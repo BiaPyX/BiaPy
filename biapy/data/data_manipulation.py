@@ -64,9 +64,10 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import torch.nn.functional as F
 from skimage.transform import resize as sk_resize
+import nibabel as nib
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask
 from biapy.utils.misc import is_main_process, os_walk_clean
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
@@ -89,7 +90,7 @@ def load_and_prepare_train_data(
     val_in_memory: bool,
     val_ov: Tuple[float, ...],
     val_padding: Tuple[int, ...],
-    norm_module: Normalization,
+    norm_module: Dict,
     crop_shape: Tuple[int, ...],
     cross_val: bool = False,
     cross_val_nsplits: int = 5,
@@ -159,7 +160,7 @@ def load_and_prepare_train_data(
     val_padding : 2D/3D int tuple, optional
         Size of padding to be added on each axis to the val data. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop_shape : 3D/4D int tuple, optional
@@ -368,11 +369,6 @@ def load_and_prepare_train_data(
                                  "format images, but using these is only available for 3D problems")
             train_using_zarr = True
 
-            if norm_module.measure_by == "image":
-                print(
-                    "WARNING: normalization by image is not possible when using Zarr/H5 files. It will be done by patch instead."
-                )
-
             assert train_zarr_data_information
             X_train = samples_from_zarr(
                 list_of_data=fids if len(ids) == 0 else ids,
@@ -384,7 +380,6 @@ def load_and_prepare_train_data(
                 is_mask=False,
                 is_3d=is_3d,
             )
-            norm_module.measure_by = "patch"
         else:
             X_train = samples_from_image_list(
                 list_of_data=ids,
@@ -421,7 +416,6 @@ def load_and_prepare_train_data(
                     is_mask=True,
                     is_3d=is_3d,
                 )
-                norm_module.measure_by = "patch"
             else:
 
                 # Calculate shape with upsampling
@@ -656,11 +650,6 @@ def load_and_prepare_train_data(
                     raise ValueError("Zarr image handle is only available for 3D problems")
                 val_using_zarr = True
 
-                if norm_module.measure_by == "image":
-                    print(
-                        "WARNING: normalization by image is not possible when using Zarr/H5 files. It will be done by patch instead."
-                    )
-
                 assert val_zarr_data_information
                 X_val = samples_from_zarr(
                     list_of_data=val_fids,
@@ -672,7 +661,6 @@ def load_and_prepare_train_data(
                     is_mask=False,
                     is_3d=is_3d,
                 )
-                norm_module.measure_by = "patch"
             else:
                 X_val = samples_from_image_list(
                     list_of_data=val_ids,
@@ -714,7 +702,6 @@ def load_and_prepare_train_data(
                         is_mask=True,
                         is_3d=is_3d,
                     )
-                    norm_module.measure_by = "patch"
                 else:
                     assert len(val_gt_ids) == len(val_ids), (
                         "Number of validation raw images ({}) and validation labels ({}) must be the same. "
@@ -1093,7 +1080,7 @@ def load_and_prepare_test_data(
 
 def load_and_prepare_cls_test_data(
     test_path: str,
-    norm_module: Normalization,
+    norm_module: Dict,
     use_val_as_test: bool,
     expected_classes: int,
     crop_shape: Tuple[int, ...],
@@ -1110,7 +1097,7 @@ def load_and_prepare_cls_test_data(
     train_path : str
         Path to the training data.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     use_val_as_test : bool
@@ -1254,7 +1241,7 @@ def load_data_from_dir(data_path: str, is_3d: bool = False) -> List[NDArray]:
 
 def load_cls_data_from_dir(
     data_path: str,
-    norm_module: Normalization,
+    norm_module: Dict,
     expected_classes: int,
     crop_shape: Optional[Tuple[int, ...]],
     is_3d: bool = True,
@@ -1271,7 +1258,7 @@ def load_cls_data_from_dir(
     data_path : str
         Path to read the images from.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     expected_classes : int
@@ -1332,7 +1319,7 @@ def load_and_prepare_train_data_cls(
     val_path: str,
     val_in_memory: bool,
     expected_classes: int,
-    norm_module: Normalization,
+    norm_module: Dict,
     crop_shape: Tuple[int, ...],
     cross_val: bool = False,
     cross_val_nsplits: int = 5,
@@ -1374,6 +1361,9 @@ def load_and_prepare_train_data_cls(
 
     expected_classes : int
         Expected number of classes to be loaded.
+
+    norm_module : Dict    
+        Information about the normalization.
 
     crop_shape : 3D/4D int tuple
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
@@ -1631,7 +1621,7 @@ def samples_from_image_list(
     crop_shape: Tuple[int, ...],
     ov: Tuple[float, ...],
     padding: Tuple[int, ...],
-    norm_module: Normalization,
+    norm_module: Dict,
     crop: bool = True,
     is_mask: bool = False,
     is_3d: bool = True,
@@ -1661,7 +1651,7 @@ def samples_from_image_list(
     padding : 2D/3D int tuple
         Size of padding to be added on each axis. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop : bool, optional
@@ -1765,15 +1755,17 @@ def samples_from_image_list(
             tot_samples_to_insert = len(crop_coords)
         else:
             tot_samples_to_insert = 1
+        
+        if is_mask:
+            img, norm_info = normalize_mask(img, norm_module=norm_module, apply_norm=False)
+        else:
+            img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
 
         dataset_file = DatasetFile(
             path=os.path.join(data_path, list_of_data[i]),
             shape=original_data_shape,
+            norm_info=norm_info
         )
-        # Depending on the normalization choosen we need to set the stats into the DatasetFile
-        norm_module.set_stats_from_image(img)
-        norm_module.set_DatasetFile_from_stats(dataset_file)
-
         dataset_info.append(dataset_file)
         for j in range(tot_samples_to_insert):
             data_sample = DataSample(
@@ -1956,7 +1948,7 @@ def samples_from_image_list_multiple_raw_one_gt(
     crop_shape: Tuple[int, ...],
     ov: Tuple[float, ...],
     padding: Tuple[int, ...],
-    norm_module: Normalization,
+    norm_module: Dict,
     crop: bool = True,
     is_3d: bool = True,
     reflect_to_complete_shape: bool = True,
@@ -1985,7 +1977,7 @@ def samples_from_image_list_multiple_raw_one_gt(
     padding : 2D/3D int tuple
         Size of padding to be added on each axis. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop : bool, optional
@@ -2109,10 +2101,12 @@ def samples_from_image_list_multiple_raw_one_gt(
         else:
             gt_tot_samples_to_insert = 1
 
-        data_file = DatasetFile(path=os.path.join(gt_path, id_, gt_id), shape=original_data_shape)
-        # Depending on the normalization choosen we need to set the stats into the DatasetFile
-        norm_module.set_stats_from_image(gt_sample)
-        norm_module.set_DatasetFile_from_stats(data_file)
+        gt_sample, norm_info = normalize_image(gt_sample, norm_module=norm_module, apply_norm=False)
+        data_file = DatasetFile(
+            path=os.path.join(gt_path, id_, gt_id), 
+            shape=original_data_shape, 
+            norm_info=norm_info
+        )
 
         gt_dataset_info.append(data_file)
         for i in range(gt_tot_samples_to_insert):
@@ -2188,13 +2182,12 @@ def samples_from_image_list_multiple_raw_one_gt(
             else:
                 tot_samples_to_insert = 1
 
+            raw_sample, norm_info = normalize_image(raw_sample, norm_module=norm_module, apply_norm=False)
             dataset_file = DatasetFile(
                 path=os.path.join(associated_raw_image_dir, raw_sample_id),
                 shape=original_data_shape,
+                norm_info=norm_info
             )
-            # Depending on the normalization choosen we need to set the stats into the DatasetFile
-            norm_module.set_stats_from_image(raw_sample)
-            norm_module.set_DatasetFile_from_stats(dataset_file)
 
             dataset_info.append(dataset_file)
             for i in range(tot_samples_to_insert):
@@ -2215,7 +2208,7 @@ def samples_from_image_list_multiple_raw_one_gt(
 
 def samples_from_class_list(
     data_path: str,
-    norm_module: Normalization,
+    norm_module: Dict,
     crop_shape: Optional[Tuple[int, ...]] = None,
     expected_classes: int = -1,
     is_3d: bool = True,
@@ -2224,7 +2217,6 @@ def samples_from_class_list(
 ) -> BiaPyDataset:
     """
     Create dataset samples from the given path taking into account that each subfolder represents a class.
-
     This function does not load the data.
 
     Parameters
@@ -2232,7 +2224,7 @@ def samples_from_class_list(
     data_path : str
         Directory of the images to read.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop_shape : 3D/4D int tuple, optional
@@ -2329,16 +2321,14 @@ def samples_from_class_list(
                     f"of {data_range_expected}) in the folder. Current image: {img_path}"
                 )
 
+            img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
             dataset_file = DatasetFile(
                 path=img_path,
                 shape=img.shape,
                 class_name=class_name,
                 class_num=c_num if gt_loaded else -1,
+                norm_info=norm_info
             )
-
-            # Depending on the normalization choosen we need to set the stats into the DatasetFile
-            norm_module.set_stats_from_image(img)
-            norm_module.set_DatasetFile_from_stats(dataset_file)
 
             xdataset_info.append(dataset_file)
             sample_dict = DataSample(
@@ -2362,7 +2352,7 @@ def filter_samples_by_properties(
     reflect_to_complete_shape: bool = False,
     filter_by_entire_image: bool = True,
     norm_before_filter: bool = False,
-    norm_module: Optional[Normalization] = None,
+    norm_module: Optional[Dict] = None,
     y_dataset: Optional[BiaPyDataset] = None,
     zarr_data_information: Optional[Dict] = None,
     save_filtered_images: bool = True,
@@ -2427,7 +2417,7 @@ def filter_samples_by_properties(
     norm_before_filter : bool, optional
         Whether to apply normalization before filtering. Be aware then that the values for filtering may change.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     y_dataset : BiaPyDataset, optional
@@ -2518,10 +2508,10 @@ def filter_samples_by_properties(
 
             if norm_before_filter:
                 assert norm_module is not None
-                img, _ = norm_module.apply_image_norm(img)
+                img, _ = normalize_image(img, norm_module=norm_module)
                 if use_Y_data:
                     assert mask is not None
-                    mask, _ = norm_module.apply_mask_norm(mask)
+                    mask, _ = normalize_mask(mask, norm_module=norm_module)
                     assert isinstance(mask, np.ndarray)
             assert isinstance(img, np.ndarray)
             satisfy_conds = sample_satisfy_conds(
@@ -2609,12 +2599,12 @@ def filter_samples_by_properties(
 
                 if norm_before_filter:
                     assert norm_module is not None
-                    norm_module.set_stats_from_DatasetFile(x_dataset.dataset_info[sample.fid])
-                    xdata, _ = norm_module.apply_image_norm(xdata)
+                    norm_info = x_dataset.dataset_info[sample.fid].norm_info
+                    xdata, _ = normalize_image(xdata, norm_module=norm_info)
                     if use_Y_data:
                         assert ydata is not None and y_dataset is not None
-                        norm_module.set_stats_from_DatasetFile(y_dataset.dataset_info[sample.fid])
-                        ydata, _ = norm_module.apply_mask_norm(ydata)
+                        norm_info = y_dataset.dataset_info[sample.fid]
+                        ydata, _ = normalize_mask(ydata, norm_module=norm_info)
 
                 if save_filtered_images and save_filtered_images_dir:
                     if "xdata_fil_example" in locals():
@@ -3063,12 +3053,7 @@ def load_images_to_dataset(
             )
         )
 
-def pad_and_reflect(
-    img: NDArray,
-    patch_shape: Tuple[int, ...],
-    pad_type: str | List[str] = "even",
-    verbose: bool = False,
-) -> NDArray:
+def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = False) -> NDArray:
     """
     Load data from a directory.
 
@@ -3077,15 +3062,8 @@ def pad_and_reflect(
     img : 3D/4D Numpy array
         Image to pad. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-    patch_shape : Tuple of 3/4 int, optional
+    crop_shape : Tuple of 3/4 int, optional
         Shape of the subvolumes to create when cropping.  E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
-
-    pad_type : str or list of str, optional
-        Select where to add the padding. If a list is provided it is expected to define the type of padding 
-        for every axis. Options:
-            * ``'left'`` to add padding in the left side
-            * ``'right'``  to add padding in the left side
-            * ``'even'`` to add padding evenly on both sides (extra pixel goes to the left if diff is odd)
 
     verbose : bool, optional
         Whether to output information.
@@ -3095,53 +3073,50 @@ def pad_and_reflect(
     img : 3D/4D Numpy array
         Image padded. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
     """
-    if img.ndim not in (3, 4):
-        raise ValueError(f"Unsupported image ndim: {img.ndim}")
-
-    if len(patch_shape) < img.ndim:
+    if img.ndim == 4 and len(crop_shape) < 4:
         raise ValueError(
-            f"'patch_shape' must have at least {img.ndim} values. Provided: {patch_shape}"
+            f"'crop_shape' needs to have 4 at least values as the input array has 4 dims. Provided crop_shape: {crop_shape}"
+        )
+    if img.ndim == 3 and len(crop_shape) < 3:
+        raise ValueError(
+            f"'crop_shape' needs to have 3 at least values as the input array has 3 dims. Provided crop_shape: {crop_shape}"
         )
 
-    def _split_padding(diff: int, pad_type: str):
-        if pad_type == "left":
-            return diff, 0
-        elif pad_type == "right":
-            return 0, diff
-        else:  # even
-            left = diff // 2 + diff % 2  # extra goes left
-            right = diff // 2
-            return left, right
-            
-    spatial_dims = img.ndim - 1  # ignore channels
+    if img.ndim == 4:
+        if img.shape[0] < crop_shape[0]:
+            diff = crop_shape[0] - img.shape[0]
+            o_shape = img.shape
+            img = np.pad(img, ((diff, 0), (0, 0), (0, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
 
-    # Broadcast single pad_type
-    if isinstance(pad_type, str):
-        pad_type = [pad_type] * spatial_dims
+        if img.shape[1] < crop_shape[1]:
+            diff = crop_shape[1] - img.shape[1]
+            o_shape = img.shape
+            img = np.pad(img, ((0, 0), (diff, 0), (0, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
 
-    if len(pad_type) != spatial_dims:
-        raise ValueError(
-            f"pad_type must have {spatial_dims} values (one per spatial axis). Got {pad_type}"
-        )
+        if img.shape[2] < crop_shape[2]:
+            diff = crop_shape[2] - img.shape[2]
+            o_shape = img.shape
+            img = np.pad(img, ((0, 0), (0, 0), (diff, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
+    else:
+        if img.shape[0] < crop_shape[0]:
+            diff = crop_shape[0] - img.shape[0]
+            o_shape = img.shape
+            img = np.pad(img, ((diff, 0), (0, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
 
-    for p in pad_type:
-        if p not in ["left", "right", "even"]:
-            raise ValueError(f"Invalid pad_type value: {p}")
-
-    pad_width = [(0, 0)] * img.ndim
-
-    for d in range(spatial_dims):
-        if img.shape[d] < patch_shape[d]:
-            diff = patch_shape[d] - img.shape[d]
-            left, right = _split_padding(diff, pad_type[d])
-            pad_width[d] = (left, right)
-
-    if any(p != (0, 0) for p in pad_width):
-        o_shape = img.shape
-        img = np.pad(img, pad_width, mode="reflect")
-        if verbose:
-            print(f"Reflected from {o_shape} to {img.shape} ({pad_width})")
-
+        if img.shape[1] < crop_shape[1]:
+            diff = crop_shape[1] - img.shape[1]
+            o_shape = img.shape
+            img = np.pad(img, ((0, 0), (diff, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
 
 
@@ -3315,6 +3290,8 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
             img = np.load(path)
         elif path.endswith(".pt"):
             img = torch.load(path, weights_only=True, map_location="cpu").numpy()
+        elif path.endswith(".nii.gz"):
+            img = nib.load(path)
         elif looks_like_hdf5(path):
             img = h5py.File(path, "r")
             img = np.array(img[list(img)[0]])
@@ -3878,3 +3855,35 @@ def resize(input_data, size, mode="bilinear", **kwargs):
         return sk_resize(input_data, size, order=order, **kwargs)
     else:
         raise TypeError("Input must be a torch.Tensor or a numpy.ndarray")
+
+
+def decide_dtype(num_values: int) -> np.dtype:
+    """
+    Decide the smallest unsigned integer dtype that can hold the given number of values.
+
+    Parameters
+    ----------
+    num_values : int
+        The number of distinct values that need to be represented.
+
+    Returns
+    -------
+    np.dtype
+        The smallest unsigned integer dtype that can represent `num_values` distinct values.
+        Possible return values are np.uint8, np.uint16, or np.uint32.
+
+    Raises
+    ------
+    ValueError
+        If `num_values` is negative or exceeds the maximum representable by np.uint32.
+    """
+    if num_values < 0:
+        raise ValueError("Number of values must be non-negative.")
+    elif num_values <= 256:
+        return np.uint8
+    elif num_values <= 65536:
+        return np.uint16
+    elif num_values <= 4294967296:
+        return np.uint32
+    else:
+        raise ValueError("Number of values exceeds the maximum representable by uint32.")

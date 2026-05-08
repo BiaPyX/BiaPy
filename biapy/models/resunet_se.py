@@ -60,6 +60,7 @@ class ResUNet_SE(nn.Module):
         k_size=3,
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
+        yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
         output_channel_info=["F"],
@@ -72,6 +73,7 @@ class ResUNet_SE(nn.Module):
         extra_conv=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        return_one_tensor: bool = False,
     ):
         """
         Initialize the ResUNet_SE model.
@@ -106,6 +108,9 @@ class ResUNet_SE(nn.Module):
 
         z_down : List of ints, optional
             Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        yx_down : List of ints, optional
+            Downsampling used in y and x dimensions. Set it to ``1`` if the dataset is not isotropic.
 
         output_channels : list of int, optional
             Output channels of the network. If one value is provided, the model will have a single output head. 
@@ -148,6 +153,10 @@ class ResUNet_SE(nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning. Default is ``256``.
 
+        return_one_tensor : bool, optional
+            Whether to return a single tensor with all outputs concatenated (if False, returns a dictionary
+            with separate entries). Default is ``False``.
+
         Returns
         -------
         model : Torch model
@@ -175,15 +184,17 @@ class ResUNet_SE(nn.Module):
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
+        self.yx_down = yx_down
         self.output_channels = output_channels
         self.output_channel_info = output_channel_info
         self.return_class = True if "class" in output_channel_info else False
         self.contrast = contrast
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
-            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
         if type(isotropy) == bool:
@@ -251,7 +262,7 @@ class ResUNet_SE(nn.Module):
                     extra_conv=extra_conv,
                 )
             )
-            mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
+            mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 
@@ -287,6 +298,7 @@ class ResUNet_SE(nn.Module):
                         out_size=feature_maps[i],
                         in_size_bridge=feature_maps[i],
                         z_down=z_down[i],
+                        yx_down=yx_down[i],
                         up_mode=upsample_layer,
                         conv=conv,
                         k_size=kernel_size,
@@ -433,4 +445,9 @@ class ResUNet_SE(nn.Module):
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
             return out_dict

@@ -43,6 +43,7 @@ dependencies = [
     "safetensors",
     "torch>=2.9.1,<2.10",
     "torchvision>=0.24.1,<0.25",
+    "nibabel>=5.4.2",
 ]
 
 [project.scripts]

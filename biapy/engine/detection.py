@@ -32,14 +32,14 @@ from biapy.utils.misc import (
 from biapy.engine.metrics import (
     detection_metrics,
     multiple_metrics,
-    DiceBCELoss,
+    DiceCELoss,
     DiceLoss,
-    CrossEntropyLoss_wrapper,
+    detection_loss,
 )
 from biapy.data.pre_processing import create_detection_masks
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data, looks_like_hdf5
-from biapy.data.data_manipulation import save_tif
+from biapy.data.data_3D_manipulation import order_dimensions, looks_like_hdf5
+from biapy.data.data_manipulation import save_tif, decide_dtype
 from biapy.data.dataset import PatchCoords
 
 
@@ -116,18 +116,28 @@ class Detection_Workflow(Base_Workflow):
             [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
         self.model_output_channel_info : List of str
-            Information about the output channels.
+            Information about the output channels. A value per output head of the model must be defined. 
 
         self.separated_class_channel : bool
             Whether if we should expect a separated output channel for classification.
 
         self.head_activations : List of str
-            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
+            Activations to be applied to the model output. A value per output channel (not output head) of the model must be defined.
+            "linear" and "ce_sigmoid" will not be applied. E.g. ["linear"] for a model with one channel, ["linear", "sigmoid"] for a
+            model with two channels, etc.
+
+        Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
+        and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
+        be correct::
+
+            self.model_output_channels = [1, 3]
+            self.model_output_channel_info = ["mask", "class"]
+            self.separated_class_channel = True
+            self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
         # Multi-head: points + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.head_activations = ["ce_sigmoid", "ce_softmax"]
+            self.head_activations = ["ce_sigmoid"] + ["ce_softmax"] * self.cfg.DATA.N_CLASSES
             self.model_output_channels = [1, self.cfg.DATA.N_CLASSES]
             self.model_output_channel_info = ["points", "class"]
             self.separated_class_channel = True
@@ -216,22 +226,17 @@ class Detection_Workflow(Base_Workflow):
             self.test_extra_metrics += ["Precision (class)", "Recall (class)", "F1 (class)", "TP (class)", "FN (class)"]
         self.test_metric_names += self.test_extra_metrics
 
-        if self.cfg.LOSS.TYPE == "CE":
-            self.loss = CrossEntropyLoss_wrapper(
-                num_classes=self.cfg.DATA.N_CLASSES,
-                ndim=self.dims,
-                separated_class_channel=self.separated_class_channel,
-                model_source=self.cfg.MODEL.SOURCE,
-                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                device=self.device,
-            )
-        elif self.cfg.LOSS.TYPE == "DICE":
-            self.loss = DiceLoss()
-        elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
-
+        self.loss = detection_loss(
+            ndim=self.dims,
+            class_rebalance_within_channels=self.cfg.PROBLEM.DETECTION.CLASS_REBALANCE_WITHIN_CHANNELS,
+            separated_class_channel=self.separated_class_channel,
+            channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
+            class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+            class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+            ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+            device=self.device,
+        )
+    
         super().define_metrics()
 
     def metric_calculation(
@@ -276,6 +281,14 @@ class Detection_Workflow(Base_Workflow):
             else:
                 _output = output
 
+        if not train and self.separated_class_channel and self.gt_channels_expected != _output.shape[1]:
+            class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+            _output = torch.cat( 
+                (
+                    _output[:,:-self.model_output_channels[class_idx]],  
+                    torch.argmax(_output[:, -self.model_output_channels[class_idx]:], dim=1).unsqueeze(1)
+                ), dim=1) 
+            
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
@@ -386,13 +399,13 @@ class Detection_Workflow(Base_Workflow):
                 if self.dims == 3:
                     point_area = class_channel[
                         max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
-                        max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
-                        max(0, point[2] - 1) : min(pred.shape[2], point[2] + 1),
+                        max(0, point[1] - 2) : min(pred.shape[1], point[1] + 2),
+                        max(0, point[2] - 2) : min(pred.shape[2], point[2] + 2),
                     ]
                 else:
                     point_area = class_channel[
-                        max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
-                        max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
+                        max(0, point[0] - 2) : min(pred.shape[0], point[0] + 2),
+                        max(0, point[1] - 2) : min(pred.shape[1], point[1] + 2),
                     ]
                 instance_classes, instance_classes_count = np.unique(point_area, return_counts=True)
                 # Remove background
@@ -414,7 +427,9 @@ class Detection_Workflow(Base_Workflow):
             file_ext = os.path.splitext(self.current_sample["X_filename"])[1]
             if self.cfg.TEST.VERBOSE:
                 print("Creating the images with detected points . . .")
-            points_pred_mask = np.zeros(pred.shape[:-1], dtype=np.uint8)
+
+            dtype = decide_dtype(len(pred_points)+1)
+            points_pred_mask = np.zeros(pred.shape[:-1], dtype=dtype)
 
             if len(pred_points) > 0:
                 # Paint the points
@@ -427,7 +442,7 @@ class Detection_Workflow(Base_Workflow):
                     points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
 
                 if self.separated_class_channel:
-                    class_channel = np.zeros(points_pred_mask.shape, dtype=np.uint8)
+                    class_channel = np.zeros(points_pred_mask.shape, dtype=dtype)
                     for n in range(len(pred_points)):
                         class_channel = np.where(points_pred_mask == n + 1, pred_points_classes[n], class_channel)
 
@@ -441,21 +456,12 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     points_pred_mask = np.expand_dims(points_pred_mask, -1)
 
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(points_pred_mask, 0),
-                        out_dir,
-                        self.current_sample["X_filename"],
-                        dtype_str="uint8",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(points_pred_mask, 0),
-                        out_dir,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+                save_tif(
+                    np.expand_dims(points_pred_mask, 0),
+                    out_dir,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
                 if self.separated_class_channel:
                     points_pred_mask = points_pred_mask[..., 0]
@@ -492,21 +498,12 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        self.current_sample["X_filename"],
-                        dtype_str="uint8",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
-                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+                save_tif(
+                    np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
             del points_pred_mask
 
         # Save coords in a couple of csv files
@@ -814,13 +811,18 @@ class Detection_Workflow(Base_Workflow):
                         print("No points found in GT!")
                     print("Creating the image with a summary of detected points and false positives with colors . . .")
 
-                points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=np.uint8)
+                dtype = decide_dtype(len(gt_coordinates)+1)
+                points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=dtype)
 
                 # TP and FN
-                gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                gt_id_img = np.zeros(pred_shape[:-1], dtype=dtype)
                 for j, cor in enumerate(gt_coordinates):
                     z, y, x = cor
                     z, y, x = int(z), int(y), int(x)
+                    if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
+                        print(f"WARNING: GT point [{z},{y},{x}] outside image with shape {pred_shape}. Skipping it in the summary image.")
+                        continue
+                    
                     if gt_assoc is not None:
                         if gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "TP":
                             points_pred_mask_color[z, y, x] = (0, 255, 0)  # Green
@@ -836,21 +838,13 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the GT ids for the current class
                 for i in range(gt_id_img.shape[0]):
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext,
-                        dtype_str="uint32",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+
+                save_tif(
+                    np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
+                    self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                    [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
                 # FP
                 if fp is not None:
@@ -867,21 +861,13 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred_mask_color.shape[0]):
                     for j in range(points_pred_mask_color.shape[-1]):
                         points_pred_mask_color[i, ..., j] = dilation(points_pred_mask_color[i, ..., j], disk(3))
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(points_pred_mask_color, 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        self.current_sample["X_filename"],
-                        dtype_str="uint8",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(points_pred_mask_color, 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+
+                save_tif(
+                    np.expand_dims(points_pred_mask_color, 0),
+                    self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
         return df
 
@@ -1269,90 +1255,89 @@ class Detection_Workflow(Base_Workflow):
         original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
         create_mask = False
 
-        if is_main_process():
-            print("############################")
-            print("#  PREPARE DETECTION DATA  #")
-            print("############################")
+        print("############################")
+        print("#  PREPARE DETECTION DATA  #")
+        print("############################")
 
-            # Create selected channels for train data
-            if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                create_mask = False
-                if not os.path.isdir(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR):
+        # Create selected channels for train data
+        if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            create_mask = False
+            if not os.path.isdir(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR):
+                print(
+                    "You select to create detection masks from given .csv files but no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR)
+                )
+                create_mask = True
+            else:
+                if len(next(os_walk_clean(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(
+                    next(os_walk_clean(self.cfg.DATA.TRAIN.GT_PATH))[2]
+                ) and len(next(os_walk_clean(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]) != len(
+                    next(os_walk_clean(self.cfg.DATA.TRAIN.GT_PATH))[2]
+                ):
                     print(
-                        "You select to create detection masks from given .csv files but no file is detected in {}. "
-                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
-                        "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR)
+                        "Different number of files found in {} and {}. Trying to create the the rest again".format(
+                            self.cfg.DATA.TRAIN.GT_PATH,
+                            self.cfg.DATA.TRAIN.DETECTION_MASK_DIR,
+                        )
                     )
                     create_mask = True
-                else:
-                    if len(next(os_walk_clean(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(
-                        next(os_walk_clean(self.cfg.DATA.TRAIN.GT_PATH))[2]
-                    ) and len(next(os_walk_clean(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]) != len(
-                        next(os_walk_clean(self.cfg.DATA.TRAIN.GT_PATH))[2]
-                    ):
-                        print(
-                            "Different number of files found in {} and {}. Trying to create the the rest again".format(
-                                self.cfg.DATA.TRAIN.GT_PATH,
-                                self.cfg.DATA.TRAIN.DETECTION_MASK_DIR,
-                            )
-                        )
-                        create_mask = True
 
-                if create_mask:
-                    create_detection_masks(self.cfg)
+            if create_mask:
+                create_detection_masks(self.cfg)
 
-            # Create selected channels for val data
-            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
-                create_mask = False
-                if not os.path.isdir(self.cfg.DATA.VAL.DETECTION_MASK_DIR):
+        # Create selected channels for val data
+        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
+            create_mask = False
+            if not os.path.isdir(self.cfg.DATA.VAL.DETECTION_MASK_DIR):
+                print(
+                    "You select to create detection masks from given .csv files but no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.DATA.VAL.DETECTION_MASK_DIR)
+                )
+                create_mask = True
+            else:
+                if len(next(os_walk_clean(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(
+                    next(os_walk_clean(self.cfg.DATA.VAL.GT_PATH))[2]
+                ) and len(next(os_walk_clean(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]) != len(
+                    next(os_walk_clean(self.cfg.DATA.VAL.GT_PATH))[2]
+                ):
                     print(
-                        "You select to create detection masks from given .csv files but no file is detected in {}. "
-                        "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
-                        "path, this process will be done just once!".format(self.cfg.DATA.VAL.DETECTION_MASK_DIR)
+                        "Different number of files found in {} and {}. Trying to create the the rest again".format(
+                            self.cfg.DATA.VAL.GT_PATH,
+                            self.cfg.DATA.VAL.DETECTION_MASK_DIR,
+                        )
                     )
                     create_mask = True
-                else:
-                    if len(next(os_walk_clean(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(
-                        next(os_walk_clean(self.cfg.DATA.VAL.GT_PATH))[2]
-                    ) and len(next(os_walk_clean(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]) != len(
-                        next(os_walk_clean(self.cfg.DATA.VAL.GT_PATH))[2]
-                    ):
-                        print(
-                            "Different number of files found in {} and {}. Trying to create the the rest again".format(
-                                self.cfg.DATA.VAL.GT_PATH,
-                                self.cfg.DATA.VAL.DETECTION_MASK_DIR,
-                            )
-                        )
-                        create_mask = True
 
-                if create_mask:
-                    create_detection_masks(self.cfg, data_type="val")
+            if create_mask:
+                create_detection_masks(self.cfg, data_type="val")
 
-            # Create selected channels for test data once
-            if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                create_mask = False
-                if not os.path.isdir(self.cfg.DATA.TEST.DETECTION_MASK_DIR):
+        # Create selected channels for test data once
+        if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            create_mask = False
+            if not os.path.isdir(self.cfg.DATA.TEST.DETECTION_MASK_DIR):
+                print(
+                    "You select to create detection masks from given .csv files but no file is detected in {}. "
+                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
+                    "path, this process will be done just once!".format(self.cfg.DATA.TEST.DETECTION_MASK_DIR)
+                )
+                create_mask = True
+            else:
+                if len(next(os_walk_clean(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(
+                    next(os_walk_clean(self.cfg.DATA.TEST.GT_PATH))[2]
+                ) and len(next(os_walk_clean(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]) != len(
+                    next(os_walk_clean(self.cfg.DATA.TEST.GT_PATH))[2]
+                ):
                     print(
-                        "You select to create detection masks from given .csv files but no file is detected in {}. "
-                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
-                        "path, this process will be done just once!".format(self.cfg.DATA.TEST.DETECTION_MASK_DIR)
+                        "Different number of files found in {} and {}. Trying to create the the rest again".format(
+                            self.cfg.DATA.TEST.GT_PATH,
+                            self.cfg.DATA.TEST.DETECTION_MASK_DIR,
+                        )
                     )
                     create_mask = True
-                else:
-                    if len(next(os_walk_clean(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(
-                        next(os_walk_clean(self.cfg.DATA.TEST.GT_PATH))[2]
-                    ) and len(next(os_walk_clean(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]) != len(
-                        next(os_walk_clean(self.cfg.DATA.TEST.GT_PATH))[2]
-                    ):
-                        print(
-                            "Different number of files found in {} and {}. Trying to create the the rest again".format(
-                                self.cfg.DATA.TEST.GT_PATH,
-                                self.cfg.DATA.TEST.DETECTION_MASK_DIR,
-                            )
-                        )
-                        create_mask = True
-                if create_mask:
-                    create_detection_masks(self.cfg, data_type="test")
+            if create_mask:
+                create_detection_masks(self.cfg, data_type="test")
 
         if is_dist_avail_and_initialized():
             dist.barrier()

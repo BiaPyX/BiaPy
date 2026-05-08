@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import math
 from typing import Any, List, Optional, Sequence, Tuple, Union
-
+import scipy.signal
 import h5py
 import zarr
 import numpy as np
@@ -346,7 +346,7 @@ def crop_3D_data_with_overlap(
     verbose: bool = True,
     median_padding: bool = False,
     load_data: bool = True,
-) -> Tuple[NDArray, NDArray, List[PatchCoords]] | Tuple[NDArray, List[PatchCoords]] | List[PatchCoords]:
+) -> Union[Tuple[NDArray, NDArray, List['PatchCoords']], Tuple[NDArray, List['PatchCoords']], List['PatchCoords']]:
     """
     Crop 3D data into smaller volumes with a defined overlap. The opposite function is :func:`~merge_3D_data_with_overlap`.
 
@@ -556,11 +556,10 @@ def crop_3D_data_with_overlap(
                 )
             )
         )
-        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y)))
+        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_y, vols_per_x)))
 
     total_vol = vols_per_z * vols_per_y * vols_per_x
     if load_data:
-
         cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
         if data_mask is not None:
             cropped_data_mask = np.zeros(
@@ -603,7 +602,8 @@ def crop_3D_data_with_overlap(
                 c += 1
 
     if verbose:
-        print("**** New data shape is: {}".format(cropped_data.shape))
+        if load_data:
+            print("**** New data shape is: {}".format(cropped_data.shape))
         print("### END 3D-OV-CROP ###")
 
     if load_data:
@@ -614,6 +614,57 @@ def crop_3D_data_with_overlap(
     else:
         return crop_coords
 
+def _get_spline_window_3D(crop_shape: Tuple[int, ...], overlap_pixels: Tuple[int, int, int], power: int = 2) -> NDArray:
+    """
+    Generate a 3D squared spline window for smooth blending. The window is designed to have values close 
+    to 1 in the center of the patch and smoothly taper to 0 towards the edges, with the transition controlled
+    by the `power` parameter.
+
+    Parameters
+    ----------   
+    crop_shape : tuple of int
+        Shape of the 3D patch for which to generate the window, in the form (z, y, x, channels).
+
+    overlap_pixels: tuple of int
+        The exact number of overlapping pixels in the (z, y, x) dimensions to apply the taper across.
+        
+    power : int, optional
+        Power to control the steepness of the window. Higher values will create a sharper transition from 1 to 0.
+        Default is 2, which creates a smooth quadratic tapering.    
+    
+    Returns
+    -------
+    window : 4D Numpy array
+        A 3D window of shape (z, y, x, 1) that can be applied to the patch for smooth blending. The values are normalized
+        so that the average is 1, ensuring that the overall intensity of the patch is preserved when blended with others.
+    """
+    def _spline_window_1D(size, ov_pixels, power=2):
+        wind = np.ones(size, dtype=np.float32)
+        if ov_pixels > 0:
+            ov_pixels = min(ov_pixels, size // 2)
+            x = np.linspace(0, 1, ov_pixels + 2)[1:-1]
+            taper = (x ** power) / (x ** power + (1 - x) ** power + 1e-8)
+            wind[:ov_pixels] = taper
+            wind[-ov_pixels:] = taper[::-1]
+        return wind
+
+    # Generate 1D splines for Z, Y, and X dimensions
+    wind_z = _spline_window_1D(crop_shape[0], overlap_pixels[0], power)
+    wind_y = _spline_window_1D(crop_shape[1], overlap_pixels[1], power)
+    wind_x = _spline_window_1D(crop_shape[2], overlap_pixels[2], power)
+
+    # Expand dims to perform outer product for 3D window
+    wind_z = wind_z[:, None, None]
+    wind_y = wind_y[None, :, None]
+    wind_x = wind_x[None, None, :]
+    
+    # Broadcast multiply to get shape (z, y, x)
+    wind_3d = wind_z * wind_y * wind_x
+    
+    # Expand to match the channel dimension of the data: (z, y, x, 1)
+    wind_3d = np.expand_dims(wind_3d, -1)
+    
+    return wind_3d.astype(np.float32)
 
 def merge_3D_data_with_overlap(
     data: NDArray,
@@ -622,7 +673,7 @@ def merge_3D_data_with_overlap(
     overlap: Tuple[float, ...] = (0, 0, 0),
     padding: Tuple[int, ...] = (0, 0, 0),
     verbose: bool = True,
-) -> NDArray | Tuple[NDArray, Optional[NDArray]]:
+) -> Union[NDArray, Tuple[NDArray, Optional[NDArray]]]:
     """
     Merge 3D subvolumes in a 3D volume with a defined overlap.
 
@@ -640,15 +691,15 @@ def merge_3D_data_with_overlap(
         Data mask to crop. E.g. ``(volume_number, z, y, x, channels)``.
 
     overlap : Tuple of 3 floats, optional
-         Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
-         :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
-         overlap. E.g. ``(z, y, x)``.
+        Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
+        :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
+        overlap. E.g. ``(z, y, x)``.
 
     padding : tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
     verbose : bool, optional
-         To print information about the crop to be made.
+        To print information about the crop to be made.
 
     Returns
     -------
@@ -657,43 +708,9 @@ def merge_3D_data_with_overlap(
 
     merged_data_mask : 5D Numpy array, optional
         Cropped image data masks. E.g. ``(z, y, x, channels)``.
-
-    Examples
-    --------
-    ::
-
-        # EXAMPLE 1
-        # Following the example introduced in crop_3D_data_with_overlap function, the merge after the cropping
-        # should be done as follows:
-
-        X_train = np.ones((165, 768, 1024, 1))
-        Y_train = np.ones((165, 768, 1024, 1))
-
-        X_train, Y_train = crop_3D_data_with_overlap(X_train, (80, 80, 80, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5))
-        X_train, Y_train = merge_3D_data_with_overlap(X_train, (165, 768, 1024, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5))
-
-        # The function will print the shape of the generated arrays. In this example:
-        #     **** New data shape is: (165, 768, 1024, 1)
-
-        # EXAMPLE 2
-        # In the same way, if no overlap in cropping was selected, the merge call
-        # should be as follows:
-
-        X_train, Y_train = merge_3D_data_with_overlap(X_train, (165, 768, 1024, 1), data_mask=Y_train, overlap=(0,0,0))
-
-        # The function will print the shape of the generated arrays. In this example:
-        #     **** New data shape is: (165, 768, 1024, 1)
-
-        # EXAMPLE 3
-        # On the contrary, if no overlap in cropping was selected but a padding of shape
-        # (64,64,64) is needed, the merge call should be as follows:
-
-        X_train, Y_train = merge_3D_data_with_overlap(X_train, (165, 768, 1024, 1), data_mask=Y_train, overlap=(0,0,0),
-            padding=(64,64,64))
-
-        # The function will print the shape of the generated arrays. In this example:
-        #     **** New data shape is: (165, 768, 1024, 1)
     """
+    assert data.ndim == 5, f"data expected to be 5 dimensional, given {data.shape}"
+    assert len(orig_vol_shape) == 4, f"orig_vol_shape expected to be 4 dimensional, given {orig_vol_shape}"
     if data_mask is not None:
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
@@ -709,7 +726,7 @@ def merge_3D_data_with_overlap(
 
     if verbose:
         print("### MERGE-3D-OV-CROP ###")
-        print("Merging {} images into {} with overlapping . . .".format(data.shape, orig_vol_shape))
+        print("Merging {} images into {} with smooth blending . . .".format(data.shape, orig_vol_shape))
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
@@ -733,7 +750,9 @@ def merge_3D_data_with_overlap(
             :,
         ]
         merged_data_mask = np.zeros(orig_vol_shape[:3] + (data_mask.shape[-1],), dtype=np.float32)
-    ov_map_counter = np.zeros((orig_vol_shape[:-1] + (1,)), dtype=np.uint16)
+        
+    # Using float32 for the weight map to accurately accumulate spline weights
+    weight_map_counter = np.zeros((orig_vol_shape[:-1] + (1,)), dtype=np.float32)
 
     # Calculate overlapping variables
     overlap_z = 1 if overlap[0] == 0 else 1 - overlap[0]
@@ -770,23 +789,14 @@ def merge_3D_data_with_overlap(
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (vols_per_x - 1)
 
-    # Real overlap calculation for printing
-    real_ov_z = ovz_per_block / (pad_input_shape[1] - padding[0] * 2)
-    real_ov_y = ovy_per_block / (pad_input_shape[2] - padding[1] * 2)
-    real_ov_x = ovx_per_block / (pad_input_shape[3] - padding[2] * 2)
+    # Calculate exact overlap in pixels for the dynamic window
+    overlap_pixels_z = (pad_input_shape[1] - padding[0] * 2) - step_z
+    overlap_pixels_y = (pad_input_shape[2] - padding[1] * 2) - step_y
+    overlap_pixels_x = (pad_input_shape[3] - padding[2] * 2) - step_x
 
-    if verbose:
-        print("Real overlapping (%): {}".format((real_ov_z, real_ov_y, real_ov_x)))
-        print(
-            "Real overlapping (pixels): {}".format(
-                (
-                    (pad_input_shape[1] - padding[0] * 2) * real_ov_z,
-                    (pad_input_shape[2] - padding[1] * 2) * real_ov_y,
-                    (pad_input_shape[3] - padding[2] * 2) * real_ov_x,
-                )
-            )
-        )
-        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y)))
+    # Generate the smooth blending window for the 3D patches
+    patch_shape = (data.shape[1], data.shape[2], data.shape[3])
+    spline_window = _get_spline_window_3D(patch_shape, (overlap_pixels_z, overlap_pixels_y, overlap_pixels_x))
 
     c = 0
     for z in range(vols_per_z):
@@ -796,34 +806,33 @@ def merge_3D_data_with_overlap(
                 d_y = 0 if (y * step_y + data.shape[2]) < orig_vol_shape[1] else last_y
                 d_x = 0 if (x * step_x + data.shape[3]) < orig_vol_shape[2] else last_x
 
-                merged_data[
-                    z * step_z - d_z : (z * step_z) + data.shape[1] - d_z,
-                    y * step_y - d_y : y * step_y + data.shape[2] - d_y,
-                    x * step_x - d_x : x * step_x + data.shape[3] - d_x,
-                ] += data[c]
+                z_start = z * step_z - d_z
+                z_end = z * step_z + data.shape[1] - d_z
+                y_start = y * step_y - d_y
+                y_end = y * step_y + data.shape[2] - d_y
+                x_start = x * step_x - d_x
+                x_end = x * step_x + data.shape[3] - d_x
+
+                # Multiply patch by 3D spline window before adding
+                merged_data[z_start:z_end, y_start:y_end, x_start:x_end] += (data[c] * spline_window)
 
                 if data_mask is not None:
-                    merged_data_mask[
-                        z * step_z - d_z : (z * step_z) + data.shape[1] - d_z,
-                        y * step_y - d_y : y * step_y + data.shape[2] - d_y,
-                        x * step_x - d_x : x * step_x + data.shape[3] - d_x,
-                    ] += data_mask[c]
+                    merged_data_mask[z_start:z_end, y_start:y_end, x_start:x_end] += (data_mask[c] * spline_window)
 
-                ov_map_counter[
-                    z * step_z - d_z : (z * step_z) + data.shape[1] - d_z,
-                    y * step_y - d_y : y * step_y + data.shape[2] - d_y,
-                    x * step_x - d_x : x * step_x + data.shape[3] - d_x,
-                ] += 1
+                # Accumulate the 3D weights
+                weight_map_counter[z_start:z_end, y_start:y_end, x_start:x_end] += spline_window
+                
                 c += 1
 
-    merged_data = np.true_divide(merged_data, ov_map_counter).astype(data.dtype)
+    # Normalize data by accumulated weights, preventing division by zero
+    merged_data = np.true_divide(merged_data, weight_map_counter + 1e-18).astype(data.dtype)
 
     if verbose:
         print("**** New data shape is: {}".format(merged_data.shape))
         print("### END MERGE-3D-OV-CROP ###")
 
     if data_mask is not None:
-        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
+        merged_data_mask = np.true_divide(merged_data_mask, weight_map_counter + 1e-18).astype(data_mask.dtype)
         return merged_data, merged_data_mask
     else:
         return merged_data
@@ -1269,62 +1278,6 @@ def ensure_3d_shape(
     return img
 
 
-def write_chunked_data(
-    data: NDArray,
-    data_dir: str,
-    filename: str,
-    crop_shape: Optional[Sequence[int]] = None,
-    dtype_str: str = "float32",
-    verbose: bool = True,
-):
-    """
-    Save images in the given directory into 'ZYXC' format.
-
-    Parameters
-    ----------
-    data : 4D numpy array
-        Data to save. E.g. ``(z, y, x, channels)``.
-
-    data_dir : str
-        Path to store X images.
-
-    filename : str
-        Filename of the data to use.
-
-    crop_shape: tuple/list of int/float
-        Crop shape to be used in determining Zarr chunks.
-
-    dtype_str : str, optional
-        Data type to use when saving.
-
-    verbose : bool, optional
-        To print saving information.
-    """
-    data = ensure_3d_shape(data)
-
-    ext = os.path.splitext(filename)[1]
-    if verbose:
-        print("Saving {} data as {} in folder: {}".format(data.shape, ext, data_dir))
-
-    os.makedirs(data_dir, exist_ok=True)
-
-    if looks_like_hdf5(filename):
-        fid = h5py.File(os.path.join(data_dir, filename), "w")
-        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")  # type: ignore
-    # Zarr
-    else:
-        chunks = crop_shape if crop_shape is not None else pick_chunks(data.shape, dtype_str)
-
-        data_zarr = zarr.open(
-            os.path.join(data_dir, filename),
-            shape=data.shape,
-            mode="w",
-            chunks=chunks,  # type: ignore
-            dtype=dtype_str,
-            zarr_format=3,
-        )
-        data_zarr[:] = data
-
 def _first_array_in_group(g: zarr.Group) -> zarr.Array:
     """Descend into the first array found (sorted by key) in a group."""
     keys = sorted(list(g.keys()))
@@ -1570,9 +1523,12 @@ def read_chunked_data(
                 data = _first_dataset_in_h5_group(fid)
             except Exception:
                 fid.close()
-                raise
+                raise ValueError(f"No datasets found in HDF5 file {filename}.")
         elif filename.endswith(".zarr") or filename.endswith(".n5"):
-            fid = zarr.open(filename, mode="r")
+            try:
+                fid = zarr.open(filename, mode="r")
+            except Exception as e:
+                raise ValueError(f"Error opening Zarr file {filename}: {e}")
             if isinstance(fid, zarr.Group):
                 data = _first_array_in_group(fid)
             else:

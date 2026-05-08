@@ -26,8 +26,13 @@ from biapy.data.data_3D_manipulation import (
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
+<<<<<<< HEAD
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
 
+=======
+from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
+from biapy.data.norm import undo_image_norm
+>>>>>>> upstream/master
 
 class Denoising_Workflow(Base_Workflow):
     """
@@ -77,8 +82,8 @@ class Denoising_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
-        self.norm_module.mask_norm = "as_image"
-        self.test_norm_module.mask_norm = "as_image"
+        self.norm_module["mask_norm"] = "as_image"
+        self.test_norm_module["mask_norm"] = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -91,14 +96,24 @@ class Denoising_Workflow(Base_Workflow):
             [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
         self.model_output_channel_info : List of str
-            Information about the output channels.
+            Information about the output channels. A value per output head of the model must be defined. 
 
         self.separated_class_channel : bool
             Whether if we should expect a separated output channel for classification.
 
         self.head_activations : List of str
-            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
+            Activations to be applied to the model output. A value per output channel (not output head) of the model must be defined.
+            "linear" and "ce_sigmoid" will not be applied. E.g. ["linear"] for a model with one channel, ["linear", "sigmoid"] for a
+            model with two channels, etc.
+
+        Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
+        and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
+        be correct::
+
+            self.model_output_channels = [1, 3]
+            self.model_output_channel_info = ["mask", "class"]
+            self.separated_class_channel = True
+            self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
         self.model_output_channels = [self.cfg.DATA.PATCH_SIZE[-1]]
         self.gt_channels_expected = self.model_output_channels[0]
@@ -352,8 +367,8 @@ class Denoising_Workflow(Base_Workflow):
                     ]  # type: ignore
 
         # Undo normalization
+        pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
-        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:

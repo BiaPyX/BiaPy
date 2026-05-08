@@ -191,12 +191,7 @@ class DatasetFile:
         shape: Optional[Tuple] = None,
         parallel_data: Optional[bool] = None,
         input_axes: Optional[str] = None,
-        lower_bound_val: Optional[float] = None,
-        upper_bound_val: Optional[float] = None,
-        scale_range_min_val: Optional[List[float]] = None,
-        scale_range_max_val: Optional[List[float]] = None,
-        mean: Optional[float] = None,
-        std: Optional[float] = None,
+        norm_info: Dict = None,
         class_num: Optional[int] = None,
         class_name: Optional[str] = None,
     ):
@@ -218,25 +213,8 @@ class DatasetFile:
         input_axes : str, optional
             String describing the order of axes in the input data (e.g., 'ZYXC').
 
-        lower_bound_val : float, optional
-            Lower bound used for intensity clipping during normalization.
-
-        upper_bound_val : float, optional
-            Upper bound used for intensity clipping during normalization.
-
-        scale_range_min_val : list of float, optional
-            Minimum values for range scaling per channel, used when normalization type
-            is "scale_range".
-
-        scale_range_max_val : list of float, optional
-            Maximum values for range scaling per channel, used when normalization type
-            is "scale_range".
-
-        mean : float, optional
-            Mean value used for mean/std normalization (normalization type "div").
-
-        std : float, optional
-            Standard deviation used for mean/std normalization (normalization type "div").
+        norm_info : dict, optional
+            Dictionary containing normalization information for the dataset file.
 
         class_num : int, optional
             Class number associated with the sample (used in classification tasks).
@@ -246,12 +224,7 @@ class DatasetFile:
         """
         self.path = path
         self.shape = shape
-        self.lower_bound_val = lower_bound_val
-        self.upper_bound_val = upper_bound_val
-        self.scale_range_min_val = scale_range_min_val
-        self.scale_range_max_val = scale_range_max_val
-        self.mean = mean
-        self.std = std
+        self.norm_info = norm_info
         self.orig_dtype = ""
         if input_axes is not None:
             self.input_axes = input_axes

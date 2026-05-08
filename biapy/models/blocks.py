@@ -491,6 +491,7 @@ class UpBlock(nn.Module):
         in_size,
         out_size,
         z_down,
+        yx_down,
         up_mode,
         conv,
         k_size,
@@ -520,6 +521,10 @@ class UpBlock(nn.Module):
         z_down : int
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3.
+        yx_down : int
+            Downsampling factor applied in the y and x dimensions during upsampling.
+            For isotropic data, this should match `z_down`. For anisotropic data, set
+            accordingly (e.g., `yx_down=2` and `z_down=1` for 2D-like anisotropic data).
         up_mode : str
             The upsampling mode to use.
 
@@ -548,7 +553,7 @@ class UpBlock(nn.Module):
         super(UpBlock, self).__init__()
         self.ndim = ndim
         block = []
-        mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
+        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
         if up_mode == "convtranspose":
             block.append(convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool))
         elif up_mode == "upsampling":
@@ -630,6 +635,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         in_size,
         out_size,
         z_down,
+        yx_down,
         up_mode,
         conv,
         attention_gate=False,
@@ -660,6 +666,10 @@ class UpConvNeXtBlock_V1(nn.Module):
         z_down : int, optional
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3. Defaults to 2.
+        yx_down : int
+            Downsampling factor applied in the y and x dimensions during upsampling.
+            For isotropic data, this should match `z_down`. For anisotropic data, set
+            accordingly (e.g., `yx_down=2` and `z_down=1` for 2D-like anisotropic data).
         up_mode : str
             The upsampling mode to use.
 
@@ -692,7 +702,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         super(UpConvNeXtBlock_V1, self).__init__()
         self.ndim = ndim
         block = []
-        mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
+        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
 
         if ndim == 3:
             pre_ln_permutation = Permute([0, 2, 3, 4, 1])
@@ -788,6 +798,7 @@ class UpConvNeXtBlock_V2(nn.Module):
         in_size,
         out_size,
         z_down,
+        yx_down,
         up_mode,
         conv,
         attention_gate=False,
@@ -817,6 +828,10 @@ class UpConvNeXtBlock_V2(nn.Module):
         z_down : int, optional
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3. Defaults to 2.
+        yx_down : int, optional
+            Downsampling factor applied in the y and x dimensions during upsampling.
+            For isotropic data, this should match `z_down`. For anisotropic data, set
+            accordingly (e.g., `yx_down=2` and `z_down=1` for 2D-like anisotropic data). Defaults to 2.
         up_mode : str
             The upsampling mode to use.
 
@@ -847,7 +862,7 @@ class UpConvNeXtBlock_V2(nn.Module):
         super(UpConvNeXtBlock_V2, self).__init__()
         self.ndim = ndim
         block = []
-        mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
+        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
 
         if ndim == 3:
             pre_ln_permutation = Permute([0, 2, 3, 4, 1])
@@ -1300,6 +1315,9 @@ class ResUpBlock(nn.Module):
     z_down : int, optional
         Downsampling factor applied in the z-dimension for 3D data during upsampling.
         Only relevant if `ndim` is 3. Defaults to 2.
+    yx_down : int, optional
+        Downsampling factor applied in the y and x dimensions for 2D and 3D data during upsampling.
+        Only relevant if `ndim` is 2 or 3. Defaults to 2.
     up_mode : str
         The upsampling mode to use.
 
@@ -1340,6 +1358,7 @@ class ResUpBlock(nn.Module):
         out_size,
         in_size_bridge,
         z_down,
+        yx_down,
         up_mode,
         conv,
         k_size,
@@ -1374,6 +1393,9 @@ class ResUpBlock(nn.Module):
         z_down : int, optional
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3. Defaults to 2.
+        yx_down : int, optional
+            Downsampling factor applied in the y and x dimensions for 2D and 3D data during upsampling.
+            Only relevant if `ndim` is 2 or 3. Defaults to 2.
         up_mode : str
             The upsampling mode to use.
 
@@ -1407,7 +1429,7 @@ class ResUpBlock(nn.Module):
         """
         super(ResUpBlock, self).__init__()
         self.ndim = ndim
-        mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
+        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
         if up_mode == "convtranspose":
             self.up = convtranspose(in_size, in_size, kernel_size=mpool, stride=mpool)
         elif up_mode == "upsampling":
@@ -1787,12 +1809,12 @@ def get_activation(activation: str = "relu") -> nn.Module:
         "none",
     ], "Get unknown activation key {}".format(activation)
     activation_dict = {
-        "relu": nn.ReLU(),
+        "relu": nn.ReLU(inplace=True),
         "tanh": nn.Tanh(),
-        "leaky_relu": nn.LeakyReLU(negative_slope=0.2),
-        "elu": nn.ELU(alpha=1.0),
+        "leaky_relu": nn.LeakyReLU(inplace=True),
+        "elu": nn.ELU(alpha=1.0, inplace=True),
         "gelu": nn.GELU(),
-        "silu": nn.SiLU(),
+        "silu": nn.SiLU(inplace=True),
         "sigmoid": nn.Sigmoid(),
         "softmax": nn.Softmax(dim=1),
         "linear": nn.Identity(),
@@ -1801,7 +1823,11 @@ def get_activation(activation: str = "relu") -> nn.Module:
     }
     return activation_dict[activation]
 
-def prepare_activation_layers(activations: List[str], output_channel_info: List[str]) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
+def prepare_activation_layers(
+    activations: List[str], 
+    output_channel_info: List[str],
+    output_channels: List[int]
+    ) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
     """ 
     Prepare activation layers for the output and classification heads.
     
@@ -1813,6 +1839,9 @@ def prepare_activation_layers(activations: List[str], output_channel_info: List[
     output_channel_info : List[str]
         A list of strings indicating the type of output channels.
 
+    output_channels : List[int]
+        A list of integers indicating the number of channels for each output head.
+
     Returns
     -------
     out_activations : nn.ModuleList
@@ -1823,17 +1852,23 @@ def prepare_activation_layers(activations: List[str], output_channel_info: List[
     """
     activation_list = []
     class_activation_list = []
-    for i, activation in enumerate(activations):
-        activation = activation.lower().removeprefix("ce_")
+
+    all_channel_info = []
+    for i, c_info in enumerate(output_channel_info):
+        for j in range(output_channels[i]):
+            all_channel_info.append(c_info)
+
+    for i, c_info in enumerate(all_channel_info):
+        activation = activations[i].lower().removeprefix("ce_")
         act = get_activation(activation.lower())
-        if "class" in output_channel_info[i]:
+        if "class" in c_info:
             class_activation_list.append(act)
         else:
             activation_list.append(act)
-
         # We break the loop after finding the fist softmax activation since we assume that there is only one 
         # softmax activation for the classification head (if any)
         if "softmax" in activation:
+            break_outer = True
             break
 
     if len(class_activation_list) > 0:
@@ -1862,19 +1897,21 @@ def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
         "in",
         "none",
     ], "Get unknown normalization layer key {}".format(norm)
-    if norm == "gn":
-        assert out_channels % 8 == 0, "GN requires channels to separable into 8 groups"
     selected_norm = {
         "bn": nn.BatchNorm3d,
         "sync_bn": nn.SyncBatchNorm,
         "in": nn.InstanceNorm3d,
-        "gn": lambda channels: nn.GroupNorm(8, channels),
+        "gn": nn.GroupNorm,
         "none": nn.Identity,
     }[norm]
-    if norm in ["bn", "sync_bn", "in"]:
+    if norm in ["bn", "sync_bn"]:
         return selected_norm(out_channels, momentum=bn_momentum)
+    elif norm == "in":
+        return selected_norm(out_channels, affine=True, momentum=bn_momentum)
+    elif norm == "gn":
+        return selected_norm(out_channels, num_groups=8)
     else:
-        return selected_norm(out_channels)
+        return selected_norm()
 
 
 def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
@@ -1902,13 +1939,17 @@ def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
         "bn": nn.BatchNorm2d,
         "sync_bn": nn.SyncBatchNorm,
         "in": nn.InstanceNorm2d,
-        "gn": lambda channels: nn.GroupNorm(16, channels),
+        "gn": nn.GroupNorm,
         "none": nn.Identity,
     }[norm]
-    if norm in ["bn", "sync_bn", "in"]:
+    if norm in ["bn", "sync_bn"]:
         return selected_norm(out_channels, momentum=bn_momentum)
+    elif norm == "in":
+        return selected_norm(out_channels, affine=True, momentum=bn_momentum)
+    elif norm == "gn":
+        return selected_norm(out_channels, num_groups=16)
     else:
-        return selected_norm(out_channels)
+        return selected_norm()
 
 
 class ResUNetPlusPlus_AttentionBlock(nn.Module):
@@ -1939,6 +1980,8 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
     z_down : int, optional
         Downsampling factor for the z-dimension (depth) in 3D max-pooling.
         Only relevant if `conv` is `nn.Conv3d`. Defaults to 2.
+    yx_down : int, optional
+        Downsampling factor for the y and x dimensions in 2D and 3D max-pooling. Defaults to 2.
     norm : str, optional
         Normalization layer type to use within the convolutional sub-blocks.
         Options include `'bn'` (BatchNorm), `'sync_bn'` (SyncBatchNorm),
@@ -1954,6 +1997,7 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         input_decoder,
         output_dim,
         z_down=2,
+        yx_down=2,
         norm="none",
     ):
         """
@@ -1976,6 +2020,8 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
             The desired number of channels for the intermediate feature maps.
         z_down : int, optional
             Downsampling factor for the z-dimension in 3D max-pooling. Defaults to 2.
+        yx_down : int, optional
+            Downsampling factor for the y and x dimensions in 2D and 3D max-pooling. Defaults to 2.
         norm : str, optional
             Normalization layer type to use within the convolutional blocks. Defaults to "none".
         """
@@ -1990,7 +2036,7 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         block += [
             nn.ReLU(),
             conv(input_encoder, output_dim, 3, padding=1),
-            maxpool((2, 2)) if conv == nn.Conv2d else maxpool((z_down, 2, 2)),
+            maxpool((yx_down, yx_down)) if conv == nn.Conv2d else maxpool((z_down, yx_down, yx_down)),
         ]
         self.conv_encoder = nn.Sequential(*block)
 

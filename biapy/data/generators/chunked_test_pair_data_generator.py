@@ -28,7 +28,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.data.data_manipulation import sample_satisfy_conds, save_tif, extract_patch_within_image
 from biapy.utils.misc import get_world_size, get_rank, is_main_process
 from biapy.data.dataset import PatchCoords
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask
 
 class chunked_test_pair_data_generator(IterableDataset):
     """
@@ -43,7 +43,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         * ``"Y"``, Zarr/H5 data (optional): Y data to process
         * ``"mask_file_to_close"``, Zarr/H5 file (optional): Y data file pointer
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     input_axes : str
@@ -99,7 +99,7 @@ class chunked_test_pair_data_generator(IterableDataset):
     def __init__(
         self,
         sample_to_process: Dict,
-        norm_module: Normalization,
+        norm_module: Dict,
         input_axes: str,
         mask_input_axes: str,
         crop_shape: Tuple[int, ...],
@@ -123,7 +123,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         ----------
         sample_to_process : dict
             Dictionary containing sample data and file pointers.
-        norm_module : Normalization
+        norm_module : Dict
             Normalization module to apply.
         input_axes : str
             Axes order for input data.
@@ -348,7 +348,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         )
 
         if self.convert_to_rgb:
-            if extract == "image" or (extract == "mask" and self.norm_module.mask_norm == "as_image"):
+            if extract == "image" or (extract == "mask" and self.norm_module["mask_norm"] == "as_image"):
                 if data.shape[-1] == 1:
                     data = np.repeat(data, 3, axis=-1)
 
@@ -372,8 +372,8 @@ class chunked_test_pair_data_generator(IterableDataset):
         pad_to_add : List of list of ints
             Padding added to the patch in order to satisfy the crop shape expected.
 
-        norm_extra_info : dict
-            Extra information of the normalization applied ``img``.
+        xnorm_info : dict
+            Extra information of the normalization applied to ``img``.
         """
         assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
         worker_info = torch.utils.data.get_worker_info()  # type: ignore
@@ -465,16 +465,18 @@ class chunked_test_pair_data_generator(IterableDataset):
                         )[0]
 
                 # Normalization
-                self.norm_module.set_stats_from_image(img)
-                img, norm_extra_info = self.norm_module.apply_image_norm(img)
-                norm_extra_info = {}
+                img, xnorm_info = normalize_image(img, norm_module=self.norm_module)
                 if mask is not None:
-                    mask = np.array(mask)
-                    self.norm_module.set_stats_from_mask(mask, n_classes=self.n_classes, ignore_index=self.ignore_index, instance_problem=self.instance_problem)
-                    mask, _ = self.norm_module.apply_mask_norm(mask)
+                    mask, _ = normalize_mask(
+                        np.array(mask), 
+                        norm_module=self.norm_module, 
+                        n_classes=self.n_classes, 
+                        ignore_index=self.ignore_index, 
+                        instance_problem=self.instance_problem
+                    )
                     assert isinstance(mask, np.ndarray)
 
-                yield vol_id, img, mask, real_patch_in_data, added_pad, norm_extra_info
+                yield vol_id, img, mask, real_patch_in_data, added_pad, xnorm_info
 
     def _shared_zarr_path(self) -> str:
         base = os.path.splitext(self.filename)[0]

@@ -17,7 +17,7 @@ import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 import torch.distributed as dist
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
 import pandas as pd
@@ -29,7 +29,10 @@ from biapy.models import (
     build_model,
     build_torchvision_model,
     build_bmz_model,
+    is_biapy_model,
+    get_bmz_model_kwargs,
     check_bmz_args,
+    get_last_layer_info,
 )
 from biapy.models.blocks import get_activation
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -58,7 +61,6 @@ from biapy.utils.misc import (
 from biapy.engine.check_configuration import (
     convert_old_model_cfg_to_current_version,
     diff_between_configs,
-    compare_configurations_without_model,
     check_configuration,
 )
 from biapy.utils.util import (
@@ -92,7 +94,7 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.dataset import PatchCoords
 from biapy.models.memory_bank import MemoryBank
@@ -167,7 +169,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.post_processing = {}
         self.post_processing["per_image"] = False
         self.post_processing["as_3D_stack"] = False
-        self.data_norm = None
         self.model = None
         self.model_build_kwargs = None
         self.checkpoint_path = None
@@ -177,6 +178,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16"
         self.loss_dtype = torch.float32
         self.dims = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
+        self.apply_activations = True
 
         self.use_gt = False
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
@@ -257,9 +259,58 @@ class Base_Workflow(metaclass=ABCMeta):
         # Tochvision variables
         self.torchvision_preprocessing = None
 
-        # Load BioImage Model Zoo pretrained model information
+        # Load pretrained model configuration if needed and check consistency with current configuration
         self.bmz_config = {}
-        if self.cfg.MODEL.SOURCE == "bmz":
+        if self.cfg.MODEL.SOURCE == "biapy":
+            # Obtain model spec from checkpoint
+            if self.cfg.MODEL.LOAD_CHECKPOINT:
+                # Take cfg from the checkpoint
+                saved_cfg, biapy_ckpt_version = load_model_checkpoint(
+                    cfg=self.cfg,
+                    jobname=self.job_identifier,
+                    model_without_ddp=None,
+                    device=self.device,
+                    just_extract_checkpoint_info=True,
+                    skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
+                )
+                assert isinstance(saved_cfg, CN), "There was an error loading the checkpoint configuration. The loaded configuration is not a YACS CfgNode object but of type {}. Check that the checkpoint file is not corrupted.".format(type(saved_cfg))
+                if saved_cfg:
+                    if len(self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT) > 0:
+                        print("Checkpoint file loaded. Extracting the following items (if available): {} . Checking consistency with current configuration . . .".format(", ".join(self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT)))
+                        # Checks that this config and previous represent the same workflow
+                        header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
+                        tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
+
+                        # Override model specs
+                        if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
+                            print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
+                            diff_between_configs(saved_cfg, tmp_cfg)
+
+                    if "weights" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT and "norm" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("WARNING: Weights will be loaded from checkpoint but not normalization instructions. This can lead to inconsistent results if the normalization instructions in the current configuration are different from the ones used in the checkpoint. Consider adding 'norm' to 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' to avoid this issue.")
+
+                    if "norm" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("Normalization instructions will be loaded from checkpoint.")
+                        update_dict_with_existing_keys(self.cfg["DATA"]["NORMALIZATION"], tmp_cfg["DATA"]["NORMALIZATION"])
+
+                    if "model_arch" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("Model architecture will be loaded from checkpoint.")
+                        # Save current model config
+                        tmp_BMZ_config = self.cfg.MODEL.clone()
+
+                        update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
+
+                        # Restore some model config
+                        self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config["BMZ"]
+                        self.cfg["MODEL"]["OUT_CHECKPOINT_FORMAT"] = tmp_BMZ_config["OUT_CHECKPOINT_FORMAT"]
+                        
+                        # Check if the merge is coherent
+                        self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+                        self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
+                        check_configuration(self.cfg, self.job_identifier)
+        
+        # Load BioImage Model Zoo pretrained model information
+        elif self.cfg.MODEL.SOURCE == "bmz":
             self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
             print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
 
@@ -276,14 +327,17 @@ class Base_Workflow(metaclass=ABCMeta):
                 elif old_val != val:
                     change = True
                 if change:
-                    print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
+                    print(f"[BMZ] Changed '{key}' from '{old_val}' to '{val}' as defined in the RDF")
                     option_list.append(key)
                     option_list.append(val)
-                    
+
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
             self.cfg.merge_from_list(option_list)
+
+            # Check consistency of the resulting configuration after merging with the BMZ model configuration
+            check_configuration(self.cfg, self.job_identifier)
 
         # Save number of channels to be created by the model
         self.define_activations_and_channels()
@@ -292,35 +346,41 @@ class Base_Workflow(metaclass=ABCMeta):
         self.define_metrics()
 
         # Normalization checks
-        print("Creating normalization module . . .")
-        self.norm_module = Normalization(
-            type=cfg.DATA.NORMALIZATION.TYPE,
-            measure_by=cfg.DATA.NORMALIZATION.MEASURE_BY,
-            mask_norm="as_mask",
-            out_dtype="float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
-            percentile_clip=cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
-            per_lower_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
-            per_upper_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
-            lower_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
-            upper_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
-            mean=cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
-            std=cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
-        )
+        print("Creating normalization module . . .")        
+        self.norm_module = {
+            "type": cfg.DATA.NORMALIZATION.TYPE,
+            "mask_norm": "as_mask",
+            "out_dtype": "float32",
+            "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
+            "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
+            "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
+            "lower_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
+            "upper_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            "mean": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
+            "std": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
+        }
+        print("Normalization module created with the following configuration:")
+        for key, val in self.norm_module.items():
+            print(f"  {key}: {val}")
+
         self.test_norm_module = self.norm_module.copy()
-        self.test_norm_module.train_normalization = False
+        self.test_norm_module["train_normalization"] = False
+        self.test_norm_module["out_dtype"] = "float32" if not cfg.TEST.REDUCE_MEMORY else "float16"
         if self.cfg.MODEL.SOURCE == "torchvision":
             print("Creating normalization module . . .")
-            self.torchvision_norm = Normalization(
-                type="scale_range",
-                measure_by="image",
-                mask_norm="as_mask",
-                out_dtype="float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
-                percentile_clip=cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
-                per_lower_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
-                per_upper_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
-                lower_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
-                upper_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
-            )
+            self.torchvision_norm = {
+                "type": "scale_range",
+                "mask_norm": "as_mask",
+                "out_dtype": "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
+                "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
+                "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
+                "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
+                "lower_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
+                "upper_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            }
+            print("Torchvision normalization module created with the following configuration:")
+            for key, val in self.torchvision_norm.items():
+                print(f"  {key}: {val}")
 
         # Chunked workflow process generator placeholder
         self.test_chunked_workflow_process_vars = {
@@ -339,14 +399,24 @@ class Base_Workflow(metaclass=ABCMeta):
             [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
         self.model_output_channel_info : List of str
-            Information about the output channels.
+            Information about the output channels. A value per output head of the model must be defined. 
 
         self.separated_class_channel : bool
             Whether if we should expect a separated output channel for classification.
 
         self.head_activations : List of str
-            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
+            Activations to be applied to the model output. A value per output channel (not output head) of the model must be defined.
+            "linear" and "ce_sigmoid" will not be applied. E.g. ["linear"] for a model with one channel, ["linear", "sigmoid"] for a
+            model with two channels, etc.
+
+        Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
+        and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
+        be correct::
+
+            self.model_output_channels = [1, 3]
+            self.model_output_channel_info = ["mask", "class"]
+            self.separated_class_channel = True
+            self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
         if not self.model_output_channels:
             raise ValueError(
@@ -595,7 +665,6 @@ class Base_Workflow(metaclass=ABCMeta):
             (
                 self.train_generator,
                 self.val_generator,
-                self.data_norm,
                 self.num_training_steps_per_epoch,
                 self.bmz_config["test_input"],
                 self.bmz_config["cover_raw"],
@@ -665,7 +734,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def model_call_func(
         self, in_img: NDArray | torch.Tensor, is_train: bool = False, apply_act: bool = True
-    ) -> torch.Tensor:
+    ) -> Any:
         """
         Call a regular Pytorch model.
 
@@ -720,7 +789,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         pred[i] = self.apply_model_activations(pred[i], training=is_train)
             else:
                 if apply_act:
-                    pred = self.apply_model_activations(pred, training=is_train)
+                    pred = self.apply_model_activations(pred, training=is_train) # type: ignore
         elif self.cfg.MODEL.SOURCE == "bmz":
             pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train), training=is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":
@@ -744,40 +813,8 @@ class Base_Workflow(metaclass=ABCMeta):
         print("###############")
         print("# Build model #")
         print("###############")
+        
         if self.cfg.MODEL.SOURCE == "biapy":
-            # Obtain model spec from checkpoint
-            if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
-                # Take cfg from the checkpoint
-                saved_cfg, biapy_ckpt_version = load_model_checkpoint(
-                    cfg=self.cfg,
-                    jobname=self.job_identifier,
-                    model_without_ddp=None,
-                    device=self.device,
-                    just_extract_checkpoint_info=True,
-                    skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
-                )
-                if saved_cfg:
-                    # Checks that this config and previous represent same workflow
-                    header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
-                    tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
-                    compare_configurations_without_model(
-                        self.cfg, tmp_cfg, header_message, old_cfg_version=biapy_ckpt_version
-                    )
-
-                    # Override model specs
-                    if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
-                        print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
-                        diff_between_configs(saved_cfg, tmp_cfg)
-                    # Save current BMZ config
-                    tmp_BMZ_config = self.cfg.MODEL.BMZ.clone()
-                    update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
-                    # Restore BMZ config
-                    self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config
-
-                    # Check if the merge is coherent
-                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
-                    self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
-                    check_configuration(self.cfg, self.job_identifier)
             (
                 self.model,
                 self.bmz_config["callable_model"],
@@ -786,12 +823,33 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["scanned_files"],
                 self.model_build_kwargs,
                 self.network_stride,
-            ) = build_model(self.cfg, self.model_output_channels, self.model_output_channel_info, self.head_activations, self.device)
+            ) = build_model(
+                self.cfg, 
+                self.model_output_channels, 
+                self.model_output_channel_info,
+                self.head_activations,
+                self.device
+            )
+            self.bmz_config["is_biapy_model"] = True
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
+            self.bmz_config["is_biapy_model"] = False
         # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
             self.model = build_bmz_model(self.cfg, self.bmz_config["original_bmz_config"], self.device)
+
+            # For old BMZ models uploaded in BMZ we need to explicitly insert the sigmoid activation as postprocessing
+            self.bmz_config["is_biapy_model"] = is_biapy_model(self.bmz_config["original_bmz_config"])
+            bmz_model_kwargs = get_bmz_model_kwargs(self.bmz_config["original_bmz_config"])
+            if self.bmz_config["is_biapy_model"] and "explicit_activation" not in bmz_model_kwargs:
+                self.bmz_config["postprocessing"] = []
+                if self.head_activations[0] in ["ce_sigmoid", "Sigmoid"]:
+                    self.bmz_config["postprocessing"].append("sigmoid")
+
+            layer_info = get_last_layer_info(self.model)
+            if layer_info['is_activation']:
+                print("[BMZ] Disabling manual activations after the model as the last layer of the model is already an activation function ({}).".format(layer_info['layer_type']))
+                self.apply_activations = False
 
         self.model_without_ddp = self.model
         if self.args.distributed:
@@ -855,6 +913,7 @@ class Base_Workflow(metaclass=ABCMeta):
         assert (
             self.start_epoch is not None and self.model is not None and self.model_without_ddp is not None and self.loss
         )
+        assert isinstance(self.start_epoch, int), "'start_epoch' should be an integer"
         self.optimizer, self.lr_scheduler = prepare_optimizer(
             self.cfg, self.model_without_ddp, len(self.train_generator)
         )
@@ -1146,7 +1205,6 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             (
                 self.test_generator, 
-                self.data_norm, 
                 test_input, 
                 cover_raw, 
                 cover_gt,
@@ -1163,7 +1221,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
 
-    def apply_model_activations(self, pred: torch.Tensor, training=False) -> torch.Tensor:
+    def apply_model_activations(self, pred: torch.Tensor | Dict, training=False) -> torch.Tensor | Dict:
         """
         Apply the last activation (if any) to the model's output.
 
@@ -1184,39 +1242,74 @@ class Base_Workflow(metaclass=ABCMeta):
             Resulting predictions after applying last activation(s).
         """
         # Do not apply any activation when using masking as pretext task
-        if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
+        if (
+            not self.apply_activations
+            or (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking")
+        ):
             return pred
 
-        def __apply_acts(prediction, acts):
+        # 1. Expand channel info to map 1-to-1 with every channel
+        all_channel_info = []
+        for i, c_info in enumerate(self.model_output_channel_info):
+            for _ in range(self.model_output_channels[i]):
+                # For semantic segmentation and classification problems, we consider that all the channels are "class" channels
+                if self.cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "CLASSIFICATION"]:
+                    c_info = "class"
+                all_channel_info.append(c_info)
+
+        def __apply_acts(tensor, acts, c_infos):
             if len(acts) == 0:
-                return prediction
-            
-            if acts[0].lower() == "ce_softmax" and not training:
-                act = get_activation("softmax")
-                return act(prediction)
-            
+                return tensor
+
             out_slices = []
-            for i, activation in enumerate(acts):
-                # Ignore ce_sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
-                # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-                # In the same way, ce_softmax is ignored during training as torch.nn.CrossEntropyLoss applies Softmax internally
-                if (training and activation not in ["linear", "ce_sigmoid", "ce_softmax"]) or (not training and activation != "linear"):
-                    activation = "sigmoid" if activation == "ce_sigmoid" else activation
-                    act = get_activation(activation.lower())
-                    out_slices.append(act(prediction[:, i:i+1, ...]))
+
+            # Find the exact index where "class" channels begin
+            class_start_idx = len(c_infos)
+            for i, info in enumerate(c_infos):
+                if "class" in info.lower():
+                    class_start_idx = i
+                    break
+            
+            # --- PART A: Process standard channels (1-by-1) ---
+            for i in range(min(class_start_idx, tensor.shape[1])):
+                chunk = tensor[:, i:i+1, ...]
+                act_str = acts[i].lower()
+                
+                # Skip if linear, or if training and it's handled by the loss function
+                if act_str == "linear" or (training and act_str in ["ce_sigmoid", "ce_softmax"]):
+                    out_slices.append(chunk)
                 else:
-                    out_slices.append(prediction[:, i:i+1, ...])
+                    clean_act = "sigmoid" if act_str == "ce_sigmoid" else act_str
+                    act_fn = get_activation(clean_act)
+                    out_slices.append(act_fn(chunk))
 
-            return torch.cat(out_slices, dim=1)
+            # --- PART B: Process the entire "class" block (all at once) ---
+            if class_start_idx < tensor.shape[1]:
+                class_chunk = tensor[:, class_start_idx:, ...]
+                act_str = acts[class_start_idx].lower()
+                
+                # Skip if linear, or if training and it's handled by the loss function
+                if act_str == "linear" or (training and act_str in ["ce_sigmoid", "ce_softmax"]):
+                    out_slices.append(class_chunk)
+                else:
+                    # Apply a single activation to the whole multidimensional block
+                    clean_act = "softmax" if "softmax" in act_str else ("sigmoid" if act_str == "ce_sigmoid" else act_str)
+                    act_fn = get_activation(clean_act)
+                    out_slices.append(act_fn(class_chunk))
 
+            return torch.cat(out_slices, dim=1) if out_slices else tensor
+
+        # 2. Apply to inputs (handling both Dict and Tensor formats)
         if isinstance(pred, dict):
-            pred["pred"] = __apply_acts(pred["pred"], self.head_activations)
+            pred_len = pred["pred"].shape[1]
+            pred["pred"] = __apply_acts(pred["pred"], self.head_activations[:pred_len], all_channel_info[:pred_len])
+            
             if "class" in pred:
-                class_pos = self.model_output_channel_info.index("class")
-                class_acts = self.head_activations[-self.model_output_channels[class_pos]:]
-                pred["class"] = __apply_acts(pred["class"], class_acts)
+                class_len = pred["class"].shape[1]
+                pred["class"] = __apply_acts(pred["class"], self.head_activations[-class_len:], all_channel_info[-class_len:])
         else:
-            pred = __apply_acts(pred, self.head_activations)
+            pred = __apply_acts(pred, self.head_activations, all_channel_info)
+            
         return pred
 
     @torch.no_grad()
@@ -1296,6 +1389,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         if "Y_filename" in self.current_sample:
                             me += " (GT: {})".format(self.current_sample["Y_filename"])
                         print(me)
+                        print("Normalization used: {}".format(self.current_sample["X_norm"]))
                     discarded = self.process_test_sample()
 
             # If process_test_sample() returns True means that the sample was skipped due to filter set
@@ -1404,7 +1498,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Multi-head concatenation
                 if isinstance(p, dict):
                     if "class" in p:
-                        p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                        p = torch.cat((p["pred"], p["class"]), dim=1)
                     else:
                         p = p["pred"]
 
@@ -1434,7 +1528,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Multi-head concatenation
                 if isinstance(p, dict):
                     if "class" in p:
-                        p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                        p = torch.cat((p["pred"], p["class"]), dim=1)
                     else:
                         p = p["pred"]
 
@@ -1486,20 +1580,9 @@ class Base_Workflow(metaclass=ABCMeta):
             """
             img = img.astype(np.float32)
             if len(img.shape) == 2:  # Classification
-                self.bmz_config[sample_key] = img[0]
+                self.bmz_config[sample_key] = img.copy()
             else:
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config[sample_key] = img[
-                        0, :, : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
-                    ].copy()
-                else:
-                    self.bmz_config[sample_key] = img[
-                        0,
-                        :,
-                        : self.cfg.DATA.PATCH_SIZE[0],
-                        : self.cfg.DATA.PATCH_SIZE[1],
-                        : self.cfg.DATA.PATCH_SIZE[2],
-                    ].copy()
+                self.bmz_config[sample_key] = img[0].copy()
 
             # Ensure dimensions
             if self.cfg.PROBLEM.NDIM == "2D":
@@ -1511,9 +1594,15 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Apply normalization
             if apply_norm:
-                self.norm_module.set_stats_from_image(self.bmz_config[sample_key])
-                self.bmz_config[sample_key], _ = self.norm_module.apply_image_norm(self.bmz_config[sample_key])
-                self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32)
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    # Transpose to (b,y,x,c) for normalization and back to (b,c,y,x) after
+                    self.bmz_config[sample_key], bmz_norm_used = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 1), self.norm_module)
+                    self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 3, 1, 2)
+                else:  
+                    # Transpose to (b,z,y,x,c) for normalization and back to (b,c,z,y,x) after
+                    self.bmz_config[sample_key], bmz_norm_used = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 4, 1), self.norm_module)
+                    self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 4, 1, 2, 3)
+                print("Normalization used in when creating BMZ data: {}".format(bmz_norm_used))
 
         # Save test_input without the normalization if not already saved
         if "test_input" not in self.bmz_config:
@@ -1531,15 +1620,20 @@ class Base_Workflow(metaclass=ABCMeta):
         # MAE
         if isinstance(pred, dict) and "mask" in pred:
             pred = self.apply_model_activations(pred)
+            assert isinstance(pred, dict), "The model output should be a dictionary containing 'pred' and 'mask' for the MAE pretext task."
+            assert "pred" in pred and "mask" in pred, "The model output should contain 'pred' and 'mask' for the MAE pretext task."
             mask = pred["mask"]
             pred = pred["pred"]
-            pred, _, _ = self.model_without_ddp.save_images(
+            pred, p_mask, _ = self.model_without_ddp.save_images(
                 torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device),
                 pred,
                 mask,
                 self.dtype,
-            )
-            pred = torch.from_numpy(pred)
+            ) # type: ignore
+
+            # We call MAE again with "return_just_preds" that sets a seed in the random masking to ensure that the same mask is applied here 
+            # and in the BMZ exported model. If not BMZ check will crash reproducing the output 
+            pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device), return_just_preds=True)
         else:
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
@@ -1552,17 +1646,14 @@ class Base_Workflow(metaclass=ABCMeta):
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
         if "cover_gt" not in self.bmz_config or ("cover_gt" in self.bmz_config and self.bmz_config["cover_gt"] is None):
-            self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
+            if self.bmz_config["test_output"].ndim == 1:  # Classification
+                self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy()
+            elif self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
+                self.bmz_config["cover_gt"] = p_mask[0].copy()
+            else:
+                self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
             if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
                 self.bmz_config["cover_gt"] = np.expand_dims(np.argmax(self.bmz_config["cover_gt"], -1), -1)
-            
-        self.bmz_config["postprocessing"] = []
-        if self.cfg.MODEL.SOURCE == "biapy":
-            # Check activations to be inserted as postprocessing in BMZ
-            act = list(self.head_activations[0])
-            for ac in act:
-                if ac in ["ce_sigmoid", "Sigmoid"]:
-                    self.bmz_config["postprocessing"].append("sigmoid")
 
     def process_test_sample(self):
         """Process a sample in the inference phase."""
@@ -1790,6 +1881,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = np.expand_dims(apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS), 0)
 
+                if self.separated_class_channel:
+                    class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+                    pred = np.concatenate( 
+                        (
+                            pred[...,:-self.model_output_channels[class_idx]],  
+                            np.expand_dims(np.argmax(pred[..., -self.model_output_channels[class_idx]:], axis=-1), axis=-1)
+                        ), axis=-1)                            
+
                 # Save image
                 if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
                     save_tif(
@@ -1798,11 +1897,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
-
-                # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
-                    _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
-                    pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
                 # Calculate the metrics
                 if self.current_sample["Y"] is not None:
@@ -1890,7 +1984,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
 
-                # Multi-head concatenationç
+                # Multi-head concatenation
                 if isinstance(pred, dict):
                     if "class" in pred:
                         pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
@@ -1912,11 +2006,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-
-                # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
-                    _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
-                    pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
@@ -2308,6 +2397,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Pass the batch through the model
                 pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
 
+                if self.separated_class_channel:
+                    class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+                    pred = np.concatenate( 
+                        (
+                            pred[...,:-self.model_output_channels[class_idx]],  
+                            np.expand_dims(np.argmax(pred[..., -self.model_output_channels[class_idx]:], axis=-1), axis=-1)
+                        ), axis=-1) 
+                
                 lbreaked = False
                 for i in range(pred.shape[0]):
                     # Break the loop as those samples were created just to complete the last batch

@@ -17,6 +17,8 @@ The implementation is adapted from the original DFCAN-pytorch repository.
 """
 # Adapted from https://github.com/L0-zhang/DFCAN-pytorch
 
+from typing import Sequence, Type
+
 import torch
 import torch.nn as nn
 import torch.fft
@@ -98,7 +100,7 @@ class RCAB(nn.Module):
     the result with the original features.
     """
 
-    def __init__(self, size_psc=128, conv=nn.Conv2d):  # size_psc：crop_size input_shape：depth
+    def __init__(self, size_psc=128, conv: Type[nn.Conv2d | nn.Conv3d] = nn.Conv2d):  # size_psc：crop_size input_shape：depth
         """
         Initialize the Residual Channel Attention Block.
 
@@ -174,7 +176,7 @@ class ResGroup(nn.Module):
     gradient flow.
     """
 
-    def __init__(self, n_RCAB=4, size_psc=128, conv=nn.Conv2d):
+    def __init__(self, n_RCAB=4, size_psc=128, conv: Type[nn.Conv2d | nn.Conv3d] = nn.Conv2d):
         """
         Initialize a Residual Group.
 
@@ -263,7 +265,7 @@ class DFCAN(nn.Module):
             The number of `RCAB` blocks within each `ResGroup`. Defaults to 4.
         """
         super().__init__()
-        if type(scale) is tuple:
+        if type(scale) is not int and isinstance(scale, Sequence):
             scale = scale[0]
         self.ndim = ndim
         size_psc = input_shape[0]

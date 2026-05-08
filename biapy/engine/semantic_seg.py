@@ -23,7 +23,7 @@ from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
-    DiceBCELoss,
+    DiceCELoss,
     DiceLoss,
     ContrastCELoss,
 )
@@ -106,14 +106,24 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
         self.model_output_channel_info : List of str
-            Information about the output channels.
+            Information about the output channels. A value per output head of the model must be defined. 
 
         self.separated_class_channel : bool
             Whether if we should expect a separated output channel for classification.
 
         self.head_activations : List of str
-            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
+            Activations to be applied to the model output. A value per output channel (not output head) of the model must be defined.
+            "linear" and "ce_sigmoid" will not be applied. E.g. ["linear"] for a model with one channel, ["linear", "sigmoid"] for a
+            model with two channels, etc.
+
+        Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
+        and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
+        be correct::
+
+            self.model_output_channels = [1, 3]
+            self.model_output_channel_info = ["mask", "class"]
+            self.separated_class_channel = True
+            self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
         self.model_output_channels = [1 if self.cfg.DATA.N_CLASSES <= 2 else self.cfg.DATA.N_CLASSES]
         self.gt_channels_expected = self.cfg.DATA.N_CLASSES
@@ -184,7 +194,6 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             semantic_loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.DATA.N_CLASSES,
                 ndim=self.dims,
-                model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
@@ -193,7 +202,19 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "DICE":
             semantic_loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            semantic_loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
+            semantic_loss = DiceCELoss(
+                num_classes=self.cfg.DATA.N_CLASSES,
+                ndim=self.dims,
+                batch_dice=True,
+                separated_class_channel=self.separated_class_channel,
+                model_source=self.cfg.MODEL.SOURCE,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                w_dice=self.cfg.LOSS.WEIGHTS[0],
+                w_ce=self.cfg.LOSS.WEIGHTS[1],
+                device=self.device,
+            )
 
         if self.cfg.LOSS.CONTRAST.ENABLE: 
             self.loss = ContrastCELoss(
@@ -400,7 +421,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             th = threshold_otsu(pred)
             pred = (pred > th).astype(np.uint8)
         else:
-            pred = np.expand_dims(np.argmax(pred, axis=-1), -1)
+            _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
+            pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+
         save_tif(
             pred,
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
@@ -418,8 +441,16 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         # Save simple binarization of predictions
+        if self.cfg.DATA.N_CLASSES <= 2:
+            th = threshold_otsu(pred)
+            pred = (pred > th).astype(np.uint8)
+        else:
+            _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
+            pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+
+        # Save simple binarization of predictions
         save_tif(
-            (pred > 0.5).astype(np.uint8),
+            pred,
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
             [self.current_sample["X_filename"]],
             verbose=self.cfg.TEST.VERBOSE,

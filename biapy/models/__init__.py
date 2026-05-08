@@ -18,13 +18,13 @@ normalization, dropout) accordingly.
 
 from importlib import import_module
 import os
+import math
 import re
 import torch
 import torch.nn as nn
 from torchinfo import summary
-from typing import Iterable, Optional, Dict, Tuple, List, Callable
+from typing import Iterable, Optional, Dict, Tuple, List, Callable, Any
 from packaging.version import Version
-from functools import partial
 from yacs.config import CfgNode as CN
 import ast
 from collections import deque, defaultdict
@@ -38,7 +38,7 @@ from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import load_description
-
+from bioimageio.spec.model import v0_4, v0_5
 
 def build_model(
     cfg: CN, 
@@ -112,6 +112,7 @@ def build_model(
             normalization=cfg.MODEL.NORMALIZATION,
             k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
+            yx_down=cfg.MODEL.YX_DOWN,
             z_down=cfg.MODEL.Z_DOWN,
             output_channels=output_channels,
             output_channel_info=output_channel_info,
@@ -122,6 +123,7 @@ def build_model(
             separated_decoders=cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD,
             isotropy=cfg.MODEL.ISOTROPY,
             larger_io=cfg.MODEL.LARGER_IO,
+            return_one_tensor=False,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
@@ -162,7 +164,7 @@ def build_model(
     elif "hrnet" in modelname:
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
-            normalization="sync_bn",
+            normalization=cfg.MODEL.NORMALIZATION,
             output_channels=output_channels,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
@@ -170,60 +172,68 @@ def build_model(
             head_activations=head_activations,
             output_channel_info=output_channel_info,
             explicit_activations=False,
+            activation=cfg.MODEL.ACTIVATION.lower(),
+            return_one_tensor=False,
         )
 
-        if cfg.MODEL.HRNET.CUSTOM:
+        variant = str(cfg.MODEL.HRNET.VARIANT).lower()
+        if variant == "custom":
+            # Pass the full custom configuration exactly as defined in the yaml/config
             args["cfg"] = cfg.MODEL.HRNET
         else:
-            if modelname == "hrnet64":
-                num_channels = 64
-            elif modelname == "hrnet48":
-                num_channels = 48
-            elif modelname == "hrnet32":
-                num_channels = 32
-            elif modelname == "hrnet18":
-                num_channels = 18
+            # Extract base channels directly from the variant string
+            try:
+                base_channels = int(variant.replace("w", ""))  # Remove 'w' prefix if present and convert to int
+            except ValueError:
+                raise ValueError(
+                    f"Invalid MODEL.HRNET.VARIANT: '{variant}'. "
+                    "Expected 'W18', 'W32', 'W48', 'W64', or 'custom'."
+                )
+
+            # Auto-generate standard HRNet topology
+            num_stages = 3
+            num_modules = [1, 4, 3]
+            num_branches = [2, 3, 4]
+
+            # Procedurally generate blocks and channels based on the number of branches
+            num_blocks = [[4] * b for b in num_branches]
+            num_channels = [[base_channels * (2**i) for i in range(b)] for b in num_branches]
+
             args["cfg"] = {
-                'Z_DOWN': cfg.MODEL.HRNET.Z_DOWN, 
-                'STAGE2': {
-                    'NUM_MODULES': 1, 
-                    'NUM_BRANCHES': 2, 
-                    'NUM_BLOCKS': [4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2], 
-                    'BLOCK': 'BASIC'
-                },
-                'STAGE3': {
-                    'NUM_MODULES': 4, 
-                    'NUM_BRANCHES': 3, 
-                    'NUM_BLOCKS': [4, 4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*4], 
-                    'BLOCK': 'BASIC',
-                },
-                'STAGE4': {
-                    'NUM_MODULES': 3, 
-                    'NUM_BRANCHES': 4, 
-                    'NUM_BLOCKS': [4, 4, 4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*4, num_channels*8], 
-                    'BLOCK': 'BASIC'
-                }
-            } 
+                'Z_DOWN': cfg.MODEL.HRNET.Z_DOWN,
+                'YX_DOWN': cfg.MODEL.HRNET.YX_DOWN,
+                'BLOCK_TYPE': cfg.MODEL.HRNET.BLOCK_TYPE,
+                'NUM_STAGES': num_stages,
+                'NUM_MODULES': num_modules,
+                'NUM_BRANCHES': num_branches,
+                'NUM_BLOCKS': num_blocks,
+                'NUM_CHANNELS': num_channels,
+            }
 
         callable_model = HighResolutionNet  # type: ignore
         model = callable_model(**args)
 
-        network_stride = [4, 4]
+        # Calculate YX total stride (e.g., [2, 2, 2] -> 8)
+        yx_schedule = args["cfg"].get("YX_DOWN", [2, 2, 2])
+        yx_total_stride = math.prod(yx_schedule)
+        network_stride = [yx_total_stride, yx_total_stride]
         if ndim == 3:
-            network_stride = [4 if args["cfg"]["Z_DOWN"] else 1] + network_stride
+            z_schedule = args["cfg"].get("Z_DOWN")
+            z_total_stride = math.prod(z_schedule)          
+            network_stride = [z_total_stride] + network_stride
+
     elif "stunet" in modelname:
-        callable_model = STUNet  # type: ignore
+        callable_model = build_stunet  # type: ignore
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
             output_channels=output_channels,
             variant=cfg.MODEL.STUNET.VARIANT,
-            deep_supervision=True,
+            deep_supervision=False,
             explicit_activations=False,
             head_activations=head_activations,
             output_channel_info=output_channel_info,
+            return_one_tensor=False,
+            pretrained=cfg.MODEL.STUNET.PRETRAINED,
         )
         model = build_stunet(**args) # type: ignore
     else:
@@ -232,7 +242,6 @@ def build_model(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 activation=cfg.MODEL.ACTIVATION.lower(),
                 n_classes=cfg.DATA.N_CLASSES,
-                head_activations=head_activations,
             )
             model = simple_CNN(**args)  # type: ignore
             callable_model = simple_CNN  # type: ignore
@@ -247,7 +256,9 @@ def build_model(
                 in_chans=cfg.DATA.PATCH_SIZE[-1],
                 ndim=ndim,
                 num_classes=cfg.DATA.N_CLASSES,
-                norm_layer=partial(nn.LayerNorm, eps=1e-6),
+                explicit_activations=False,
+                head_activations=head_activations,
+                output_channel_info=output_channel_info,
             )
             if cfg.MODEL.VIT_MODEL == "custom":
                 args2 = dict(
@@ -270,6 +281,7 @@ def build_model(
                 alpha=1.67,
                 z_down=cfg.MODEL.Z_DOWN,
                 output_channels=output_channels,
+                explicit_activations=False,
             )
             if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
                 args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
@@ -290,13 +302,14 @@ def build_model(
                 output_channel_info=output_channel_info,
                 head_activations=head_activations,
                 explicit_activations=False,
-                decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION.lower(),
+                decoder_activation=cfg.MODEL.ACTIVATION.lower(),
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT,
                 normalization=cfg.MODEL.NORMALIZATION,
                 dropout=cfg.MODEL.DROPOUT_VALUES[0],
-                k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
+                k_size=cfg.MODEL.KERNEL_SIZE,
                 contrast=cfg.LOSS.CONTRAST.ENABLE,
                 contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+                return_one_tensor=False,
             )
             model = UNETR(**args)  # type: ignore
             callable_model = UNETR  # type: ignore
@@ -311,13 +324,10 @@ def build_model(
             model = EDSR(args)  # type: ignore
             callable_model = EDSR  # type: ignore
         elif modelname == "rcan":
-            scale = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
-            if type(scale) is tuple:
-                scale = scale[0]
             args = dict(
                 ndim=ndim,
                 filters=cfg.MODEL.RCAN_CONV_FILTERS,
-                scale=scale,
+                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                 num_rg=cfg.MODEL.RCAN_RG_BLOCK_NUM,
                 num_rcab=cfg.MODEL.RCAN_RCAB_BLOCK_NUM,
                 reduction=cfg.MODEL.RCAN_REDUCTION_RATIO,
@@ -352,7 +362,6 @@ def build_model(
                 patch_size=cfg.MODEL.VIT_TOKEN_SIZE,
                 in_chans=cfg.DATA.PATCH_SIZE[-1],
                 ndim=ndim,
-                norm_layer=partial(nn.LayerNorm, eps=1e-6),
                 embed_dim=cfg.MODEL.VIT_EMBED_DIM,
                 depth=cfg.MODEL.VIT_NUM_LAYERS,
                 num_heads=cfg.MODEL.VIT_NUM_HEADS,
@@ -362,7 +371,8 @@ def build_model(
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
                 masking_type=cfg.MODEL.MAE_MASK_TYPE,
                 mask_ratio=cfg.MODEL.MAE_MASK_RATIO,
-                device=device,
+                return_just_preds=False,
+                device=device.type,
             )
             model = MaskedAutoencoderViT(**args)  # type: ignore
             callable_model = MaskedAutoencoderViT  # type: ignore
@@ -647,6 +657,84 @@ def merge_import_lines(import_lines: List[str]) -> List[str]:
     merged.extend(sorted(standalone_imports))
     return sorted(merged)
 
+def adapt_bmz_model_kwargs(model_kwargs: Dict, model_to_consume: bool) -> Dict:
+    """
+    Adapt BMZ model arguments to be compatible with BiaPy's model building functions.
+
+    Parameters
+    ----------
+    model_kwargs : dict
+        Dictionary of model arguments to be adapted.
+
+    model_to_consume : bool
+        Whether the model is being adapted for consumption (True) or for exporting (False).
+
+    Returns
+    -------
+    adapted_args : dict
+        Dictionary of adapted arguments ready to be passed to the model building function.
+    """
+    adapted_args = model_kwargs.copy()
+
+    if "explicit_activations" in model_kwargs:
+        adapted_args["explicit_activations"] = not model_to_consume
+    if "return_just_preds" in model_kwargs:
+        adapted_args["return_just_preds"] = not model_to_consume
+    if "return_one_tensor" in model_kwargs:
+        adapted_args["return_one_tensor"] = not model_to_consume
+
+    return adapted_args
+
+def get_bmz_model_kwargs(model: ModelDescr_v0_4 | ModelDescr_v0_5) -> Dict:
+    """
+    Get the PyTorch state dict weight specification from a BMZ model description.
+
+    Parameters
+    ----------
+    model : ModelDescr_v0_4 | ModelDescr_v0_5
+        BMZ model description.
+
+    Returns
+    -------
+    model_kwargs : dict
+        Dictionary of model arguments extracted from the BMZ model description, ready to be adapted for BiaPy's model building functions.
+    """
+    assert model.weights.pytorch_state_dict
+    weight_spec = model.weights.pytorch_state_dict
+    if isinstance(weight_spec, v0_4.PytorchStateDictWeightsDescr):
+        return weight_spec.kwargs
+    elif isinstance(weight_spec, v0_5.PytorchStateDictWeightsDescr):
+        return weight_spec.architecture.kwargs
+    else:
+        raise ValueError("Unsupported weight specification type in BMZ model description.")
+
+def update_bmz_model_kwargs_to_biapy(new_biapy_model_kwargs: Dict, model: ModelDescr_v0_4 | ModelDescr_v0_5):
+    """
+    Build a model from Bioimage Model Zoo (BMZ).
+
+    Parameters
+    ----------
+    new_biapy_model_kwargs : dict
+        Dictionary of model arguments as expected by BiaPy's model building functions.
+
+    model : ModelDescr
+        BMZ model RDF that contains all the information of the model.
+
+    Returns
+    -------
+    bmz_model_kwargs : dict
+        Updated dictionary of model arguments to be used in the BMZ model RDF, ensuring compatibility with BiaPy.
+    """
+    bmz_model_kwargs = get_bmz_model_kwargs(model)
+    for k, v in new_biapy_model_kwargs.items():
+        if k in bmz_model_kwargs:
+            if bmz_model_kwargs[k] != new_biapy_model_kwargs[k]:
+                print(f"    Updating BMZ model argument '{k}' from '{bmz_model_kwargs[k]}' to '{new_biapy_model_kwargs[k]}'")
+                bmz_model_kwargs[k] = new_biapy_model_kwargs[k]
+        else:
+            print(f"    Adding new argument '{k}' with value '{v}'")
+            bmz_model_kwargs[k] = v
+    return bmz_model_kwargs
 
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
@@ -669,7 +757,13 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
         Torch model.
     """
     assert model.weights.pytorch_state_dict
-    model_instance = load_torch_model(model.weights.pytorch_state_dict, load_state=True, devices=[device])
+    weight_spec = model.weights.pytorch_state_dict
+    if isinstance(weight_spec, v0_4.PytorchStateDictWeightsDescr):
+        weight_spec.kwargs = adapt_bmz_model_kwargs(weight_spec.kwargs, model_to_consume=True)
+    elif isinstance(weight_spec, v0_5.PytorchStateDictWeightsDescr):
+        weight_spec.architecture.kwargs = adapt_bmz_model_kwargs(weight_spec.architecture.kwargs, model_to_consume=True)
+
+    model_instance = load_torch_model(weight_spec, load_state=True, devices=[device])
 
     # Check the network created
     if cfg.PROBLEM.NDIM == "2D":
@@ -696,6 +790,44 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
     )
 
     return model_instance
+
+def is_biapy_model(model: ModelDescr_v0_4 | ModelDescr_v0_5) -> bool:
+    """
+    Check if a model is a BiaPy model by looking for: 
+        1) the presence of "danifranco" in the GitHub username or "Daniel Franco" in the author name.
+        2) the presence of "biapy" in the model tags.
+        3) the presence of a citation with the text "BiaPy: accessible deep learning on bioimages" in the citations of the model.
+
+    Parameters
+    ----------
+    model : ModelDescr_v0_4 | ModelDescr_v0_5
+        The model to check.
+
+    Returns
+    -------
+    bool
+        True if the model is a BiaPy model, False otherwise.
+    """
+    try:
+        # Check authors for "danifranco" GitHub username or "Daniel Franco" name
+        for author in model.authors:
+            github_username = author.github_user if hasattr(author, "github_user") else ""
+            author_name = author.name if hasattr(author, "name") else ""
+            if github_username == "danifranco" or author_name in ["Daniel Franco-Barranco", "Daniel Franco Barranco", "Daniel Franco"]:
+                return True
+            
+        tags = model.tags if hasattr(model, "tags") else [""]
+        if "biapy" in tags:
+            return True
+
+        for cite in model.cite:
+            cite_text = cite.text if hasattr(cite, "text") else ""
+            if "BiaPy: accessible deep learning on bioimages" == cite_text:
+                return True
+    except Exception as e:
+        print(f"Warning: Could not determine if model is a BiaPy model due to error: {e}")
+
+    return False
 
 def find_bmz_models(
     model_ID: Optional[str] = None,
@@ -1011,13 +1143,20 @@ def check_bmz_model_compatibility(
                 channel_code = ["A"] # wild-whale
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
-        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [
-            1,
-        ] * channels
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = (1, 1)
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES"] = []
+        if any([x for x in ["F_pre", "F_post", "F_cleft"] if x in channel_code]):
+            opts["PROBLEM.INSTANCE_SEG.TYPE"] = "synapses"
+        else:
+            opts["PROBLEM.INSTANCE_SEG.TYPE"] = "regular"
+        opts["PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS"] = []
+        opts["PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL"] = ""
+        opts["PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS"] = []
+        opts["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS"] = ""
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS"] = [{}]
+
         if classes != 2:
             opts["DATA.N_CLASSES"] = max(2, classes)
-        if channel_code == "A":
-            opts["LOSS.CLASS_REBALANCE"] = "auto"
 
     elif specific_workflow in ["all", "DETECTION"] and "detection" in tags:
         pass
@@ -1108,9 +1247,10 @@ def check_bmz_model_compatibility(
     if "preprocessing" in (inputs[0] or {}):
         preproc_info = inputs[0]["preprocessing"]
         key_to_find = "id" if model_version > Version("0.5.0") else "name"
+
         if isinstance(preproc_info, list):
             # remove ensure_dtype->float casts (BiaPy does it anyway)
-            new_preproc_info = []
+            filtered_preproc_info = []
             for preproc in preproc_info:
                 if key_to_find in preproc and not (
                     preproc[key_to_find] == "ensure_dtype"
@@ -1118,81 +1258,74 @@ def check_bmz_model_compatibility(
                     and "dtype" in preproc["kwargs"]
                     and "float" in str(preproc["kwargs"]["dtype"])
                 ):
-                    new_preproc_info.append(preproc)
-            preproc_info = new_preproc_info.copy()
+                    filtered_preproc_info.append(preproc)
 
-            if len(preproc_info) > 1:
-                reason_message = (
-                    f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
-                )
-                return preproc_info, True, reason_message, opts
-            elif len(preproc_info) == 1:
-                preproc_info = preproc_info[0]
-                if key_to_find in preproc_info:
-                    proc_id = preproc_info[key_to_find]
-                    if proc_id not in [
-                        "zero_mean_unit_variance",
-                        "fixed_zero_mean_unit_variance",
-                        "scale_range",
-                        "scale_linear",
-                        "clip"
-                    ]:
-                        reason_message = (
-                            f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
-                        )
-                        return preproc_info, True, reason_message, opts
-                    else:
-                        # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
-                        if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-                            if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
-                                mean = preproc_info["kwargs"]["mean"]
-                                std = preproc_info["kwargs"]["std"]
-                            elif "mean" in preproc_info:
-                                mean = preproc_info["mean"]
-                                std = preproc_info["std"]
-                            else:
-                                mean, std = -1.0, -1.0
-
-                            if isinstance(mean, list):
-                                mean = float(mean[-1])
-                            if isinstance(std, list):
-                                std = float(std[-1])
-                                
-                            opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
-                            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
-                            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
-
-                        # scale_linear ~ div (gain not handled, same as original)
-                        elif proc_id == "scale_linear":
-                            opts["DATA.NORMALIZATION.TYPE"] = "div"
-
-                        # scale_range -> scale_range (+ optional PERC_CLIP)
-                        elif proc_id == "scale_range":
-                            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
-                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
-                            # Check if there is percentile clipping
-                            if min_percentile != 0 or max_percentile != 100:
-                                opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
-                        elif proc_id == "clip":
-                            opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
-                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
-                            max_value = float(preproc_info["kwargs"].get("max_value", -1))
-                            min_value = float(preproc_info["kwargs"].get("min_value", -1))
-                            if min_percentile != 0 or max_percentile != 100:
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
-                            elif min_value != -1 or max_value != -1:
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
-                else:
+            for preproc_info in filtered_preproc_info:
+                if key_to_find not in preproc_info:
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
                     )
                     return preproc_info, True, reason_message, opts
+                
+                proc_id = preproc_info[key_to_find]
+                if proc_id not in [
+                    "zero_mean_unit_variance",
+                    "fixed_zero_mean_unit_variance",
+                    "scale_range",
+                    "scale_linear",
+                    "clip"
+                ]:
+                    reason_message = (
+                        f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
+                    )
+                    return preproc_info, True, reason_message, opts
+
+                # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
+                if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+                    if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
+                        mean = preproc_info["kwargs"]["mean"]
+                        std = preproc_info["kwargs"]["std"]
+                    elif "mean" in preproc_info:
+                        mean = preproc_info["mean"]
+                        std = preproc_info["std"]
+                    else:
+                        mean, std = -1.0, -1.0
+
+                    if not isinstance(mean, list):
+                        mean = [float(mean)]
+                    if not isinstance(std, list):
+                        std = [float(std)]
+
+                    opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
+                    opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
+                    opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
+
+                # scale_linear ~ div (gain not handled, same as original)
+                elif proc_id == "scale_linear":
+                    opts["DATA.NORMALIZATION.TYPE"] = "div"
+
+                # scale_range -> scale_range (+ optional PERC_CLIP)
+                elif proc_id == "scale_range":
+                    opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
+                    min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                    max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
+                    # Check if there is percentile clipping
+                    if min_percentile != 0 or max_percentile != 100:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                elif proc_id == "clip":
+                    opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                    min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                    max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
+                    max_value = float(preproc_info["kwargs"].get("max_value", -1))
+                    min_value = float(preproc_info["kwargs"].get("min_value", -1))
+                    if min_percentile != 0 or max_percentile != 100:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                    elif min_value != -1 or max_value != -1:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
 
     # --------- Post-processing in kwargs (unsupported) ---------
     if "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
@@ -1517,3 +1650,41 @@ def can_import_env_deps(
 
     ok = len(failures) == 0
     return ok, ("" if ok else ", ".join(failures))
+
+def get_last_layer_info(model: nn.Module) -> Dict[str, Any]:
+    """
+    Recursively finds the last layer of a model and checks if it's an activation.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The PyTorch model to analyze.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - "layer_object": The last layer object found in the model.
+        - "layer_type": The type name of the last layer.
+        - "is_activation": A boolean indicating whether the last layer is a common activation function.
+    """
+    # 1. Recursively find the last child module
+    last_layer = model
+    while list(last_layer.children()):
+        last_layer = list(last_layer.children())[-1]
+
+    # 2. Define a tuple of common activation types
+    activation_types = (
+        nn.ReLU, nn.Sigmoid, nn.Softmax, nn.LogSoftmax, 
+        nn.Tanh, nn.LeakyReLU, nn.ELU, nn.PReLU, nn.GELU,
+        nn.Softplus, nn.Softsign, nn.Hardtanh
+    )
+
+    # 3. Check if the last layer is an instance of these types
+    is_activation = isinstance(last_layer, activation_types)
+    
+    return {
+        "layer_object": last_layer,
+        "layer_type": type(last_layer).__name__,
+        "is_activation": is_activation
+    }

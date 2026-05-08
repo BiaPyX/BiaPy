@@ -202,10 +202,20 @@ def extract_BMZ_sample_and_cover(
     cover_gt : NDArray
         The ground truth img_gt cover (2D slice). Shape will be (H, W, C).
     """
-    cover_raw, cover_gt = None, img_gt
+    cover_raw = None
+    cover_gt = img_gt if not isinstance(img_gt, int) else None
     mask_available = img_gt is not None and isinstance(img_gt, np.ndarray)
     dims = 2 if not is_3d else 3
-    ref_img = img_gt if mask_available else img
+    scale = [1,] * dims
+    if mask_available:
+        # Probably in SR workflow
+        if img.shape[:-1] != img_gt.shape[:-1]:
+            ref_img = img
+            scale = [x//y for x,y in zip(img_gt.shape[:-1], img.shape[:-1])]
+        else:
+            ref_img = img_gt
+    else:
+        ref_img = img
     if isinstance(ref_img, np.ndarray):    
         if dims == 2:
             H, W, C = ref_img.shape
@@ -263,6 +273,14 @@ def extract_BMZ_sample_and_cover(
             img, patch, is_3d=True if is_3d else False
         )
         if mask_available:
+            patch = PatchCoords(
+                z_start=z_start*scale[0] if is_3d else None,
+                z_end=z_start*scale[0]+patch_size[0]*scale[0] if is_3d else None,
+                y_start=y_start*scale[-2],
+                y_end=y_start*scale[-2]+patch_size[-3]*scale[-2],
+                x_start=x_start*scale[-1],
+                x_end=x_start*scale[-1]+patch_size[-2]*scale[-1],
+            )
             rimg_gt = extract_patch_within_image(
                 img_gt, patch, is_3d=True if is_3d else False
             )
@@ -288,6 +306,14 @@ def extract_BMZ_sample_and_cover(
             img, patch, data_axes_order=input_axis_order,
         )
         if mask_available:
+            patch = PatchCoords(
+                z_start=0 if is_3d else None,
+                z_end=0+patch_size[0]*scale[0] if is_3d else None,
+                y_start=0,
+                y_end=0+patch_size[-3]*scale[-2],
+                x_start=0,
+                x_end=0+patch_size[-2]*scale[-1],
+            )
             rimg_gt = extract_patch_from_efficient_file(
                 img_gt, patch, data_axes_order=input_axis_order,
             )   
@@ -556,7 +582,7 @@ def create_model_doc(
         workflow_name = "Image to image"
         workflow_tag = "image_to_image"
 
-    if biapy_cfg.PROBLEM.TYPE in ["DENOISING", "SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
+    if biapy_cfg.PROBLEM.TYPE in ["DENOISING", "SUPER_RESOLUTION", "IMAGE_TO_IMAGE", "SELF_SUPERVISED"]:
         metrics_used = (
             "Metrics to measure the similarity between the prediction and the ground truth in different ways:"
         )
@@ -609,26 +635,23 @@ def create_model_doc(
         preproc_info = "- Scaling the range to [0-max] and then dividing by the maximum value of the data.\n"
     elif biapy_cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":    
         preproc_info = "- Zero mean and unit variance normalization. "
-        if biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL > 0:
-            preproc_info += f"Using provided mean value of {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL}. "
+        if any(x for x in biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL if x > 0):
+            preproc_info += f"Using provided mean values: {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL}. "
         else:
             preproc_info += "Mean value calculated from the training data. "
-        if biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL > 0:
-            preproc_info += f"Using provided std value of {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL}.\n"
+        if any(x for x in biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL if x > 0):
+            preproc_info += f"Using provided std values: {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL}.\n"
         else:
             preproc_info += "Std value calculated from the training data.\n"
 
     if biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
         preproc_info += "- Percentile clipping. "
-        if biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE >= 0 and biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE >= 0:
+        if any(x for x in biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE if x >= 0) and any(x for x in biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE if x >= 0):
             preproc_info += f"Using provided lower and upper values of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE}, respectively, to clip the data before normalization.\n"
         else:
             preproc_info += f"Using provided lower and upper percentiles of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC}, respectively, to calculate the values to clip the data before normalization.\n"
 
-    if biapy_cfg.DATA.NORMALIZATION.MEASURE_BY == "image":
-        preproc_info += "- Normalization and percentile clipping values calculated from the complete image.\n"
-    else:
-        preproc_info += "- Normalization and percentile clipping values calculated from each patch.\n"
+    preproc_info += "- Normalization and percentile clipping values calculated from the complete image.\n"
  
     try:
         with open(cfg_file, "r") as file:
@@ -661,7 +684,7 @@ def create_model_doc(
             default_flow_style=False,  # block style (multi-line)
             width=1000                 # avoid line wrapping
         )
-
+    model_arch = biapy_cfg.MODEL.ARCHITECTURE.lower()
     message = ""
     message += f'# {bmz_cfg["model_name"]}\n'
     message += "\n"
@@ -731,6 +754,9 @@ def create_model_doc(
         message += "{}\n".format(cfg_data_mes)
         message += "```\n"
         message += "\n"
+        if model_arch == "mae":
+            message += "IMPORTANT NOTICE: In order to enable random masking in the model ensure to set the 'return_just_preds' parameter to False when calling the model.\n"
+            message += "\n"
     message += "## Contact\n"
     message += "For problems with BiaPy library itself checkout our [FAQ & Troubleshooting section](https://biapy.readthedocs.io/en/latest/get_started/faq.html).\n"
     message += "\n"
@@ -743,7 +769,6 @@ def create_model_doc(
     message += "\n"
     message += "## References\n"
     message += "[1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
-    model_arch = biapy_cfg.MODEL.ARCHITECTURE.lower()
     ref_count = 2
     if model_arch in ["unet", "resunet", "seunet", "resunet_se", "attention_unet"]:
         message += f"[{ref_count}] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"

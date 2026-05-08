@@ -430,6 +430,7 @@ class MultiResUnet(torch.nn.Module):
         upsampling_position="pre",
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        return_one_tensor: bool = False,
     ):
         """
         Create 2D/3D MultiResUNet model.
@@ -480,6 +481,10 @@ class MultiResUnet(torch.nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning. Default is ``256``.
 
+        return_one_tensor : bool, optional
+            Whether to return a single tensor with all outputs concatenated (if False, returns a dictionary
+            with separate entries). Default is ``False``.
+
         Raises
         ------
         ValueError
@@ -502,10 +507,11 @@ class MultiResUnet(torch.nn.Module):
         self.return_class = True if "class" in output_channel_info else False
         self.contrast = contrast
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
-            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
 
@@ -715,5 +721,10 @@ class MultiResUnet(torch.nn.Module):
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
             return out_dict
     

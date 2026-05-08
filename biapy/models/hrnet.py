@@ -33,7 +33,8 @@ from biapy.models.blocks import (
     get_norm_2d, 
     ConvNeXtBlock_V2,
     ConvNeXtBlock_V1,
-    prepare_activation_layers
+    prepare_activation_layers,
+    get_activation,
 )
 from biapy.models.heads import ASPP, ProjectionHead, PSP, OCRHead
 
@@ -48,7 +49,8 @@ class HighResolutionModule(nn.Module):
         num_channels: List[int],
         multi_scale_output: bool = True,
         norm: str = "none",
-        mpool: Tuple[int, ...] = (2, 2),
+        branch_strides: List[Tuple[int, ...]] = None,
+        activation: str = "relu",
     ):
         """
         Initialize a High Resolution Module.
@@ -86,11 +88,13 @@ class HighResolutionModule(nn.Module):
             The type of normalization layer to apply within the module's blocks
             and fusion layers (e.g., 'bn', 'sync_bn', 'in', 'gn', 'none').
             Defaults to "none".
-        mpool : Tuple[int, ...], optional
-            The downsampling factor for max-pooling operations, primarily used
-            in the fusion layers when features from higher resolution branches
-            are downsampled to match lower resolution ones. Defaults to (2, 2).
-
+        branch_strides : List[Tuple[int, ...]], optional
+            The strides for each branch, primarily used in the fusion layers when
+            features from higher resolution branches are downsampled to match lower
+            resolution ones. Defaults to None.
+        activation : str, optional
+            The activation function to use within the blocks and fusion layers.
+            Defaults to "relu".
         Raises
         ------
         ValueError
@@ -112,9 +116,11 @@ class HighResolutionModule(nn.Module):
 
         self.multi_scale_output = multi_scale_output
 
+        self.branch_strides = branch_strides
         self.branches = self._make_branches(num_branches, blocks, num_blocks, num_channels, norm=norm)
-        self.fuse_layers = self._make_fuse_layers(norm=norm, mpool=mpool)
-        self.relu = nn.ReLU(inplace=False)
+        self.activation_str = activation
+        self.activation = get_activation(activation)
+        self.fuse_layers = self._make_fuse_layers(norm=norm)
 
     def _check_branches(
         self, num_branches: int, num_blocks: List[int], num_inchannels: List[int], num_channels: List[int]
@@ -251,13 +257,12 @@ class HighResolutionModule(nn.Module):
             List of branches created for the High Resolution Module.
         """
         branches = []
-
         for i in range(num_branches):
             branches.append(self._make_one_branch(i, block, num_blocks, num_channels, norm=norm))
 
         return nn.ModuleList(branches)
 
-    def _make_fuse_layers(self, norm: str, mpool: Tuple[int, ...] = (2, 2)):
+    def _make_fuse_layers(self, norm: str):
         """
         Construct the fusion layers for exchanging information between branches.
 
@@ -270,10 +275,6 @@ class HighResolutionModule(nn.Module):
         ----------
         norm : str
             Normalization layer type to use within the fusion layers.
-        mpool : Tuple[int, ...], optional
-            Downsampling factor for pooling operations when features are downsampled
-            from a higher resolution branch to a lower resolution one during fusion.
-            Defaults to (2, 2).
 
         Returns
         -------
@@ -306,37 +307,56 @@ class HighResolutionModule(nn.Module):
                 elif j == i:
                     fuse_layer.append(None)
                 else:
+                    # Calculate true relative downsample factor
+                    stride_j = self.branch_strides[j]
+                    stride_i = self.branch_strides[i]
+                    rel_stride = tuple(si // sj for si, sj in zip(stride_i, stride_j))
+
+                    # Determine downsample steps dynamically
+                    if all(s == 1 for s in rel_stride):
+                        num_steps = 1
+                        step_strides = [tuple([1] * len(rel_stride))]
+                    else:
+                        max_factor = max(rel_stride)
+                        num_steps = 0
+                        temp_factor = max_factor
+                        while temp_factor > 1:
+                            num_steps += 1
+                            temp_factor //= 2
+                        
+                        step_strides = []
+                        current_rel = list(rel_stride)
+                        for _ in range(num_steps):
+                            s = []
+                            for d in range(len(current_rel)):
+                                if current_rel[d] > 1:
+                                    s.append(2)
+                                    current_rel[d] //= 2
+                                else:
+                                    s.append(1)
+                            step_strides.append(tuple(s))
+
                     conv3x3s = []
-                    for k in range(i - j):
-                        if k == i - j - 1:
-                            num_outchannels_conv3x3 = num_inchannels[i]
-                            conv3x3s.append(
-                                ConvBlock(
-                                    conv=self.conv_call,
-                                    in_size=num_inchannels[j],
-                                    out_size=num_outchannels_conv3x3,
-                                    k_size=3,
-                                    padding=1,
-                                    stride=mpool,
-                                    norm=norm,
-                                    bias=False,
-                                )
+                    in_ch = num_inchannels[j]
+                    for k in range(num_steps):
+                        out_ch = num_inchannels[i] if k == num_steps - 1 else in_ch
+                        _act = "none" if k == num_steps - 1 else self.activation_str
+
+                        conv3x3s.append(
+                            ConvBlock(
+                                conv=self.conv_call,
+                                in_size=in_ch,
+                                out_size=out_ch,
+                                k_size=3,
+                                padding=1,
+                                stride=step_strides[k],
+                                act=_act,
+                                norm=norm,
+                                bias=False,
                             )
-                        else:
-                            num_outchannels_conv3x3 = num_inchannels[j]
-                            conv3x3s.append(
-                                ConvBlock(
-                                    conv=self.conv_call,
-                                    in_size=num_inchannels[j],
-                                    out_size=num_outchannels_conv3x3,
-                                    k_size=3,
-                                    padding=1,
-                                    stride=mpool,
-                                    act="relu",
-                                    norm=norm,
-                                    bias=False,
-                                ),
-                            )
+                        )
+                        in_ch = out_ch
+
                     fuse_layer.append(nn.Sequential(*conv3x3s))
             fuse_layers.append(nn.ModuleList(fuse_layer))
 
@@ -418,7 +438,7 @@ class HighResolutionModule(nn.Module):
                         )
                 else:
                     y = y + self.fuse_layers[i][j](x[j])
-            x_fuse.append(self.relu(y))
+            x_fuse.append(self.activation(y))
 
         return x_fuse
 
@@ -430,11 +450,13 @@ class HighResolutionNet(nn.Module):
         normalization: str = "none",
         output_channels: List[int] = [1],
         output_channel_info=["F"],
-        explicit_activations: bool = False  ,
+        explicit_activations: bool = False,
         head_activations: List[str] = ["ce_sigmoid"],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         head_type: str = "FCN",
+        activation: str = "relu",
+        return_one_tensor: bool = False,
     ):
         """
         Implements a 2D/3D High-Resolution Net (HRNet) model.
@@ -498,6 +520,13 @@ class HighResolutionNet(nn.Module):
         explicit_activations : bool, optional
             If True, uses explicit activation functions in the last layers.
 
+        activation : str, optional
+            Activation function to use in the HRNet blocks. Default is "relu".
+
+        return_one_tensor : bool, optional
+            Whether to return a single tensor with all outputs concatenated (if False, returns a dictionary
+            with separate entries). Default is ``False``.
+
         Returns
         -------
         model : nn.Module
@@ -528,13 +557,13 @@ class HighResolutionNet(nn.Module):
         self.in_size = 64
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.contrast = contrast
-        self.z_down = cfg["Z_DOWN"]
         self.head_type = head_type
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
+        self.activation = activation
         if self.explicit_activations:
-            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
-            "have the same number of values as 'output_channels'"
-            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to have the same number of values as 'output_channels'"
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
 
@@ -542,22 +571,35 @@ class HighResolutionNet(nn.Module):
             self.conv_call = nn.Conv3d
             self.norm_func = get_norm_3d
             self.dropout = nn.Dropout3d
-            mpool = (2, 2, 2) if self.z_down else (1, 2, 2)
         else:
             self.conv_call = nn.Conv2d
             self.norm_func = get_norm_2d
             self.dropout = nn.Dropout2d
-            mpool = (2, 2)
+
+        # ---------------------------------------------------------
+        # Dynamic Configuration Initialization
+        # ---------------------------------------------------------
+        num_stages = cfg.get("NUM_STAGES", 3)
+        yx_down_list = cfg.get("YX_DOWN", [2] * num_stages)
+        z_down_list = cfg.get("Z_DOWN", [True] * num_stages)
+
+        # Helper to safely retrieve the correct max-pooling factor per stage
+        def get_mpool(idx):
+            yx = yx_down_list[idx] if isinstance(yx_down_list, list) and idx < len(yx_down_list) else 2
+            z_val = z_down_list[idx] if isinstance(z_down_list, list) and idx < len(z_down_list) else z_down_list
+            return (z_val, yx, yx) if self.ndim == 3 else (yx, yx)
 
         in_channels = image_shape[-1]
+        mpool_stem = get_mpool(0)
 
+        # Initial Stem Layers
         self.conv1_block = ConvBlock(
             conv=self.conv_call,
             in_size=in_channels,
             out_size=64,
             k_size=3,
             padding=1,
-            stride=mpool,
+            stride=mpool_stem,
             act="none",
             norm=normalization,
             bias=False,
@@ -568,48 +610,66 @@ class HighResolutionNet(nn.Module):
             out_size=64,
             k_size=3,
             padding=1,
-            stride=mpool,
-            act="relu",
+            stride=mpool_stem,
+            act=self.activation,
             norm=normalization,
             bias=False,
         )
         self.layer1 = self._make_layer(HRBottleneck, 64, 64, 4, norm=normalization)
+        
+        # ---------------------------------------------------------
+        # Dynamic Stage Creation
+        # ---------------------------------------------------------
+        self.transitions = nn.ModuleList()
+        self.stages = nn.ModuleList()
+        # layer1 uses HRBottleneck which expands the 64 base channels by 4 (64 * 4 = 256)
+        pre_stage_channels = [64 * HRBottleneck.expansion]
 
-        self.stage2_cfg = cfg["STAGE2"]
-        num_channels = self.stage2_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage2_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
+        # Calculate absolute stride out of the stem (which downsamples twice)
+        stem_stride = tuple(s * s for s in mpool_stem)
+        current_strides = [stem_stride]
 
-        self.transition1 = self._make_transition_layer([256], num_channels, norm=normalization, mpool=mpool)
+        for i in range(num_stages):
+            mpool_stage = get_mpool(i)
+            
+            b_type = cfg["BLOCK_TYPE"][i] if isinstance(cfg["BLOCK_TYPE"], list) else cfg["BLOCK_TYPE"]
+            block = self.blocks_dict[b_type]
+            
+            cur_channels = [ch * block.expansion for ch in cfg["NUM_CHANNELS"][i]]
 
-        self.stage2, pre_stage_channels = self._make_stage(
-            self.stage2_cfg, num_channels, norm=normalization, mpool=mpool
-        )
+            # Construct Transition Layer for this stage
+            self.transitions.append(
+                self._make_transition_layer(pre_stage_channels, cur_channels, norm=normalization, mpool=mpool_stage)
+            )
 
-        self.stage3_cfg = cfg["STAGE3"]
-        num_channels = self.stage3_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage3_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition2 = self._make_transition_layer(
-            pre_stage_channels, num_channels, norm=normalization, mpool=mpool
-        )
-        self.stage3, pre_stage_channels = self._make_stage(
-            self.stage3_cfg, num_channels, norm=normalization, mpool=mpool
-        )
+            # Update absolute strides tracking for all branches
+            num_branches_cur = len(cur_channels)
+            num_branches_pre = len(current_strides)
+            for j in range(num_branches_cur):
+                if j >= num_branches_pre:
+                    steps = j - num_branches_pre + 1
+                    new_stride = current_strides[-1]
+                    for _ in range(steps):
+                        new_stride = tuple(a * b for a, b in zip(new_stride, mpool_stage))
+                    current_strides.append(new_stride)
 
-        self.stage4_cfg = cfg["STAGE4"]
-        num_channels = self.stage4_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage4_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition3 = self._make_transition_layer(
-            pre_stage_channels, num_channels, norm=normalization, mpool=mpool
-        )
+            # Construct High Resolution Modules for this stage
+            stage_cfg = {
+                "NUM_MODULES": cfg["NUM_MODULES"][i],
+                "NUM_BRANCHES": cfg["NUM_BRANCHES"][i],
+                "NUM_BLOCKS": cfg["NUM_BLOCKS"][i],
+                "NUM_CHANNELS": cur_channels,
+                "BLOCK": b_type,
+            }
 
-        self.stage4, pre_stage_channels = self._make_stage(
-            self.stage4_cfg, num_channels, multi_scale_output=True, norm=normalization, mpool=mpool
-        )
+            is_last_stage = (i == num_stages - 1)
+            stage, pre_stage_channels = self._make_stage(
+                stage_cfg, cur_channels, multi_scale_output=True, norm=normalization, branch_strides=current_strides
+            )
+            self.stages.append(stage)
 
-        in_channels = sum(self.stage4_cfg["NUM_CHANNELS"])
+        # The final input channels for heads is the sum of all branch channels in the final stage
+        head_in_channels = sum(pre_stage_channels)
 
         self.heads = nn.Sequential()
         if head_type in ["ASPP", "PSP", "OCR"]:
@@ -617,7 +677,7 @@ class HighResolutionNet(nn.Module):
                 self.heads.append(
                     ASPP(
                         conv=self.conv_call,
-                        in_dims=in_channels,
+                        in_dims=head_in_channels,
                         out_dims=256,
                         norm=normalization,
                         rate=[6, 12, 18],
@@ -627,7 +687,7 @@ class HighResolutionNet(nn.Module):
                 self.heads.append(
                     PSP(
                         conv=self.conv_call,         
-                        in_dims=in_channels,
+                        in_dims=head_in_channels,
                         out_dims=256,
                         norm=normalization,         
                         pool_sizes=[1, 2, 3, 6],      
@@ -637,7 +697,7 @@ class HighResolutionNet(nn.Module):
                 self.heads.append(
                     OCRHead(
                         conv=self.conv_call,         
-                        in_dims=in_channels,
+                        in_dims=head_in_channels,
                         out_dims=256,
                         num_classes=self.output_channels[0],
                         norm=normalization,         
@@ -647,33 +707,38 @@ class HighResolutionNet(nn.Module):
                 )
             # Add the head for classification if needed
             if len(self.output_channels) > 1:
-                self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
+                self.heads.append(self.conv_call(head_in_channels, self.output_channels[1], kernel_size=1, padding="same"))
         elif head_type == "FCN":
             if self.contrast:
                 self.heads = nn.Sequential(
-                    self.conv_call(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-                    self.norm_func(normalization, in_channels),
+                    self.conv_call(head_in_channels, head_in_channels, kernel_size=3, stride=1, padding=1),
+                    self.norm_func(normalization, head_in_channels),
                     self.dropout(0.10),
-                    self.conv_call(in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+                    self.conv_call(head_in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
                 )
-                # Add the head for classification if needed
                 if len(self.output_channels) > 1:
-                    self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
+                    self.heads.append(self.conv_call(head_in_channels, self.output_channels[1], kernel_size=1, padding="same"))
             else:
                 for i, out_ch in enumerate(output_channels):
-                    self.heads.append(self.conv_call(in_channels, out_ch, kernel_size=1, padding="same"))
+                    self.heads.append(self.conv_call(head_in_channels, out_ch, kernel_size=1, padding="same"))
         else:
             raise ValueError(f"head_type '{head_type}' is not supported. Choose from: 'ASPP', 'PSP', 'FCN'.")
 
         if self.contrast:
-            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=in_channels, proj_dim=contrast_proj_dim)
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=head_in_channels, proj_dim=contrast_proj_dim)
         
+        # ---------------------------------------------------------
+        # Dynamic Upsample Calculation
+        # Branch 0's resolution is solely dictated by conv1 and conv2 
+        # (Stem layers), applying mpool twice. We invert that here.
+        # ---------------------------------------------------------
         if self.ndim == 2:
-            scale_factor = 4
+            scale_factor = (mpool_stem[0]**2, mpool_stem[1]**2)
             mode = "bilinear"
         else:
-            scale_factor = (1, 4, 4) if not self.z_down else (4, 4, 4)
+            scale_factor = (mpool_stem[0]**2, mpool_stem[1]**2, mpool_stem[2]**2)
             mode = "trilinear"
+
         self.upsample_logits = nn.Upsample(
             scale_factor=scale_factor,      
             mode=mode,       
@@ -728,7 +793,7 @@ class HighResolutionNet(nn.Module):
                             k_size=3,
                             padding=1,
                             stride=1,
-                            act="relu",
+                            act=self.activation,
                             norm=norm,
                             bias=False,
                         )
@@ -748,7 +813,7 @@ class HighResolutionNet(nn.Module):
                             k_size=3,
                             padding=1,
                             stride=mpool,
-                            act="relu",
+                            act=self.activation,
                             norm=norm,
                             bias=False,
                         )
@@ -821,7 +886,7 @@ class HighResolutionNet(nn.Module):
         num_inchannels,
         multi_scale_output=True,
         norm="none",
-        mpool: Tuple[int, ...] = (2, 2),
+        branch_strides=None,
     ):
         """
         Construct a full stage of the HRNet, consisting of multiple HighResolutionModule instances.
@@ -850,8 +915,8 @@ class HighResolutionNet(nn.Module):
             Normalization layer to use (one of 'bn', 'sync_bn', 'in',
             'gn', or 'none'). Default is 'none'.
 
-        mpool : Tuple[int, ...], optional
-            Downsampling factor for the pooling operation. Used to downsample the features. Default is (2, 2).
+        branch_strides : List[int], optional
+            Strides for each branch in the stage. Default is None.
 
         Returns
         -------
@@ -885,7 +950,8 @@ class HighResolutionNet(nn.Module):
                     num_channels=num_channels,
                     multi_scale_output=reset_multi_scale_output,
                     norm=norm,
-                    mpool=mpool,
+                    branch_strides=branch_strides,
+                    activation=self.activation,
                 )
             )
             num_inchannels = modules[-1].get_num_inchannels()
@@ -915,55 +981,58 @@ class HighResolutionNet(nn.Module):
         Dict or torch.Tensor
             If there is only one output head, returns a tensor with the predictions.
             If there are multiple output heads (e.g. for multi-task learning), returns a dictionary with keys:
+
                 - "pred": tensor with the main predictions (e.g. segmentation map)
                 - "class": tensor with the classification output (if `return_class` is True)
                 - "embed": tensor with the contrastive learning embedding (if `contrast` is True)
         """
         x = self.conv1_block(input)
         x = self.conv2_block(x)
-
         x = self.layer1(x)
-        x_list = []
-        for i in range(self.stage2_cfg["NUM_BRANCHES"]):
-            if self.transition1[i] is not None:
-                x_list.append(self.transition1[i](x))
-            else:
-                x_list.append(x)
-        y_list = self.stage2(x_list)
-
-        x_list = []
-        for i in range(self.stage3_cfg["NUM_BRANCHES"]):
-            if self.transition2[i] is not None:
-                x_list.append(self.transition2[i](y_list[-1]))
-            else:
-                x_list.append(y_list[i])
-        y_list = self.stage3(x_list)
-
-        if os.environ.get("drop_stage4"):
-            return y_list
-
-        x_list = []
-        for i in range(self.stage4_cfg["NUM_BRANCHES"]):
-            if self.transition3[i] is not None:
-                x_list.append(self.transition3[i](y_list[-1]))
-            else:
-                x_list.append(y_list[i])
-        y_list = self.stage4(x_list)
+        
+        y_list = [x]
+        
+        # ---------------------------------------------------------
+        # Dynamic Forward Pass through stages
+        # ---------------------------------------------------------
+        for i in range(len(self.stages)):
+            x_list = []
+            transition = self.transitions[i]
+            stage = self.stages[i]
+            num_branches = len(transition) 
+            
+            for j in range(num_branches):
+                if transition[j] is not None:
+                    # Modify existing branch
+                    if j < len(y_list):
+                        x_list.append(transition[j](y_list[j]))
+                    # Generate new branch from lowest resolution branch
+                    else:
+                        x_list.append(transition[j](y_list[-1]))
+                else:
+                    x_list.append(y_list[j])
+                    
+            y_list = stage(x_list)
+            
+            # Check drop_stage4 dynamically on the second-to-last stage
+            if os.environ.get("drop_stage4") and i == len(self.stages) - 2:
+                return y_list
 
         feat1 = y_list[0]
+        feats_to_cat = [feat1]
 
         if feat1.ndim == 4:
-            _, _, h, w = y_list[0].size()
-            feat2 = F.interpolate(y_list[1], size=(h, w), mode="bilinear", align_corners=True)
-            feat3 = F.interpolate(y_list[2], size=(h, w), mode="bilinear", align_corners=True)
-            feat4 = F.interpolate(y_list[3], size=(h, w), mode="bilinear", align_corners=True)
+            target_size = (feat1.shape[2], feat1.shape[3])
+            mode = "bilinear"
         else:
-            _, _, d, h, w = y_list[0].size()
-            feat2 = F.interpolate(y_list[1], size=(d, h, w), mode="trilinear", align_corners=True)
-            feat3 = F.interpolate(y_list[2], size=(d, h, w), mode="trilinear", align_corners=True)
-            feat4 = F.interpolate(y_list[3], size=(d, h, w), mode="trilinear", align_corners=True)
+            target_size = (feat1.shape[2], feat1.shape[3], feat1.shape[4])
+            mode = "trilinear"
+            
+        for i in range(1, len(y_list)):
+            feats_to_cat.append(F.interpolate(y_list[i], size=target_size, mode=mode, align_corners=True))
 
-        feats = torch.cat([feat1, feat2, feat3, feat4], 1)
+        feats = torch.cat(feats_to_cat, dim=1)
+        
         out = self.heads(feats)
         out = self.upsample_logits(out)
 
@@ -1004,5 +1073,9 @@ class HighResolutionNet(nn.Module):
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
             return out_dict
-

@@ -203,14 +203,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
         self.model_output_channel_info : List of str
-            Information about the output channels.
+            Information about the output channels. A value per output head of the model must be defined. 
 
         self.separated_class_channel : bool
             Whether if we should expect a separated output channel for classification.
 
         self.head_activations : List of str
-            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
+            Activations to be applied to the model output. A value per output channel (not output head) of the model must be defined.
+            "linear" and "ce_sigmoid" will not be applied. E.g. ["linear"] for a model with one channel, ["linear", "sigmoid"] for a
+            model with two channels, etc.
+
+        Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
+        and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
+        be correct::
+
+            self.model_output_channels = [1, 3]
+            self.model_output_channel_info = ["mask", "class"]
+            self.separated_class_channel = True
+            self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
         if self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO != []:
             set_model_output_channels = False
@@ -462,7 +472,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 patch_size=self.cfg.DATA.PATCH_SIZE,
                 ndims=self.dims,
                 anisotropy=self.resolution,
-                weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                channel_weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
                 center_mode=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("center_mode", "centroid"),
                 medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
             ).to(self.device, non_blocking=True)
@@ -474,16 +484,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
         else:
             instance_loss = instance_segmentation_loss(
-                weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                channel_weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                class_rebalance_within_channels=self.cfg.PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS,
+                separated_class_channel=self.separated_class_channel,
                 ndim = self.dims,
                 out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
                 channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                 gt_channels_expected = self.gt_channels_expected,
-                n_classes=self.cfg.DATA.N_CLASSES,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                device=self.device,
             )
         
         if self.cfg.LOSS.CONTRAST.ENABLE: 
@@ -538,6 +550,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 _output = output.clone()
             else:
                 _output = output
+
+        if not train and self.separated_class_channel and self.gt_channels_expected != _output.shape[1]:
+            class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+            _output = torch.cat( 
+                (
+                    _output[:,:-self.model_output_channels[class_idx]],  
+                    torch.argmax(_output[:, -self.model_output_channels[class_idx]:], dim=1).unsqueeze(1)
+                ), dim=1)  
 
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
@@ -935,7 +955,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pred_labels = pred_labels[0]
             pred_labels, d_result = measure_morphological_props_and_filter(
                 pred_labels,
-                intensity_image=self.current_sample["X"][0],
+                intensity_image=self.current_sample["X"].squeeze(),
                 resolution=self.resolution,
                 extra_props=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS,
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
@@ -1254,7 +1274,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 relative_th_value=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["relative", "relative_by_patch"], 
                 out_dir=out_dir,
                 filenames = filenames,
-                verbose=self.cfg.TEST.VERBOSE,
             )
             points_available["pre"] = {"points": pre_points, "df": pre_points_df}
             points_available["post"] = {"points": post_points, "df": post_points_df}
@@ -1751,7 +1770,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     post_points_df=points_available["post"]["df"],
                     post_points=points_available["post"]["points"],
                     out_dir=self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                    verbose=self.cfg.TEST.VERBOSE,
                 )
                 
             if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:

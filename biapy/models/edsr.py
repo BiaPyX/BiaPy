@@ -12,6 +12,7 @@ for both 2D and 3D image super-resolution tasks.
 """
 import torch
 import torch.nn as nn
+from typing import Sequence
 
 
 class EDSR(nn.Module):
@@ -56,7 +57,7 @@ class EDSR(nn.Module):
             Defaults to 3.
         """
         super(EDSR, self).__init__()
-        if type(upsampling_factor) is tuple:
+        if type(upsampling_factor) is not int and isinstance(upsampling_factor, Sequence):
             upsampling_factor = upsampling_factor[0]
         self.ndim = ndim
 

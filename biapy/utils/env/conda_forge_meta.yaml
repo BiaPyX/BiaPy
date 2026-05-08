@@ -48,6 +48,7 @@ requirements:
     - imagecodecs >=2024.1.1
     - pooch >=1.8.1
     - xarray ==2025.1.*
+    - nibabel >=5.4.2
 
 test:
   imports:

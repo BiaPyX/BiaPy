@@ -22,16 +22,14 @@ import difflib
 from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree, distance_matrix
-from scipy.ndimage import rotate, grey_dilation, grey_erosion, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
+from scipy.ndimage import rotate, grey_dilation, grey_erosion, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
 from scipy.signal import savgol_filter
-from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
 from skimage.segmentation import watershed, relabel_sequential, find_boundaries, clear_border
 from skimage.filters import rank, threshold_otsu, gaussian
 from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
 from skimage.exposure import equalize_adapthist
 from skimage.feature import peak_local_max, blob_log
-from scipy.ndimage import binary_dilation as binary_dilation_scipy
 from scipy.cluster.hierarchy import linkage, fcluster
 import torch.nn.functional as F
 import pandas as pd
@@ -178,9 +176,9 @@ def watershed_by_channels(
             morph_funcs = []
             for operation in seed_morph_sequence:
                 if operation == "dilate":
-                    morph_funcs.append(binary_dilation)
+                    morph_funcs.append(dilation)
                 elif operation == "erode":
-                    morph_funcs.append(binary_erosion)
+                    morph_funcs.append(erosion)
 
         image3d = True if seed_map.ndim == 3 else False
         if not image3d:
@@ -193,8 +191,8 @@ def watershed_by_channels(
                     seed_map[i] = morph_function(seed_map[i], disk(radius=seed_morph_radius[k]))
 
             if erode_and_dilate_growth_mask:
-                growth_mask[i] = binary_dilation(growth_mask[i], disk(radius=fore_erosion_radius))
-                growth_mask[i] = binary_erosion(growth_mask[i], disk(radius=fore_dilation_radius))
+                growth_mask[i] = dilation(growth_mask[i], disk(radius=fore_erosion_radius))
+                growth_mask[i] = erosion(growth_mask[i], disk(radius=fore_dilation_radius))
 
         if not image3d:
             seed_map = seed_map.squeeze()
@@ -464,7 +462,7 @@ class Embedding_cluster:
         Returns
         -------
         NDArray
-            Instance labels with shape (*spatial,), dtype uint8 if max(label) ≤ 255 else uint16.
+            Instance labels with shape ``(*spatial,)``, dtype uint8 if max(label) ≤ 255 else uint16.
         """
         assert pred.ndim in (3, 4), f"Expected (Y,X,C) or (Z,Y,X,C); got {pred.shape}"
         spatial = pred.shape[:-1]
@@ -542,7 +540,6 @@ def connect_pre_post_synapse_points_by_distance(
     post_points_df: pd.DataFrame,
     post_points: NDArray,
     out_dir: Optional[str] = None,
-    verbose: bool = True,
 ):
     """
     Connect pre and post synaptic points by distance. For each pre point, find the closest post point and assign it as a synapse.
@@ -559,8 +556,6 @@ def connect_pre_post_synapse_points_by_distance(
         Array containing the coordinates of the post synaptic points. Shape (N_post, 3) for 3D data or (N_post, 2) for 2D data.
     out_dir : str, optional
         Directory to save the output data into. If None, the output data will not be saved.
-    verbose : bool, optional
-        Whether to print the progress of the function or not.
     """
     pre_post_mapping = {}
     pres, posts = [], []
@@ -587,12 +582,6 @@ def connect_pre_post_synapse_points_by_distance(
                 # For those pre points that do not have any post points assigned just put a -1 value
                 pres.append(i)
                 posts.append(-1)
-    else:
-        if verbose:
-            if len(pre_points) == 0:
-                print("No pre synaptic points found!")
-            if len(post_points) == 0:
-                print("No post synaptic points found!")
 
     # Create a mapping dataframe
     pre_post_map_df = pd.DataFrame(
@@ -734,7 +723,6 @@ def create_synapses_from_point_probs(
         post_points_df=post_points_df,
         post_points=post_points,
         out_dir=out_dir,
-        verbose=verbose,
     )
 
     return pre_points_df, pre_points, post_points_df, post_points
@@ -867,11 +855,7 @@ def extract_points_in_predictions(
         lbl_cont += 1
 
     # Dilate the labels
-    new_data = binary_dilation_scipy(
-        new_data,
-        iterations=1,
-        structure=ellipse_footprint_cpd,
-    )
+    new_data = dilation(new_data, footprint=ellipse_footprint_cpd)
 
     d_result["ids"] = ids
     first_tag = point_type
@@ -902,6 +886,7 @@ def extract_points_in_predictions(
     
     # Save just the points and their probabilities
     if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
         points_df.to_csv(
             os.path.join(
                 out_dir,
@@ -1118,6 +1103,7 @@ def extract_synapse_connectivity(
                 ],
             )
             pre_post_map_df.sort_values(by=["pre_id", "post_id"])
+            os.makedirs(csv_dir, exist_ok=True)
             pre_post_map_df.to_csv(
                 os.path.join(
                     csv_dir,
@@ -2008,16 +1994,16 @@ def voronoi_on_mask(
     binaryMask = binary_fill_holes(binaryMask)
     if erode_size > 0:
         # use a 3D ball; works fine with a single-slice Z as well
-        struct_elem = morphology.ball(radius=erode_size) if image3d else morphology.disk(radius=erode_size)
-        binaryMask = morphology.binary_erosion(binaryMask, struct_elem)
+        struct_elem = ball(radius=erode_size) if image3d else disk(radius=erode_size)
+        binaryMask = erosion(binaryMask, struct_elem)
 
     # 2) Keep only labels inside the mask
     voronoiCyst = data * binaryMask
 
     # 3) Perimeter = label border within the mask
     binaryVoronoiCyst = (voronoiCyst > 0).astype(np.uint8)
-    struct_elem = morphology.ball(radius=2) if image3d else morphology.disk(radius=2)
-    eroded = morphology.binary_erosion(binaryVoronoiCyst, struct_elem)
+    struct_elem = ball(radius=2) if image3d else disk(radius=2)
+    eroded = erosion(binaryVoronoiCyst, struct_elem)
     perim = (binaryVoronoiCyst - eroded).astype(bool)  # True at perimeter
 
     # 4) Unknown targets to fill = inside mask but unlabeled
@@ -2371,7 +2357,7 @@ def detection_watershed(
     print("Dilating a bit the seeds . . .")
     seeds = seeds.squeeze()
     if all(x != 0 for x in first_dilation):
-        seeds += (binary_dilation(seeds, structure=np.ones(first_dilation))).astype(np.uint8) # type: ignore
+        seeds += (dilation(seeds, footprint=np.ones(first_dilation))).astype(np.uint8) # type: ignore
 
     # Background seed
     seeds = label(seeds) # type: ignore

@@ -437,7 +437,7 @@ def get_checkpoint_path(cfg, jobname):
             raise NotImplementedError
     return resume
 
-def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False) -> Tuple[int | CN | None, str | None]:
     """
     Load a model checkpoint from disk.
 
@@ -451,7 +451,12 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         The configuration object. Key parameters:
         - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to checkpoint.
         - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for checkpoint selection.
-        - `cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS`: If True, only model weights are loaded.
+        - `cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT`: List of items to load from the checkpoint (if available). Options are:
+
+          - "weights": Load model weights.
+          - "model_arch": Load model architecture.
+          - "optimizer": Load optimizer state.
+          - "epoch": Load epoch number.
     jobname : str
         The name of the current job/experiment.
     model_without_ddp : nn.Module
@@ -520,8 +525,8 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
                 "the model will be built based on the current configuration"
             )
         return (
-            checkpoint["cfg"] if "cfg" in checkpoint else None,
-            checkpoint["biapy_version"] if "biapy_version" in checkpoint else None,
+            CN(checkpoint["cfg"]) if "cfg" in checkpoint else None,
+            str(checkpoint["biapy_version"]) if "biapy_version" in checkpoint else None,
         )
 
     if 'model' in checkpoint:
@@ -542,10 +547,13 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         model_state_dict = model_without_ddp.state_dict()
         for k, v in checkpoint_state_dict.items():
             if k in model_state_dict:
-                if v.shape == model_state_dict[k].shape:
-                    filtered_state_dict[k] = v
+                if torch.is_tensor(v):
+                    if v.shape == model_state_dict[k].shape:
+                        filtered_state_dict[k] = v
+                    else:
+                        print(f"Skipping layer '{k}' due to shape mismatch: checkpoint {v.shape} vs model {model_state_dict[k].shape}")
                 else:
-                    print(f"Skipping layer '{k}' due to shape mismatch: checkpoint {v.shape} vs model {model_state_dict[k].shape}")
+                    print(f"Skipping layer '{k}' because its value is not a tensor (type {type(v)})")
             else:
                 print(f"Skipping unexpected layer '{k}' not found in model.")
 
@@ -558,10 +566,8 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             model_without_ddp.discriminator.load_state_dict(checkpoint["discriminator_state_dict"], strict=False)
             print("Discriminator weights loaded!")
 
-    if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:
-        return start_epoch, resume
-
     # Load also opt, epoch and scaler info
+<<<<<<< HEAD
     if "optimizer" in checkpoint and optimizer is not None:
         # Backward compatibility: checkpoints are not converted in check_configuration.
         checkpoint_optimizer = checkpoint["optimizer"]
@@ -574,11 +580,19 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             opt.load_state_dict(opt_state)
             loaded_optimizers += 1
         print(f"Optimizer info loaded for {loaded_optimizers}/{len(optimizer)} optimizer(s)!")
+=======
+    if "optimizer" in checkpoint and optimizer is not None and "optimizer" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+        optimizer.load_state_dict(checkpoint["optimizer"], strict=False)
+        print("Optimizer info loaded!")
+>>>>>>> upstream/master
 
-    if "epoch" in checkpoint:
+    start_epoch = 0
+    if "epoch" in checkpoint and "epoch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         start_epoch = checkpoint["epoch"]
         if isinstance(start_epoch, str):
             start_epoch = 0
+        else:
+            start_epoch = int(start_epoch) # type: ignore
         print("Epoch loaded!")
 
     return start_epoch, resume

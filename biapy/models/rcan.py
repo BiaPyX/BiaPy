@@ -26,6 +26,8 @@ Reference:
 Adapted from:
 https://github.com/yjn870/RCAN-pytorch
 """
+from typing import Sequence
+
 import torch
 from torch import nn
 
@@ -277,7 +279,7 @@ class rcan(nn.Module):
             model outputs at the same resolution as the input features. Defaults to True.
         """
         super(rcan, self).__init__()
-        if type(scale) is tuple:
+        if type(scale) is not int and isinstance(scale, Sequence):
             scale = scale[0]
         self.ndim = ndim
         self.upscaling_layer = upscaling_layer

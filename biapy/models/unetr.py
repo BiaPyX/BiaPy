@@ -74,6 +74,7 @@ class UNETR(nn.Module):
         k_size=3,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        return_one_tensor: bool = False,
     ):
         """
         Initialize the UNETR model.
@@ -171,6 +172,10 @@ class UNETR(nn.Module):
             Dimension of the projection head for contrastive learning, if `contrast` is True.
             Defaults to `256`.
 
+        return_one_tensor : bool, optional
+            If True, concatenates all outputs into a single tensor along the channel dimension
+            in the forward pass. Defaults to `False`.
+
         Returns
         -------
         model : nn.Module
@@ -197,10 +202,11 @@ class UNETR(nn.Module):
         self.k_size = k_size
         self.contrast = contrast
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
-            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
         if self.ndim == 3:
@@ -486,4 +492,9 @@ class UNETR(nn.Module):
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
             return out_dict

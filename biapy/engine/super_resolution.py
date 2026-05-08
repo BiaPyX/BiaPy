@@ -33,7 +33,7 @@ from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
-
+from biapy.data.norm import undo_image_norm
 
 class Super_resolution_Workflow(Base_Workflow):
     """
@@ -86,8 +86,8 @@ class Super_resolution_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = True
 
-        self.norm_module.mask_norm = "as_image"
-        self.test_norm_module.mask_norm = "as_image"
+        self.norm_module["mask_norm"] = "as_image"
+        self.test_norm_module["mask_norm"] = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -100,14 +100,24 @@ class Super_resolution_Workflow(Base_Workflow):
             [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
         self.model_output_channel_info : List of str
-            Information about the output channels.
+            Information about the output channels. A value per output head of the model must be defined. 
 
         self.separated_class_channel : bool
             Whether if we should expect a separated output channel for classification.
 
         self.head_activations : List of str
-            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
+            Activations to be applied to the model output. A value per output channel (not output head) of the model must be defined.
+            "linear" and "ce_sigmoid" will not be applied. E.g. ["linear"] for a model with one channel, ["linear", "sigmoid"] for a
+            model with two channels, etc.
+
+        Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
+        and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
+        be correct::
+
+            self.model_output_channels = [1, 3]
+            self.model_output_channel_info = ["mask", "class"]
+            self.separated_class_channel = True
+            self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
         self.model_output_channels = [self.cfg.DATA.PATCH_SIZE[-1]]
         self.gt_channels_expected = self.model_output_channels[0]
@@ -319,7 +329,10 @@ class Super_resolution_Workflow(Base_Workflow):
         if train and isinstance(_output, torch.Tensor) and isinstance(_targets, torch.Tensor):
             if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
                 _output = torch.clamp(_output, min=0, max=1)
-                _targets = torch.clamp(_targets, min=0, max=1)
+                try:
+                    _targets = torch.clamp(_targets, min=0, max=1)
+                except Exception as e:
+                    _targets = _targets.to(torch.float32).clamp(min=0, max=1)
             elif self.cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
                 _output = (_output - torch.min(_output)) / (torch.max(_output) - torch.min(_output) + 1e-8)
                 _targets = (_targets - torch.min(_targets)) / (torch.max(_targets) - torch.min(_targets) + 1e-8)
@@ -470,7 +483,7 @@ class Super_resolution_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
+        pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
 
         # Save image

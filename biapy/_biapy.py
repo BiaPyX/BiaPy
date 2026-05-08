@@ -34,6 +34,7 @@ from bioimageio.spec.model.v0_5 import (
     OutputTensorDescr,
     IntervalOrRatioDataDescr,
     SpaceInputAxis,
+    SpaceOutputAxis,
     SpaceOutputAxisWithHalo,
     SizeReference,
     TensorId,
@@ -64,7 +65,7 @@ from biapy.models.bmz_utils import (
     create_model_cover,
     get_bmz_model_info,
 )
-
+from biapy.models import adapt_bmz_model_kwargs
 from biapy.config.config import Config, update_dependencies
 from biapy.engine.check_configuration import (
     check_configuration,
@@ -171,7 +172,7 @@ class BiaPy:
             copyfile(self.args.config, self.cfg_file)
 
         # Merge configuration file with the default settings
-        self.cfg = Config(self.job_dir, self.job_identifier)
+        cfg_manager = Config(self.job_dir, self.job_identifier)
 
         # Translates the input config it to current version
         with open(self.args.config, "r", encoding="utf8") as stream:
@@ -183,14 +184,12 @@ class BiaPy:
             except yaml.YAMLError as exc:
                 raise ValueError("Error reading the configuration file. Please check the file format: {}".format(exc))
         temp_cfg = CN(convert_old_model_cfg_to_current_version(original_cfg))
-        if self.cfg._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
+        if cfg_manager._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
             print("The following changes were made in order to adapt the input configuration:")
             diff_between_configs(original_cfg, temp_cfg)
         del original_cfg
-        self.cfg._C.merge_from_other_cfg(temp_cfg)
-
-        update_dependencies(self.cfg)
-        # self.cfg.freeze()
+        cfg_manager._C.merge_from_other_cfg(temp_cfg)
+        update_dependencies(cfg_manager)
 
         # GPU selection
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -206,9 +205,9 @@ class BiaPy:
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
         # GPU management
-        self.device = init_devices(self.args, self.cfg.get_cfg_defaults())
-        self.cfg._C.merge_from_list(opts)
-        self.cfg : CN = self.cfg.get_cfg_defaults()
+        self.device = init_devices(self.args, cfg_manager.get_cfg_defaults())
+        cfg_manager._C.merge_from_list(opts)
+        self.cfg: CN = cfg_manager.get_cfg_defaults()
 
         # Reproducibility
         set_seed(self.cfg.SYSTEM.SEED)
@@ -599,6 +598,7 @@ class BiaPy:
 
         # Add percentile norm
         preprocessing = []
+        axes = list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
         if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
             min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
             max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
@@ -609,6 +609,7 @@ class BiaPy:
                         "kwargs": {
                             "max_percentile": max_percentile,
                             "min_percentile": min_percentile,
+                            "axes": axes,
                         },
                     }
                 )
@@ -622,6 +623,7 @@ class BiaPy:
                             "kwargs": {
                                 "max_value": upper_value if upper_value != -1 else None,
                                 "min_value": lower_value if lower_value != -1 else None,
+                                "axes": axes,
                             },
                         }
                     )
@@ -632,18 +634,19 @@ class BiaPy:
                 test_input = (
                     self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
                 )
-                if test_input.max() > max_val:
+                if test_input.max() == 1:
+                    max_val = 1
+                elif test_input.max() > 255:
                     max_val = 65535
 
-            preprocessing.append(
-                {
-                    "id": "scale_linear",
-                    "kwargs": {"gain": float(1 / max_val), "offset": 0},
-                }
-            )
+            if max_val != 1:
+                preprocessing.append(
+                    {
+                        "id": "scale_linear",
+                        "kwargs": {"gain": float(1 / max_val), "offset": 0},
+                    }
+                )
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
-            axes = ["channel"]
-            axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
             preprocessing.append(
                 {
                     "id": "scale_range",
@@ -658,19 +661,18 @@ class BiaPy:
             custom_mean = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL
             custom_std = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL
 
-            if custom_mean != -1 and custom_std != -1:
+            if custom_mean != [-1] and custom_std != [-1]:
                 preprocessing.append(
                     {
                         "id": "fixed_zero_mean_unit_variance",
                         "kwargs": {
-                            "mean": custom_mean,
-                            "std": custom_std,
+                            "mean": [custom_mean],
+                            "std": [custom_std],
+                            "axis": "channel",
                         },
                     }
                 )
             else:
-                axes = ["channel"]
-                axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
                 preprocessing.append(
                     {
                         "id": "zero_mean_unit_variance",
@@ -682,10 +684,17 @@ class BiaPy:
 
         print("Pre-processing: {}".format(preprocessing))
 
-        # Post-processing deactivated as the models now are built with activations when they are exported
-        # so no post-processing is needed
+        # Post-processing activated only for old BiaPy models uploaded to BMZ without no "explicit_activations" field
         postprocessing = []
-        print("Post-processing: any")
+        if "postprocessing" in self.workflow.bmz_config:
+            for post in self.workflow.bmz_config["postprocessing"]:
+                if post == "sigmoid":
+                    postprocessing.append(
+                        {
+                            "id": "sigmoid",
+                        }
+                    )
+        print("Post-processing: {}".format(postprocessing))
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)
@@ -724,48 +733,58 @@ class BiaPy:
             test_output = (
                 self.workflow.bmz_config["test_output"] if "test_output" not in bmz_cfg else bmz_cfg["test_output"]
             )
-            output_axes = [
-                BatchAxis(size=1),
-                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
-            ]
             np.save(test_output_path, test_output)
-            if self.cfg.PROBLEM.NDIM == "3D":
+            # Classification workflow
+            if len(test_output.shape) == 2:
+                output_axes = [
+                    BatchAxis(size=1),
+                    SpaceOutputAxis(id=AxisId("z"), size=self.cfg.DATA.N_CLASSES)
+                ]
+            else:
+                output_axes = [
+                    BatchAxis(size=1),
+                    ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
+                ]
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    if test_output.shape[test_output.ndim-3] >= 20:
+                        output_axes += [
+                            SpaceOutputAxisWithHalo(
+                                halo=(test_output.shape[test_output.ndim-3]//8) & ~1, 
+                                    id=AxisId("z"), 
+                                    size=SizeReference(
+                                        tensor_id='input0', # type: ignore
+                                        axis_id='z', # type: ignore
+                                        offset=0,
+                                    ),
+                                scale=float(test_input.shape[test_input.ndim-3]/test_output.shape[test_output.ndim-3]),
+                            )
+                        ]
+                    else:
+                        output_axes += [SpaceOutputAxis(id=AxisId("z"), size=test_output.shape[test_output.ndim-3])]
                 output_axes += [
                     SpaceOutputAxisWithHalo(
-                        halo=(test_output.shape[2]//8) & ~1, 
-                            id=AxisId("z"), 
-                            size=SizeReference(
-                                tensor_id='input0', # type: ignore
-                                axis_id='z', # type: ignore
-                                offset=0,
-                            ),
-                        scale=float(test_input.shape[2]//test_output.shape[2]),
+                        halo=(test_output.shape[test_output.ndim-2]//8) & ~1, 
+                        id=AxisId("y"), 
+                        size=SizeReference(
+                            tensor_id='input0', # type: ignore
+                            axis_id='y', # type: ignore
+                            offset=0,
+                        ),
+                        scale=float(test_input.shape[test_input.ndim-2]/test_output.shape[test_output.ndim-2]),
                     )
                 ]
-            output_axes += [
-                SpaceOutputAxisWithHalo(
-                    halo=(test_output.shape[test_output.ndim-2]//8) & ~1, 
-                    id=AxisId("y"), 
-                    size=SizeReference(
-                        tensor_id='input0', # type: ignore
-                        axis_id='y', # type: ignore
-                        offset=0,
+                output_axes += [
+                    SpaceOutputAxisWithHalo(
+                        halo=(test_output.shape[test_output.ndim-1]//8) & ~1,  
+                        id=AxisId("x"),
+                        size=SizeReference(
+                            tensor_id='input0', # type: ignore
+                            axis_id='x', # type: ignore
+                            offset=0,
+                        ),
+                        scale=float(test_input.shape[test_input.ndim-1]/test_output.shape[test_output.ndim-1]),
                     ),
-                    scale=float(test_input.shape[test_input.ndim-2]//test_output.shape[test_output.ndim-2]),
-                )
-            ]
-            output_axes += [
-                SpaceOutputAxisWithHalo(
-                    halo=(test_output.shape[test_output.ndim-1]//8) & ~1,  
-                    id=AxisId("x"),
-                    size=SizeReference(
-                        tensor_id='input0', # type: ignore
-                        axis_id='x', # type: ignore
-                        offset=0,
-                    ),
-                    scale=float(test_input.shape[test_input.ndim-1]//test_output.shape[test_output.ndim-1]),
-                ),
-            ]
+                ]
             data_descr = IntervalOrRatioDataDescr(type="float32")
             output_descr = OutputTensorDescr(
                 id=TensorId("output0"),
@@ -777,6 +796,7 @@ class BiaPy:
             outputs = [output_descr]
         else:
             inputs = []
+            input_shapes = []
             for i, input in enumerate(self.workflow.bmz_config["original_bmz_config"].inputs):
                 if type(input) != InputTensorDescr:
                     # Read tensor
@@ -788,6 +808,7 @@ class BiaPy:
                         test_tensor = ensure_2d_shape(test_tensor, test_tensor_local_path)
                     else:
                         test_tensor = ensure_3d_shape(test_tensor, test_tensor_local_path)
+                    input_shapes.append(test_tensor.shape)
 
                     # Create axes object
                     input_axes = []
@@ -837,6 +858,7 @@ class BiaPy:
                     else:
                         test_tensor = ensure_3d_shape(test_tensor, test_tensor_local_path)
 
+                    input_shape = input_shapes[i] if i < len(input_shapes) else input_shapes[0]
                     # Create axes object
                     output_axes = []
                     for letter in output.axes:
@@ -851,7 +873,7 @@ class BiaPy:
                         elif letter == "z":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                    halo=(test_tensor.shape[0]//8) & ~1, 
+                                    halo=(input_shape.shape[0]//8) & ~1, 
                                         id=AxisId(str(letter)), 
                                         size=SizeReference(
                                             tensor_id='input0', # type: ignore
@@ -863,7 +885,7 @@ class BiaPy:
                         elif letter == "y":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                    halo=(test_tensor.shape[test_tensor.ndim-2]//8) & ~1, 
+                                    halo=(input_shape.shape[1]//8) & ~1, 
                                     id=AxisId(str(letter)), 
                                     size=SizeReference(
                                         tensor_id='input0', # type: ignore
@@ -875,7 +897,7 @@ class BiaPy:
                         elif letter == "x":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                halo=(test_tensor.shape[test_tensor.ndim-1]//8) & ~1, 
+                                halo=(input_shape.shape[2]//8) & ~1, 
                                 id=AxisId(str(letter)), 
                                 size=SizeReference(
                                         tensor_id='input0', # type: ignore
@@ -1064,8 +1086,8 @@ class BiaPy:
 
             arch_file_sha256 = create_file_sha256sum(arch_file_path)
             model_kwargs = self.workflow.model_build_kwargs.copy()
-            if "explicit_activations" in model_kwargs:
-                model_kwargs["explicit_activations"] = True
+            model_kwargs = adapt_bmz_model_kwargs(model_kwargs, model_to_consume=False)
+
             pytorch_architecture = ArchitectureFromFileDescr(
                 source=Path(arch_file_path),
                 sha256=Sha256(arch_file_sha256),
@@ -1100,7 +1122,7 @@ class BiaPy:
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
             pytorch_version=torch.__version__,  # type: ignore
-            dependencies=env_descriptor,
+            dependencies=env_descriptor.model_dump() if env_descriptor else None,  # type: ignore
         )
 
         # torchscript = TorchscriptWeightsDescr(

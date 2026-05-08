@@ -59,6 +59,7 @@ class U_NeXt_V2(nn.Module):
         feature_maps=[32, 64, 128, 256],
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
+        yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
         output_channel_info=["F"],
@@ -72,6 +73,7 @@ class U_NeXt_V2(nn.Module):
         stem_k_size=2,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        return_one_tensor: bool = False,
     ):
         """
         Initialize the U-NeXt_V2 model.
@@ -108,6 +110,11 @@ class U_NeXt_V2(nn.Module):
             pooling stage in the encoder. Set elements to `1` if the dataset is not
             isotropic and z-downsampling is not desired at that stage.
             Its length should match the number of pooling stages (`len(feature_maps) - 1`).
+            Defaults to `[2, 2, 2, 2]`.
+
+        yx_down : List[int], optional
+            A list of downsampling factors for the y and x dimensions at each pooling
+            stage in the encoder. Its length should match the number of pooling stages (`len(feature_maps) - 1`).
             Defaults to `[2, 2, 2, 2]`.
 
         output_channels : List[int], optional
@@ -170,6 +177,9 @@ class U_NeXt_V2(nn.Module):
             Dimension of the projection head for contrastive learning, if `contrast` is True.
             Defaults to `256`.
 
+        return_one_tensor : bool, optional  
+            If True, concatenates all outputs into a single tensor along the channel dimension
+            in the forward pass. Defaults to `False`.
         """
         super(U_NeXt_V2, self).__init__()
 
@@ -184,16 +194,18 @@ class U_NeXt_V2(nn.Module):
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
+        self.yx_down = yx_down
         self.output_channels = output_channels
         self.output_channel_info = output_channel_info
         self.return_class = True if "class" in output_channel_info else False
         layer_norm = nn.LayerNorm
         self.contrast = contrast
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
-            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
 
@@ -267,7 +279,7 @@ class U_NeXt_V2(nn.Module):
             sd_probs.append(sd_probs_stage)
 
             # Downsampling
-            mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
+            mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
             self.downsample_layers.append(
                 nn.Sequential(
                     pre_ln_permutation,
@@ -302,13 +314,14 @@ class U_NeXt_V2(nn.Module):
                     kernel_size = (1, 7, 7)
                 self.up_paths[j].append(
                     UpConvNeXtBlock_V2(
-                        self.ndim,
-                        convtranspose,
-                        in_channels,
-                        feature_maps[i],
-                        z_down[i],
-                        upsample_layer,
-                        conv,
+                        ndim=self.ndim,
+                        convtranspose=convtranspose,
+                        in_size=in_channels,
+                        out_size=feature_maps[i],
+                        z_down=z_down[i],
+                        yx_down=yx_down[i],
+                        up_mode=upsample_layer,
+                        conv=conv,
                         attention_gate=False,
                         cn_layers=cn_layers[i],
                         sd_probs=sd_probs[i],
@@ -438,4 +451,9 @@ class U_NeXt_V2(nn.Module):
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
             return out_dict

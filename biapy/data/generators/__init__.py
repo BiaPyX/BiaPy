@@ -30,7 +30,6 @@ from biapy.data.generators.chunked_workflow_process_generator import chunked_wor
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
-from biapy.data.norm import Normalization
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
 from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
 
@@ -39,10 +38,10 @@ def create_train_val_augmentors(
     system_dict: Dict[str, Any],
     X_train: BiaPyDataset,
     X_val: BiaPyDataset,
-    norm_module: Normalization,
+    norm_module: Dict,
     Y_train: Optional[BiaPyDataset] = None,
     Y_val: Optional[BiaPyDataset] = None,
-) -> Tuple[DataLoader, DataLoader, Normalization, int, NDArray, NDArray, NDArray]:
+) -> Tuple[DataLoader, DataLoader, int, NDArray, NDArray, NDArray]:
     """
     Create training and validation generators.
 
@@ -64,7 +63,7 @@ def create_train_val_augmentors(
     X_val : BiaPyDataset
         Loaded train Y data.
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     Y_train : BiaPyDataset, optional
@@ -81,11 +80,17 @@ def create_train_val_augmentors(
     val_generator : DataLoader
         Validation data generator.
 
-    data_norm : Normalization
-        Normalization of the data.
-
     num_training_steps_per_epoch: int
         Number of training steps per epoch.
+
+    bmz_input_sample : 4D Numpy array
+        Sample of the input data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
+
+    cover_raw : 4D Numpy array
+        Sample of the raw cover data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
+
+    cover_gt : 4D Numpy array
+        Sample of the GT cover data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
     """
     if cfg.PROBLEM.NDIM == "2D":
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
@@ -258,7 +263,6 @@ def create_train_val_augmentors(
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)  # type: ignore
-    data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
@@ -368,7 +372,7 @@ def create_train_val_augmentors(
     bmz_input_sample, mask_sample = train_generator.load_sample(0, first_load=True)
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
         img=bmz_input_sample,
-        img_gt=mask_sample,
+        img_gt=mask_sample if not isinstance(mask_sample, int) else None,
         patch_size=cfg.DATA.PATCH_SIZE,
         is_3d=cfg.PROBLEM.NDIM == "3D",
         input_axis_order=cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
@@ -420,15 +424,15 @@ def create_train_val_augmentors(
         prefetch_factor=2 if num_workers_val > 0 else None,
     )
 
-    return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample, cover_raw, cover_gt
+    return train_dataset, val_dataset, num_training_steps_per_epoch, bmz_input_sample, cover_raw, cover_gt
 
 
 def create_test_generator(
     cfg: CN,
     X_test: Any,
     Y_test: Any,
-    norm_module: Normalization,
-) -> Tuple[test_pair_data_generator | test_single_data_generator, Normalization, NDArray, NDArray, NDArray]:
+    norm_module: Dict,
+) -> Tuple[test_pair_data_generator | test_single_data_generator, NDArray, NDArray, NDArray]:
     """
     Create test data generator.
 
@@ -444,7 +448,7 @@ def create_test_generator(
         Test data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
         in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     Returns
@@ -452,8 +456,14 @@ def create_test_generator(
     test_generator : test_pair_data_generator/test_single_data_generator
         Test data generator.
 
-    data_norm : Normalization
-        Normalization of the data.
+    bmz_input_sample : 4D Numpy array
+        Sample of the input data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
+
+    cover_raw : 4D Numpy array
+        Sample of the raw cover data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
+
+    cover_gt : 4D Numpy array
+        Sample of the GT cover data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
     """
     if cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
         provide_Y = False
@@ -500,7 +510,6 @@ def create_test_generator(
         dic["n_classes"] = cfg.DATA.N_CLASSES
     
     test_generator = gen_name(**dic)
-    data_norm = test_generator.get_data_normalization()
 
     # Save a sample to export the model to BMZ
     bmz_input_sample = None
@@ -527,7 +536,7 @@ def create_test_generator(
             bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
         bmz_input_sample = bmz_input_sample.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
 
-    return test_generator, data_norm, bmz_input_sample, cover_raw, cover_gt
+    return test_generator, bmz_input_sample, cover_raw, cover_gt
 
 def by_chunks_collate_fn(data):
     """
@@ -557,7 +566,7 @@ def create_chunked_test_generator(
     cfg: CN,
     system_dict: Dict[str, Any],
     current_sample: Dict,
-    norm_module: Normalization,
+    norm_module: Dict,
     out_dir: str,
     dtype_str: str,
 ) -> DataLoader:
@@ -584,7 +593,7 @@ def create_chunked_test_generator(
     current_sample : dict
         Dictionary containing the sample to process (e.g., file pointers, data arrays).
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module to apply to the data.
 
     out_dir : str

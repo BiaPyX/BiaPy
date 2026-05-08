@@ -182,6 +182,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "Db"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "Db"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
             elif set(sorted_original_instance_channels) == {"F", "Dn"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "Dn"]
@@ -1193,10 +1202,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'top-5-accuracy' can only be used when DATA.N_CLASSES >= 5")
 
     loss = ""
-    if cfg.PROBLEM.TYPE in [
-        "SEMANTIC_SEG",
-        "DETECTION",
-    ]:
+    if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss in [
             "CE",
@@ -1205,18 +1211,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
 
         if cfg.DATA.N_CLASSES > 2:
-            if loss != "CE":
-                raise ValueError("'DATA.N_CLASSES' are only used with 'CE' loss and not with {}".format(loss))
-            if cfg.LOSS.CLASS_REBALANCE == "auto":
-                raise ValueError(
-                    "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
-                    "Use 'manual' and 'LOSS.CLASS_WEIGHTS' if you really want to rebalance classes. If not, set 'LOSS.CLASS_REBALANCE' to 'none'."
-                )
-        if loss == "W_CE_DICE":
-            assert (
-                len(cfg.LOSS.WEIGHTS) == 2
-            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE == 'W_CE_DICE'"
-            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
+            if loss not in ["CE", 'W_CE_DICE']:
+                raise ValueError("'DATA.N_CLASSES' are only used in ['CE', 'W_CE_DICE'] losses and not with {}".format(loss))
+
+            if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
+                raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
+    elif cfg.PROBLEM.TYPE == "DETECTION":
+        loss = "CE"
+        if cfg.DATA.N_CLASSES > 2:
+            if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
+                raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
+
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
@@ -1235,11 +1240,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 len(cfg.LOSS.WEIGHTS) == 2
             ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
             assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
-    elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        assert cfg.LOSS.CLASS_REBALANCE in [
-        "none",
-        "auto",
-    ], "LOSS.CLASS_REBALANCE not in ['none', 'auto'] for INSTANCE_SEG workflow"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss in ["MSE", "CYCLEGAN"], "LOSS.TYPE must be in ['MSE', 'CYCLEGAN'] for DENOISING"
@@ -1253,8 +1253,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.LOSS.CLASS_REBALANCE in [
         "none",
         "manual",
-        "auto",
-    ], "LOSS.CLASS_REBALANCE not in ['none', 'manual', 'auto']"
+    ], "LOSS.CLASS_REBALANCE not in ['none', 'manual']"
     if cfg.LOSS.CLASS_REBALANCE == "manual":
         if cfg.LOSS.CLASS_WEIGHTS == []:
             raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
@@ -1325,7 +1324,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
         )
 
-    model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT
+    for item in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+        if item not in ["weights", "norm", "model_arch", "optimizer", "epoch"]:
+            raise ValueError("'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' can only have items in ['weights', 'norm', 'model_arch', 'optimizer', 'epoch']")
+    model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and "model_arch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
@@ -1752,6 +1754,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be of " f"{dim_count} dimension"
             )
 
+        if cfg.DATA.N_CLASSES > 2 and len(cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS) != 2:
+            raise ValueError("When 'DATA.N_CLASSES' > 2, 'PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS' needs to have two weights: one for the background "
+            "and one for the foreground")
+            
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
         if not (cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING):
@@ -1815,8 +1821,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Classification ####
     elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
-        if cfg.TEST.BY_CHUNKS.ENABLE:
-            raise ValueError("'TEST.BY_CHUNKS.ENABLE' can not be activated for CLASSIFICATION workflow")
         if cfg.MODEL.SOURCE == "torchvision":
             if cfg.MODEL.TORCHVISION_MODEL_NAME not in [
                 "alexnet",
@@ -2103,8 +2107,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if cfg.TEST.ENABLE:
         if cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
-            if not os.path.exists(cfg.DATA.TEST.PATH):
-                raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
+            path_to_check = cfg.DATA.VAL.PATH if not cfg.DATA.VAL.FROM_TRAIN else cfg.DATA.TRAIN.PATH
+            if not os.path.exists(path_to_check):
+                raise ValueError("Test data not found: {}".format(path_to_check))
             if (
                 cfg.DATA.TEST.LOAD_GT
                 and not os.path.exists(cfg.DATA.TEST.GT_PATH)
@@ -2137,6 +2142,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     print("Found {} test classes".format(len(list_of_classes)))
             
         if cfg.TEST.BY_CHUNKS.ENABLE:
+            if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+                raise ValueError("'TEST.BY_CHUNKS' can only be activated in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
             if cfg.PROBLEM.NDIM == "2D":
                 raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
             if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
@@ -2144,6 +2151,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "chunk_by_chunk",
                     "entire_pred",
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
+            if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == 'chunk_by_chunk':
+                    raise NotImplementedError("Chunk by chunk processing is not implemented yet for instance segmentation workflow")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
@@ -2343,13 +2353,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "mae",
             "unext_v1",
             "unext_v2",
-            "hrnet18",
-            "hrnet32",
-            "hrnet48",
-            "hrnet64",
+            "hrnet",
             "stunet",
+<<<<<<< HEAD
             "nafnet",
         ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
+=======
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
+>>>>>>> upstream/master
         if (
             model_arch
             not in [
@@ -2367,10 +2378,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "dfcan",
                 "rcan",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
                 "stunet",
             ]
             and cfg.PROBLEM.NDIM == "3D"
@@ -2393,10 +2401,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "unext_v2",
                         "dfcan",
                         "rcan",
-                        "hrnet18",
-                        "hrnet32",
-                        "hrnet48",
-                        "hrnet64",
+                        "hrnet",
                         "stunet",
                     ]
                 )
@@ -2416,15 +2421,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unetr",
                 "unext_v1",
                 "unext_v2",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
                 "stunet",
             ]
         ):
             raise ValueError(
-                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
             )
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
@@ -2447,6 +2449,58 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
             else:
                 raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
+
+    # Adjust YX_DOWN 
+    if all(x == 0 for x in cfg.MODEL.YX_DOWN):
+        if model_arch == "multiresunet":
+            opts.extend(["MODEL.YX_DOWN", (2, 2, 2, 2)])
+        else:
+            opts.extend(["MODEL.YX_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
+    elif any([False for x in cfg.MODEL.YX_DOWN if x != 1 and x != 2]):
+        raise ValueError("'MODEL.YX_DOWN' needs to be 1 or 2")
+    else:
+        if model_arch == "multiresunet" and len(cfg.MODEL.YX_DOWN) != 4:
+            raise ValueError("'MODEL.YX_DOWN' length must be 4 when using 'multiresunet'")
+        elif model_arch in [
+            "unet",
+            "resunet",
+            "resunet++",
+            "seunet",
+            "resunet_se",
+            "attention_unet",
+            "unext_v1",
+            "unext_v2",
+        ]:
+            if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.YX_DOWN):
+                raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.YX_DOWN' length must be equal")
+    if "hrnet" in model_arch:
+        assert cfg.MODEL.HRNET.VARIANT in ["W18", "W32", "W48", "W64", "custom"], "'MODEL.HRNET.VARIANT' needs to be in ['W18', 'W32', 'W48', 'W64', 'custom']"
+        if cfg.MODEL.HRNET.VARIANT != "custom":
+            # Extract base channels directly from the variant string
+            base_channels = int(cfg.MODEL.HRNET.VARIANT.lower().replace("w", ""))  # Remove 'w' prefix if present and convert to int
+            num_stages = 3
+            num_modules = [1, 4, 3]
+            num_branches = [2, 3, 4]
+
+            # Procedurally generate blocks and channels based on the number of branches
+            num_blocks = [[4] * b for b in num_branches]
+            num_channels = [[base_channels * (2**i) for i in range(b)] for b in num_branches]
+
+            opts.extend(["MODEL.HRNET.Z_DOWN", (1,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
+            opts.extend(["MODEL.HRNET.YX_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
+            opts.extend(["MODEL.HRNET.BLOCK_TYPE", 'BASIC'])
+            opts.extend(["MODEL.HRNET.NUM_STAGES", num_stages])
+            opts.extend(["MODEL.HRNET.NUM_MODULES", num_modules])
+            opts.extend(["MODEL.HRNET.NUM_BRANCHES", num_branches])
+            opts.extend(["MODEL.HRNET.NUM_BLOCKS", num_blocks])
+            opts.extend(["MODEL.HRNET.NUM_CHANNELS", num_channels])
+        else:
+            if len(cfg.MODEL.HRNET.NUM_BLOCKS) != len(cfg.MODEL.HRNET.YX_DOWN):
+                raise ValueError("'MODEL.HRNET.NUM_BLOCKS' length and 'MODEL.HRNET.YX_DOWN' length must be equal")
+            if any([False for x in cfg.MODEL.HRNET.YX_DOWN if x != 1 and x != 2]):
+                raise ValueError("'MODEL.HRNET.YX_DOWN' needs to be 1 or 2")
+            if any([False for x in cfg.MODEL.HRNET.Z_DOWN if x != 1 and x != 2]):
+                raise ValueError("'MODEL.HRNET.Z_DOWN' needs to be 1 or 2")
 
     # Adjust Z_DOWN values to feature maps
     if all(x == 0 for x in cfg.MODEL.Z_DOWN):
@@ -2488,7 +2542,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
-            
+    
+    if cfg.MODEL.NORMALIZATION == "":
+        opts.extend(["MODEL.NORMALIZATION", "in"])
+    else:
+        assert cfg.MODEL.NORMALIZATION in ["in", "bn", "sync_bn", "gn", "ln"], "'MODEL.NORMALIZATION' needs to be in ['in', 'bn', 'sync_bn', 'gn', 'ln']"
+
     if len(opts) > 0:
         cfg.merge_from_list(opts)
         opts = []
@@ -2517,15 +2576,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "multiresunet",
                 "unext_v1",
                 "unext_v2",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
                 "stunet",
                 "nafnet",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -2572,13 +2628,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "multiresunet",
                 "unext_v1",
                 "unext_v2",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
+                "stunet",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
                 )
             # Not allowed archs
             if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
@@ -2601,14 +2655,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "wdsr",
                 "vit",
                 "mae",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
+                "stunet",
             ]:
                 raise ValueError(
                     "'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', "
-                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
+                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet', 'stunet']"
                 )
 
             # Not allowed archs
@@ -2642,51 +2694,60 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "multiresunet",
             "unext_v1",
             "unext_v2",
-            "hrnet18",
-            "hrnet32",
-            "hrnet48",
-            "hrnet64",
+            "hrnet",
             "stunet",
         ]:
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]
 
-            if "hrnet" not in model_arch:
-                for i in range(len(cfg.MODEL.FEATURE_MAPS) - 1):
-                    if not all(
-                        [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % cfg.MODEL.Z_DOWN[i] != 0]
-                    ):
-                        m = (
-                            "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number "
-                            + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
-                        )
-                        if cfg.PROBLEM.NDIM == "3D":
-                            m += (
-                                "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
-                                + "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
-                            )
-                        raise ValueError(m)
-                    z_size = z_size // cfg.MODEL.Z_DOWN[i]
-            else:
-                
-                # Check that the input patch size is divisible in every level of the HRNet selected
-                hrnet_zdown_div = 2 if cfg.MODEL.HRNET.Z_DOWN else 1
+            is_hrnet = "hrnet" in model_arch
+            is_3d = cfg.PROBLEM.NDIM == "3D"
 
-                for i in range(4):
-                    if not all(
-                        [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % hrnet_zdown_div != 0]
-                    ):
-                        m = (
-                            f"The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the HRNET's levels. You can:\n 1) Reduce the number "
-                            + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
+            # 1. Setup the downsampling schedules based on the architecture
+            if is_hrnet:
+                num_downsamplings = len(cfg.MODEL.HRNET.NUM_BLOCKS)
+                yx_down_schedule = cfg.MODEL.HRNET.YX_DOWN
+                z_down_schedule = cfg.MODEL.HRNET.Z_DOWN
+                z_param_name = "MODEL.HRNET.Z_DOWN"
+            else:
+                if model_arch == "multiresunet":
+                    num_downsamplings = 4
+                else:
+                    num_downsamplings = len(cfg.MODEL.FEATURE_MAPS) - 1
+                yx_down_schedule = cfg.MODEL.YX_DOWN
+                z_down_schedule = cfg.MODEL.Z_DOWN
+                z_param_name = "MODEL.Z_DOWN"
+
+            # Isolate the current sizes to simulate downsampling iteratively
+            current_z = cfg.DATA.PATCH_SIZE[0] if is_3d else 1
+            current_yx = list(cfg.DATA.PATCH_SIZE[1:-1]) if is_3d else list(cfg.DATA.PATCH_SIZE[:-1])
+
+            # 2. Single loop to validate divisibility and simulate downsampling
+            for i in range(num_downsamplings):
+                yx_factor = yx_down_schedule[i]
+                z_factor = z_down_schedule[i] if is_3d else 1
+
+                # Check divisibility using clean generator expressions
+                yx_invalid = any(dim % yx_factor != 0 or dim <= 2 for dim in current_yx)
+                z_invalid = is_3d and (current_z % z_factor != 0 or current_z <= 2)
+
+                if yx_invalid or z_invalid:
+                    m = (
+                        f"The 'DATA.PATCH_SIZE' provided is not divisible by the downsampling factor at level {i} of the {model_arch}. "
+                        "You can:\n"
+                        " 1) Reduce the number of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array length)\n"
+                        " 2) Increase 'DATA.PATCH_SIZE'"
+                    )
+                    if is_3d:
+                        m += (
+                            f"\n 3) If the Z axis is the problem (often smaller due to resolution), you "
+                            f"can tune '{z_param_name}' to not downsample the Z axis in all levels."
                         )
-                        if cfg.PROBLEM.NDIM == "3D":
-                            m += (
-                                "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
-                                + f"can tune 'MODEL.HRNET.Z_DOWN' variable to not downsample the image in all U-Net levels"
-                            )
-                        raise ValueError(m)
-                    z_size = z_size // 2 if cfg.MODEL.HRNET.Z_DOWN else z_size
+                    raise ValueError(m)
+
+                # Apply downsampling to prepare for the next level's check
+                current_yx = [dim // yx_factor for dim in current_yx]
+                current_z = current_z // z_factor
 
         if "hrnet" in model_arch:
             assert cfg.MODEL.HRNET.BLOCK_TYPE in ['BASIC', 'BOTTLENECK', 'CONVNEXT_V1', 'CONVNEXT_V2'], "'MODEL.HRNET.BLOCK_TYPE' not in ['BASIC', 'BOTTLENECK', 'CONVNEXT_V1', 'CONVNEXT_V2']"
@@ -3021,6 +3082,7 @@ def _assert_list_of_pos_ints(x, ctx):
         assert isinstance(v, int) and v > 0, f"'{ctx}[{i}]' must be a positive integer"
 
 
+<<<<<<< HEAD
 def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
     """
     Compare two BiaPy configurations and raise an error if critical workflow variables differ.
@@ -3105,6 +3167,9 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
 
 
 def convert_old_model_cfg_to_current_version(old_cfg: dict):
+=======
+def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
+>>>>>>> upstream/master
     """
     Convert old configuration to the current BiaPy version.
     
@@ -3121,6 +3186,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
     new_cfg : dict
         Updated configuration to the current BiaPy version.
     """
+<<<<<<< HEAD
     if "TRAIN" in old_cfg:
         if "OPTIMIZER" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["OPTIMIZER"], str):
             old_cfg["TRAIN"]["OPTIMIZER"] = [old_cfg["TRAIN"]["OPTIMIZER"]]
@@ -3135,6 +3201,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "LR_SCHEDULER" in old_cfg["TRAIN"]:
             if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
                 old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]] * len(old_cfg["TRAIN"]["OPTIMIZER"])
+=======
+    workflow = old_cfg.get("PROBLEM", {}).get("TYPE", "SEMANTIC_SEG")
+>>>>>>> upstream/master
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
             full_image = old_cfg["TEST"]["STATS"]["FULL_IMG"]
@@ -3424,14 +3493,16 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]
-
+        if "TEST" in old_cfg["DATA"]:
+            if "ARGMAX_TO_OUTPUT" in old_cfg["DATA"]["TEST"]:
+                del old_cfg["DATA"]["TEST"]["ARGMAX_TO_OUTPUT"]
         if "NORMALIZATION" in old_cfg["DATA"]:
             if "PERC_CLIP" in old_cfg["DATA"]["NORMALIZATION"]:
                 val = old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
-                if isinstance(val, bool) and val:
+                if isinstance(val, bool):
                     del old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
                     old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] = {}
-                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["ENABLE"] = True
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["ENABLE"] = val
                     if "PERC_LOWER" in old_cfg["DATA"]["NORMALIZATION"]:
                         old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_PERC"] = old_cfg["DATA"]["NORMALIZATION"][
                             "PERC_LOWER"
@@ -3443,18 +3514,43 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                         ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
 
+                if (
+                    "LOWER_VALUE" in old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] 
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"] = [old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"]]
+
+                if (
+                    "UPPER_VALUE" in old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] 
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"] = [old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"]]
+            if "ZERO_MEAN_UNIT_VAR" in old_cfg["DATA"]["NORMALIZATION"]:
+                if (
+                    "MEAN_VAL" in old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = [old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"]]
+                if (
+                    "STD_VAL" in old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = [old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"]]   
+            if "MEASURE_BY" in old_cfg["DATA"]["NORMALIZATION"]:
+                del old_cfg["DATA"]["NORMALIZATION"]["MEASURE_BY"]
+
             if "TYPE" in old_cfg["DATA"]["NORMALIZATION"] and old_cfg["DATA"]["NORMALIZATION"]["TYPE"] == "custom":
                 old_cfg["DATA"]["NORMALIZATION"]["TYPE"] = "zero_mean_unit_variance"
                 if "CUSTOM_MEAN" in old_cfg["DATA"]["NORMALIZATION"]:
                     old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
                     mean = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = mean
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = [mean]
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]
                 if "CUSTOM_STD" in old_cfg["DATA"]["NORMALIZATION"]:
                     if "ZERO_MEAN_UNIT_VAR" not in old_cfg["DATA"]["NORMALIZATION"]:
                         old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
                     std = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = std
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = [std]
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
                 if "CUSTOM_MODE" in old_cfg["DATA"]["NORMALIZATION"]:
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MODE"]
@@ -3483,17 +3579,36 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
 
     if "LOSS" in old_cfg and "CLASS_REBALANCE" in old_cfg["LOSS"]:
         if isinstance(old_cfg["LOSS"]["CLASS_REBALANCE"], bool):
-            old_cfg["LOSS"]["CLASS_REBALANCE"] = "auto" if old_cfg["LOSS"]["CLASS_REBALANCE"] else "none"
+            val = bool(old_cfg["LOSS"]["CLASS_REBALANCE"])
+            old_cfg["LOSS"]["CLASS_REBALANCE"] = "none"
+            if workflow == "INSTANCE_SEG":
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["CLASS_REBALANCE_WITHIN_CHANNELS"] = val
+            elif workflow == "DETECTION":
+                old_cfg["PROBLEM"]["DETECTION"]["CLASS_REBALANCE_WITHIN_CHANNELS"] = val
+            elif workflow == "SEMANTIC_SEG":
+                cls_weights = old_cfg.get("LOSS", {}).get("CLASS_WEIGHTS", [])
+                if cls_weights != []:
+                    old_cfg["LOSS"]["CLASS_REBALANCE"] = "manual"
 
     if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
         del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
 
     if "MODEL" in old_cfg:
+        load_checkpoint = True if "LOAD_CHECKPOINT" in old_cfg["MODEL"] and old_cfg["MODEL"]["LOAD_CHECKPOINT"] else False
+        if "LOAD_MODEL_FROM_CHECKPOINT" in old_cfg["MODEL"]:
+            if old_cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] and load_checkpoint:
+                old_cfg["MODEL"]["ITEMS_TO_LOAD_FROM_CHECKPOINT"] = ["weights", "norm", "model_arch"]
+            del old_cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"]
         if "BATCH_NORMALIZATION" in old_cfg["MODEL"]:
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
                 old_cfg["MODEL"]["NORMALIZATION"] = "bn"
             del old_cfg["MODEL"]["BATCH_NORMALIZATION"]
-
+        if "UNETR_DEC_ACTIVATION" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["ACTIVATION"] = old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
+            del old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
+        if "UNETR_DEC_KERNEL_SIZE" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["KERNEL_SIZE"] = old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
+            del old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
         if "N_CLASSES" in old_cfg["MODEL"]:
             if "DATA" not in old_cfg:
                 old_cfg["DATA"] = {}
@@ -3575,9 +3690,67 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_32")
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
+
+        if "hrnet" in old_cfg["MODEL"]["ARCHITECTURE"].lower():
+            old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"
+
         if "HRNET" in old_cfg["MODEL"]:
             if "STAGE1" in old_cfg["MODEL"]["HRNET"]:
                 del old_cfg["MODEL"]["HRNET"]["STAGE1"]
+
+            variant_str = None
+            # 1. Migrate CUSTOM boolean to VARIANT string
+            if "CUSTOM" in old_cfg["MODEL"]["HRNET"]:
+                is_custom = old_cfg["MODEL"]["HRNET"].pop("CUSTOM")
+                if is_custom:
+                    variant_str = "custom"
+            if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower():
+                modelname = old_cfg["MODEL"]["ARCHITECTURE"]
+                # Extract base channels dynamically (e.g., 'hrnet32' -> 32)
+                match = re.search(r'\d+', modelname)
+                if match and variant_str != "custom":
+                    variant_str = "W" + str(int(match.group()))
+                old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"
+                
+            # Fallback if variant wasn't explicitly captured from old keys
+            if variant_str is None:
+                variant_str = old_cfg["MODEL"]["HRNET"].get("VARIANT", "W18")
+            
+            old_cfg["MODEL"]["HRNET"]["VARIANT"] = str(variant_str)
+
+            # 2. Extract nested stages into the new dynamic flat lists
+            if "STAGE2" in old_cfg["MODEL"]["HRNET"]:
+                num_stages = 0
+                num_modules = []
+                num_branches = []
+                num_blocks = []
+                num_channels = []
+                
+                for stage_idx in [2, 3, 4, 5]: # Checking up to STAGE5 just in case
+                    stage_key = f"STAGE{stage_idx}"
+                    if stage_key in old_cfg["MODEL"]["HRNET"]:
+                        num_stages += 1
+                        stage_cfg = old_cfg["MODEL"]["HRNET"].pop(stage_key)
+                        num_modules.append(stage_cfg.get("NUM_MODULES", 1))
+                        num_branches.append(stage_cfg.get("NUM_BRANCHES", stage_idx))
+                        num_blocks.append(stage_cfg.get("NUM_BLOCKS", [4] * stage_idx))
+                        num_channels.append(stage_cfg.get("NUM_CHANNELS", [18 * (2**i) for i in range(stage_idx)]))
+                
+                if num_stages > 0:
+                    old_cfg["MODEL"]["HRNET"]["NUM_STAGES"] = num_stages
+                    old_cfg["MODEL"]["HRNET"]["NUM_MODULES"] = num_modules
+                    old_cfg["MODEL"]["HRNET"]["NUM_BRANCHES"] = num_branches
+                    old_cfg["MODEL"]["HRNET"]["NUM_BLOCKS"] = num_blocks
+                    old_cfg["MODEL"]["HRNET"]["NUM_CHANNELS"] = num_channels
+            
+            # 3. Migrate Z_DOWN from bool to list and initialize YX_DOWN
+            n_stages = old_cfg["MODEL"]["HRNET"].get("NUM_STAGES", 3)
+            
+            if "Z_DOWN" in old_cfg["MODEL"]["HRNET"]:
+                z_down_val = old_cfg["MODEL"]["HRNET"]["Z_DOWN"]
+                if isinstance(z_down_val, bool):
+                    old_cfg["MODEL"]["HRNET"]["Z_DOWN"] = [2 if z_down_val else 1] * n_stages
+
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
     except:
@@ -3596,14 +3769,14 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             del old_cfg["PATHS"]["LWR_Y_FILE"]
         if "UPR_Y_FILE" in old_cfg["PATHS"]:
             del old_cfg["PATHS"]["UPR_Y_FILE"]  
-        
+
     return old_cfg
 
 def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path: str=""):
     """
     Print differences between two given configurations.
 
-    Paramaters
+    Parameters
     ----------
     old_dict : Config or Dict
         First dictionary to compare against ``new_dict``.
