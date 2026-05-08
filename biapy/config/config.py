@@ -1439,7 +1439,9 @@ class Config:
         #   * Classification: 'accuracy', 'top-5-accuracy'
         #   * Image to image: "psnr", "mae", "mse", "ssim"
         _C.TRAIN.METRICS = []
-
+        
+        # Gradient clipping max norm applied per optimizer. 0 = disabled.
+        _C.TRAIN.GRADIENT_CLIP_NORM = 0.0
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
         _C.TRAIN.LR_SCHEDULER.NAME = ""  # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'

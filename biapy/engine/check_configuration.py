@@ -2821,6 +2821,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS > cfg.TRAIN.EPOCHS:
                 raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' needs to be less than 'TRAIN.EPOCHS'")
 
+    # Gradient clipping validation
+    if not isinstance(cfg.TRAIN.GRADIENT_CLIP_NORM, (int, float)):
+        raise ValueError("'TRAIN.GRADIENT_CLIP_NORM' must be a number")
+    if cfg.TRAIN.GRADIENT_CLIP_NORM < 0:
+        raise ValueError("'TRAIN.GRADIENT_CLIP_NORM' must be non-negative (0 to disable)")
+
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
         if not check_value(cfg.AUGMENTOR.DA_PROB):
@@ -3129,7 +3135,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "LR_SCHEDULER" in old_cfg["TRAIN"]:
             if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
                 old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]] * len(old_cfg["TRAIN"]["OPTIMIZER"])
-        # and what about the rest, min lr optimizer?
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
             full_image = old_cfg["TEST"]["STATS"]["FULL_IMG"]

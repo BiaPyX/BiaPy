@@ -13,7 +13,8 @@ from torch.optim.optimizer import Optimizer
 from typing import Callable, Optional
 from torch.utils.data import DataLoader
 from yacs.config import CfgNode as CN
-
+from torch.amp import GradScaler, autocast # tmp
+from torch.nn.utils import clip_grad_norm_
 from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all_reduce_mean
 from biapy.engine import Scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
@@ -90,14 +91,10 @@ def train_one_epoch(
     """
     # Switch to training mode
     model.train(True)
-    lr_names = []
-    # Ensure correct order of each epoch info by adding loss first
+    lr_names = [name.replace("loss", "lr", 1) for name in loss_names]
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
     for loss_name in loss_names:
-        lr_name = "lr" + loss_name.strip("loss")
-        lr_names.append(lr_name)
         metric_logger.add_meter(loss_name, SmoothedValue())
-        metric_logger.add_meter(lr_name, SmoothedValue(window_size=1, fmt="{value:.6f}"))
 
     # Set up the header for logging
     header = "Epoch: [{}]".format(epoch + 1)
@@ -156,7 +153,7 @@ def train_one_epoch(
             else:
                 losses.append(result)
 
-        # Separate metric if precalculated inside the loss (e.g. Embedding loss) 
+        # Separate metric if precalculated inside the loss (e.g. Embedding loss)
         precalculated_metric, precalculated_metric_name = None, None
         if isinstance(losses[0], tuple):
             precalculated_metric = losses[0][1]
@@ -174,6 +171,16 @@ def train_one_epoch(
             metric_function(outputs, targets, metric_logger=metric_logger)
         else:
             metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
+
+        # Forward pass scaling the loss
+        for i, loss_tensor in enumerate(losses):
+            loss_tensor.backward()
+            if cfg.TRAIN.GRADIENT_CLIP_NORM > 0:
+                params = [p for group in optimizer[i].param_groups for p in group["params"]]
+                clip_grad_norm_(params, max_norm=cfg.TRAIN.GRADIENT_CLIP_NORM)
+            optimizer[i].step()
+            if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+                lr_scheduler[i].step()
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
@@ -197,7 +204,6 @@ def train_one_epoch(
             metric_logger.update(**{lr_names[i]: max_lr})
             if log_writer:
                 log_writer.update(head="opt", **{lr_names[i]: max_lr})
-
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("[Train] averaged stats:", metric_logger)
