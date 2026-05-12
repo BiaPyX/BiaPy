@@ -15,6 +15,12 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 import scipy.signal
 import h5py
 import zarr
+try:
+    import z5py
+    _Z5PY_AVAILABLE = True
+except ImportError:
+    z5py = None  # type: ignore[assignment]
+    _Z5PY_AVAILABLE = False
 import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
@@ -1342,10 +1348,10 @@ def read_chunked_nested_data(
     """
     if looks_like_hdf5(file):
         return read_chunked_nested_h5(file, data_path)
-    elif any(file.endswith(x) for x in [".n5", ".zarr"]):
+    elif any(file.endswith(x) for x in [".n5", "n5", ".zarr"]):
         return read_chunked_nested_zarr(file, data_path)
     else:
-        raise ValueError("Input file seems to not be either Zarr or H5")
+        raise ValueError("Input file seems to not be either Zarr/H5/n5. Supported formats: .h5, .hdf5, .hdf, .n5, .zarr")
 
 
 def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.Group, zarr.Array]:
@@ -1380,9 +1386,17 @@ def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.G
     >>> group, array = read_chunked_nested_zarr("data.zarr")
     >>> subgroup, dataset = read_chunked_nested_zarr("experiment.n5", "images.channel1")
     """
-    if not any(zarrfile.endswith(x) for x in [".n5", ".zarr"]):
+    if not any(zarrfile.endswith(x) for x in [".n5", "n5", ".zarr"]):
         raise ValueError("Not implemented for other filetypes than Zarr")
-    fid = zarr.open(zarrfile, mode="r")
+    if zarrfile.endswith(".n5") or zarrfile.endswith("n5"):
+        if not _Z5PY_AVAILABLE:
+            raise ImportError(
+                "z5py is required for N5 format support but is not installed. "
+                "Install it via conda: conda install -c conda-forge z5py"
+            )
+        fid = z5py.File(zarrfile, "r")
+    else:
+        fid = zarr.open(zarrfile, mode="r")
 
     def find_obj(path: str, fid: zarr.Group):  # type: ignore
         obj = None
@@ -1396,7 +1410,10 @@ def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.G
                     return None
                 obj = find_obj(".".join(rpath[1:]), fid[rpath[0]])
             else:
-                arrays = list(fid.array_keys())
+                try:
+                    arrays = list(fid.array_keys())
+                except:
+                    arrays = list(fid.keys())
                 if rpath[0] not in arrays:
                     return None
                 return fid[rpath[0]]
