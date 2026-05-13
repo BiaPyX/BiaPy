@@ -779,11 +779,22 @@ def labels_into_channels(
 
         if gtype == "omnipose":
             # 1. Calculate Distance Transform (The "Potential Field")
-            dist_field = edt.edt(vol, anisotropy=resolution, parallel=-1).astype(np.float32)
+            # Must be computed per-cell so each pixel holds its distance to its
+            # own cell boundary. Using the full multi-label vol as foreground
+            # merges touching cells into one region, giving wrong EDT values at
+            # shared interfaces.
+            dist_field = np.zeros_like(vol, dtype=np.float32)
+            for lb in instances:
+                cell_mask = (vol == lb)
+                dist_field[cell_mask] = edt.edt(cell_mask, anisotropy=resolution, parallel=-1)[cell_mask]
 
             # 2. Calculate Gradients of the Distance Field
             # np.gradient returns [dz, dy, dx] for 3D or [dy, dx] for 2D
-            grads = np.gradient(dist_field)
+            # Pass voxel spacing so gradients are physically correct for anisotropic data.
+            if vol.ndim == 3:
+                grads = np.gradient(dist_field, resolution[0], resolution[1], resolution[2])
+            else:
+                grads = np.gradient(dist_field, resolution[1], resolution[2])
             
             # 3. Normalize the flows
             # Omnipose uses normalized gradients as direction vectors
@@ -791,44 +802,63 @@ def labels_into_channels(
             grads = [g / mag for g in grads]
 
             # 4. Apply mask and save to global arrays
+            # Only write within foreground to leave background at 0.
+            fg = fg_mask > 0
             if vol.ndim == 3:
-                Gz = grads[-3]
-            Gv = grads[-2]
-            Gh = grads[-1]
+                Gz[fg] = grads[-3][fg]
+            Gv[fg] = grads[-2][fg]
+            Gh[fg] = grads[-1][fg]
         else:
             for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
                 slc = slice_from_props(props_tbl, i, vol.ndim)
                 mask = (vol[slc] == lb)
                 
                 # 1. Define the center (source of the heat)
-                # We find the pixel closest to the median of the mask coordinates
+                # Cellpose uses the mask pixel closest to the continuous centroid,
+                # not the median of sorted coordinates (which can differ for irregular shapes).
                 coords = np.nonzero(mask)
-                centers = [int(np.median(c)) for c in coords]
+                centroid = np.array([c.mean() for c in coords])            # continuous centroid
+                coord_stack = np.stack(coords, axis=1).astype(np.float32)  # (N, ndim)
+                idx = int(np.argmin(np.sum((coord_stack - centroid) ** 2, axis=1)))
+                centers = tuple(int(c[idx]) for c in coords)
 
                 # 2. Iterative Diffusion Process
                 # We initialize the center with a value and let it diffuse strictly within the mask
                 heat = np.zeros_like(mask, dtype=np.float32)
-                heat[tuple(centers)] = 1.0
+                heat[centers] = 1.0
                 
                 # Pre-calculate diffusion normalization
                 # 2D (4 neighbors) -> 0.25 | 3D (6 neighbors) -> 0.1666...
                 diff_coeff = 1.0 / (2 * vol.ndim)
 
                 for _ in range(niter):
-                    # Compute sum of neighbors across all available axes
-                    neighbor_sum = 0
-                    for axis in range(vol.ndim):
-                        neighbor_sum += np.roll(heat, 1, axis=axis) + np.roll(heat, -1, axis=axis)
-                    
+                    # Accumulate neighbor values with zero-boundary conditions.
+                    # np.roll wraps around bounding-box edges (periodic BC), which
+                    # is wrong; explicit slice-based shifts give Dirichlet BC (0 outside).
+                    neighbor_sum = np.zeros_like(heat)
+                    for axis in range(heat.ndim):
+                        slc_src = [slice(None)] * heat.ndim
+                        slc_dst = [slice(None)] * heat.ndim
+                        slc_src[axis] = slice(None, -1)   # value at index i
+                        slc_dst[axis] = slice(1, None)    # goes to neighbor i+1
+                        neighbor_sum[tuple(slc_dst)] += heat[tuple(slc_src)]
+                        slc_src[axis] = slice(1, None)    # value at index i+1
+                        slc_dst[axis] = slice(None, -1)   # goes to neighbor i
+                        neighbor_sum[tuple(slc_dst)] += heat[tuple(slc_src)]
+
                     new_heat = neighbor_sum * diff_coeff
                     heat[coords] = new_heat[coords]
 
                     # Keep the source hot
-                    heat[tuple(centers)] = 1.0
+                    heat[centers] = 1.0
 
                 # 3. Calculate Gradients
                 # np.gradient returns a list of arrays: [d0, d1, d2] -> [dz, dy, dx] in 3D
-                grads = np.gradient(heat)
+                # Pass voxel spacing so anisotropic data produces correct flow directions.
+                if vol.ndim == 3:
+                    grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
+                else:
+                    grads = np.gradient(heat, resolution[1], resolution[2])
                 
                 # 4. Normalize the flows
                 mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
@@ -930,6 +960,12 @@ def labels_into_channels(
                 suffix = "_vertical_distance.tif"
             elif mod == "Z":
                 suffix = "_z_distance.tif"
+            elif mod == "Gv":
+                suffix = "_vertical_flow.tif"
+            elif mod == "Gh":
+                suffix = "_horizontal_flow.tif"
+            elif mod == "Gz":
+                suffix = "_z_flow.tif"
             elif mod == "Db":
                 suffix = "_distance_to_border.tif"
             elif mod == "Dc":
@@ -961,7 +997,7 @@ def labels_into_channels(
             save_tif(
                 np.expand_dims(instance_labels, 0),
                 save_dir,
-                filenames=["vol" + "_y.tif"],
+                filenames=["vol_y.tif"],
                 verbose=False,
             )
     return new_mask

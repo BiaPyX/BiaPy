@@ -446,8 +446,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             for ch in ("Z", "V", "H"):
                 if ch in chs:
                     if ch in dst:
-                        assert [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]] == [], (
-                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'norm', 'act' and 'mask_values' keys"
+                        assert [x for x in dst[ch].keys() if x not in ["norm", "act"]] == [], (
+                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'norm' and 'act' keys"
+                            " ('mask_values' is no longer accepted: foreground masking is derived automatically)"
                         )
                     norm = dst.get(ch, {}).get("norm", True)
                     act = dst.get(ch, {}).get("act", "")
@@ -456,8 +457,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     dst[ch] = {
                         "norm": norm,
                         "act": act,
-                        "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
+
+            # Gh / Gv / Gz — Gradient channels group
+            for ch in ("Gz", "Gv", "Gh"):
+                if ch in chs:
+                    if ch in dst:
+                        assert [x for x in dst[ch].keys() if x not in ["niter", "scale_flows", "gradient_type"]] == [], (
+                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'niter', 'scale_flows' and 'gradient_type' keys"
+                            " ('mask_values' is no longer accepted: foreground masking is derived automatically from the flow vector magnitude)"
+                        )
+
+                    dst[ch] = {
+                        "niter": dst.get(ch, {}).get("niter", 200),
+                        "scale_flows": dst.get(ch, {}).get("scale_flows", 5.0),
+                        "gradient_type": dst.get(ch, {}).get("gradient_type", "cellpose"),
+                    }
+
             # Db — boundary distance-to-boundary
             if "Db" in chs:
                 if "Db" in dst:
@@ -615,6 +631,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
                 if "R" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
+                if "Gv" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "gradient-flow"])
                 elif "E_offset" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
                 else:
@@ -637,8 +655,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # H / V / Z — distance channels group
             # Their values need to be consistent to be able to create unique folder names for the channel masks and to know whether to apply normalization by default or not, so we check them all together here.
-            found_keys = {"norm": None, "act": None, "mask_values": None, "dilation": None}
-            default_keys =  {"norm": False, "act": "", "mask_values": True, "dilation": [3, 25, 25]}
+            found_keys = {"norm": None, "act": None, "dilation": None}
+            default_keys = {"norm": False, "act": "", "dilation": [3, 25, 25]}
             for ch in ("Z", "V", "H"):
                 for key in found_keys.keys():
                     if ch in chs and ch in dst and key in dst[ch]:
@@ -652,7 +670,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 dst[ch] = {
                     "norm": found_keys["norm"] if found_keys["norm"] is not None else default_keys["norm"],
                     "act": found_keys["act"] if found_keys["act"] is not None else default_keys["act"],
-                    "mask_values": found_keys["mask_values"] if found_keys["mask_values"] is not None else default_keys["mask_values"],
                     "dilation": found_keys["dilation"] if found_keys["dilation"] is not None else default_keys["dilation"],
                 }
 
@@ -663,8 +680,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post", "F_cleft", "Z"]]:
                 suffix += f"_{ch}" if ch != "Z" else "_ZVH"
                 for entry in dst.get(ch, {}):
-                    eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
-                    suffix += f".{entry}-{eval}"
+                    # These do not affect the values in the channel masks so we ignore them for the unique folder name creation
+                    if entry not in ["act", "mask_values"]: 
+                        eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
+                        suffix += f".{entry}-{eval}"
 
             train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
@@ -686,7 +705,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for ch in sorted_original_instance_channels:
                     if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post", "F_cleft"]:
                         losses.append("bce")
-                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R"]:
+                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R", "Gv", "Gh", "Gz"]:
                         losses.append("l1")
                     elif ch in ["E_offset", "E_sigma", "E_seediness"]:
                         losses.append("embedseg")
@@ -1365,7 +1384,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings']"
+            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings", "gradient-flow"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings', 'gradient-flow']"
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 assert x in [
                     "F",
@@ -1386,8 +1405,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "E_sigma",
                     "E_seediness",
                     "We",
-                    "M"
-                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We']"
+                    "M",
+                    "Gv",
+                    "Gh",
+                    "Gz",
+                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We', 'Gv', 'Gh', 'Gz']"
             
             # Legacy mask used in CartoCell
             if "M" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
@@ -1404,15 +1426,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "embeddings":
                 assert "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_sigma" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_seediness" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'E_offset', 'E_sigma' and 'E_seediness' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
                 assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 3, "'E_offset', 'E_sigma' and 'E_seediness' channels must be the only ones used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
+            elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "gradient-flow":
+                assert "Gv" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "Gh" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'Gv', 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow'"
+                if cfg.PROBLEM.NDIM == "2D":
+                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh"}, "'Gv' and 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '2D'"
+                else:
+                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh", "Gz"}, "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":  
+                for ch in ["R", "Gv", "Gh", "E_offset", "E_sigma", "E_seediness"]:
+                    raise ValueError("'{}' channel can not be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'watershed'".format(ch))
                 if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                     if cfg.PROBLEM.NDIM != "3D":
                         raise ValueError("'A' channel can only be used in 3D segmentation")
                 if "Z" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and cfg.PROBLEM.NDIM == "2D":
                     raise ValueError("'Z' channel can only be used in 3D segmentation")
-                if "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db", "R"}, "'R' channel can only be used together with 'Db' channel"
-
                 if any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["Z", "V", "H"]]):
                     if "H" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "V" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                         raise ValueError("'H' channel can only be used together with 'V' channel")
@@ -1495,8 +1522,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 elif key in ("Z", "V", "H"):  # distance channels group
                     _assert_bool(val, "norm", ctx)
                     assert isinstance(val["norm"], bool)
-                    _assert_bool(val, "mask_values", ctx)
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
+                elif key in ("Gv", "Gh", "Gz"):  # gradient flow channels
+                   _assert_int(val, "niter", ctx, min_val=1)
+                   _assert_float(val, "scale_flows", ctx, min_val=0.0)
+                   _assert_str_in(val, "gradient_type", {"omnipose", "cellpose"}, ctx)
                 elif key  == "Db":  # distance channels group
                     _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
                     if val["val_type"] == "discretize":

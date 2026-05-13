@@ -104,21 +104,30 @@ class Config:
         #   - 'P' stands for 'Central part', the extreme case of the F channel, where only the center of mass, or the skeleton is 
         #     represented. It may also be expressed as a heatmap.
         #   - 'C' stands for 'Contour', it is a binary representation of the countours of each instance.
-        #   - 'H' stands for 'Horizontal distance', where, for each instance, the pixel/voxel value is the distance to its contour/skeleton 
-        #     in the horizontal axis.
-        #   - 'V' stands for 'Vertical distance', where, for each instance, the pixel/voxel value is the distance to its contour/skeleton 
-        #     in the vertical axis.
-        #   - 'Z' stands for 'Depth distance', where, for each instance, the pixel/voxel value is the distance to its contour/skeleton 
-        #     in the depth axis.
-        #   - 'Db' stands for 'Distance to the boundary', where, for each instance, the pixel/voxel value is the distance to its contour.
-        #   - 'Dc' stands for 'Distance to the center', where, for each instance, the pixel/voxel value is the distance to its 
-        #     center/skeleton.
-        #   - 'Dn' stands for 'Distance to the closest neighbor', where, for each instance, the pixel/voxel value is the distance to its 
-        #     closest neighbor instance.
-        #   - 'D' stands for 'Db for F and B channels' distance map'. In some cases, background pixel distances are negated and combined 
-        #     with a Tanh activation, 
-        #     while in others they are not
-        #   - 'R' stands for 'Radial distance', distances to boundaries measure how far each pixel is from its object’s edge along fixed 
+        #   - 'H' stands for 'Horizontal distance' (HoVer-Net style). For each instance, the pixel/voxel value is the signed
+        #     horizontal displacement to the centroid. When 'norm' is True (default) values are rescaled to [-1, 1]: leftmost
+        #     pixel of the cell = -1, rightmost = +1, centroid column = 0. Background pixels are always 0.
+        #   - 'V' stands for 'Vertical distance' (HoVer-Net style), same as 'H' along the vertical axis:
+        #     top pixel = -1, bottom pixel = +1, centroid row = 0. Background = 0.
+        #   - 'Z' stands for 'Depth distance' (HoVer-Net style), same as 'H' along the depth (z) axis. Only relevant for 3D data.
+        #   - 'Gh', 'Gv', and 'Gz' stand for the x/y/z components of a flow field derived from a heat-diffusion potential
+        #     (Cellpose strategy) or the per-cell EDT gradient (Omnipose strategy). Each component is a unit vector in [-1, 1];
+        #     background is (0, 0[, 0]). Inspired by "Cellpose: a generalist algorithm for cellular segmentation"
+        #     (https://www.nature.com/articles/s41592-020-01018-x) and "Omnipose" (https://www.nature.com/articles/s41467-022-32267-2).
+        #   - 'Db' stands for 'Distance to the boundary'. For each foreground pixel the value is its Euclidean distance to
+        #     the nearest background pixel (i.e. intra-cell distance from the cell boundary inward). After per-cell normalization
+        #     ('norm'=True), boundary pixels map to 0 and the innermost pixel maps to 1. Background is always 0.
+        #   - 'Dc' stands for 'Distance to the center'. For each foreground pixel the value is its Euclidean distance to
+        #     the centroid (or skeleton) of its cell. The centroid pixel therefore has Dc = 0 (the minimum, most important value).
+        #     Background is also 0. When 'norm' is True, values are rescaled per-cell to [0, 1].
+        #   - 'Dn' stands for 'Distance to the closest neighbor'. For each foreground pixel the value reflects the proximity to
+        #     the nearest other instance; isolated cells (no neighbor) are assigned 0. Background is 0.
+        #   - 'D' stands for 'signed Distance field'. Foreground pixels hold the positive Euclidean distance to the nearest
+        #     background pixel; background pixels hold the negative distance to the nearest foreground pixel. The field spans
+        #     from negative (deep background) through 0 (boundary) to positive (deep interior). When 'norm' is True (default)
+        #     the field is passed through tanh, mapping all values to (-1, 1). Because both foreground (+) and background (-)
+        #     carry meaningful signal, the loss is computed on all pixels without masking.
+        #   - 'R' stands for 'Radial distance', distances to boundaries measure how far each pixel is from its object's edge along fixed 
         #     radial directions, with StarDist being the most prominent approach.
         #   - 'T' stands for 'Touching area', where touching regions between instances are highlighted.
         #   - 'A' stands for 'Affinities' and contains the affinity values for each dimension. Affinities represent images as graphs for 
@@ -157,40 +166,41 @@ class Config:
         #          Options are 'thick', 'inner', 'outer', 'subpixel', and 'dense'. The 'dense' option labels as contour
         #          every pixel that is not part of the foreground. Default: 'thick'
         #   - 'H', 'V' and 'Z' channels. Possible options:
-        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
-        #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
-        #          Options are '', 'linear', and 'sigmoid'. Default: ''
-        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
-        #          Default: True
-        #   - Gh, Gv and Gz channels. Possible options:
-        #       - 'niter': int, number of iterations for the diffusion process. Default: 200
-        #       - 'scale_flows': float, scaling factor applied to the target flow channels. Default: 5.0
-        #       - 'gradient_type': str, method to compute the gradients. Options are "cellpose" and "omnipose". Default: "omnipose"
-        #       - 'mask_values': bool, specifies whether to mask the flow channel so the loss is computed only on non-zero values. Default: True
+        #       - 'norm': bool, specifies whether signed displacements are normalized to [-1, 1] (centroid = 0). Default: True
+        #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
+        #          Options are 'linear', and 'sigmoid'. Default: ''
+        #       Note: the loss mask for H/V/Z is derived automatically from a binary foreground channel (F, M, or B) in the GT
+        #       when one is present; otherwise all pixels are included (background = 0 is a valid training target).
+        #   - 'Gh', 'Gv' and 'Gz' channels. Possible options:
+        #       - 'niter': int, number of iterations for the diffusion process (Cellpose strategy only). Default: 200
+        #       - 'gradient_type': str, method to compute the gradients. Options are "cellpose" and "omnipose". Default: "cellpose"
+        #       Note: the loss mask is derived automatically from the vector magnitude (foreground = unit-vector, background = zero).
         #   - 'Db' channel. Possible options:
         #       - 'val_type': str, to determine how to modify the distance values. Default: 'norm'. Options are:
         #           - 'raw': to leave the distances as they are calculated.
-        #           - 'norm': to normalize the distances between 0 and 1.
+        #           - 'norm': to normalize the distances per cell to [0, 1] (boundary → 0, innermost pixel → 1).
         #           - 'discretize': to discretize the distances into bins.
         #       - 'bin_size': float, size of each bin when 'val_type' is 'discretize'. Default: 0.1
         #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected.
         #          Options are: '', 'linear' and 'sigmoid'. Default: ''.
-        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #       - 'mask_values': bool, kept for compatibility but superseded: the loss mask prefers a binary foreground channel
+        #         (F/M/B) to avoid excluding boundary pixels (Db=0). Falls back to (Db > 0) if no binary channel is present. Default: True
         #   - 'Dc' channel. Possible options:
         #       - 'type': str, specifies the reference used to calculate the distance. Options are 'centroid' or 'skeleton'.
         #         Default: 'centroid'
-        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
-        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
-        #         Default: True
+        #       - 'norm': bool, specifies whether distances are normalized per cell to [0, 1]. Default: True
+        #       - 'mask_values': bool, kept for compatibility but superseded: the loss mask prefers a binary foreground channel
+        #         (F/M/B) to correctly include the centroid pixel (Dc=0). Falls back to (Dc > 0) if no binary channel is present,
+        #         which still misses the centroid — prefer pairing Dc with F, M, or B. Default: True
         #   - 'Dn' channel. Possible options:
         #       - 'closing_size': int, specifies the size of the closing operation applied to the combined distance map.
         #         Default: 0
         #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
-        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
-        #         Default: True
+        #       - 'mask_values': bool, kept for compatibility but superseded: the loss mask prefers a binary foreground channel
+        #         (F/M/B) to include isolated cells (Dn=0). Falls back to (Dn > 0) if no binary channel is present. Default: True
         #       - 'decline_power': int, specifies the power applied to distances to control the rate of decline. Default: 3
         #   - 'D' channel. Possible options:
-        #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
+        #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
         #         Options are 'tanh' and 'linear'. Default: 'tanh'
         #       - 'alpha': int, specifies the scaling factor applied to background distances when 'act' is 'tanh'.
         #         Default: 1
@@ -201,8 +211,8 @@ class Config:
         #       - 'nrays': int, specifies the number of rays used to represent radial distances.
         #         Default: 32 for 2D data and 96 for 3D data
         #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
-        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
-        #         Default: True
+        #       - 'mask_values': bool, kept for compatibility but superseded: the loss mask prefers a binary foreground channel
+        #         (F/M/B) to avoid excluding near-boundary ray pixels (R≈0). Falls back to (R > 0) if no binary channel is present. Default: True
         #   - 'T' channel. Possible options:
         #       - 'thickness': int, specifies the thickness (in pixels) of the touching area. Default: 2
         #   - 'A' channel. Possible options:
@@ -225,14 +235,15 @@ class Config:
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
         #   - 'F_cleft' channel. Possible options:
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
-        #   - 'H', 'V' and 'Z' channels. Possible options:
-        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: False
-        #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
+        #   - 'H', 'V' and 'Z' channels (synapse mode). Possible options:
+        #       - 'norm': bool, if True signed displacements are normalized to [-1, 1]; if False raw physical distances are kept.
+        #         Default: False (raw distances in physical units for synapse partner offsets)
+        #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
         #         Options are '', 'linear', and 'sigmoid'. Default: ''
-        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
-        #         Default: True
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. In the case of the synapses this
         #         will represent the area that will define the distance channels. Default: [3,25,25]
+        #       Note: the loss mask for H/V/Z is derived automatically from a binary foreground channel (F_pre/F_post/F_cleft)
+        #       when one is present; otherwise all pixels are included.
         #
         # For example:
         #  DATA_CHANNELS = ['F', 'C']
@@ -334,10 +345,54 @@ class Config:
 
         
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 2.2.3 EmbedSeg-like post-processing options for instance segmentation
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
+        # 2.2.3 Cellpose/Omnipose-like post-processing options for instance segmentation
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Options for flow-field-based instance creation from Gv/Gh/[Gz] channels.
+        # Inspired by the work:
+        # References:
+        #   "Cellpose: a generalist algorithm for cellular segmentation"
+        #    [link]: https://www.nature.com/articles/s41592-020-01018-x
+        #   "Omnipose: a high-precision morphology-independent solution for bacterial cell segmentation"
+        #    [link]: https://www.nature.com/articles/s41592-022-01639-4
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE = CN()
+        # Post-processing strategy to use for flow-field-based instance creation. Options:
+        #   - 'cellpose': Euler integration with time-suppressed steps (dt/(t+1)) followed by
+        #     histogram peak detection and nearest-peak assignment. A flow consistency check then
+        #     removes instances whose predicted flow diverges from a centroid-pointing approximation.
+        #     Suited for Cellpose-style flows (heat-diffusion potential gradient).
+        #   - 'omnipose': Euler integration with constant step size followed by DBSCAN clustering
+        #     on convergence positions. The flow consistency check is skipped. Suited for
+        #     Omnipose-style flows (per-cell EDT gradient), which converge precisely to the
+        #     cell skeleton rather than a centroid.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE = "cellpose"
+        # Foreground probability threshold. Pixels/voxels with a predicted foreground probability
+        # above this value are considered foreground and will be traced through the flow field.
+        # Applies when a dedicated binary channel ('F', 'M', or 'B') is present in DATA_CHANNELS.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH = 0.5
+        # Flow-consistency threshold to discard spurious instances after Euler integration.
+        # Measured as mean cosine-similarity error (0 = perfect, 2 = opposite direction).
+        # Instances with error > this threshold are removed. Set to 0 to disable.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.4
+        # Number of Euler integration steps used to trace each foreground pixel through the
+        # flow field until it converges to an attractor.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS = 200
+        # Step size (dt) for each Euler integration step.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DT = 1.0
+        # Whether to use Cellpose-style step suppression (dt / (t+1)) that slows each step as
+        # integration progresses, improving convergence for noisy flow fields.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED = True
+        # Minimum number of pixels in a connected component to be kept as a valid instance.
+        # Smaller objects are discarded after clustering.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE = 15
+        # Maximum pixel distance from a pixel's convergence position to a valid attractor peak.
+        # Pixels whose convergence position falls farther than this from any peak are discarded.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST = 5.0
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.2.4 EmbedSeg-like post-processing options for instance segmentation
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Options for embedding-based clustering instance creation. They are inspired by the work:
-        # Reference: 
+        # Reference:
         #   "EmbedSeg: Embedding-based Instance Segmentation for Biomedical Microscopy Data"
         #    [link]: https://www.sciencedirect.com/science/article/pii/S1361841522001700
         # Code adapted from: 
@@ -353,7 +408,7 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE = 100
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 2.2.3 Synapse-specific options for instance segmentation
+        # 2.2.5 Synapse-specific options for instance segmentation
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()
@@ -881,7 +936,7 @@ class Config:
         _C.DATA.PREPROCESS.RESIZE.ORDER = 1
         # Points outside the boundaries of the input are filled according to the given mode: {'constant', 'edge', 'symmetric', 'reflect', 'wrap'}
         _C.DATA.PREPROCESS.RESIZE.MODE = "reflect"
-        # Used in conjunction with mode ‘constant’, the value outside the image boundaries.
+        # Used in conjunction with mode 'constant', the value outside the image boundaries.
         _C.DATA.PREPROCESS.RESIZE.CVAL = 0.0
         # Whether to clip the output to the range of values of the input image.
         _C.DATA.PREPROCESS.RESIZE.CLIP = True
@@ -904,7 +959,7 @@ class Config:
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR.ENABLE = False
         # Standard deviation for Gaussian kernel.
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR.SIGMA = 1
-        # The mode parameter determines how the array borders are handled: {‘reflect’, ‘constant’, ‘nearest’, ‘mirror’, ‘wrap’} ‘constant’ value = 0
+        # The mode parameter determines how the array borders are handled: {'reflect', 'constant', 'nearest', 'mirror', 'wrap'} 'constant' value = 0
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR.MODE = "nearest"
         # If None, the image is assumed to be a grayscale (single channel) image.
         # Otherwise, this parameter indicates which axis of the array corresponds to channels.
@@ -934,9 +989,9 @@ class Config:
         # Canny or edge detection (only 2D - grayscale or RGB)
         _C.DATA.PREPROCESS.CANNY = CN()
         _C.DATA.PREPROCESS.CANNY.ENABLE = False
-        # Lower bound for hysteresis thresholding (linking edges). If None, low_threshold is set to 10% of dtype’s max.
+        # Lower bound for hysteresis thresholding (linking edges). If None, low_threshold is set to 10% of dtype's max.
         _C.DATA.PREPROCESS.CANNY.LOW_THRESHOLD = None
-        # Upper bound for hysteresis thresholding (linking edges). If None, high_threshold is set to 20% of dtype’s max.
+        # Upper bound for hysteresis thresholding (linking edges). If None, high_threshold is set to 20% of dtype's max.
         _C.DATA.PREPROCESS.CANNY.HIGH_THRESHOLD = None
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -991,7 +1046,7 @@ class Config:
         # Elastic transformations
         _C.AUGMENTOR.ELASTIC = False
         # Strength of the distortion field. Higher values mean that pixels are moved further with respect to the distortion
-        # field’s direction. Set this to around 10 times the value of sigma for visible effects.
+        # field's direction. Set this to around 10 times the value of sigma for visible effects.
         _C.AUGMENTOR.E_ALPHA = (12, 16)
         # Standard deviation of the gaussian kernel used to smooth the distortion fields.  Higher values (for 128x128 images
         # around 5.0) lead to more water-like effects, while lower values (for 128x128 images around 1.0 and lower) lead to

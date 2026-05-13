@@ -38,7 +38,8 @@ from biapy.data.post_processing.post_processing import (
     extract_synful_synapses,
     connect_pre_post_synapse_points_by_distance,
 )
-from biapy.data.post_processing.polygon_nms_postprocessing import stardist_instances_from_prediction
+from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
+from biapy.data.post_processing.gradient_tracking import flows_to_instances
 from biapy.data.pre_processing import create_instance_channels
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
@@ -250,6 +251,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if set_model_output_channels:
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
+                elif channel in ["Gv", "Gh", "Gz"]:
+                    # Cellpose flow targets are unit vectors in [-1, 1]; tanh constrains
+                    # predictions to the same range and stabilises MSE training.
+                    self.head_activations.append("tanh")
+                    if set_model_output_channels:
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info[0] += "+" + channel
                 elif channel == "Db":
                     val_type = dst.get(channel, {}).get("val_type", "norm")
                     if val_type == "discretize":
@@ -371,7 +379,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 m = "IoU ({} channel)".format(channel) if channel != "A" else "IoU ({} channels)".format(channel)
                 self.train_metric_names += [m]
                 self.train_metric_best += ["max"]
-            elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R"]:
+            elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R", "Gv", "Gh", "Gz"]:
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
                 self.train_metric_names += ["L1 ({} channel)".format(channel)]
                 self.train_metric_best += ["min"]
@@ -657,6 +665,31 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     min_mask_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM,
                     min_unclustered_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM,
                     min_object_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE
+                )
+                if self.dims == 2:
+                    pred_labels = np.expand_dims(pred_labels, 0)
+            elif any(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")):
+                print("Creating instances with Cellpose/Omnipose flow procedure . . .")
+                channels = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+                fg_channel = next(
+                    (ch for ch in channels if ch in ("F", "M", "B")), ""
+                )
+                # pred is (Z, Y, X, C) for 3D or (1, Y, X, C) for 2D; flows_to_instances
+                # accepts (Z,Y,X,C) or (Y,X,C) — squeeze the leading singleton for 2D.
+                _pred_in = pred if self.dims == 3 else pred[0]
+                pred_labels = flows_to_instances(
+                    pred=_pred_in,
+                    channels=channels,
+                    flow_type=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE,
+                    fg_channel=fg_channel,
+                    fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH,
+                    flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD,
+                    n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
+                    dt=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DT,
+                    suppressed=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED,
+                    min_size=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE,
+                    max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
+                    resolution=list(self.resolution[-self.dims:]),
                 )
                 if self.dims == 2:
                     pred_labels = np.expand_dims(pred_labels, 0)
