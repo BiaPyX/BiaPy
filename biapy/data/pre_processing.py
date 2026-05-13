@@ -853,6 +853,10 @@ def labels_into_channels(
                     heat[centers] = 1.0
 
                 # 3. Calculate Gradients
+                # np.gradient needs at least 2 elements per axis.  Skip cells that
+                # are only 1 pixel wide along any axis (their flow stays 0).
+                if any(s < 2 for s in heat.shape):
+                    continue
                 # np.gradient returns a list of arrays: [d0, d1, d2] -> [dz, dy, dx] in 3D
                 # Pass voxel spacing so anisotropic data produces correct flow directions.
                 if vol.ndim == 3:
