@@ -1975,6 +1975,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'DATA.VAL.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too"
                 )
 
+        if cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO != []:
+            assert sum(cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO) == cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS, (
+                "The sum of the channels per head info needs to be equal to the total number of output channels defined in 'PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS'. "
+                f"Currently, the sum of 'PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO' is {sum(cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO)} while 'PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS' is {cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS}."
+            )
+        
     if cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.PREPROCESS.VAL:
         print(
             "WARNING: validation preprocessing will be done based on 'DATA.PREPROCESS.TRAIN', as 'DATA.VAL.FROM_TRAIN' is selected"
@@ -2560,7 +2566,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
-    
+
+    if cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
+        if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
+            opts.extend(["PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD", False])
+        else:
+            if cfg.MODEL.LARGER_IO:
+                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.LOSS.CONTRAST.ENABLE:
+                raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
+
     if cfg.MODEL.NORMALIZATION == "":
         opts.extend(["MODEL.NORMALIZATION", "in"])
     else:

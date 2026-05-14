@@ -262,8 +262,8 @@ class Config:
         # contours than pixels representing the background. With this option activated, the loss will give more importance to contour pixels to help
         # the model learn better to predict them.
         _C.PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS = True
-        # Information on how the channels are distributed in the model's output heads. It must be a list of list of strings, where each 
-        # inner list contains the channels that are going to be predicted in the same head. If not provided, it will be set automatically
+        # Information on how the channels are distributed in the model's output heads. It must be a list of list of ints, where each 
+        # inner list contains the number of channels that are going to be predicted in the same head. If not provided, it will be set automatically
         # with all the channels in one head, i.e. [DATA_CHANNELS]. For example, if "V", "H" and "Z" channels are in the same head, it is likely 
         # that they are representing distance maps and therefore the model will be able to learn them together. On the other hand, if "C" channel 
         # is in a different head than "H", "V" and "Z", it is likely that the model will be able to learn better the contours of the instances 
@@ -527,6 +527,13 @@ class Config:
         # 2.6 Image-to-image problem specification
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         _C.PROBLEM.IMAGE_TO_IMAGE = CN()
+        # Information on how the channels are distributed in the model's output heads. It must be a list of list of ints, where each 
+        # inner list contains the number of channels that are going to be predicted in the same head. 
+        _C.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO = []
+        # Whether to use a different decoder for each head in the model.
+        _C.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD = False
+        # Expected output channels to be predicted by the model.
+        _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = 1
         # To use a custom data loader to load a random image from each image sample folder. The data needs to be structured
         # in an special way, that is, instead of having images in the training/val folder a folder for each sample is expected,
         # where in each of those different versions of the same data sample will be placed. Visit the following tutorial

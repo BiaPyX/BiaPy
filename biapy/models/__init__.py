@@ -104,6 +104,12 @@ def build_model(
         "unext_v1",
         "unext_v2",
     ]:
+        separated_decoders = False
+        if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
+            separated_decoders = True
+        elif cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD:
+            separated_decoders = True
+
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
             activation=cfg.MODEL.ACTIVATION.lower(),
@@ -120,7 +126,7 @@ def build_model(
             explicit_activations=False,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-            separated_decoders=cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD,
+            separated_decoders=separated_decoders,
             isotropy=cfg.MODEL.ISOTROPY,
             larger_io=cfg.MODEL.LARGER_IO,
             return_one_tensor=False,

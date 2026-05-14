@@ -112,6 +112,7 @@ def load_and_prepare_train_data(
     norm_before_filter: bool = False,
     random_crops_in_DA: bool = False,
     y_upscaling: Tuple[int, ...] = (1, 1),
+    gt_channels_expected: int = 1,
     reflect_to_complete_shape: bool = False,
     convert_to_rgb: bool = False,
     is_y_mask: bool = False,
@@ -269,6 +270,9 @@ def load_and_prepare_train_data(
 
     y_upscaling : 2D/3D int tuple, optional
         Upscaling to be done when loading Y data. User for super-resolution workflow.
+
+    gt_channels_expected : int, optional
+        Expected number of channels in the GT.
 
     reflect_to_complete_shape : bool, optional
         Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
@@ -847,14 +851,14 @@ def load_and_prepare_train_data(
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
                     crop_shape[2] * y_upscaling[2],
-                    crop_shape[3],
+                    gt_channels_expected,
                 )
             else:
                 assert len(y_upscaling) == 2 and len(crop_shape) == 3
                 real_shape = (
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
-                    crop_shape[2],
+                    gt_channels_expected,
                 )
             load_images_to_dataset(
                 dataset=Y_train,
@@ -889,14 +893,14 @@ def load_and_prepare_train_data(
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
                     crop_shape[2] * y_upscaling[2],
-                    crop_shape[3],
+                    gt_channels_expected,
                 )
             else:
                 assert len(y_upscaling) == 2 and len(crop_shape) == 3
                 real_shape = (
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
-                    crop_shape[2],
+                    gt_channels_expected,
                 )
             load_images_to_dataset(
                 dataset=Y_val,

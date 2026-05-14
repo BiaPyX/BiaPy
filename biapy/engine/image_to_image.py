@@ -109,11 +109,17 @@ class Image_to_Image_Workflow(Base_Workflow):
             self.separated_class_channel = True
             self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
-        self.model_output_channels = [self.cfg.DATA.PATCH_SIZE[-1]]
-        self.gt_channels_expected = self.model_output_channels[0]
-        self.separated_class_channel = False
-        self.head_activations = ["linear"] * self.model_output_channels[0]
+        if self.cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO != []:
+            self.model_output_channels = []
+            for head_channels in self.cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO:
+                self.model_output_channels.append(head_channels)
+        else:
+            self.model_output_channels = [self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS]
+        
         self.model_output_channel_info = ["pred{}".format(i) for i in range(len(self.model_output_channels))]
+        self.gt_channels_expected = self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
+        self.separated_class_channel = False
+        self.head_activations = ["linear"] * self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
 
         super().define_activations_and_channels()
 
@@ -300,10 +306,8 @@ class Image_to_Image_Workflow(Base_Workflow):
             for i, metric in enumerate(not_norm_metrics):
                 m_name = not_norm_metrics_names[i]
                 m_name_real = list_names_to_use[not_norm_metrics_pos[i]]
-                if m_name in ["mse", "mae"]:
-                    val = metric(_output, _targets)
-                elif m_name == "ssim":
-                    val = metric(_output, _targets)
+                if m_name in ["mse", "mae", "ssim"]:
+                    val = metric(_output.contiguous(), _targets.contiguous())
                 else:
                     raise NotImplementedError
 

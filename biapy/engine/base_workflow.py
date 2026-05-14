@@ -619,6 +619,7 @@ class Base_Workflow(metaclass=ABCMeta):
             filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
             norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
             y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+            gt_channels_expected=self.gt_channels_expected,
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
             convert_to_rgb=self.cfg.DATA.FORCE_RGB,
             is_y_mask=self.is_y_mask,
