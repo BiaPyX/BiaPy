@@ -863,3 +863,18 @@ class Self_supervised_Workflow(Base_Workflow):
                 ]
             )
         self.cfg.merge_from_list(opts)
+
+    def after_all_chunk_prediction_workflow_process(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting.
+        This function is called on all ranks.
+        """
+        pass
+
+    def after_all_chunk_prediction_workflow_process_master_rank(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting, but only on the master rank.
+        This function is called only on the master rank.
+        """
+        pass
+    

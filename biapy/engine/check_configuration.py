@@ -1434,7 +1434,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh", "Gz"}, "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":  
                 for ch in ["R", "Gv", "Gh", "E_offset", "E_sigma", "E_seediness"]:
-                    raise ValueError("'{}' channel can not be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'watershed'".format(ch))
+                    if ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                        raise ValueError("'{}' channel can not be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'watershed'".format(ch))
                 if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                     if cfg.PROBLEM.NDIM != "3D":
                         raise ValueError("'A' channel can only be used in 3D segmentation")

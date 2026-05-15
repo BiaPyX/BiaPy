@@ -1626,11 +1626,29 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-                raise NotImplementedError
+                super().after_all_chunk_prediction_workflow_process()
             else: 
                 pass
         else: # synapses
             pass
+
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        raise NotImplementedError
 
     def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Execute steps needed after merging all predicted patches into the original image in "by chunks" setting."""
