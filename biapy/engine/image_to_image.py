@@ -15,7 +15,7 @@ from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 from typing import Dict, Optional
 from numpy.typing import NDArray
-
+import copy
 
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
 from biapy.engine.base_workflow import Base_Workflow
@@ -508,7 +508,12 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        pred = undo_image_norm(pred, self.current_sample["X_norm"])
+        adjusted_norm = copy.deepcopy(self.current_sample["X_norm"])
+        if self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS != len(self.current_sample["X_norm"]["per_channel_info"]):
+            for i in range(len(self.current_sample["X_norm"]["per_channel_info"]), self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS):
+                adjusted_norm["per_channel_info"][str(i)] = copy.deepcopy(self.current_sample["X_norm"]["per_channel_info"]["0"])
+
+        pred = undo_image_norm(pred, adjusted_norm)
         assert isinstance(pred, np.ndarray)
 
         # Save image
