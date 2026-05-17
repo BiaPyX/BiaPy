@@ -262,7 +262,7 @@ class Self_supervised_Workflow(Base_Workflow):
     def MaskedAutoencoderViT_loss_wrapper(self, output, targets):
         """Unravel MAE loss."""
         # Targets not used because the loss has been already calculated 
-        return output["loss"]
+        return {"losses": [output["loss"]]}
 
     def metric_calculation(
         self,

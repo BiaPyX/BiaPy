@@ -124,7 +124,6 @@ def train_one_epoch(
         outputs = model_call_func(batch, is_train=True)
 
         # Loss function call
-        losses = []
         if memory_bank is not None:
             if total_iters + step >= contrast_warmup_iters:
                 with_embed = True
@@ -139,25 +138,21 @@ def train_one_epoch(
                 'segment_queue': memory_bank.segment_queue,
             }
 
-            loss = loss_function(outputs, targets, with_embed=with_embed)
+            result = loss_function(outputs, targets, with_embed=with_embed)
 
             memory_bank.dequeue_and_enqueue(
                 outputs['key'], targets.detach(),
             )
-            losses.append(loss)
         else:
             result = loss_function(outputs, targets)
-            if isinstance(result, (list, tuple)):
-                losses.extend(result)
-            else:
-                losses.append(result)
 
-        # Separate metric if precalculated inside the loss (e.g. Embedding loss)
-        precalculated_metric, precalculated_metric_name = None, None
-        if isinstance(losses[0], tuple):
-            precalculated_metric = losses[0][1]
-            precalculated_metric_name = losses[0][2]
-            losses[0] = losses[0][0]
+        # Parse the loss result
+        if isinstance(result, dict):
+            losses = result.get("losses", [])
+            precalculated_metrics = result.get("metrics", {})
+        else:
+            losses = [result]
+            precalculated_metrics = {}
 
         for l_val in losses:
             loss_value = l_val.item()
@@ -166,10 +161,11 @@ def train_one_epoch(
                 sys.exit(1)
 
         # Calculate the metrics
-        if precalculated_metric is None:
+        if not precalculated_metrics:
             metric_function(outputs, targets, metric_logger=metric_logger)
         else:
-            metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
+            for m_name, m_val in precalculated_metrics.items():
+                metric_logger.meters[m_name].update(m_val)
 
         # Forward pass scaling the loss
         for i, loss_tensor in enumerate(losses):
@@ -276,7 +272,6 @@ def evaluate(
         outputs = model_call_func(images, is_train=True)
         
         # Loss function call
-        losses = []
         if memory_bank is not None:
             with_embed = False
 
@@ -288,21 +283,17 @@ def evaluate(
                 'segment_queue': memory_bank.segment_queue,
             }
 
-            loss = loss_function(outputs, targets, with_embed=with_embed)
-            losses.append(loss)
+            result = loss_function(outputs, targets, with_embed=with_embed)
         else:
             result = loss_function(outputs, targets)
-            if isinstance(result, (list, tuple)):
-                losses.extend(result)
-            else:
-                losses.append(result)
 
         # Separate metric if precalculated inside the loss (e.g. Embedding loss)
-        precalculated_metric, precalculated_metric_name = None, None
-        if isinstance(losses[0], tuple):
-            precalculated_metric = losses[0][1]
-            precalculated_metric_name = losses[0][2]
-            losses[0] = losses[0][0]
+        if isinstance(result, dict):
+            losses = result.get("losses", [])
+            precalculated_metrics = result.get("metrics", {})
+        else:
+            losses = [result]
+            precalculated_metrics = {}
 
         for l_val in losses:
             loss_value = l_val.item()
@@ -311,8 +302,9 @@ def evaluate(
                 sys.exit(1)
 
         # Calculate the metrics
-        if precalculated_metric is not None:
-            metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
+        if precalculated_metrics:
+            for m_name, m_val in precalculated_metrics.items():
+                metric_logger.meters[m_name].update(m_val)
         else:
             metric_function(outputs, targets, metric_logger=metric_logger)
 

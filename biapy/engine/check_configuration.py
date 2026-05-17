@@ -2838,7 +2838,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
             if not isinstance(cfg.TRAIN.LR_SCHEDULER.MIN_LR, list):
                 raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must be a list")
-            # same here?
             if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
                 raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must have length 1 or match 'TRAIN.OPTIMIZER' length")
             if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:

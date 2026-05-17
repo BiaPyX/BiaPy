@@ -359,10 +359,6 @@ class NAFNet(nn.Module):
     def forward_loss(self, pred, targets, loss_fn):
         """Compute GAN losses using the discriminator and the given loss function.
 
-        Follows the same pattern as ``MaskedAutoencoderViT.forward_loss``:
-        the loss is computed internally by the model so that the training
-        engine does not need to know about discriminators.
-
         Parameters
         ----------
         pred : torch.Tensor

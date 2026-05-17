@@ -448,7 +448,7 @@ class loss_encapsulation(nn.Module):
         """
         if isinstance(inputs, dict):
             inputs = inputs["pred"]
-        return self.loss(inputs, targets)
+        return {"losses": [self.loss(inputs, targets)]}
        
 class CrossEntropyLoss_wrapper:
     """
@@ -2456,7 +2456,11 @@ class SpatialEmbLoss(nn.Module):
 
         loss = loss / B
         iou = iou / B
-        return loss + prediction.sum() * 0, float(iou), "IoU" # keep graph identical to originals
+        
+        return {
+            "losses": [loss + prediction.sum() * 0], 
+            "metrics": {"IoU": float(iou)}
+        }
 
 class VGG(nn.Module):
     """Perceptual loss based on VGG16 feature activations.

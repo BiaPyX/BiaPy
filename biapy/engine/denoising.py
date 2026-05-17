@@ -187,8 +187,7 @@ class Denoising_Workflow(Base_Workflow):
     def NAFNetGan_loss_wrapper(self, output, targets):
         """Extract pre-computed GAN losses from NAFNet.
 
-        Follows the same pattern as ``MaskedAutoencoderViT_loss_wrapper``:
-        the model computes losses internally via :meth:`NAFNet.forward_loss`,
+        The model computes losses internally via :meth:`NAFNet.forward_loss`,
         and this wrapper retrieves them so the training engine never
         sees the discriminator.
 
@@ -208,7 +207,8 @@ class Denoising_Workflow(Base_Workflow):
             pred = output["pred"]
         else:
             pred = output
-        return self.model_without_ddp.forward_loss(pred, targets, self.cyclegan_loss)
+        loss_g, loss_d = self.model_without_ddp.forward_loss(pred, targets, self.cyclegan_loss)
+        return {"losses": [loss_g, loss_d]}
 
     def metric_calculation(
         self,
