@@ -218,20 +218,20 @@ class chunked_test_pair_data_generator(IterableDataset):
         assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
         if self.crop_shape[0] > self.z_dim:
             raise ValueError(
-                "Z Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis)".format(
-                    self.crop_shape[0], self.z_dim
+                "Z Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis). Shape provided: {} (axis order: {})".format(
+                    self.crop_shape[0], self.z_dim, self.X_parallel_data.shape, self.input_axes
                 )
             )
         if self.crop_shape[1] > self.y_dim:
             raise ValueError(
-                "Y Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis)".format(
-                    self.crop_shape[1], self.y_dim
+                "Y Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis). Data shape provided: {} (axis order: {})".format(
+                    self.crop_shape[1], self.y_dim, self.X_parallel_data.shape, self.input_axes
                 )
             )
         if self.crop_shape[2] > self.x_dim:
             raise ValueError(
-                "X Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis)".format(
-                    self.crop_shape[2], self.x_dim
+                "X Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis). Shape provided: {} (axis order: {})".format(
+                    self.crop_shape[2], self.x_dim, self.X_parallel_data.shape, self.input_axes
                 )
             )
         for i, p in enumerate(self.padding):
