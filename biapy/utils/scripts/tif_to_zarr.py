@@ -1,43 +1,47 @@
-import zarr
 import os
-from skimage.io import imread
+import argparse
+import zarr
 import numpy as np
-from tqdm import tqdm 
+from tqdm import tqdm
+from biapy.data.data_manipulation import read_img_as_ndarray
 
-img_shape = (1024, 1024)
-input_x_dir = "/home/user/data/x"
-input_y_dir = "/home/user/data/y"
-output_dir = '/home/user/data/zarr'
-outfilename = "training.zarr"
-dsx = 'volumes/raw' 
-dsy = 'volumes/labels/neuron_ids' 
-resolution = (8,8,8)
-offset = (0,0,0)
 
-input_x_ids = sorted(next(os.walk(input_x_dir))[2])
-input_y_ids = sorted(next(os.walk(input_y_dir))[2])
+def parse_args():
+    parser = argparse.ArgumentParser(description="Stack TIFF files from a directory into a single Zarr file.")
+    parser.add_argument("input_dir", type=str, help="Directory containing input TIFF files.")
+    parser.add_argument("output_dir", type=str, help="Directory where the Zarr file will be saved.")
+    parser.add_argument("zarr_filename", type=str, help="Name of the output Zarr file (e.g. data.zarr).")
+    parser.add_argument("--is_3d", action="store_true", help="Set if the images are 3D.")
+    parser.add_argument("--dsx", type=str, default="volumes/raw", help="Dataset path in the Zarr file (default: volumes/raw).")
+    parser.add_argument("--resolution", type=int, nargs=3, default=[8, 8, 8], metavar=("Z", "Y", "X"), help="Resolution in (Z, Y, X) order (default: 8 8 8).")
+    parser.add_argument("--offset", type=int, nargs=3, default=[0, 0, 0], metavar=("Z", "Y", "X"), help="Offset in (Z, Y, X) order (default: 0 0 0).")
+    return parser.parse_args()
 
-# Allocate memory for the predictions
-pred_stack, pred_mask_stack = [], []
 
-# Read all the images/labels and create their stacks
-for n, id_ in tqdm(enumerate(input_x_ids), total=len(input_x_ids)):
-    img = imread(os.path.join(input_x_dir, id_))
-    pred_stack.append(np.expand_dims(img,0))
+def main():
+    args = parse_args()
+    resolution = tuple(args.resolution)
+    offset = tuple(args.offset)
 
-    mask = imread(os.path.join(input_y_dir, input_y_ids[n]))
-    pred_mask_stack.append(np.expand_dims(mask,0))
+    input_ids = sorted(next(os.walk(args.input_dir))[2])
 
-pred_stack = np.concatenate(pred_stack).astype(img.dtype)
-pred_mask_stack = np.concatenate(pred_mask_stack).astype(mask.dtype)
+    imgs = []
+    for id_ in tqdm(input_ids, desc="Reading"):
+        img = read_img_as_ndarray(os.path.join(args.input_dir, id_), is_3d=args.is_3d)
+        imgs.append(img)
 
-# Write Zarr 
-os.makedirs(output_dir, exist_ok=True)
-data = zarr.open(os.path.join(output_dir, outfilename), mode='w')
-data[dsx] = pred_stack
-data[dsx].attrs['resolution'] = resolution
-data[dsx].attrs['offset'] = offset
+    pred_stack = np.stack(imgs, axis=0)
+    print(f"Stack shape: {pred_stack.shape}")
 
-data[dsy] = pred_mask_stack
-data[dsy].attrs['resolution'] = resolution
-data[dsy].attrs['offset'] = offset
+    os.makedirs(args.output_dir, exist_ok=True)
+    zarr_path = os.path.join(args.output_dir, args.zarr_filename)
+    store = zarr.open_group(zarr_path, mode="w")
+    ds = store.create_array(args.dsx, shape=pred_stack.shape, dtype=pred_stack.dtype)
+    ds[:] = pred_stack
+    ds.attrs["resolution"] = resolution
+    ds.attrs["offset"] = offset
+    print(f"Saved {zarr_path}")
+
+
+if __name__ == "__main__":
+    main()
