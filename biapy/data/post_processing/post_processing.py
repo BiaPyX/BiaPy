@@ -69,6 +69,7 @@ def watershed_by_channels(
     resolution: List[float|int]=[1., 1., 1.],
     watershed_by_2d_slices: bool=False,
     save_dir: Optional[str]=None,
+    verbose: bool=True,
 ):
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation algorithm.
@@ -201,6 +202,9 @@ def watershed_by_channels(
     seed_ths_used, growth_mask_ths_used = [], []
     # Affinities are expected to be alone so we can use them directly
     if "A" in seed_channels and len(seed_channels) == 1:
+        # Take the first three affinities only
+        data = data[..., [0, 1, 2]]
+
         # For now use the minimum values between all affinities (to enhance borders)
         foreground_probs = np.min(data, axis=-1)
 
@@ -328,8 +332,8 @@ def watershed_by_channels(
     seed_map = label(seed_map, connectivity=1)
     topografic_surface = gaussian(topografic_surface, sigma=1.0, truncate=1)
 
-    # Print the thresholds used
-    print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))
+    if verbose:
+        print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, max_size=thres_small_before)
