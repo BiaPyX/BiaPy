@@ -219,7 +219,7 @@ def watershed_by_channels(
         growth_mask_ths_used.append(th)
 
         # Define the topographic surface to grow the seeds
-        topografic_surface = - (1 - foreground_probs)
+        topografic_surface = - foreground_probs
     else:
         # Seed creation process
         hvz_channels_processed = False
@@ -315,7 +315,7 @@ def watershed_by_channels(
 
         # Define the topographic surface to grow the seeds
         if "overall" in locals():
-            topografic_surface = -(1.0 - overall) 
+            topografic_surface = 1.0 - overall
         else:
             ch_pos = channels.index(topo_surface_channel)
             if ch in ["C", "B", "Dn", "Dc"]:
