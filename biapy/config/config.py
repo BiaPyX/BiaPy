@@ -1705,6 +1705,15 @@ class Config:
         #      memory to process the entire prediction image with 'entire_pred'.
         #    * 'entire_pred': the predicted image will be loaded in memory and processed entirely (be aware of your  memory budget)
         _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE = "chunk_by_chunk"
+        # Number of voxels added on each side of a chunk before running the per-chunk watershed (instance segmentation,
+        # 'chunk_by_chunk' mode only). A larger halo gives each chunk more context from its neighbours so seeds near
+        # boundaries are correctly connected, reducing jagged artefacts at chunk seams. Set this to at least the radius
+        # of your largest expected instance. Increasing this value raises memory usage proportionally.
+        # Use -1 (default) to let BiaPy compute it automatically as patch_size / 8.
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO = -1
+        # Minimum normalised IoU required to merge two instances across a chunk boundary
+        # (instance segmentation, 'chunk_by_chunk' mode only). Must be in (0, 1].
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH = 0.3
 
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

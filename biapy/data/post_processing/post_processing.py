@@ -186,7 +186,7 @@ def watershed_by_channels(
             seed_map = np.expand_dims(seed_map, 0)
             growth_mask = np.expand_dims(growth_mask, 0)
 
-        for i in tqdm(range(seed_map.shape[0])):
+        for i in tqdm(range(seed_map.shape[0]), disable=not verbose):
             if len(seed_morph_sequence) != 0:
                 for k, morph_function in enumerate(morph_funcs):
                     seed_map[i] = morph_function(seed_map[i], disk(radius=seed_morph_radius[k]))
@@ -352,9 +352,10 @@ def watershed_by_channels(
 
     # Apply marker controlled watershed
     if watershed_by_2d_slices:
-        print("Doing watershed by 2D slices")
+        if verbose:
+            print("Doing watershed by 2D slices")
         segm = np.zeros(seed_map.shape, dtype=appropiate_dtype)
-        for z in tqdm(range(len(segm))):
+        for z in tqdm(range(len(segm)), disable=not verbose):
             segm[z] = watershed(topografic_surface[z], seed_map[z], mask=growth_mask[z])
     else:
         segm = watershed(topografic_surface, seed_map, mask=growth_mask)

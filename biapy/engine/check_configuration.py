@@ -2181,9 +2181,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "chunk_by_chunk",
                     "entire_pred",
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
-            if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == 'chunk_by_chunk':
-                    raise NotImplementedError("Chunk by chunk processing is not implemented yet for instance segmentation workflow")
+                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO < -1 or cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO == 0:
+                    raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO' must be -1 (auto) or a positive integer")
+                if not (0 < cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH <= 1):
+                    raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH' must be in (0, 1]")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
