@@ -176,6 +176,7 @@ def train_one_epoch(
             optimizer[i].step()
             if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
                 lr_scheduler[i].step()
+            optimizer[i].zero_grad() 
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
