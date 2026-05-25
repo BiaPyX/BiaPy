@@ -759,7 +759,7 @@ class Detection_Workflow(Base_Workflow):
                     all_channel_d_metrics[7] += d_metrics["Recall (class)"]
                     all_channel_d_metrics[8] += d_metrics["F1 (class)"]
                     all_channel_d_metrics[9] += d_metrics["TP (class)"]
-                    all_channel_d_metrics[9] += d_metrics["FN (class)"]
+                    all_channel_d_metrics[10] += d_metrics["FN (class)"]
 
                 # Save csv files with the associations between GT points and predicted ones
                 if gt_assoc is not None:

@@ -1924,16 +1924,21 @@ def detection_metrics(
             df_fp = df_fp.drop(columns=["pred_class"])
     else:
         if df is not None:
-            gt_matched_classes = df["gt_class"].tolist()
-            pred_matched_classes = df["pred_class"].tolist()
-            TP_classes = len([1 for x, y in zip(gt_matched_classes, pred_matched_classes) if x == y])
-            FN_classes = len([1 for x, y in zip(gt_matched_classes, pred_matched_classes) if x != y])
+            # Class metrics must be computed only on true detections (TP by distance),
+            # not on all Hungarian associations.
+            tp_df = df[df["tag"] == "TP"]
+            if len(tp_df) > 0:
+                TP_classes = int((tp_df["gt_class"] == tp_df["pred_class"]).sum())
+                FN_classes = int((tp_df["gt_class"] != tp_df["pred_class"]).sum())
+            else:
+                TP_classes = 0
+                FN_classes = 0
         else:
             TP_classes = 0
             FN_classes = 0
 
         try:
-            precision_classes = TP_classes / (TP_classes + FP)
+            precision_classes = TP_classes / (TP_classes + FN_classes)
         except:
             precision_classes = 0
         try:
