@@ -566,6 +566,17 @@ class Config:
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", "train", "y_detection_masks")
         # Path to load/save SSL target prepared.
         _C.DATA.TRAIN.SSL_SOURCE_DIR = os.path.join("user_data", "train", "x_ssl_source")
+        # Extract random patches during data augmentation (DA)
+        _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH = False
+        # Create a probability map so the patches extracted will have a high probability of having an object in the middle
+        # of it. Useful to avoid extracting patches which no foreground class information. Use it only when
+        # 'PROBLEM.TYPE' is 'SEMANTIC_SEG', 'INSTANCE_SEG' or 'DETECTION'
+        _C.DATA.TRAIN.PROBABILITY_MAP = False  # Used when _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH=True
+        _C.DATA.TRAIN.W_FOREGROUND = 0.94  # Used when _C.DATA.TRAIN.PROBABILITY_MAP=True
+        _C.DATA.TRAIN.W_BACKGROUND = 0.06  # Used when _C.DATA.TRAIN.PROBABILITY_MAP=True
+        # Extra train data generation: number of times to duplicate the train data. Useful when
+        # _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
+        _C.DATA.TRAIN.REPLICATE = 0
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
         # 3D tuple when using _C.PROBLEM.NDIM='3D'

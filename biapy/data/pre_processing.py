@@ -2715,9 +2715,11 @@ def add_gaussian_noise(image: NDArray, percentage_of_noise: float) -> NDArray:
     return noisy_img
 
 
-################
-# SEMANTIC SEG #
-################
+
+###########
+# GENERAL #
+###########
+
 def calculate_volume_prob_map(
     Y: BiaPyDataset, is_3d: bool = False, w_foreground: float = 0.94, w_background: float = 0.06, save_dir=None
 ) -> List[NDArray] | NDArray:
@@ -2758,41 +2760,44 @@ def calculate_volume_prob_map(
     Ylen = len(Y.sample_list)
     for i in tqdm(range(Ylen), disable=not is_main_process()):
         if Y.sample_list[i].img_is_loaded():
-            _map = Y.sample_list[i].img.copy().astype(np.float32)
+            raw = Y.sample_list[i].img
         else:
             path = Y.dataset_info[Y.sample_list[i].fid].path
-            _map = read_img_as_ndarray(path, is_3d=is_3d).astype(np.float32)
+            raw = read_img_as_ndarray(path, is_3d=is_3d)
 
-        for k in range(_map.shape[-1]):
-            if is_3d:
-                for j in range(_map.shape[0]):
-                    # Remove artifacts connected to image border
-                    _map[j, ..., k] = clear_border(_map[j, ..., k])
-            else:
-                # Remove artifacts connected to image border
-                _map[..., k] = clear_border(_map[..., k])
+        # Collapse all channels into a single binary foreground map so that any
+        # non-zero value in any channel (semantic, instance, or detection masks)
+        # is treated as foreground. Shape becomes (..., 1).
+        _map = (raw > 0).any(axis=-1, keepdims=True).astype(np.float32)
 
-            foreground_pixels = (_map[..., k] > 0).sum()
-            background_pixels = (_map[..., k] == 0).sum()
+        if is_3d:
+            for j in range(_map.shape[0]):
+                _map[j, ..., 0] = clear_border(_map[j, ..., 0])
+        else:
+            _map[..., 0] = clear_border(_map[..., 0])
 
-            if foreground_pixels == 0:
-                _map[..., k][np.where(_map[..., k] > 0)] = 0
-            else:
-                _map[..., k][np.where(_map[..., k] > 0)] = w_foreground / foreground_pixels
-            if background_pixels == 0:
-                _map[..., k][np.where(_map[..., k] == 0)] = 0
-            else:
-                _map[..., k][np.where(_map[..., k] == 0)] = w_background / background_pixels
+        foreground_pixels = (_map[..., 0] > 0).sum()
+        background_pixels = (_map[..., 0] == 0).sum()
 
-            # Necessary to get all probs sum 1
-            s = _map[..., k].sum()
-            if s == 0:
-                t = 1
-                for x in _map[..., k].shape:
-                    t *= x
-                _map[..., k].fill(1 / t)
-            else:
-                _map[..., k] = _map[..., k] / _map[..., k].sum()
+        if foreground_pixels == 0:
+            _map[..., 0][np.where(_map[..., 0] > 0)] = 0
+        else:
+            _map[..., 0][np.where(_map[..., 0] > 0)] = w_foreground / foreground_pixels
+        if background_pixels == 0:
+            _map[..., 0][np.where(_map[..., 0] == 0)] = 0
+        else:
+            _map[..., 0][np.where(_map[..., 0] == 0)] = w_background / background_pixels
+
+        # Necessary to get all probs sum 1
+        s = _map[..., 0].sum()
+        if s == 0:
+            t = 1
+            for x in _map[..., 0].shape:
+                t *= x
+            _map[..., 0].fill(1 / t)
+        else:
+            _map[..., 0] = _map[..., 0] / _map[..., 0].sum()
+
         if first_shape is None:
             first_shape = _map.shape
         if first_shape != _map.shape:
@@ -2820,11 +2825,6 @@ def calculate_volume_prob_map(
                 f = os.path.join(save_dir, "prob_map" + str(i).zfill(d) + ".npy")
                 np.save(f, maps[i])
     return maps
-
-
-###########
-# GENERAL #
-###########
 
 
 def resize_images(images: List[NDArray], **kwards) -> List[NDArray]:

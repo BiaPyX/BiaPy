@@ -1324,6 +1324,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
         )
 
+    if cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH and cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+        raise ValueError(
+            "'DATA.TRAIN.PROBABILITY_MAP' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
+        )
+
     for item in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         if item not in ["weights", "norm", "model_arch", "optimizer", "epoch"]:
             raise ValueError("'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' can only have items in ['weights', 'norm', 'model_arch', 'optimizer', 'epoch']")
@@ -3452,13 +3457,17 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["POSTSITE_DILATION_DISTANCE_CHANNELS"]
 
     if "DATA" in old_cfg:
-        if "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]:   
+        if "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["EXTRACT_RANDOM_PATCH"] = old_cfg["DATA"]["EXTRACT_RANDOM_PATCH"]
             del old_cfg["DATA"]["EXTRACT_RANDOM_PATCH"]
         if "PROBABILITY_MAP" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["PROBABILITY_MAP"] = old_cfg["DATA"]["PROBABILITY_MAP"]
             del old_cfg["DATA"]["PROBABILITY_MAP"]
         if "W_FOREGROUND" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["W_FOREGROUND"] = old_cfg["DATA"]["W_FOREGROUND"]
             del old_cfg["DATA"]["W_FOREGROUND"]
         if "W_BACKGROUND" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["W_BACKGROUND"] = old_cfg["DATA"]["W_BACKGROUND"]
             del old_cfg["DATA"]["W_BACKGROUND"]
         if "TRAIN" in old_cfg["DATA"]:
             if "MINIMUM_FOREGROUND_PER" in old_cfg["DATA"]["TRAIN"]:
@@ -3469,8 +3478,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [["foreground"]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [["lt"]]
-            if "REPLICATE" in old_cfg["DATA"]["TRAIN"]:
-                del old_cfg["DATA"]["TRAIN"]["REPLICATE"]
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]

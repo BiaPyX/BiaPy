@@ -6,6 +6,7 @@ augmenting, and batching image and mask data for deep learning workflows in BiaP
 It supports 2D and 3D data, chunked loading, distributed training, and advanced
 augmentation pipelines.
 """
+import os
 import torch
 from typing import List, Dict, Any, Tuple, Optional
 from torch.utils.data import (
@@ -92,6 +93,24 @@ def create_train_val_augmentors(
     cover_gt : 4D Numpy array
         Sample of the GT cover data to be used for exporting the model to BMZ. Shape is ``(1, y, x, channels)`` for ``2D`` or ``(1, z, y, x, channels)`` for ``3D``.
     """
+    # Calculate the probability map per image
+    prob_map = None
+    if cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH:
+        if os.path.exists(cfg.PATHS.PROB_MAP_DIR):
+            print("Loading probability map . . .")
+            prob_map_file = os.path.join(cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME)
+            num_files = len(next(os_walk_clean(cfg.PATHS.PROB_MAP_DIR))[2])
+            prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
+        else:
+            assert Y_train
+            prob_map = calculate_volume_prob_map(
+                Y_train,
+                (cfg.PROBLEM.NDIM == "3D"),
+                cfg.DATA.TRAIN.W_FOREGROUND,
+                cfg.DATA.TRAIN.W_BACKGROUND,
+                save_dir=cfg.PATHS.PROB_MAP_DIR,
+            )
+
     if cfg.PROBLEM.NDIM == "2D":
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
             cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
@@ -238,8 +257,11 @@ def create_train_val_augmentors(
             salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE,
             resolution=cfg.DATA.TRAIN.RESOLUTION,
+            random_crops_in_DA=cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
+            prob_map=prob_map,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,
+            extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
             norm_module=norm_module,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB,
@@ -285,6 +307,7 @@ def create_train_val_augmentors(
             Y=Y_val,
             da=False,
             shape=cfg.DATA.PATCH_SIZE,
+            random_crops_in_DA=cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
             val=True,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,
