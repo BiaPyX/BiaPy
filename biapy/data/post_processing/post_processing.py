@@ -51,6 +51,22 @@ from biapy.data.pre_processing import generate_ellipse_footprint
 
 ZarrOrH5Array = Union[zarr.Array, h5py.Dataset]
 
+def _otsu_auto_threshold(arr: NDArray) -> float:
+    """Compute Otsu threshold for arbitrary-range float arrays.
+
+    Falls back to normalizing arr to [0,1] and mapping back when the raw range
+    is too narrow for skimage's histogram (256 bins) to handle directly.
+    """
+    vmin, vmax = float(arr.min()), float(arr.max())
+    if vmin == vmax:
+        return vmin
+    try:
+        return float(threshold_otsu(arr))
+    except ValueError:
+        norm = (arr - vmin) / (vmax - vmin)
+        return float(threshold_otsu(norm)) * (vmax - vmin) + vmin
+
+
 def watershed_by_channels(
     data: NDArray,
     channels: List[str],
@@ -209,7 +225,7 @@ def watershed_by_channels(
         foreground_probs = np.min(data, axis=-1)
 
         # Seed creation process
-        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else float(threshold_otsu(data)) 
+        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else _otsu_auto_threshold(data)
         seed_map = foreground_probs > th
         seed_ths_used.append(th)
 
@@ -231,13 +247,13 @@ def watershed_by_channels(
                 else: # F, P, Db, D
                     seed_map = data[..., ch_pos]
                 
-                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else float(threshold_otsu(seed_map))
+                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else _otsu_auto_threshold(seed_map)
                 seed_ths_used.append(th)
 
                 seed_map = seed_map > th
             else:
                 if ch in ['F', 'B', 'P', 'C', 'Db', 'Dc', 'Dn', 'D', 'T']:
-                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else float(threshold_otsu(data[..., ch_pos]))
+                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else _otsu_auto_threshold(data[..., ch_pos])
                     seed_ths_used.append(th)
 
                     if ch in ["F", "P", "Db", "D"]:
@@ -282,7 +298,7 @@ def watershed_by_channels(
                     if any([x for x in hvz_ths if x != "auto"]):
                         th = float(np.min([x for x in hvz_ths if x != "auto"])) # Take the most restrictive
                     else:
-                        th = float(threshold_otsu(overall))
+                        th = _otsu_auto_threshold(overall)
                     for x in hvz_ths:
                         seed_ths_used.append(th)
 
@@ -300,12 +316,12 @@ def watershed_by_channels(
                 else: # F, Db, D
                     growth_mask = data[..., ch_pos]
 
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else float(threshold_otsu(growth_mask) / 2)
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else _otsu_auto_threshold(growth_mask) / 2
                 growth_mask_ths_used.append(th)
 
                 growth_mask = growth_mask > th
             else:
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else float(threshold_otsu(data[..., ch_pos]) / 2)
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else _otsu_auto_threshold(data[..., ch_pos]) / 2
                 growth_mask_ths_used.append(th)
 
                 if ch in ["F", "Db", "D"]:
