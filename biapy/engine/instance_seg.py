@@ -7,6 +7,7 @@ It handles data preparation, model setup, metrics, predictions, post-processing,
 and result saving for assigning unique IDs to each object in 2D and 3D images.
 """
 import os
+import math
 import torch
 import h5py
 import numpy as np
@@ -70,6 +71,7 @@ from biapy.data.data_3D_manipulation import (
     load_synapse_gt_points,
     extract_patch_from_efficient_file,
     insert_patch_in_efficient_file,
+    order_dimensions,
 )
 from biapy.data.dataset import PatchCoords
 
@@ -1748,39 +1750,80 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 # Use uint64 to hold large globally-offset IDs.
                 self.test_chunked_workflow_process_vars["dtype_str"] = "uint64"
 
-                # Temporarily suppress TIF creation inside the base-class pass.
-                # The base class would save it after Pass A with un-merged local IDs,
-                # which is wrong. We create the final TIF ourselves after Pass E.
+                phases = self.cfg.TEST.BY_CHUNKS.PHASES
+                run_pass_a = "instance_creation" in phases
+                run_merging = "instance_merging" in phases
+
+                if not run_pass_a and not run_merging:
+                    return
+
                 save_out_tif = self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF
-                if save_out_tif:
-                    self.cfg.defrost()
-                    self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
-                    self.cfg.freeze()
 
                 self._halo = self._effective_halo()
                 print(f"[Rank {get_rank()} ({os.getpid()})] Effective halo: {self._halo}")
 
-                # ---- Pass A: per-chunk instance labelling (base-class loop, all ranks) ----
-                print(f"[Rank {get_rank()} ({os.getpid()})] Pass A: creating per-chunk instance labels . . .")
-                super().after_all_chunk_prediction_workflow_process()
+                if run_pass_a:
+                    # Temporarily suppress TIF creation inside the base-class pass.
+                    # The base class would save it after Pass A with un-merged local IDs,
+                    # which is wrong. We create the final TIF ourselves after Pass E.
+                    if save_out_tif:
+                        self.cfg.defrost()
+                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
+                        self.cfg.freeze()
 
-                if save_out_tif:
-                    self.cfg.defrost()
-                    self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = True
-                    self.cfg.freeze()
+                    # ---- Pass A: per-chunk instance labelling (base-class loop, all ranks) ----
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Pass A: creating per-chunk instance labels . . .")
+                    super().after_all_chunk_prediction_workflow_process()
 
-                # Retrieve the grid parameters the generator used
-                from biapy.data.generators.chunked_workflow_process_generator import (
-                    chunked_workflow_process_generator as _CWP,
-                )
-                tgen: _CWP = self.test_generator.dataset  # type: ignore
-                zarr_path    = tgen._shared_zarr_path()
-                axes_order   = tgen.out_data_order
-                z_dim, y_dim, x_dim = tgen.z_dim, tgen.y_dim, tgen.x_dim
-                step_z, step_y, step_x = tgen.step_z, tgen.step_y, tgen.step_x
-                vols_per_z   = tgen.vols_per_z
-                vols_per_y   = tgen.vols_per_y
-                vols_per_x   = tgen.vols_per_x
+                    if save_out_tif:
+                        self.cfg.defrost()
+                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = True
+                        self.cfg.freeze()
+
+                    # Retrieve grid parameters from the generator
+                    from biapy.data.generators.chunked_workflow_process_generator import (
+                        chunked_workflow_process_generator as _CWP,
+                    )
+                    tgen: _CWP = self.test_generator.dataset  # type: ignore
+                    zarr_path  = tgen._shared_zarr_path()
+                    axes_order = tgen.out_data_order
+                    z_dim, y_dim, x_dim = tgen.z_dim, tgen.y_dim, tgen.x_dim
+                    step_z, step_y, step_x = tgen.step_z, tgen.step_y, tgen.step_x
+                    vols_per_z = tgen.vols_per_z
+                    vols_per_y = tgen.vols_per_y
+                    vols_per_x = tgen.vols_per_x
+                else:
+                    # ---- Skip Pass A: derive grid params from config + existing label Zarr ----
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Pass A skipped ('instance_creation' not in PHASES), "
+                        "reusing existing instance label Zarr."
+                    )
+                    if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+                        axes_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
+                    else:
+                        axes_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+                    base_filename = os.path.splitext(self.current_sample["X_filename"])[0]
+                    zarr_path = os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, base_filename + ".zarr"
+                    )
+                    if not os.path.exists(zarr_path):
+                        raise FileNotFoundError(
+                            f"Pass A was skipped but the instance Zarr was not found: {zarr_path}"
+                        )
+                    _existing = zarr.open(zarr_path, mode="r", zarr_format=3)
+                    _, z_dim, _, y_dim, x_dim = order_dimensions(_existing.shape, axes_order)
+                    assert isinstance(z_dim, int) and isinstance(y_dim, int) and isinstance(x_dim, int)
+                    patch_size = self.cfg.DATA.PATCH_SIZE
+                    step_z = int(patch_size[0])
+                    step_y = int(patch_size[1])
+                    step_x = int(patch_size[2])
+                    vols_per_z = math.ceil(z_dim / step_z)
+                    vols_per_y = math.ceil(y_dim / step_y)
+                    vols_per_x = math.ceil(x_dim / step_x)
+
+                if not run_merging:
+                    return
+
                 total_chunks = vols_per_z * vols_per_y * vols_per_x
 
                 rank        = get_rank()
@@ -2050,7 +2093,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
                         dist.barrier()
                     if is_main_process():
-                        tgen.save_parallel_data_as_tif()
+                        if not run_pass_a:
+                            # tgen was not created when skipping Pass A — save directly.
+                            data = np.array(zarr.open(zarr_path, mode="r", zarr_format=3))
+                            data = ensure_3d_shape(data)
+                            out_filename = os.path.splitext(os.path.basename(zarr_path))[0] + ".tif"
+                            save_tif(
+                                np.expand_dims(data, 0),
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                                [out_filename],
+                                verbose=True,
+                            )
+                        else:
+                            tgen.save_parallel_data_as_tif()
                     if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
                         dist.barrier()
 

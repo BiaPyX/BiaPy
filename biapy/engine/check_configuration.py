@@ -2176,6 +2176,32 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'TEST.BY_CHUNKS' can only be activated in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
             if cfg.PROBLEM.NDIM == "2D":
                 raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
+            _valid_phases = {"prediction", "instance_creation", "instance_merging"}
+            _instance_only_phases = {"instance_creation", "instance_merging"}
+            if not isinstance(cfg.TEST.BY_CHUNKS.PHASES, (list, tuple)) or len(cfg.TEST.BY_CHUNKS.PHASES) == 0:
+                raise ValueError("'TEST.BY_CHUNKS.PHASES' must be a non-empty list")
+            _unknown = set(cfg.TEST.BY_CHUNKS.PHASES) - _valid_phases
+            if _unknown:
+                raise ValueError(
+                    f"'TEST.BY_CHUNKS.PHASES' contains unknown phase(s): {sorted(_unknown)}. "
+                    f"Valid values are: {sorted(_valid_phases)}"
+                )
+            _used_instance_phases = _instance_only_phases & set(cfg.TEST.BY_CHUNKS.PHASES)
+            if _used_instance_phases and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+                raise ValueError(
+                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' are only valid "
+                    "for 'INSTANCE_SEG' workflows"
+                )
+            if _used_instance_phases and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE != "chunk_by_chunk":
+                raise ValueError(
+                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' require "
+                    "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' == 'chunk_by_chunk'"
+                )
+            if _used_instance_phases and not cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
+                raise ValueError(
+                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' require "
+                    "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE' == True"
+                )
             if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
                 assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
                     "chunk_by_chunk",
@@ -2185,6 +2211,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO' must be -1 (auto) or a positive integer")
                 if not (0 < cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH <= 1):
                     raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH' must be in (0, 1]")
+            if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_START < 0:
+                raise ValueError("'TEST.BY_CHUNKS.Z_START' must be -1 (disabled) or a non-negative integer")
+            if cfg.TEST.BY_CHUNKS.Z_END != -1 and cfg.TEST.BY_CHUNKS.Z_END <= 0:
+                raise ValueError("'TEST.BY_CHUNKS.Z_END' must be -1 (disabled) or a positive integer")
+            if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_END != -1:
+                if cfg.TEST.BY_CHUNKS.Z_START >= cfg.TEST.BY_CHUNKS.Z_END:
+                    raise ValueError("'TEST.BY_CHUNKS.Z_START' must be less than 'TEST.BY_CHUNKS.Z_END'")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:

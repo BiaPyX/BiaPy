@@ -1687,6 +1687,22 @@ class Config:
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
         # In how many iterations the H5 writer needs to flush the data. No need to do so with Zarr files.
         _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
+        # Z slice index (inclusive) at which chunk processing starts. Use -1 (default) to start from the beginning.
+        # Useful for distributing large-volume prediction across multiple cluster jobs, each handling a Z sub-range.
+        _C.TEST.BY_CHUNKS.Z_START = -1
+        # Z slice index (exclusive) at which chunk processing ends. Use -1 (default) to process until the end.
+        # The output Zarr is always the full data shape so multiple jobs can write concurrently.
+        _C.TEST.BY_CHUNKS.Z_END = -1
+        # Phases to execute in this job. Allows splitting the full pipeline across multiple cluster jobs.
+        # Available phases:
+        #   * 'prediction'         : run the model on each patch and write raw predictions to a Zarr file.
+        #   * 'instance_creation'  : run per-chunk watershed (instance segmentation, 'chunk_by_chunk' only).
+        #   * 'instance_merging'   : resolve cross-chunk instance IDs (Passes B–E, instance segmentation only).
+        # Example multi-job setup for a large volume:
+        #   Job 1 — Z_START=0,   Z_END=500,  PHASES=["prediction", "instance_creation"]
+        #   Job 2 — Z_START=500, Z_END=1000, PHASES=["prediction", "instance_creation"]
+        #   Job 3 — (no Z range) PHASES=["instance_merging"]
+        _C.TEST.BY_CHUNKS.PHASES = ["prediction", "instance_creation", "instance_merging"]
 
         # After passing all the patches through the model we obtain the model's raw predictions, which may be subsequently processed
         # to generate the final prediction. Each workflow has its own steps for this process:

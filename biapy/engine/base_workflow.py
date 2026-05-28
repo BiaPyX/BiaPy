@@ -2228,7 +2228,7 @@ class Base_Workflow(metaclass=ABCMeta):
         A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
         depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
         """
-        if not self.cfg.TEST.REUSE_PREDICTIONS:
+        if not self.cfg.TEST.REUSE_PREDICTIONS and "prediction" in self.cfg.TEST.BY_CHUNKS.PHASES:
             # Create the generator
             self.test_generator = create_chunked_test_generator(
                 self.cfg,

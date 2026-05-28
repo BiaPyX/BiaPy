@@ -68,6 +68,8 @@ class chunked_workflow_process_generator(IterableDataset):
         crop_shape: Tuple[int, ...],
         out_dir: str,
         dtype_str: str = "float32",
+        z_start: int = -1,
+        z_end: int = -1,
     ):
         """
         Initialize the chunked_workflow_process_generator.
@@ -84,6 +86,10 @@ class chunked_workflow_process_generator(IterableDataset):
             Output directory for results.
         dtype_str : str, optional
             Data type for output.
+        z_start : int, optional
+            First Z slice (inclusive) to process. -1 means start from the beginning.
+        z_end : int, optional
+            Last Z slice (exclusive) to process. -1 means process until the end.
         """
         super(chunked_workflow_process_generator).__init__()
         self.model_predictions = model_predictions
@@ -147,12 +153,25 @@ class chunked_workflow_process_generator(IterableDataset):
         self.vols_per_y = math.ceil(self.y_dim / self.step_y)
         self.vols_per_x = math.ceil(self.x_dim / self.step_x)
 
-        self.len = self.vols_per_z * self.vols_per_y * self.vols_per_x
+        # Clamp Z range to valid chunk indices
+        effective_z_start = 0 if z_start == -1 else z_start
+        effective_z_end = self.z_dim if z_end == -1 else z_end
+        self.z_vol_start = math.ceil(effective_z_start / self.step_z)
+        self.z_vol_end = min(math.ceil(effective_z_end / self.step_z), self.vols_per_z)
+        self.vols_per_z_effective = self.z_vol_end - self.z_vol_start
+
+        self.len = self.vols_per_z_effective * self.vols_per_y * self.vols_per_x
 
         if is_main_process():
+            z_range_msg = ""
+            if z_start != -1 or z_end != -1:
+                z_range_msg = (
+                    f"Z range: slices [{effective_z_start}, {effective_z_end}) → "
+                    f"chunks [{self.z_vol_start}, {self.z_vol_end}) of {self.vols_per_z} total. "
+                )
             print(
                 f"Initialized chunked_workflow_process_generator with sample {self.filename} and shape {self.X_parallel_data.shape}.\n"
-                f"Crop shape: {self.crop_shape_zyx}. Input axes: {self.input_axes}. Output data axes order: {self.out_data_order}. "
+                f"Crop shape: {self.crop_shape_zyx}. Input axes: {self.input_axes}. Output data axes order: {self.out_data_order}. {z_range_msg}"
                 ""
             )
 
@@ -197,8 +216,8 @@ class chunked_workflow_process_generator(IterableDataset):
         assert isinstance(self.z_dim, int) and isinstance(self.y_dim, int) and isinstance(self.x_dim, int)
         
         for vol_id in sampler:
-            z, y, x = np.unravel_index(vol_id, (self.vols_per_z, self.vols_per_y, self.vols_per_x))
-            z = int(z)
+            z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
+            z = int(z_local) + self.z_vol_start
             y = int(y)
             x = int(x)
 
