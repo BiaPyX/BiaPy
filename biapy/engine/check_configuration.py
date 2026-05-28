@@ -692,12 +692,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
-            if set(sorted_original_instance_channels) == {"F_post", "Z", "V", "H"}:
-                opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", [1, 3]])
+        if cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO == []:
+            # Default: one output head per channel entry (each DATA_CHANNELS item in its own head)
+            effective_channels_per_head = [1] * len(sorted_original_instance_channels)
+            opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", effective_channels_per_head])
+        else:
+            effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
 
-        if len(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO) > 0:
-            assert sum(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO) == len(sorted_original_instance_channels), "The total number of channels in 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' "
-            "need to be the same as the number of channels in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+        if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2:
+            raise ValueError(
+                f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True but "
+                f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has only {len(effective_channels_per_head)} "
+                f"entr{'y' if len(effective_channels_per_head) == 1 else 'ies'}, so no decoder separation can occur. "
+                f"Set 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' to a list with at least 2 entries whose values "
+                f"sum to the number of DATA_CHANNELS ({len(sorted_original_instance_channels)})."
+            )
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
             if not channel_loss_set:
