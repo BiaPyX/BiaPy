@@ -1032,19 +1032,14 @@ class HighResolutionNet(nn.Module):
             feats_to_cat.append(F.interpolate(y_list[i], size=target_size, mode=mode, align_corners=True))
 
         feats = torch.cat(feats_to_cat, dim=1)
-        
-        out = self.heads(feats)
-        out = self.upsample_logits(out)
-
-        out_dict = {}
 
         # Pass the features through the output heads
         class_outs, outs = [], []
         for i, head in enumerate(self.heads):
             if "class" not in self.output_channel_info[i]:
-                outs.append(head(feats))
+                outs.append(self.upsample_logits(head(feats)))
             else:
-                class_outs.append(head(feats))  
+                class_outs.append(self.upsample_logits(head(feats)))
         outs = torch.cat(outs, dim=1)
 
         # Apply activations to the output heads if explicit_activations is True

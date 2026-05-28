@@ -692,12 +692,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
-        if cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO == []:
-            # Default: one output head per channel entry (each DATA_CHANNELS item in its own head)
-            effective_channels_per_head = [1] * len(sorted_original_instance_channels)
-            opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", effective_channels_per_head])
-        else:
-            effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
+        effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
 
         if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2:
             raise ValueError(
@@ -3594,9 +3589,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_32")
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
-
-        if "hrnet" in old_cfg["MODEL"]["ARCHITECTURE"].lower():
-            old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"
 
         if "HRNET" in old_cfg["MODEL"]:
             if "STAGE1" in old_cfg["MODEL"]["HRNET"]:
