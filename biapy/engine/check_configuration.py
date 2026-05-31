@@ -2196,16 +2196,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' are only valid "
                     "for 'INSTANCE_SEG' workflows"
                 )
-            if _used_instance_phases and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE != "chunk_by_chunk":
-                raise ValueError(
-                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' require "
-                    "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' == 'chunk_by_chunk'"
-                )
-            if _used_instance_phases and not cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
-                raise ValueError(
-                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' require "
-                    "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE' == True"
-                )
             if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
                 assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
                     "chunk_by_chunk",
