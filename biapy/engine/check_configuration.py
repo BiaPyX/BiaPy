@@ -3580,14 +3580,15 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
 
-        if "HRNET" in old_cfg["MODEL"]:
-            if "STAGE1" in old_cfg["MODEL"]["HRNET"]:
-                del old_cfg["MODEL"]["HRNET"]["STAGE1"]
+        if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower() or "HRNET" in old_cfg["MODEL"]:
+            hrnet_block = old_cfg["MODEL"].get("HRNET", {})
+            if "STAGE1" in hrnet_block:
+                del hrnet_block["STAGE1"]
 
             variant_str = None
             # 1. Migrate CUSTOM boolean to VARIANT string
-            if "CUSTOM" in old_cfg["MODEL"]["HRNET"]:
-                is_custom = old_cfg["MODEL"]["HRNET"].pop("CUSTOM")
+            if "CUSTOM" in hrnet_block:
+                is_custom = hrnet_block.pop("CUSTOM")
                 if is_custom:
                     variant_str = "custom"
             if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower():
@@ -3600,12 +3601,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 
             # Fallback if variant wasn't explicitly captured from old keys
             if variant_str is None:
-                variant_str = old_cfg["MODEL"]["HRNET"].get("VARIANT", "W18")
+                variant_str = hrnet_block.get("VARIANT", "W18")
             
-            old_cfg["MODEL"]["HRNET"]["VARIANT"] = str(variant_str)
+            hrnet_block["VARIANT"] = str(variant_str)
 
             # 2. Extract nested stages into the new dynamic flat lists
-            if "STAGE2" in old_cfg["MODEL"]["HRNET"]:
+            if "STAGE2" in hrnet_block:
                 num_stages = 0
                 num_modules = []
                 num_branches = []
@@ -3614,28 +3615,28 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 
                 for stage_idx in [2, 3, 4, 5]: # Checking up to STAGE5 just in case
                     stage_key = f"STAGE{stage_idx}"
-                    if stage_key in old_cfg["MODEL"]["HRNET"]:
+                    if stage_key in hrnet_block:
                         num_stages += 1
-                        stage_cfg = old_cfg["MODEL"]["HRNET"].pop(stage_key)
+                        stage_cfg = hrnet_block.pop(stage_key)
                         num_modules.append(stage_cfg.get("NUM_MODULES", 1))
                         num_branches.append(stage_cfg.get("NUM_BRANCHES", stage_idx))
                         num_blocks.append(stage_cfg.get("NUM_BLOCKS", [4] * stage_idx))
                         num_channels.append(stage_cfg.get("NUM_CHANNELS", [18 * (2**i) for i in range(stage_idx)]))
                 
                 if num_stages > 0:
-                    old_cfg["MODEL"]["HRNET"]["NUM_STAGES"] = num_stages
-                    old_cfg["MODEL"]["HRNET"]["NUM_MODULES"] = num_modules
-                    old_cfg["MODEL"]["HRNET"]["NUM_BRANCHES"] = num_branches
-                    old_cfg["MODEL"]["HRNET"]["NUM_BLOCKS"] = num_blocks
-                    old_cfg["MODEL"]["HRNET"]["NUM_CHANNELS"] = num_channels
+                    hrnet_block["NUM_STAGES"] = num_stages
+                    hrnet_block["NUM_MODULES"] = num_modules
+                    hrnet_block["NUM_BRANCHES"] = num_branches
+                    hrnet_block["NUM_BLOCKS"] = num_blocks
+                    hrnet_block["NUM_CHANNELS"] = num_channels
             
             # 3. Migrate Z_DOWN from bool to list and initialize YX_DOWN
-            n_stages = old_cfg["MODEL"]["HRNET"].get("NUM_STAGES", 3)
+            n_stages = hrnet_block.get("NUM_STAGES", 3)
             
-            if "Z_DOWN" in old_cfg["MODEL"]["HRNET"]:
-                z_down_val = old_cfg["MODEL"]["HRNET"]["Z_DOWN"]
+            if "Z_DOWN" in hrnet_block:
+                z_down_val = hrnet_block["Z_DOWN"]
                 if isinstance(z_down_val, bool):
-                    old_cfg["MODEL"]["HRNET"]["Z_DOWN"] = [2 if z_down_val else 1] * n_stages
+                    hrnet_block["Z_DOWN"] = [2 if z_down_val else 1] * n_stages
 
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
