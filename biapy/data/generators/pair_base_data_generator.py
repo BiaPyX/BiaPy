@@ -956,7 +956,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if xnorm_info is None:
                 xnorm_info = self.norm_module
             img, _ = normalize_image(img, norm_module=xnorm_info)
-            ynorm = self.norm_module if self.mask_norm["norm_target"] else self.mask_norm
+            ynorm = self.Y.dataset_info[sample.fid].norm_info if self.mask_norm["norm_target"] else self.mask_norm
             mask, _ = normalize_mask(mask, norm_module=ynorm)
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
 
