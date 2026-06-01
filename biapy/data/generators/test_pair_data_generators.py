@@ -303,13 +303,13 @@ class test_pair_data_generator(Dataset):
             img = np.expand_dims(img, 0)
             if self.provide_Y:
                 mask = np.expand_dims(np.array(mask), 0)
-                if self.norm_module["mask_norm"] == "as_mask":
+                if self.norm_module["target_type"] == "mask":
                     mask = mask.astype(np.uint8)
 
             if self.convert_to_rgb:
                 if img.shape[-1] == 1:
                     img = np.repeat(img, 3, axis=-1)
-                if self.norm_module["mask_norm"] == "as_image" and mask and mask.shape[-1] == 1:
+                if self.norm_module["target_type"] == "image" and mask and mask.shape[-1] == 1:
                     mask = np.repeat(mask, 3, axis=-1)
 
             # Data channel check

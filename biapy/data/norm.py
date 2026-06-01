@@ -231,13 +231,13 @@ def normalize_mask(
 
     norm_module : dict
         Normalization module dict with the normalization parameters. Expected keys are:
-            * ``mask_norm``, str: type of normalization to apply to the mask. Expected values are:
-                - ``as_mask``: apply normalization as if the mask were a mask. This means that the function will check if the channels 
-                  of the mask are binary or not and if they need to be divided by 255 (e.g. if they are in 255 instead of 1). The function 
-                  will also check if there are non-binary channels (e.g. distance transform channel) and set them as non-binary in the 
-                  normalization information. This is essential to know how to handle the data in other parts of the pipeline such as 
+            * ``target_type``, str: type of normalization to apply to the mask. Expected values are:
+                - ``mask``: apply normalization as if the mask were a mask. This means that the function will check if the channels
+                  of the mask are binary or not and if they need to be divided by 255 (e.g. if they are in 255 instead of 1). The function
+                  will also check if there are non-binary channels (e.g. distance transform channel) and set them as non-binary in the
+                  normalization information. This is essential to know how to handle the data in other parts of the pipeline such as
                   during data augmentation.
-                - ``as_image``: apply normalization as if the mask were an image. This means that the same normalization specified in `norm_module` 
+                - ``image``: apply normalization as if the mask were an image. This means that the same normalization specified in `norm_module`
                   for images will be applied to the mask.
 
     ignore_index : Optional[int]
@@ -272,13 +272,13 @@ def normalize_mask(
         or not and if they need to be divided by 255 or not.
     """
     assert mask.ndim >= 3, "Data should be at least 3D. E.g. (y, x, channels) in 2D and (z, y, x, channels) in 3D"
-    assert "mask_norm" in norm_module, "'mask_norm' key should be in 'norm_module' dict"
+    assert "target_type" in norm_module, "'target_type' key should be in 'norm_module' dict"
 
     _ignore_index = -1 if ignore_index is None else ignore_index
-    if norm_module["mask_norm"] == "as_mask":
+    if norm_module["target_type"] == "mask":
         orig_dtype = str(mask.dtype)
         norm_info = {
-            "mask_norm": norm_module["mask_norm"],
+            "target_type": norm_module["target_type"],
             "orig_dtype": orig_dtype,
             "per_channel_info": {}
         }
@@ -313,9 +313,9 @@ def normalize_mask(
 
     # Continue normalization as if it were an image
     # Normalization in test should not be applied to mask/ground truth data
-    elif norm_module["mask_norm"] == "as_image" and is_training:
+    elif norm_module["target_type"] == "image" and is_training:
         mask, norm_info = normalize_image(img=mask, norm_module=norm_module, apply_norm=apply_norm) 
-        norm_info["mask_norm"] = norm_module["mask_norm"]
+        norm_info["target_type"] = norm_module["target_type"]
     else:
         norm_info = norm_module.copy()
 

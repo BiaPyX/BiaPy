@@ -525,7 +525,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Y data analysis
         # Loop over a few masks to ensure foreground class is present to decide normalization
         self.mask_norm = None
-        if self.norm_module["mask_norm"] == "as_mask":
+        if self.norm_module["target_type"] == "mask":
             print("Checking which channel of the mask needs normalization . . .")
             n_samples = min(50, len(self.X.sample_list))
             if instance_problem:
@@ -956,13 +956,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if xnorm_info is None:
                 xnorm_info = self.norm_module
             img, _ = normalize_image(img, norm_module=xnorm_info)
-            mask, _ = normalize_mask(mask, norm_module=self.mask_norm)
+            ynorm = self.norm_module if self.mask_norm["norm_target"] else self.mask_norm
+            mask, _ = normalize_mask(mask, norm_module=ynorm)
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
 
         if self.convert_to_rgb:
             if img.shape[-1] == 1:
                 img = np.repeat(img, 3, axis=-1)
-            if self.norm_module["mask_norm"] == "as_image" and mask.shape[-1] == 1:
+            if self.norm_module["target_type"] == "image" and mask.shape[-1] == 1:
                 mask = np.repeat(mask, 3, axis=-1)
 
         return img, mask
@@ -1110,7 +1111,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 zoom_range=self.zoom_range,
                 zoom_in_z=self.zoom_in_z,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             )  # type: ignore
 
         # Apply random rotations
@@ -1121,7 +1122,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 angles=self.rnd_rot_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             )  # type: ignore
 
         # Apply square rotations
@@ -1132,7 +1133,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 angles=[90, 180, 270],
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             )  # type: ignore
 
         # Apply cblur
@@ -1233,7 +1234,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 alpha=self.e_alpha,
                 sigma=self.e_sigma,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
                 mode=self.e_mode
             ) # type: ignore
 
@@ -1242,7 +1243,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             ) # type: ignore
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
@@ -1250,7 +1251,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             ) # type: ignore
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:

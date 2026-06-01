@@ -349,8 +349,9 @@ class Base_Workflow(metaclass=ABCMeta):
         print("Creating normalization module . . .")        
         self.norm_module = {
             "type": cfg.DATA.NORMALIZATION.TYPE,
-            "mask_norm": "as_mask",
+            "target_type": "mask",
             "out_dtype": "float32",
+            "norm_target": False,
             "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
             "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
             "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
@@ -370,7 +371,8 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Creating normalization module . . .")
             self.torchvision_norm = {
                 "type": "scale_range",
-                "mask_norm": "as_mask",
+                "target_type": "mask",
+                "norm_target": False,
                 "out_dtype": "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
                 "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
                 "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,

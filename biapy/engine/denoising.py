@@ -77,8 +77,9 @@ class Denoising_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
-        self.norm_module["mask_norm"] = "as_image"
-        self.test_norm_module["mask_norm"] = "as_image"
+        self.norm_module["target_type"] = "image"
+        self.test_norm_module["target_type"] = "image"
+        self.test_norm_module["norm_target"] = bool(self.cfg.LOSS.TYPE == "CYCLEGAN")
 
     def define_activations_and_channels(self):
         """
