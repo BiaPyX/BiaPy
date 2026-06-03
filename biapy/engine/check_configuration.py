@@ -2595,6 +2595,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
+            _inst_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
+            if model_arch not in _inst_supported:
+                raise ValueError(
+                    f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is only supported by {_inst_supported}. "
+                    f"Selected architecture '{model_arch}' does not support it."
+                )
 
     if cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "DETECTION":
@@ -2608,6 +2614,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
+            _det_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
+            if model_arch not in _det_supported:
+                raise ValueError(
+                    f"'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is only supported by {_det_supported}. "
+                    f"Selected architecture '{model_arch}' does not support it."
+                )
 
     if cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
@@ -2617,6 +2629,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
+            _i2i_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
+            if model_arch not in _i2i_supported:
+                raise ValueError(
+                    f"'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is only supported by {_i2i_supported}. "
+                    f"Selected architecture '{model_arch}' does not support it."
+                )
 
     if cfg.MODEL.NORMALIZATION == "":
         opts.extend(["MODEL.NORMALIZATION", "in"])

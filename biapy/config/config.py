@@ -468,7 +468,10 @@ class Config:
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
         _C.PROBLEM.DETECTION.DATA_CHECK_MW = False
-        # Whether to use a different decoder for each output head.
+        # Whether to use a different decoder for each head in the model. Only applicable when 'DATA.N_CLASSES' > 2
+        # (multi-class detection), where the model has two heads: one for the detection points and one for the class
+        # predictions. Only supported by: ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet',
+        # 'unext_v1', 'unext_v2'].
         _C.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD = False
         # Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
         # The weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
@@ -1368,7 +1371,7 @@ class Config:
         # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
         _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
         # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
-        # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
+        # done, which will fail if a layer mismatch is found.
         _C.MODEL.SKIP_UNMATCHED_LAYERS = False
         # Epochs to save a checkpoint of the model apart from the best of the validation. Set it to -1 to not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
