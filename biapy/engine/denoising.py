@@ -402,18 +402,6 @@ class Denoising_Workflow(Base_Workflow):
                         -reflected_orig_shape[3] :,
                     ]  # type: ignore
 
-        # Esto lo he usado para el norm, y el clip, lo hacen ellos también 
-        # if self.current_sample["Y"] is not None:
-        #     pred_norm = np.clip(pred.copy().astype(np.float32), 0, 1)
-        #     targets_norm, _ = normalize_image(self.current_sample["Y"].copy(), self.test_norm_module)
-        #     norm_metric_values = self.metric_calculation(output=pred_norm, targets=targets_norm, train=False)
-        #     for metric in norm_metric_values:
-        #         norm_key = f"{str(metric).lower()}_norm"
-        #         if norm_key not in self.stats["merge_patches"]:
-        #             self.stats["merge_patches"][norm_key] = 0
-        #         self.stats["merge_patches"][norm_key] += norm_metric_values[metric]
-        #         self.current_sample_metrics[norm_key] = norm_metric_values[metric]
-
         # Undo normalization
         pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
@@ -482,18 +470,6 @@ class Denoising_Workflow(Base_Workflow):
     def after_all_images(self):
         """Excute steps that must be done after predicting all images."""
         super().after_all_images()
-
-    # Esto lo he usado, super() y las extras, pero se debería de quitar
-    # def print_stats(self, image_counter):
-    #     super().print_stats(image_counter)
-    #     if self.cfg.DATA.TEST.LOAD_GT:
-    #         for metric in ["mse_norm", "mae_norm"]:
-    #             if metric in self.stats["merge_patches"]:
-    #                 print("Test {} (normalized space): {}".format(
-    #                     metric.upper(),
-    #                     self.stats["merge_patches"][metric],
-    #                 ))
-
 
 ####################################
 # Adapted from N2V code:           #
