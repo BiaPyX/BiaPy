@@ -7,6 +7,7 @@ It handles data preparation, model setup, metrics, predictions, post-processing,
 and result saving for localization of objects in 2D and 3D images.
 """
 import os
+import warnings
 import torch
 import torch.distributed as dist
 import numpy as np
@@ -820,7 +821,7 @@ class Detection_Workflow(Base_Workflow):
                     z, y, x = cor
                     z, y, x = int(z), int(y), int(x)
                     if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
-                        print(f"WARNING: GT point [{z},{y},{x}] outside image with shape {pred_shape}. Skipping it in the summary image.")
+                        warnings.warn(f"GT point [{z},{y},{x}] outside image with shape {pred_shape}. Skipping it in the summary image.")
                         continue
                     
                     if gt_assoc is not None:

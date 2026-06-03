@@ -8,6 +8,7 @@ post-processing options.
 """
 import os
 import re
+import warnings
 import numpy as np
 import collections
 from typing import Dict
@@ -364,13 +365,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     channel_loss_set = True
 
             if seed_channels == [] or seed_channels_thresh == [] or topo_surface_ch == "" or growth_mask_channels == [] or growth_mask_channel_ths == []:
-                print("WARNING: seems that the channels requested are custom so BiaPy did not fill some varibles by default.\n"
-                    "You will need to fill the following variables:\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH\n"
+                warnings.warn(
+                    "Seems that the channels requested are custom so BiaPy did not fill some variables by default. "
+                    "You will need to fill the following variables: "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH."
                 )
             if seed_channels != []:
                 opts.extend(
@@ -1283,7 +1285,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
             raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-        print("WARNING: 'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
+        warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     
@@ -1320,7 +1322,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'MODEL.TORCHVISION_MODEL_NAME' needs to be configured when 'MODEL.SOURCE' is 'torchvision'"
             )
         if cfg.TEST.AUGMENTATION:
-            print("WARNING: 'TEST.AUGMENTATION' is not available using TorchVision models")
+            warnings.warn("'TEST.AUGMENTATION' is not available using TorchVision models")
         if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models")
         if cfg.PROBLEM.NDIM == "3D":
@@ -1417,7 +1419,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             
             # Legacy mask used in CartoCell
             if "M" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                print("WARNING: 'M' channel is a legacy mask channel used in CartoCell so the name is kept but the functionality is limited")
+                warnings.warn("'M' channel is a legacy mask channel used in CartoCell so the name is kept but the functionality is limited")
                 if cfg.PROBLEM.NDIM != "3D":
                     raise ValueError("'M' channel can only be used in 3D segmentation (CartoCell legacy approach)")
                 elif set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) != {"F", "C", "M"}:
@@ -2960,7 +2962,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1, 10)):
                 raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")
             if cfg.AUGMENTOR.ZOOM_IN_Z and dim_count == 2:
-                print("WARNING: Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
+                warnings.warn("Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
         assert cfg.AUGMENTOR.AFFINE_MODE in [
             "constant",
             "reflect",

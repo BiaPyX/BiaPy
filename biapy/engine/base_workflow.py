@@ -9,6 +9,7 @@ metrics, logging, and post-processing for both 2D and 3D biomedical image analys
 import math
 import os
 import datetime
+import warnings
 import time
 import json
 import torch
@@ -286,7 +287,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             diff_between_configs(saved_cfg, tmp_cfg)
 
                     if "weights" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT and "norm" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
-                        print("WARNING: Weights will be loaded from checkpoint but not normalization instructions. This can lead to inconsistent results if the normalization instructions in the current configuration are different from the ones used in the checkpoint. Consider adding 'norm' to 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' to avoid this issue.")
+                        warnings.warn("Weights will be loaded from checkpoint but not normalization instructions. This can lead to inconsistent results if the normalization instructions in the current configuration are different from the ones used in the checkpoint. Consider adding 'norm' to 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' to avoid this issue.")
 
                     if "norm" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
                         print("Normalization instructions will be loaded from checkpoint.")

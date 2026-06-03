@@ -4,6 +4,7 @@ Pre-processing utilities for image and mask data in deep learning workflows.
 This module provides pre-processing functions for instance segmentation, detection mask creation, self-supervised learning data generation, semantic segmentation probability maps, and general image processing operations such as resizing, blurring, edge detection, histogram matching, and CLAHE. It supports both 2D and 3D data formats and integrates with BiaPy configuration objects for flexible data pipelines.
 """
 import os
+import warnings
 import edt
 import h5py
 import zarr
@@ -1705,12 +1706,12 @@ def synapse_channel_creation(
 
             if not pre_ok:
                 if verbose:
-                    print(f"WARNING: discarding presynaptic point {pre_loc} out of shape: {shape_zyx}")
+                    warnings.warn(f"Discarding presynaptic point {pre_loc} out of shape: {shape_zyx}")
                 if pre_id not in pre_seen:
                     pre_missed += 1
             if not post_ok:
                 if verbose:
-                    print(f"WARNING: discarding postsynaptic point {post_loc} out of shape: {shape_zyx}")
+                    warnings.warn(f"Discarding postsynaptic point {post_loc} out of shape: {shape_zyx}")
                 if post_id not in post_seen:
                     post_missed += 1
 
@@ -2501,7 +2502,7 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
         file_path = os.path.join(label_dir, ids[i])
         
         if not os.path.exists(os.path.join(img_dir, img_filename)):
-            print("WARNING: No image found for CSV file: {}. Using the image that's in the same spot (within the CSV files list) where"
+            warnings.warn("No image found for CSV file: {}. Using the image that's in the same spot (within the CSV files list) where "
                 "the CSV file is in its own list of CSV files. Check if it is correct!".format(file_path)
             )
             img_filename = img_ids[i]

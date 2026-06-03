@@ -18,6 +18,7 @@ normalization, dropout) accordingly.
 
 from importlib import import_module
 import os
+import warnings
 import math
 import re
 import torch
@@ -550,7 +551,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 if spec and spec.origin and os.path.isfile(spec.origin):
                     queue.append(spec.origin)
             except Exception as e:
-                print(f"Warning: Failed to resolve {name}: {e}")
+                warnings.warn(f"Failed to resolve {name}: {e}")
 
     # === Step 2: Traverse dependency tree and store definitions in discovery order ===
     # We use a list to store the (name, source) tuples in the order they are found (BFS).
@@ -579,7 +580,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
 
         source = name_to_source.get(name)
         if not source:
-            print(f"Warning: Source not found for {name}")
+            warnings.warn(f"Source not found for {name}")
             continue
 
         # Add the definition to the temporary list
@@ -637,7 +638,7 @@ def merge_import_lines(import_lines: List[str]) -> List[str]:
                 for name in names:
                     grouped[mod].add(name.strip())
             except Exception as e:
-                print(f"Warning: could not parse import line '{line}': {e}")
+                warnings.warn(f"Could not parse import line '{line}': {e}")
         else:
             standalone_imports.add(line)
 
@@ -818,7 +819,7 @@ def is_biapy_model(model: ModelDescr_v0_4 | ModelDescr_v0_5) -> bool:
             if "BiaPy: accessible deep learning on bioimages" == cite_text:
                 return True
     except Exception as e:
-        print(f"Warning: Could not determine if model is a BiaPy model due to error: {e}")
+        warnings.warn(f"Could not determine if model is a BiaPy model due to error: {e}")
 
     return False
 

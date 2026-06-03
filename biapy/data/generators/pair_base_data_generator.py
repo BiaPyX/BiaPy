@@ -11,6 +11,7 @@ from typing import (
     Literal,
     Dict,
 )
+import warnings
 import numpy as np
 import random
 import torch
@@ -470,7 +471,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         if rotation90 and rand_rot:
-            print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
+            warnings.warn("You selected double rotation type. Maybe you should set only 'rand_rot'?")
 
         self.X = X
         self.Y = Y

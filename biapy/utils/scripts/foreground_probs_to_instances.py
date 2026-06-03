@@ -9,6 +9,7 @@ Usage:
 
 from pathlib import Path
 import argparse
+import warnings
 import numpy as np
 
 from skimage.feature import peak_local_max
@@ -116,7 +117,7 @@ def main():
         try:
             labels = probs_to_instances(probs)
         except Exception as e:
-            print(f"[WARN] Skipping '{fp.name}': processing error ({e})")
+            warnings.warn(f"Skipping '{fp.name}': processing error ({e})")
             continue
 
         save_tif(np.expand_dims(np.expand_dims(labels, axis=-1),0), out_dir, [fp.stem + "_labels.tif" ], verbose=False)
