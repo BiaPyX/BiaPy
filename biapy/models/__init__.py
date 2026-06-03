@@ -109,6 +109,8 @@ def build_model(
             separated_decoders = True
         elif cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD:
             separated_decoders = True
+        elif cfg.PROBLEM.TYPE == "DETECTION" and cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD:
+            separated_decoders = True
 
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,

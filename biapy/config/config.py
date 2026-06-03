@@ -468,6 +468,8 @@ class Config:
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
         _C.PROBLEM.DETECTION.DATA_CHECK_MW = False
+        # Whether to use a different decoder for each output head.
+        _C.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD = False
         # Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
         # The weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
         # In the specific case of detection, where there are usually much less pixels representing the center of the objects to detect than

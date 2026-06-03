@@ -2596,6 +2596,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
 
+    if cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD:
+        if cfg.PROBLEM.TYPE != "DETECTION":
+            opts.extend(["PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD", False])
+        else:
+            if cfg.DATA.N_CLASSES <= 2:
+                raise ValueError(
+                    "'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' can only be True when 'DATA.N_CLASSES' is greater than 2"
+                )
+            if cfg.MODEL.LARGER_IO:
+                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.LOSS.CONTRAST.ENABLE:
+                raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
+
     if cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
             opts.extend(["PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD", False])
