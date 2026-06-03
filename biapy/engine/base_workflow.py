@@ -879,12 +879,12 @@ class Base_Workflow(metaclass=ABCMeta):
         print("#######################")
         print("# Prepare logging tool #")
         print("#######################")
-        # To start the logging
-        now = datetime.datetime.now()
-        now = now.strftime("%Y_%m_%d_%H_%M_%S")
+        # To start the logging — reuse the timestamp from BiaPy.__init__ when available so
+        # that the training log filename matches the stdout/stderr log filename.
+        ts = getattr(self, "log_timestamp", None) or datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         self.log_file = os.path.join(
             self.cfg.LOG.LOG_DIR,
-            self.cfg.LOG.LOG_FILE_PREFIX + "_log_" + str(now) + ".txt",
+            self.cfg.LOG.LOG_FILE_PREFIX + "_log_" + ts + "_training_log.json",
         )
         if self.global_rank == 0:
             os.makedirs(self.cfg.LOG.LOG_DIR, exist_ok=True)

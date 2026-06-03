@@ -269,7 +269,9 @@ class Config:
         # is in a different head than "H", "V" and "Z", it is likely that the model will be able to learn better the contours of the instances 
         # separately from the distance maps.
         _C.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO = []
-        # Whether to use a different decoder for each head in the model.
+        # Whether to use a different decoder for each head in the model. The heads are defined by 'CHANNELS_PER_HEAD_INFO',
+        # so at least two entries are required there. Only supported by: ['unet', 'resunet', 'resunet++', 'seunet',
+        # 'resunet_se', 'attention_unet', 'unext_v1', 'unext_v2'].
         _C.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD = False
         # Weights to be applied to the channels. Notice that these weights are not applied directly to the loss, but to the predicted channels before
         # calculating the loss. The length of the list must be equal to the number of channels. 
@@ -535,7 +537,9 @@ class Config:
         # Information on how the channels are distributed in the model's output heads. It must be a list of list of ints, where each 
         # inner list contains the number of channels that are going to be predicted in the same head. 
         _C.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO = []
-        # Whether to use a different decoder for each head in the model.
+        # Whether to use a different decoder for each head in the model. The heads are defined by 'CHANNELS_PER_HEAD_INFO',
+        # so at least two entries are required there. Only supported by: ['unet', 'resunet', 'resunet++', 'seunet',
+        # 'resunet_se', 'attention_unet', 'unext_v1', 'unext_v2'].
         _C.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD = False
         # Expected output channels to be predicted by the model.
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = 1
@@ -2006,7 +2010,7 @@ class Config:
         # 10. Logging
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.LOG = CN()
-        _C.LOG.LOG_DIR = os.path.join(job_dir, "train_logs")
+        _C.LOG.LOG_DIR = os.path.join(job_dir, "logs")
         _C.LOG.TENSORBOARD_LOG_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "tensorboard")
         _C.LOG.LOG_FILE_PREFIX = job_identifier
         _C.LOG.CHART_CREATION_FREQ = 5
