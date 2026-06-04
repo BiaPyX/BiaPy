@@ -13,7 +13,7 @@ from torch.optim.optimizer import Optimizer
 from typing import Callable, Optional
 from torch.utils.data import DataLoader
 from yacs.config import CfgNode as CN
-
+from torch.nn.utils import clip_grad_norm_
 from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all_reduce_mean
 from biapy.engine import Scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
@@ -29,15 +29,16 @@ def train_one_epoch(
     metric_function: Callable,
     prepare_targets: Callable,
     data_loader: DataLoader,
-    optimizer: Optimizer,
+    optimizer: list[Optimizer],
     device: torch.device,
     epoch: int,
     log_writer: Optional[TensorboardLogger] = None,
-    lr_scheduler: Optional[Scheduler] = None,
+    lr_scheduler: list[Optional[Scheduler]] = None,
     verbose: bool = False,
     memory_bank: Optional[MemoryBank] = None,
     total_iters: int=0,
     contrast_warmup_iters: int=0,
+    loss_names: list[str] = None,
 ):
     """
     Train the model for one epoch.
@@ -61,7 +62,7 @@ def train_one_epoch(
         Function to prepare targets for loss/metrics.
     data_loader : DataLoader
         Training data loader.
-    optimizer : Optimizer
+    optimizer : List[Optimizer]
         Optimizer for model parameters.
     device : torch.device
         Device to use.
@@ -69,7 +70,7 @@ def train_one_epoch(
         Current epoch number.
     log_writer : TensorboardLogger, optional
         Logger for TensorBoard.
-    lr_scheduler : Scheduler, optional
+    lr_scheduler : List[Scheduler]
         Learning rate scheduler.
     verbose : bool, optional
         Verbosity flag.
@@ -89,28 +90,26 @@ def train_one_epoch(
     """
     # Switch to training mode
     model.train(True)
-
-    # Ensure correct order of each epoch info by adding loss first
+    lr_names = [name.replace("loss", "lr", 1) for name in loss_names]
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
-    metric_logger.add_meter("loss", SmoothedValue())
+    for loss_name in loss_names:
+        metric_logger.add_meter(loss_name, SmoothedValue())
 
     # Set up the header for logging
     header = "Epoch: [{}]".format(epoch + 1)
     print_freq = 10
 
-    optimizer.zero_grad()
+    for opt in optimizer:
+        opt.zero_grad()
 
     for step, (batch, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # Apply warmup cosine decay scheduler if selected
         # (notice we use a per iteration (instead of per epoch) lr scheduler)
-        if (
-            epoch % cfg.TRAIN.ACCUM_ITER == 0
-            and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine"
-            and lr_scheduler
-            and isinstance(lr_scheduler, WarmUpCosineDecayScheduler)
-        ):
-            lr_scheduler.adjust_learning_rate(optimizer, step / len(data_loader) + epoch)
+        if cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
+            for sched, opt in zip(lr_scheduler, optimizer):
+                if sched and isinstance(sched, WarmUpCosineDecayScheduler):
+                    sched.adjust_learning_rate(opt, step / len(data_loader) + epoch)
 
         # Gather inputs
         targets = prepare_targets(targets, batch)
@@ -139,60 +138,68 @@ def train_one_epoch(
                 'segment_queue': memory_bank.segment_queue,
             }
 
-            loss = loss_function(outputs, targets, with_embed=with_embed)
+            result = loss_function(outputs, targets, with_embed=with_embed)
 
             memory_bank.dequeue_and_enqueue(
                 outputs['key'], targets.detach(),
             )
         else:
-            loss = loss_function(outputs, targets)
+            result = loss_function(outputs, targets)
 
-        # Separate metric if precalculated inside the loss (e.g. Embedding loss)
-        precalculated_metric, precalculated_metric_name = None, None
-        if isinstance(loss, tuple):
-            precalculated_metric = loss[1]
-            precalculated_metric_name = loss[2]
-            loss = loss[0]
+        # Parse the loss result
+        if isinstance(result, dict):
+            losses = result.get("losses", [])
+            precalculated_metrics = result.get("metrics", {})
+        else:
+            losses = [result]
+            precalculated_metrics = {}
 
-        loss_value = loss.item()
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+        for l_val in losses:
+            loss_value = l_val.item()
+            if not math.isfinite(loss_value):
+                print("Loss is {}, stopping training".format(loss_value))
+                sys.exit(1)
 
         # Calculate the metrics
-        if precalculated_metric is None:
+        if not precalculated_metrics:
             metric_function(outputs, targets, metric_logger=metric_logger)
         else:
-            metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
+            for m_name, m_val in precalculated_metrics.items():
+                metric_logger.meters[m_name].update(m_val)
 
         # Forward pass scaling the loss
-        loss /= cfg.TRAIN.ACCUM_ITER
-        if (step + 1) % cfg.TRAIN.ACCUM_ITER == 0:
-            loss.backward()
-            optimizer.step()  # update weight
-            optimizer.zero_grad()
-            if lr_scheduler and isinstance(lr_scheduler, OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-                lr_scheduler.step()
+        for i, loss_tensor in enumerate(losses):
+            loss_tensor.backward()
+            if cfg.TRAIN.GRADIENT_CLIP_NORM > 0:
+                params = [p for group in optimizer[i].param_groups for p in group["params"]]
+                clip_grad_norm_(params, max_norm=cfg.TRAIN.GRADIENT_CLIP_NORM)
+            optimizer[i].step()
+            if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+                lr_scheduler[i].step()
+            optimizer[i].zero_grad() 
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
 
         # Update loss in loggers
-        metric_logger.update(loss=loss_value)
-        loss_value_reduce = all_reduce_mean(loss_value)
-        if log_writer:
-            log_writer.update(loss=loss_value_reduce, head="loss")
+        for i, loss_tensor in enumerate(losses):
+            loss_name = loss_names[i]
+            val = loss_tensor.item()
+            metric_logger.update(**{loss_name: val})
+            loss_value_reduce = all_reduce_mean(val)
+            if log_writer:
+                log_writer.update(head="loss", **{loss_name: loss_value_reduce})
 
         # Update lr in loggers
-        max_lr = 0.0
-        for group in optimizer.param_groups:
-            max_lr = max(max_lr, group["lr"])
-        if step == 0:
-            metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
-        metric_logger.update(lr=max_lr)
-        if log_writer:
-            log_writer.update(lr=max_lr, head="opt")
-
+        for i, opt in enumerate(optimizer):
+            max_lr = 0.0
+            for group in opt.param_groups:
+                max_lr = max(max_lr, group["lr"])
+            if step == 0:
+                metric_logger.add_meter(lr_names[i], SmoothedValue(window_size=1, fmt="{value:.6f}"))
+            metric_logger.update(**{lr_names[i]: max_lr})
+            if log_writer:
+                log_writer.update(head="opt", **{lr_names[i]: max_lr})
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("[Train] averaged stats:", metric_logger)
@@ -209,8 +216,9 @@ def evaluate(
     prepare_targets: Callable,
     epoch: int,
     data_loader: DataLoader,
-    lr_scheduler: Optional[Scheduler] = None,
+    lr_scheduler: list[Optional[Scheduler]] = None,
     memory_bank: Optional[MemoryBank] = None,
+    loss_names: list[str] = None,
 ):
     """
     Evaluate the model on the validation set.
@@ -248,7 +256,8 @@ def evaluate(
     """
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
-    metric_logger.add_meter("loss", SmoothedValue())
+    for loss_name in loss_names:
+        metric_logger.add_meter(loss_name, SmoothedValue())
     header = "Epoch: [{}]".format(epoch + 1)
 
     # Switch to evaluation mode
@@ -275,30 +284,35 @@ def evaluate(
                 'segment_queue': memory_bank.segment_queue,
             }
 
-            loss = loss_function(outputs, targets, with_embed=with_embed)
+            result = loss_function(outputs, targets, with_embed=with_embed)
         else:
-            loss = loss_function(outputs, targets)
+            result = loss_function(outputs, targets)
 
         # Separate metric if precalculated inside the loss (e.g. Embedding loss)
-        precalculated_metric, precalculated_metric_name = None, None
-        if isinstance(loss, tuple):
-            precalculated_metric = loss[1]
-            precalculated_metric_name = loss[2]
-            loss = loss[0]
-        
-        loss_value = loss.item()
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+        if isinstance(result, dict):
+            losses = result.get("losses", [])
+            precalculated_metrics = result.get("metrics", {})
+        else:
+            losses = [result]
+            precalculated_metrics = {}
+
+        for l_val in losses:
+            loss_value = l_val.item()
+            if not math.isfinite(loss_value):
+                print("Loss is {}, stopping training".format(loss_value))
+                sys.exit(1)
 
         # Calculate the metrics
-        if precalculated_metric is not None:
-            metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
+        if precalculated_metrics:
+            for m_name, m_val in precalculated_metrics.items():
+                metric_logger.meters[m_name].update(m_val)
         else:
             metric_function(outputs, targets, metric_logger=metric_logger)
 
         # Update loss in loggers
-        metric_logger.update(loss=loss)
+        for i, loss_tensor in enumerate(losses):
+            loss_name = loss_names[i]
+            metric_logger.update(**{loss_name: loss_tensor.item()})
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -306,10 +320,10 @@ def evaluate(
     print("[Val] averaged stats:", metric_logger)
 
     # Apply reduceonplateau scheduler if the global validation has been reduced
-    if (
-        lr_scheduler
-        and isinstance(lr_scheduler, ReduceLROnPlateau)
-        and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau"
-    ):
-        lr_scheduler.step(metric_logger.meters["loss"].global_avg, epoch=epoch)
+    if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
+        for i, sched in enumerate(lr_scheduler):
+            if sched and isinstance(sched, ReduceLROnPlateau):
+                loss_name = loss_names[i]
+                sched.step(metric_logger.meters[loss_name].global_avg, epoch=epoch)
+
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

@@ -232,6 +232,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.gt_channels_expected = -1 
         self.train_metrics_message = ""
         self.test_metrics_message = ""
+        self.loss_names = ["loss"]
         
         self.resolution: List[int | float] = list(self.cfg.DATA.TEST.RESOLUTION)
         if self.cfg.PROBLEM.NDIM == "2D":
@@ -349,8 +350,9 @@ class Base_Workflow(metaclass=ABCMeta):
         print("Creating normalization module . . .")        
         self.norm_module = {
             "type": cfg.DATA.NORMALIZATION.TYPE,
-            "mask_norm": "as_mask",
+            "target_type": "mask",
             "out_dtype": "float32",
+            "norm_target": False,
             "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
             "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
             "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
@@ -370,7 +372,8 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Creating normalization module . . .")
             self.torchvision_norm = {
                 "type": "scale_range",
-                "mask_norm": "as_mask",
+                "target_type": "mask",
+                "norm_target": False,
                 "out_dtype": "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
                 "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
                 "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
@@ -619,6 +622,7 @@ class Base_Workflow(metaclass=ABCMeta):
             ),
             filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
             norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
+            random_crops_in_DA=self.cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
             y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             gt_channels_expected=self.gt_channels_expected,
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
@@ -895,8 +899,9 @@ class Base_Workflow(metaclass=ABCMeta):
             self.log_writer = None
 
         self.plot_values = {}
-        self.plot_values["loss"] = []
-        self.plot_values["val_loss"] = []
+        for loss_name in self.loss_names:
+            self.plot_values[loss_name] = []
+            self.plot_values[f"val_{loss_name}"] = []
         for i in range(len(self.train_metric_names)):
             self.plot_values[self.train_metric_names[i]] = []
             self.plot_values["val_" + self.train_metric_names[i]] = []
@@ -971,6 +976,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 memory_bank=self.memory_bank,
                 total_iters=total_iters,
                 contrast_warmup_iters=contrast_init_iter,
+                loss_names=self.loss_names,
             )
             total_iters += iterations_done
 
@@ -1005,6 +1011,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     data_loader=self.val_generator,
                     lr_scheduler=self.lr_scheduler,
                     memory_bank=self.memory_bank,
+                    loss_names=self.loss_names,
                 )
 
                 # Save checkpoint is val loss improved
@@ -1067,9 +1074,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     f.write(json.dumps(log_stats) + "\n")
 
                 # Create training plot
-                self.plot_values["loss"].append(train_stats["loss"])
-                if self.val_generator:
-                    self.plot_values["val_loss"].append(test_stats["loss"])
+                for loss_name in self.loss_names:
+                    self.plot_values[loss_name].append(train_stats[loss_name])
+                    if self.val_generator:
+                        self.plot_values[f"val_{loss_name}"].append(test_stats[loss_name])              
                 for i in range(len(self.train_metric_names)):
                     self.plot_values[self.train_metric_names[i]].append(train_stats[self.train_metric_names[i]])
                     if self.val_generator:
@@ -1080,6 +1088,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     create_plots(
                         self.plot_values,
                         self.train_metric_names,
+                        self.loss_names,
                         self.job_identifier,
                         self.cfg.PATHS.CHARTS,
                     )

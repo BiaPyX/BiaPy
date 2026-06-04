@@ -25,9 +25,11 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
-from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
-from biapy.data.norm import undo_image_norm
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process, MetricLogger
+from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
+from biapy.data.norm import undo_image_norm, normalize_image
+from biapy.utils.util import check_downsample_division
+from biapy.data.post_processing.post_processing import ensemble8_2d_predictions
 
 class Denoising_Workflow(Base_Workflow):
     """
@@ -77,8 +79,10 @@ class Denoising_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
-        self.norm_module["mask_norm"] = "as_image"
-        self.test_norm_module["mask_norm"] = "as_image"
+        self.norm_module["target_type"] = "image"
+        self.norm_module["norm_target"] = bool(self.cfg.LOSS.TYPE == "CYCLEGAN")
+        self.test_norm_module["target_type"] = "image"
+        self.test_norm_module["norm_target"] = bool(self.cfg.LOSS.TYPE == "CYCLEGAN")
 
     def define_activations_and_channels(self):
         """
@@ -176,8 +180,39 @@ class Denoising_Workflow(Base_Workflow):
         # print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
         if self.cfg.LOSS.TYPE == "MSE":
             self.loss = loss_encapsulation(n2v_loss_mse)
+        elif self.cfg.LOSS.TYPE == "CYCLEGAN":
+            self.cyclegan_loss = CycleGanLoss(cfg=self.cfg, device=self.device)
+            self.loss = self.NAFNetGan_loss_wrapper
+            if "loss_discriminator" not in self.loss_names:
+                self.loss_names.append("loss_discriminator")
 
         super().define_metrics()
+
+    def NAFNetGan_loss_wrapper(self, output, targets):
+        """Extract pre-computed GAN losses from NAFNet.
+
+        The model computes losses internally via :meth:`NAFNet.forward_loss`,
+        and this wrapper retrieves them so the training engine never
+        sees the discriminator.
+
+        Parameters
+        ----------
+        output : torch.Tensor or dict
+            Model predictions (dict with ``"pred"`` key).
+        targets : torch.Tensor
+            Ground-truth images.
+
+        Returns
+        -------
+        tuple
+            ``(loss_generator, loss_discriminator)``.
+        """
+        if isinstance(output, dict):
+            pred = output["pred"]
+        else:
+            pred = output
+        loss_g, loss_d = self.model_without_ddp.forward_loss(pred, targets, self.cyclegan_loss)
+        return {"losses": [loss_g, loss_d]}
 
     def metric_calculation(
         self,
@@ -242,7 +277,13 @@ class Denoising_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                val = metric(_output.contiguous(), _targets[:, _output.shape[1]:].contiguous())
+                # Nafnet for Gan With Supervised
+                if _targets.shape[1] == _output.shape[1]:
+                    target_for_metric = _targets.contiguous()
+                # Normal N2Void
+                else:
+                    target_for_metric = metric(_output.contiguous(), _targets[:, _output.shape[1]:].contiguous())
+                val = metric(_output.contiguous(), target_for_metric)
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 
@@ -259,57 +300,94 @@ class Denoising_Workflow(Base_Workflow):
 
         original_data_shape = self.current_sample["X"].shape
 
-        # Crop if necessary
-        if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
-            if self.cfg.PROBLEM.NDIM == "2D":
-                self.current_sample["X"], _ = crop_data_with_overlap(  # type: ignore
-                    self.current_sample["X"],
-                    self.cfg.DATA.PATCH_SIZE,
-                    overlap=self.cfg.DATA.TEST.OVERLAP,
-                    padding=self.cfg.DATA.TEST.PADDING,
-                    verbose=self.cfg.TEST.VERBOSE,
+        if self.cfg.TEST.FULL_IMG and self.cfg.PROBLEM.NDIM == "2D":
+            self.current_sample["X"], o_test_shape = check_downsample_division(
+                self.current_sample["X"], len(self.cfg.MODEL.FEATURE_MAPS) - 1
+            )
+            if self.current_sample["Y"] is not None:
+                self.current_sample["Y"], _ = check_downsample_division(
+                    self.current_sample["Y"], len(self.cfg.MODEL.FEATURE_MAPS) - 1
                 )
-            else:
-                self.current_sample["X"], _ = crop_3D_data_with_overlap(  # type: ignore
+
+            # Make the prediction
+            if self.cfg.TEST.AUGMENTATION:
+                pred = ensemble8_2d_predictions(
                     self.current_sample["X"][0],
-                    self.cfg.DATA.PATCH_SIZE,
-                    overlap=self.cfg.DATA.TEST.OVERLAP,
-                    padding=self.cfg.DATA.TEST.PADDING,
-                    verbose=self.cfg.TEST.VERBOSE,
-                    median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
-                )
-
-        pred = self.predict_batches_in_test(self.current_sample["X"], None)
-        del self.current_sample["X"]
-
-        # Reconstruct the predictions
-        if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
-            if self.cfg.PROBLEM.NDIM == "3D":
-                original_data_shape = original_data_shape[1:]
-            f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
-
-            if self.cfg.TEST.REDUCE_MEMORY:
-                pred = f_name(
-                    pred,
-                    original_data_shape[:-1] + (pred.shape[-1],),
-                    padding=self.cfg.DATA.TEST.PADDING,
-                    overlap=self.cfg.DATA.TEST.OVERLAP,
-                    verbose=self.cfg.TEST.VERBOSE,
+                    axes_order_back=self.axes_order_back,
+                    pred_func=self.model_call_func,
+                    axes_order=self.axes_order,
+                    device=self.test_device,
+                    mode=self.cfg.TEST.AUGMENTATION_MODE,
                 )
             else:
-                obj = f_name(
-                    pred,
-                    original_data_shape[:-1] + (pred.shape[-1],),
-                    padding=self.cfg.DATA.TEST.PADDING,
-                    overlap=self.cfg.DATA.TEST.OVERLAP,
-                    verbose=self.cfg.TEST.VERBOSE,
-                )
-                pred = obj
-                del obj
+                pred = self.model_call_func(self.current_sample["X"])
 
-            if self.cfg.PROBLEM.NDIM == "3D":
-                assert isinstance(pred, np.ndarray)
-                pred = np.expand_dims(pred, 0)
+            # Multi-head concatenation
+            if isinstance(pred, dict):
+                if "class" in pred:
+                    pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    pred = pred["pred"]
+
+            pred = to_numpy_format(pred, self.axes_order_back)
+            del self.current_sample["X"]
+
+            # Recover original shape if padded with check_downsample_division
+            pred = pred[:, : o_test_shape[1], : o_test_shape[2]]
+            if self.current_sample["Y"] is not None:
+                self.current_sample["Y"] = self.current_sample["Y"][:, : o_test_shape[1], : o_test_shape[2]]
+        else:
+            # Crop if necessary
+            if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    self.current_sample["X"], _ = crop_data_with_overlap(  # type: ignore
+                        self.current_sample["X"],
+                        self.cfg.DATA.PATCH_SIZE,
+                        overlap=self.cfg.DATA.TEST.OVERLAP,
+                        padding=self.cfg.DATA.TEST.PADDING,
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+                else:
+                    self.current_sample["X"], _ = crop_3D_data_with_overlap(  # type: ignore
+                        self.current_sample["X"][0],
+                        self.cfg.DATA.PATCH_SIZE,
+                        overlap=self.cfg.DATA.TEST.OVERLAP,
+                        padding=self.cfg.DATA.TEST.PADDING,
+                        verbose=self.cfg.TEST.VERBOSE,
+                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
+                    )
+
+            pred = self.predict_batches_in_test(self.current_sample["X"], None)
+            del self.current_sample["X"]
+
+            # Reconstruct the predictions
+            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    original_data_shape = original_data_shape[1:]
+                f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
+
+                if self.cfg.TEST.REDUCE_MEMORY:
+                    pred = f_name(
+                        pred,
+                        original_data_shape[:-1] + (pred.shape[-1],),
+                        padding=self.cfg.DATA.TEST.PADDING,
+                        overlap=self.cfg.DATA.TEST.OVERLAP,
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+                else:
+                    obj = f_name(
+                        pred,
+                        original_data_shape[:-1] + (pred.shape[-1],),
+                        padding=self.cfg.DATA.TEST.PADDING,
+                        overlap=self.cfg.DATA.TEST.OVERLAP,
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+                    pred = obj
+                    del obj
+
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    assert isinstance(pred, np.ndarray)
+                    pred = np.expand_dims(pred, 0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
@@ -337,6 +415,16 @@ class Denoising_Workflow(Base_Workflow):
                 [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
+
+        # Calculate metrics
+        if self.current_sample["Y"] is not None:
+            metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
+            for metric in metric_values:
+                if str(metric).lower() not in self.stats["merge_patches"]:
+                    self.stats["merge_patches"][str(metric).lower()] = 0
+                self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
+                self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
+
 
     def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """

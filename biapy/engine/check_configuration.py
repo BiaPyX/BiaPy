@@ -1267,7 +1267,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
+        assert loss in ["MSE", "CYCLEGAN"], "LOSS.TYPE must be in ['MSE', 'CYCLEGAN'] for DENOISING"
     elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "CE", "LOSS.TYPE must be 'CE'"
@@ -1347,6 +1347,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError(
             "'DATA.N_CLASSES' can only be greater than 2 in the following workflows: 'SEMANTIC_SEG', "
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
+        )
+
+    if cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH and cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+        raise ValueError(
+            "'DATA.TRAIN.PROBABILITY_MAP' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
         )
 
     for item in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
@@ -1840,12 +1845,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == "DENOISING":
-        if cfg.DATA.TEST.LOAD_GT:
-            raise ValueError(
-                "Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'"
-            )
-        if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
-            raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
+        if cfg.PROBLEM.DENOISING.LOAD_GT_DATA or cfg.LOSS.TYPE == "CYCLEGAN":
+            if not cfg.DATA.TRAIN.GT_PATH and not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                raise ValueError(
+                    "Supervised denoising (e.g., with CYCLEGAN or LOAD_GT_DATA=True) "
+                    "requires ground truth. 'DATA.TRAIN.GT_PATH' must be provided."
+                )
+        else:
+            if cfg.DATA.TEST.LOAD_GT:
+                raise ValueError(
+                    "Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'"
+                )
+            if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
+                raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in denoising workflow")
 
@@ -2415,6 +2427,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "unext_v2",
             "hrnet",
             "stunet",
+            "nafnet",
         ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
         if (
             model_arch
@@ -2673,6 +2686,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "hrnet",
                 "stunet",
+                "nafnet",
             ]:
                 raise ValueError(
                     "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
@@ -2878,11 +2892,53 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
 
     ### Train ###
-    assert cfg.TRAIN.OPTIMIZER in [
-        "SGD",
-        "ADAM",
-        "ADAMW",
-    ], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"
+    ## Optimizers ##
+    if not isinstance(cfg.TRAIN.OPTIMIZER, list):
+        raise ValueError("'TRAIN.OPTIMIZER' must be a list")
+    if cfg.MODEL.ARCHITECTURE in ['nafnet'] and cfg.MODEL.NAFNET.ARCHITECTURE_D != "":
+        if len(cfg.TRAIN.OPTIMIZER) != 2:
+            raise ValueError(
+                f"Configuration mismatch: You requested {len(cfg.TRAIN.OPTIMIZER)} optimizers, "
+                f"but the model has 2 parameter group(s). "
+                f"Check your TRAIN.OPTIMIZER list in the config."
+            )
+    elif len(cfg.TRAIN.OPTIMIZER) > 1:
+        raise ValueError(
+            "Multiple optimizers were provided but no discriminator architecture is configured. "
+            "Either set a discriminator (e.g. 'MODEL.NAFNET.ARCHITECTURE_D') or reduce 'TRAIN.OPTIMIZER' to a single entry."
+        )
+    for opt in cfg.TRAIN.OPTIMIZER:
+        if opt not in ["SGD", "ADAM", "ADAMW"]:
+            raise ValueError("'TRAIN.OPTIMIZER' values must be in ['SGD', 'ADAM', 'ADAMW']")
+
+    ## LR ##
+    if not isinstance(cfg.TRAIN.LR, list):
+        raise ValueError("'TRAIN.LR' must be a list")
+    if len(cfg.TRAIN.OPTIMIZER) != len(cfg.TRAIN.LR):
+        raise ValueError("'TRAIN.OPTIMIZER' and 'TRAIN.LR' must have the same length")
+
+    ## Betas ##
+    if not isinstance(cfg.TRAIN.OPT_BETAS, list):
+        raise ValueError("'TRAIN.OPT_BETAS' must be a list")
+    for idx, beta_pair in enumerate(cfg.TRAIN.OPT_BETAS):
+        if isinstance(beta_pair, str):
+            raise ValueError(
+                f"Config Error in 'TRAIN.OPT_BETAS': Found a string '{beta_pair}'. "
+                f"You must use nested square brackets `[]`. "
+                f"Change it to: [[0.9, 0.999]]"
+            )
+        if not isinstance(beta_pair, list):
+            raise ValueError(
+                f"Config Error: Each item in 'TRAIN.OPT_BETAS' must be a list. "
+                f"Got {type(beta_pair).__name__} at index {idx}."
+            )
+    if len(cfg.TRAIN.OPT_BETAS) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
+        raise ValueError("'TRAIN.OPT_BETAS' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+    if len(cfg.TRAIN.OPT_BETAS) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:
+        cfg.TRAIN.OPT_BETAS = cfg.TRAIN.OPT_BETAS * len(cfg.TRAIN.OPTIMIZER)
+    for beta_pair in cfg.TRAIN.OPT_BETAS:
+        if len(beta_pair) != 2:
+            raise ValueError("Each entry in 'TRAIN.OPT_BETAS' must be a tuple/list of length 2")
 
     if cfg.TRAIN.ENABLE and cfg.TRAIN.LR_SCHEDULER.NAME != "":
         if cfg.TRAIN.LR_SCHEDULER.NAME not in [
@@ -2891,7 +2947,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "onecycle",
         ]:
             raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle']")
-        if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1.0 and cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
+        if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
+            if not isinstance(cfg.TRAIN.LR_SCHEDULER.MIN_LR, list):
+                raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must be a list")
+            if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
+                raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+            if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:
+                opts.extend(["TRAIN.LR_SCHEDULER.MIN_LR", cfg.TRAIN.LR_SCHEDULER.MIN_LR * len(cfg.TRAIN.OPTIMIZER)])
+            if all(x == -1.0 for x in cfg.TRAIN.LR_SCHEDULER.MIN_LR):
+                raise ValueError(
+                    "'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']"
+                )
+        elif len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) > 1 and len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) != len(cfg.TRAIN.OPTIMIZER):
+            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+
+        if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle" and all(x == -1.0 for x in cfg.TRAIN.LR_SCHEDULER.MIN_LR):
             raise ValueError(
                 "'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']"
             )
@@ -2913,6 +2983,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
             if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS > cfg.TRAIN.EPOCHS:
                 raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' needs to be less than 'TRAIN.EPOCHS'")
+
+    # Gradient clipping validation
+    if not isinstance(cfg.TRAIN.GRADIENT_CLIP_NORM, (int, float)):
+        raise ValueError("'TRAIN.GRADIENT_CLIP_NORM' must be a number")
+    if cfg.TRAIN.GRADIENT_CLIP_NORM < 0:
+        raise ValueError("'TRAIN.GRADIENT_CLIP_NORM' must be non-negative (0 to disable)")
 
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
@@ -3107,6 +3183,87 @@ def _assert_list_of_pos_ints(x, ctx):
     for i, v in enumerate(x):
         assert isinstance(v, int) and v > 0, f"'{ctx}[{i}]' must be a positive integer"
 
+def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
+    """
+    Compare two BiaPy configurations and raise an error if critical workflow variables differ.
+
+    This function checks that key configuration variables (such as problem type, patch size,
+    number of classes, and data channels) match between the current and previous configuration.
+    It ignores model-specific parameters and allows for some backward compatibility.
+
+    Parameters
+    ----------
+    actual_cfg : yacs.config.CfgNode
+        The current configuration object.
+    old_cfg : yacs.config.CfgNode or dict
+        The previous configuration object to compare against.
+    header_message : str, optional
+        Message to prepend to any error or warning (default: "").
+    old_cfg_version : str or None, optional
+        Version string of the old configuration, for backward compatibility (default: None).
+
+    Raises
+    ------
+    ValueError
+        If a critical configuration variable does not match and cannot be ignored.
+    """
+    print("Comparing configurations . . .")
+
+    vars_to_compare = [
+        "PROBLEM.TYPE",
+        "PROBLEM.NDIM",
+        "DATA.PATCH_SIZE",
+        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
+        "PROBLEM.SUPER_RESOLUTION.UPSCALING",
+        "DATA.N_CLASSES",
+        "TRAIN.OPTIMIZER", # yeah not so sure how many
+    ]
+
+    def get_attribute_recursive(var, attr):
+        att = attr.split(".")
+        if len(att) == 1:
+            return getattr(var, att[0])
+        else:
+            return get_attribute_recursive(getattr(var, att[0]), ".".join(att[1:]))
+
+    # Old configuration translation
+    dim_count = 2 if old_cfg.PROBLEM.NDIM == "2D" else 3
+    # BiaPy version less than 3.5.5
+    if old_cfg_version is None:
+        if isinstance(old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"], int):
+            old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (
+                old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],
+            ) * dim_count
+
+    for var_to_compare in vars_to_compare:
+        current_value = get_attribute_recursive(actual_cfg, var_to_compare)
+        old_value = get_attribute_recursive(old_cfg, var_to_compare)
+        if current_value != old_value:
+            error_message, warning_message = "", ""
+            if var_to_compare == "DATA.N_CLASSES":
+                if not actual_cfg.MODEL.SKIP_UNMATCHED_LAYERS:
+                    error_message = header_message \
+                        + f"The '{var_to_compare}' value of the compared configurations does not match: " \
+                        + f"{current_value} (current configuration) vs {old_value} (from loaded configuration). " \
+                        + "If you want to load all weights from the checkpoint that match in shape with your model " \
+                        + "(e.g., to fine-tune the head), set 'MODEL.SKIP_UNMATCHED_LAYERS' to True."
+            # Allow SSL pretrainings
+            elif not (var_to_compare == "PROBLEM.TYPE" and old_value == "SELF_SUPERVISED"):
+                error_message = header_message \
+                    + f"The '{var_to_compare}' value of the compared configurations does not match: " \
+                    + f"{current_value} (current configuration) vs {old_value} (from loaded configuration)"
+            elif var_to_compare == "DATA.PATCH_SIZE" and any([new for new, old in zip(current_value,old_value) if new < old]):
+                warning_message = \
+                    f"WARNING: The 'DATA.PATCH_SIZE' value used for training the model that you are trying to load was {old_value}." \
+                    + f"It seems that one of the values in your 'DATA.PATCH_SIZE', which is {current_value}, is smaller so may be causing " \
+                    + "an error during model building process"
+                
+            if error_message != "":
+                raise ValueError( error_message )
+            if warning_message != "":
+                print( warning_message )
+            
+    print("Configurations seem to be compatible. Continuing . . .")
 
 def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
     """
@@ -3125,6 +3282,20 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
     new_cfg : dict
         Updated configuration to the current BiaPy version.
     """
+    if "TRAIN" in old_cfg:
+        if "OPTIMIZER" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["OPTIMIZER"], str):
+            old_cfg["TRAIN"]["OPTIMIZER"] = [old_cfg["TRAIN"]["OPTIMIZER"]]
+        if "LR" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["LR"], float):
+            old_cfg["TRAIN"]["LR"] = [old_cfg["TRAIN"]["LR"]]
+        if "OPT_BETAS" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["OPT_BETAS"], str):
+                clean_str = old_cfg["TRAIN"]["OPT_BETAS"].strip().strip("()")
+                number_list = [float(x.strip()) for x in clean_str.split(",")]
+                old_cfg["TRAIN"]["OPT_BETAS"] = [number_list]
+        if "ACCUM_ITER" in old_cfg["TRAIN"]:
+            del old_cfg["TRAIN"]["ACCUM_ITER"]
+        if "LR_SCHEDULER" in old_cfg["TRAIN"]:
+            if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
+                old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]] * len(old_cfg["TRAIN"]["OPTIMIZER"])
     workflow = old_cfg.get("PROBLEM", {}).get("TYPE", "SEMANTIC_SEG")
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
@@ -3393,13 +3564,17 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["POSTSITE_DILATION_DISTANCE_CHANNELS"]
 
     if "DATA" in old_cfg:
-        if "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]:   
+        if "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["EXTRACT_RANDOM_PATCH"] = old_cfg["DATA"]["EXTRACT_RANDOM_PATCH"]
             del old_cfg["DATA"]["EXTRACT_RANDOM_PATCH"]
         if "PROBABILITY_MAP" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["PROBABILITY_MAP"] = old_cfg["DATA"]["PROBABILITY_MAP"]
             del old_cfg["DATA"]["PROBABILITY_MAP"]
         if "W_FOREGROUND" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["W_FOREGROUND"] = old_cfg["DATA"]["W_FOREGROUND"]
             del old_cfg["DATA"]["W_FOREGROUND"]
         if "W_BACKGROUND" in old_cfg["DATA"]:
+            old_cfg["DATA"]["TRAIN"]["W_BACKGROUND"] = old_cfg["DATA"]["W_BACKGROUND"]
             del old_cfg["DATA"]["W_BACKGROUND"]
         if "TRAIN" in old_cfg["DATA"]:
             if "MINIMUM_FOREGROUND_PER" in old_cfg["DATA"]["TRAIN"]:
@@ -3410,8 +3585,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [["foreground"]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [["lt"]]
-            if "REPLICATE" in old_cfg["DATA"]["TRAIN"]:
-                del old_cfg["DATA"]["TRAIN"]["REPLICATE"]
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]

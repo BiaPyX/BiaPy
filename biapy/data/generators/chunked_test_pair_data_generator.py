@@ -366,7 +366,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         )
 
         if self.convert_to_rgb:
-            if extract == "image" or (extract == "mask" and self.norm_module["mask_norm"] == "as_image"):
+            if extract == "image" or (extract == "mask" and self.norm_module["target_type"] == "image"):
                 if data.shape[-1] == 1:
                     data = np.repeat(data, 3, axis=-1)
 

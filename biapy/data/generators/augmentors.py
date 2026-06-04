@@ -1825,7 +1825,7 @@ def rotation(
     heat: Optional[NDArray] = None,
     angles: Union[Tuple[int, int], List[int]] = [],
     mode: str = "reflect",
-    mask_type: str = "as_mask",
+    mask_type: str = "mask",
 ) -> Union[
     NDArray,
     Tuple[NDArray, Optional[NDArray], Optional[NDArray]],
@@ -1851,7 +1851,7 @@ def rotation(
         How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
 
     mask_type : str, optional
-        How to treat the mask during interpolation. Either as "as_mask" (order 0) or "as_image" (order 1).
+        How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
     Returns
     -------
@@ -1914,7 +1914,7 @@ def rotation(
     # Mask
     mask_out = None
     if mask is not None:
-        order_mask = 0 if mask_type == "as_mask" else 1
+        order_mask = 0 if mask_type == "mask" else 1
         mask_out = _rotate(mask, axes_img, order=order_mask)
 
     # Heat
@@ -1931,7 +1931,7 @@ def zoom(
     heat: Optional[NDArray] = None,
     zoom_in_z: bool = False,
     mode: str = "reflect",
-    mask_type: str = "as_mask",
+    mask_type: str = "mask",
 ) -> Union[
     NDArray,
     Tuple[NDArray, Optional[NDArray], Optional[NDArray]],
@@ -1961,7 +1961,7 @@ def zoom(
         How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
 
     mask_type : str, optional
-        How to treat the mask during interpolation. Either as "as_mask" (order 0) or "as_image" (order 1).
+        How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
     Returns
     -------
@@ -1985,7 +1985,7 @@ def zoom(
     assert zoom_range[0] > 0, "Zoom range values must be greater than 0"
 
     zoom_selected = random.uniform(zoom_range[0], zoom_range[1])
-    mask_order = 0 if mask_type == "as_mask" else 1
+    mask_order = 0 if mask_type == "mask" else 1
     if img.ndim == 4:
         z_zoom = zoom_selected if zoom_in_z else 1
         img_shape = [
@@ -2155,7 +2155,7 @@ def shear(
     mask: Optional[NDArray] = None,
     heat: Optional[NDArray] = None,
     cval: float = 0,
-    mask_type: str = "as_mask",
+    mask_type: str = "mask",
     mode: str = "constant",
 ):
     """
@@ -2179,7 +2179,7 @@ def shear(
         Value used for points outside the boundaries.
 
     mask_type : str
-        How to treat the mask during interpolation. Either as "as_mask" (order 0) or "as_image" (order 1).
+        How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
     mode : str
         Points outside boundaries are filled according to this mode.
@@ -2236,7 +2236,7 @@ def shear(
             H_mask, W_mask = mask.shape[:2]
             # same transform (center/size differs? -> rebuild with mask size)
             tform_m = _build_shear_matrix_skimage((H_mask, W_mask), np.deg2rad(shear_x), np.deg2rad(shear_y))
-            mask_order = 0 if mask_type == "as_mask" else 1
+            mask_order = 0 if mask_type == "mask" else 1
             m = _warp_hwc(mask, tform_m, order=mask_order, cval=cval, mode=mode)
 
         h = None
@@ -2263,7 +2263,7 @@ def shear(
             Zm, Hm, Wm, Cm = mask.shape
             assert (Zm, Hm, Wm) == (Z, H, W), "mask shape must match image (z,y,x)"
             tform_m = _build_shear_matrix_skimage((Hm, Wm), np.deg2rad(shear_x), np.deg2rad(shear_y))
-            mask_order = 0 if mask_type == "as_mask" else 1
+            mask_order = 0 if mask_type == "mask" else 1
             m_out = np.empty_like(mask)
             for z in range(Z):
                 m_out[z] = _warp_hwc(mask[z], tform_m, order=mask_order, cval=cval, mode=mode)
@@ -2289,7 +2289,7 @@ def shift(
     heat: Optional[NDArray] = None,
     shift_range: Optional[tuple] = None,
     cval: float = 0,
-    mask_type: str = "as_mask",
+    mask_type: str = "mask",
     mode: str = "constant",
 ):
     """
@@ -2313,7 +2313,7 @@ def shift(
         Value used for points outside the boundaries.
 
     mask_type : str
-        How to treat the mask during interpolation. Either as "as_mask" (order 0) or "as_image" (order 1).
+        How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
     mode : str
         Points outside boundaries are filled according to this mode.
@@ -2364,7 +2364,7 @@ def shift(
 
     # Shift mask
     if mask is not None:
-        order_mask = 0 if mask_type == "as_mask" else 1
+        order_mask = 0 if mask_type == "mask" else 1
         mask = shift_nd(mask, get_shift_tuple(mask, x_pix, y_pix),
                         order=order_mask, mode=mode, cval=cval)
 
@@ -2636,7 +2636,7 @@ def elastic(
     heat: Optional[NDArray] = None,
     alpha: float | tuple = 14,
     sigma: float = 4,
-    mask_type: str = "as_mask",
+    mask_type: str = "mask",
     cval: float = 0,
     mode: str = "constant",
     random_seed=None,
@@ -2668,7 +2668,7 @@ def elastic(
         Points outside boundaries are filled according to this mode.
 
     mask_type : str, optional
-        How to treat the mask during interpolation. Either as "as_mask" (order 0) or "as_image" (order 1).
+        How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
     random_seed : int, optional
         Random seed for reproducibility.
@@ -2749,7 +2749,7 @@ def elastic(
 
     img = warp_with_new_displacement(image, alpha_val, sigma_val, 3, cval, mode)
     if mask is not None:
-        mask_order = 0 if mask_type == "as_mask" else 1
+        mask_order = 0 if mask_type == "mask" else 1
         mask = warp_with_new_displacement(mask, alpha_val, sigma_val, mask_order, cval, mode)
     if heat is not None:
         heat_mins, heat_maxes = np.min(heat, axis=tuple(range(heat.ndim - 1))), np.max(heat, axis=tuple(range(heat.ndim - 1)))

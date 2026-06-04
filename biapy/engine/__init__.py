@@ -21,7 +21,7 @@ def prepare_optimizer(
     cfg: CN,
     model_without_ddp: nn.Module | nn.parallel.DistributedDataParallel,
     steps_per_epoch: int,
-) -> Tuple[Optimizer, Scheduler | None]:
+) -> Tuple[list[Optimizer], list[Scheduler | None]]:
     """
     Create and configure the optimizer and learning rate scheduler for the given model.
 
@@ -40,50 +40,63 @@ def prepare_optimizer(
 
     Returns
     -------
-    optimizer : Optimizer
-        Configured optimizer for the model.
-    lr_scheduler : Scheduler or None
-        Configured learning rate scheduler, or None if not specified.
+    optimizers : List[Optimizer]
+        Configured optimizers for the models.
+    lr_schedulers : List[Scheduler | None]
+        Configured learning rate schedulers, or None if not specified.
     """
-    lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
-    opt_args = {}
-    if cfg.TRAIN.OPTIMIZER in ["ADAM", "ADAMW"]:
-        opt_args["betas"] = cfg.TRAIN.OPT_BETAS
-    optimizer = timm.optim.create_optimizer_v2(
-        model_without_ddp,
-        opt=cfg.TRAIN.OPTIMIZER,
-        lr=lr,
-        weight_decay=cfg.TRAIN.W_DECAY,
-        **opt_args,
-    )
-    print(optimizer)
 
-    # Learning rate schedulers
-    lr_scheduler = None
-    if cfg.TRAIN.LR_SCHEDULER.NAME != "":
-        if cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
-            lr_scheduler = ReduceLROnPlateau(
-                optimizer,
-                patience=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE,
-                factor=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR,
-                min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR,
-            )
-        elif cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
-            lr_scheduler = WarmUpCosineDecayScheduler(
-                lr=cfg.TRAIN.LR,
-                min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR,
-                warmup_epochs=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS,
-                epochs=cfg.TRAIN.EPOCHS,
-            )
-        elif cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-            lr_scheduler = OneCycleLR(
-                optimizer,
-                cfg.TRAIN.LR,
-                epochs=cfg.TRAIN.EPOCHS,
-                steps_per_epoch=steps_per_epoch,
-            )
+    optimizers = []
+    lr_schedulers = []
+    
+    if hasattr(model_without_ddp, 'param_groups'):
+        param_groups = model_without_ddp.param_groups
+    else:
+        param_groups = [[p for p in model_without_ddp.parameters()]]
 
-    return optimizer, lr_scheduler
+    for i in range(len(cfg.TRAIN.OPTIMIZER)):
+        lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
+        opt_args = {}
+        if cfg.TRAIN.OPTIMIZER[i] in ["ADAM", "ADAMW"]:
+            opt_args["betas"] = cfg.TRAIN.OPT_BETAS[i]
+        optimizer = timm.optim.create_optimizer_v2(
+            param_groups[i],
+            opt=cfg.TRAIN.OPTIMIZER[i],
+            lr=lr[i],
+            weight_decay=cfg.TRAIN.W_DECAY,
+            **opt_args,
+        )
+        print(optimizer)
+        optimizers.append(optimizer)
+
+        # Learning rate schedulers
+        lr_scheduler = None
+        if cfg.TRAIN.LR_SCHEDULER.NAME != "":
+            if cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
+                lr_scheduler = ReduceLROnPlateau(
+                    optimizer,
+                    patience=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE,
+                    factor=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR,
+                    min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR[i],
+                )
+            elif cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
+                lr_scheduler = WarmUpCosineDecayScheduler(
+                    lr=cfg.TRAIN.LR[i],
+                    min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR[i],
+                    warmup_epochs=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS,
+                    epochs=cfg.TRAIN.EPOCHS,
+                )
+            elif cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+                lr_scheduler = OneCycleLR(
+                    optimizer,
+                    cfg.TRAIN.LR[i],
+                    epochs=cfg.TRAIN.EPOCHS,
+                    steps_per_epoch=steps_per_epoch,
+                )
+        
+        lr_schedulers.append(lr_scheduler)
+
+    return optimizers, lr_schedulers
 
 
 def build_callbacks(cfg: CN) -> EarlyStopping | None:

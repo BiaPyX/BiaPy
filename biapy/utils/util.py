@@ -34,7 +34,7 @@ from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
 
 
-def create_plots(results, metrics, job_id, chartOutDir):
+def create_plots(results, metrics, loss_names, job_id, chartOutDir):
     """
     Create loss and main metric plots with the given results.
 
@@ -50,6 +50,8 @@ def create_plots(results, metrics, job_id, chartOutDir):
         and its validation counterpart (e.g., 'val_jaccard_index').
     metrics : List[str]
         A list of metric names (e.g., ["jaccard_index", "f1_score"]) present in `results`.
+    loss_names : List[str]
+        A list of loss function names (e.g., ["loss", "loss_discriminator"]) present in `results`.
     job_id : str
         A unique identifier for the job, used in plot titles and filenames.
     chartOutDir : str
@@ -76,18 +78,20 @@ def create_plots(results, metrics, job_id, chartOutDir):
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
     # Loss
-    plt.plot(results["loss"])
-    if "val_loss" in results:
-        plt.plot(results["val_loss"])
-    plt.title("Model JOBID=" + job_id + " loss")
-    plt.ylabel("Value")
-    plt.xlabel("Epoch")
-    if "val_loss" in results:
-        plt.legend(["Train loss", "Val. loss"], loc="upper left")
-    else:
-        plt.legend(["Train loss"], loc="upper left")
-    plt.savefig(os.path.join(chartOutDir, job_id + "_loss.png"))
-    plt.clf()
+    for loss_key in loss_names:
+        val_loss_key = f"val_{loss_key}"
+        plt.plot(results[loss_key])
+        if val_loss_key in results:
+            plt.plot(results[val_loss_key])
+        plt.title("Model JOBID=" + job_id + " " + loss_key)
+        plt.ylabel("Value")
+        plt.xlabel("Epoch")
+        if val_loss_key in results:
+            plt.legend([f"Train {loss_key}", f"Val. {loss_key}"], loc="upper left")
+        else:
+            plt.legend([f"Train {loss_key}"], loc="upper left")
+        plt.savefig(os.path.join(chartOutDir, job_id + "_" + loss_key + ".png"))
+        plt.clf()
 
     # Metric
     for i in range(len(metrics)):

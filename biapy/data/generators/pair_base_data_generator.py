@@ -279,18 +279,32 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     salt_pep_proportion : bool, optional
         To apply poisson noise to the images.
 
+    random_crops_in_DA : bool, optional
+        Decide to make random crops in DA (before transformations).
+
+    shape : 3D int tuple, optional
+        Shape of the desired images when using 'random_crops_in_DA'.
+
     resolution : 2D tuple of floats, optional
         Resolution of the given data ``(y,x)``. E.g. ``(8,8)``.
 
+    prob_map : 4D Numpy array or str, optional
+        If it is an array, it should represent the probability map used to make random crops when
+        ``random_crops_in_DA`` is set. If str given should be the path to read these maps from.
+
     val : bool, optional
         Advise the generator that the images will be to validate the model to not make random crops (as the val.
-        data must be the same on each epoch).
+        data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
 
     n_classes : int, optional
         Number of classes.
 
     ignore_index : int, optional
-        Value to ignore in the loss/metrics. 
+        Value to ignore in the loss/metrics.
+
+    extra_data_factor : int, optional
+        Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y`` where concatenated
+        ``extra_data_factor`` times.
 
     n2v : bool, optional
         Whether to create `Noise2Void <https://openaccess.thecvf.com/content_CVPR_2019/papers/Krull_Noise2Void_-_Learning_Denoising_From_Single_Noisy_Images_CVPR_2019_paper.pdf>`__
@@ -415,11 +429,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         salt_and_pepper: bool = False,
         salt_pep_amount: float = 0.05,
         salt_pep_proportion: float = 0.5,
+        random_crops_in_DA: bool = False,
         shape: Tuple[int, int, int] = (256, 256, 1),
         resolution: Tuple[int, ...] = (-1,),
+        prob_map: Optional[NDArray | str] = None,
         val: bool = False,
         n_classes: int = 1,
         ignore_index: Optional[int] = None,
+        extra_data_factor: int = 1,
         n2v: bool = False,
         n2v_perc_pix: float = 0.198,
         n2v_manipulator="uniform_withCP",
@@ -450,10 +467,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.val = val
         self.convert_to_rgb = convert_to_rgb
         self.norm_module = norm_module.copy()
+        self.random_crops_in_DA = random_crops_in_DA
+        self.prob_map = None
         self.preprocess_f = preprocess_f
         self.preprocess_cfg = preprocess_cfg
 
         self.random_crop_func = random_3D_crop_pair if ndim == 3 else random_crop_pair
+        if random_crops_in_DA and prob_map is not None:
+            if isinstance(prob_map, str):
+                f = next(os_walk_clean(prob_map))[2]
+                self.prob_map = []
+                for i in range(len(f)):
+                    self.prob_map.append(os.path.join(prob_map, f[i]))
+            else:
+                self.prob_map = prob_map
 
         # Super-resolution options
         self.random_crop_scale = random_crop_scale
@@ -499,7 +526,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Y data analysis
         # Loop over a few masks to ensure foreground class is present to decide normalization
         self.mask_norm = None
-        if self.norm_module["mask_norm"] == "as_mask":
+        if self.norm_module["target_type"] == "mask":
             print("Checking which channel of the mask needs normalization . . .")
             n_samples = min(50, len(self.X.sample_list))
             if instance_problem:
@@ -652,6 +679,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.n2v_load_gt = n2v_load_gt
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
 
+        if extra_data_factor > 1:
+            self.extra_data_factor = extra_data_factor
+            self.o_indexes = np.concatenate([self.o_indexes] * extra_data_factor)
+            self.length = self.length * extra_data_factor
+        else:
+            self.extra_data_factor = 1
+
         self.da_options = []
         self.trans_made = ""
         if rotation90:
@@ -747,6 +781,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         i: int,
         pos: int,
         out_dir: str,
+        point_dict: Dict,
     ):
         """
         Save transformed samples in order to check the generator.
@@ -770,6 +805,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         out_dir : str
             Directory to save the images.
+
+        point_dict : Dict
+            Necessary info to draw the patch extracted within the original image. It has ``ox`` and
+            ``oy`` representing the ``x`` and ``y`` coordinates of the central point selected during
+            the crop extraction, and ``s_x`` and ``s_y`` as the ``(0,0)`` coordinates of the extracted
+            patch. For ``3D`` samples it must contain also ``oz`` and ``s_z``.
         """
         raise NotImplementedError
 
@@ -893,11 +934,21 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply random crops if it is selected
         if sample.coords is None:
+            # Capture probability map
+            if self.prob_map is not None:
+                if isinstance(self.prob_map, list):
+                    img_prob = np.load(self.prob_map[idx])
+                else:
+                    img_prob = self.prob_map[idx]
+            else:
+                img_prob = None
+
             img, mask = self.random_crop_func(  # type: ignore
                 img,
                 mask,
                 self.shape[: self.ndim],
                 self.val,
+                img_prob=img_prob,
                 scale=self.random_crop_scale,
             )
 
@@ -906,13 +957,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if xnorm_info is None:
                 xnorm_info = self.norm_module
             img, _ = normalize_image(img, norm_module=xnorm_info)
-            mask, _ = normalize_mask(mask, norm_module=self.mask_norm)
+            ynorm = self.Y.dataset_info[sample.fid].norm_info if self.mask_norm["norm_target"] else self.mask_norm
+            mask, _ = normalize_mask(mask, norm_module=ynorm)
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
 
         if self.convert_to_rgb:
             if img.shape[-1] == 1:
                 img = np.repeat(img, 3, axis=-1)
-            if self.norm_module["mask_norm"] == "as_image" and mask.shape[-1] == 1:
+            if self.norm_module["target_type"] == "image" and mask.shape[-1] == 1:
                 mask = np.repeat(mask, 3, axis=-1)
 
         return img, mask
@@ -1060,7 +1112,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 zoom_range=self.zoom_range,
                 zoom_in_z=self.zoom_in_z,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             )  # type: ignore
 
         # Apply random rotations
@@ -1071,7 +1123,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 angles=self.rnd_rot_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             )  # type: ignore
 
         # Apply square rotations
@@ -1082,7 +1134,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 angles=[90, 180, 270],
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             )  # type: ignore
 
         # Apply cblur
@@ -1183,7 +1235,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 alpha=self.e_alpha,
                 sigma=self.e_sigma,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
                 mode=self.e_mode
             ) # type: ignore
 
@@ -1192,7 +1244,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             ) # type: ignore
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
@@ -1200,7 +1252,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module["mask_norm"],
+                mask_type=self.norm_module["target_type"],
             ) # type: ignore
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
@@ -1342,6 +1394,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         sample_x = []
         sample_y = []
 
+        point_dict = {}
         # Generate the examples
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(num_examples), disable=not is_main_process()):
@@ -1360,8 +1413,51 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     self.draw_grid(orig_images["o_x"])
                     self.draw_grid(orig_images["o_y"])
 
-            sample_x.append(img)
-            sample_y.append(mask)
+            # Apply random crops if it is selected
+            if self.random_crops_in_DA:
+                # Capture probability map
+                if self.prob_map is not None:
+                    if isinstance(self.prob_map, list):
+                        img_prob = np.load(self.prob_map[pos])
+                    else:
+                        img_prob = self.prob_map[pos]
+                else:
+                    img_prob = None
+
+                if self.ndim == 2:
+                    img, mask, oy, ox, s_y, s_x = random_crop_pair(  # type: ignore
+                        img,
+                        mask,
+                        self.shape[:2],
+                        self.val,
+                        img_prob=img_prob,
+                        draw_prob_map_points=True,
+                        scale=self.random_crop_scale,
+                    )
+                else:
+                    img, mask, oz, oy, ox, s_z, s_y, s_x = random_3D_crop_pair(  # type: ignore
+                        img,
+                        mask,
+                        self.shape[:3],
+                        self.val,
+                        img_prob=img_prob,
+                        draw_prob_map_points=True,
+                    )
+                if save_to_dir:
+                    (
+                        point_dict["oy"],
+                        point_dict["ox"],
+                        point_dict["s_y"],
+                        point_dict["s_x"],
+                    ) = (oy, ox, s_y, s_x)
+                if self.ndim == 3:
+                    point_dict["oz"], point_dict["s_z"] = oz, s_z
+
+                sample_x.append(img)
+                sample_y.append(mask)
+            else:
+                sample_x.append(img)
+                sample_y.append(mask)
 
             # Apply transformations
             if self.da:
@@ -1381,7 +1477,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 sample_y[i] = mask
 
             if save_to_dir:
-                self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir)
+                self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir, point_dict)
 
     def draw_grid(self, im: NDArray, grid_width: Optional[int] = None) -> NDArray:
         """

@@ -385,6 +385,21 @@ def build_model(
             )
             model = MaskedAutoencoderViT(**args)  # type: ignore
             callable_model = MaskedAutoencoderViT  # type: ignore
+        elif modelname == "nafnet":
+            args = dict(
+                img_channel=cfg.DATA.PATCH_SIZE[-1], 
+                width=cfg.MODEL.NAFNET.WIDTH, 
+                middle_blk_num=cfg.MODEL.NAFNET.MIDDLE_BLK_NUM,
+                enc_blk_nums=cfg.MODEL.NAFNET.ENC_BLK_NUMS,
+                dec_blk_nums=cfg.MODEL.NAFNET.DEC_BLK_NUMS,
+                drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0], 
+                dw_expand=cfg.MODEL.NAFNET.DW_EXPAND,
+                ffn_expand=cfg.MODEL.NAFNET.FFN_EXPAND,
+                discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,
+                patchgan_base_filters=cfg.MODEL.NAFNET.PATCHGAN.BASE_FILTERS,
+            )
+            callable_model = NAFNet   # type: ignore
+            model = callable_model(**args)  # type: ignore
     # Check the network created
     model.to(device)
     if cfg.PROBLEM.NDIM == "2D":

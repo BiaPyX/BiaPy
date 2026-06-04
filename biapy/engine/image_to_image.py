@@ -77,8 +77,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = False
 
-        self.norm_module["mask_norm"] = "as_image"
-        self.test_norm_module["mask_norm"] = "as_image"
+        self.norm_module["target_type"] = "image"
+        self.test_norm_module["target_type"] = "image"
 
     def define_activations_and_channels(self):
         """
