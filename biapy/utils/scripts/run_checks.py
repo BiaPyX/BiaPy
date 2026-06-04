@@ -1869,6 +1869,96 @@ all_test_info["Test31"] = {
     ]
 }
 
+all_test_info["Test32"] = {
+    "enable": True,
+    "jobname": "test32",
+    "description": "2D Denoising. NAFNet (GAN-based CycleGAN). scale_range norm. Basic DA.",
+    "template_path": os.path.join(data_folder, "denoising", "2d_denoising.yaml"),
+    "yaml": "test32.yaml",
+    "yaml_modifications": {
+        "PROBLEM": {
+            "TYPE": "DENOISING",
+            "NDIM": "2D",
+            "DENOISING": {
+                "LOAD_GT_DATA": True,
+            },
+        },
+        "DATA": {
+            "PATCH_SIZE": "(128, 128, 1)",
+            "TRAIN": {
+                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "noisy"),
+                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "gt"),
+                "IN_MEMORY": True,
+            },
+            "TEST": {
+                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "noisy"),
+                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "gt"),
+                "LOAD_GT": True,
+            },
+            "VAL": {
+                "FROM_TRAIN": True,
+            },
+            "NORMALIZATION": {
+                "TYPE": "scale_range",
+            },
+        },
+        "AUGMENTOR": {
+            "ENABLE": True,
+            "VFLIP": True,
+            "HFLIP": True,
+        },
+        "MODEL": {
+            "ARCHITECTURE": "nafnet",
+            "NAFNET": {
+                "WIDTH": 16,
+                "MIDDLE_BLK_NUM": 12,
+                "ENC_BLK_NUMS": [2, 2, 4, 8],
+                "DEC_BLK_NUMS": [2, 2, 2, 2],
+                "DW_EXPAND": 2,
+                "FFN_EXPAND": 2,
+                "ARCHITECTURE_D": "patchgan",
+                "PATCHGAN": {
+                    "BASE_FILTERS": 64,
+                },
+            },
+        },
+        "LOSS": {
+            "TYPE": "CYCLEGAN",
+            "CYCLEGAN": {
+                "LAMBDA_GAN": 1.0,
+                "LAMBDA_RECON": 1.0,
+                "ALPHA_PERCEPTUAL": 100.0,
+                "GAMMA_SSIM": 10.0,
+                "DELTA_MSE": 1.0,
+            },
+        },
+        "TRAIN": {
+            "ENABLE": True,
+            "GRADIENT_CLIP_NORM": 1.0,
+            "OPTIMIZER": ["ADAM", "ADAM"],
+            "LR": [1e-3, 1e-3],
+            "OPT_BETAS": "(0.5, 0.999)",
+            "BATCH_SIZE": 16,
+            "EPOCHS": 3,
+            "W_DECAY": 0.0,
+            "LR_SCHEDULER": {
+                "NAME": "warmupcosine",
+                "MIN_LR": [1.0e-6, 1.0e-6],
+                "WARMUP_COSINE_DECAY_EPOCHS": 0,
+            },
+        },
+        "TEST": {
+            "ENABLE": True,
+            "FULL_IMG": True,
+            "METRICS": ["mae", "mse"],
+        },
+    },
+    "internal_checks": [
+        {"type": "regular", "pattern": "Test MAE:", "gt": False, "value": 1.0},
+        {"type": "regular", "pattern": "Test MSE:", "gt": False, "value": 1.0},
+    ]
+}
+
 
 # ---------------------------------------------------------
 # 4. DATASET DEFINITIONS
@@ -1878,14 +1968,18 @@ DATASETS = [
         "folder_name": "semantic_seg",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/2d_semantic_segmentation.yaml",
-                "template_local": "2d_semantic_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/2d_semantic_segmentation.yaml",
+                "filename": "2d_semantic_segmentation.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt",
                 "filename": "fibsem_epfl_2D.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/3d_semantic_segmentation.yaml",
-                "template_local": "3d_semantic_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/3d_semantic_segmentation.yaml",
+                "filename": "3d_semantic_segmentation.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
                 "filename": "fibsem_epfl_3D.zip",
             }
@@ -1895,8 +1989,10 @@ DATASETS = [
         "folder_name": "instance_seg",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_instance_segmentation.yaml",
-                "template_local": "2d_instance_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_instance_segmentation.yaml",
+                "filename": "2d_instance_segmentation.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1b7_WDDGEEaEoIpO_1EefVr0w0VQaetmg",
                 "filename": "Stardist_v2_2D.zip",
             },
@@ -1905,8 +2001,10 @@ DATASETS = [
                 "filename": "dsb2018.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/3d_instance_segmentation.yaml",
-                "template_local": "3d_instance_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/3d_instance_segmentation.yaml",
+                "filename": "3d_instance_segmentation.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1fdL35ZTNw5hhiKau1gadaGu-rc5ZU_C7",
                 "filename": "demo3D_3D.zip",
             },
@@ -1932,14 +2030,18 @@ DATASETS = [
         "folder_name": "detection",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/2d_detection.yaml",
-                "template_local": "2d_detection.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/2d_detection.yaml",
+                "filename": "2d_detection.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1pWqQhcWY15b5fVLZDkPS-vnE-RU6NlYf",
                 "filename": "Stardist_v2_detection.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/3d_detection.yaml",
-                "template_local": "3d_detection.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/3d_detection.yaml",
+                "filename": "3d_detection.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=19P4AcvBPJXeW7QRj92Jh1keunGa5fi8d",
                 "filename": "NucMM-Z_training.zip",
             },
@@ -1957,16 +2059,24 @@ DATASETS = [
         "folder_name": "denoising",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml",
-                "template_local": "2d_denoising.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml",
+                "filename": "2d_denoising.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1ZCNBWkOJc4XOtfKHP7M0g1yIVzqtwS76",
                 "filename": "Noise2Void_RGB.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml",
-                "template_local": "3d_denoising.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml",
+                "filename": "3d_denoising.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1OIjnUoJKdnbClBlpzk7V5R8wtoLont-r",
                 "filename": "flywing3D.zip",
+            },
+            {
+                "url": "https://upvehueus-my.sharepoint.com/:u:/g/personal/ignacio_arganda_ehu_eus/IQAdIV2dalIJSbKznwwmhbtOASlNWTUdztnGtLGTm33wchY?e=fXBaSy&download=1",
+                "filename": "NAFNet_denoising_data.zip",
             }
         ]
     },
@@ -1974,14 +2084,18 @@ DATASETS = [
         "folder_name": "sr",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml",
-                "template_local": "2d_super_resolution.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml",
+                "filename": "2d_super_resolution.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1rtrR_jt8hcBEqvwx_amFBNR7CMP5NXLo",
                 "filename": "sr_data_2D.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml",
-                "template_local": "3d_super_resolution.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml",
+                "filename": "3d_super_resolution.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1TfQVK7arJiRAVmKHRebsfi8NEas8ni4s",
                 "filename": "sr_data_3D.zip",
             }
@@ -1991,8 +2105,10 @@ DATASETS = [
         "folder_name": "ssl",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml",
-                "template_local": "2d_self_supervision.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml",
+                "filename": "2d_self_supervision.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt",
                 "filename": "fibsem_epfl_2D.zip",
             },
@@ -2001,8 +2117,10 @@ DATASETS = [
                 "filename": "test14_checkpoint.pth",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml",
-                "template_local": "3d_self_supervision.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml",
+                "filename": "3d_self_supervision.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
                 "filename": "fibsem_epfl_3D.zip",
             }
@@ -2012,8 +2130,10 @@ DATASETS = [
         "folder_name": "classification",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml",
-                "template_local": "2d_classification.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml",
+                "filename": "2d_classification.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=15_pnH4_tJcwhOhNqFsm26NQuJbNbFSIN",
                 "filename": "DermaMNIST_2D.zip",
             },
@@ -2022,8 +2142,10 @@ DATASETS = [
                 "filename": "butterfly_data.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml",
-                "template_local": "3d_classification.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml",
+                "filename": "3d_classification.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1pypWJ4Z9sRLPlVHbG6zpwmS6COkm3wUg",
                 "filename": "DermaMNIST_3D.zip",
             }
@@ -2033,20 +2155,26 @@ DATASETS = [
         "folder_name": "image_to_image",
         "data": [
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/2d_image-to-image.yaml",
-                "template_local": "2d_image_to_image.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/2d_image-to-image.yaml",
+                "filename": "2d_image_to_image.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7",
                 "filename": "Dapi_dataset.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells/lightmycells_actin.yaml",
-                "template_local": "2d_image_to_image_light.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells/lightmycells_actin.yaml",
+                "filename": "2d_image_to_image_light.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1SU4u-bcM1ZaDzEYg-d8W3zP6Yq2o8eKV",
                 "filename": "reduced_actin_lightmycells.zip",
             },
             {
-                "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/3d_image-to-image.yaml",
-                "template_local": "3d_image_to_image.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/3d_image-to-image.yaml",
+                "filename": "3d_image_to_image.yaml",
+            },
+            {
                 "url": "https://drive.google.com/uc?id=1jL0bn2X3OFaV5T-6KR1g6fPDllH-LWzm",
                 "filename": "Nuclear_Pore_complex_3D.zip",
             }
@@ -2269,35 +2397,33 @@ for category in DATASETS:
     os.makedirs(target_folder, exist_ok=True)
     
     for item in category["data"]:
-        # Download Template
-        if "template_local" in item:
-            template_local_path = os.path.join(target_folder, item["template_local"])
-            if not os.path.exists(template_local_path) and "template" in item:
-                urllib.request.urlretrieve(item["template"], template_local_path)
-                
-        # Download and Extract Data
         out_filename = os.path.join(target_folder, item["filename"])
         outpath, fextension = os.path.splitext(item["filename"])
         out_path = os.path.join(target_folder, outpath)
-        
-        if not os.path.exists(out_path):
+
+        # For zip archives check whether the extracted directory exists; for all other
+        # files (yaml, pth, safetensors, …) check the file itself.
+        existence_path = out_path if fextension == ".zip" else out_filename
+
+        if not os.path.exists(existence_path):
             if fextension in ['.pth', '.safetensors']:
                 os.makedirs(out_path, exist_ok=True)
                 download_drive_file(item["url"], os.path.join(out_path, item["filename"]))
             else:
-                if "onedrive" in item.get("url", "").lower() or "sharepoint" in item.get("url", "").lower():
-                    download_onedrive_file(item["url"], out_filename)
-                elif "zenodo" in item.get("url", "").lower():
-                    urllib.request.urlretrieve(item["url"], filename=out_filename)
+                url = item.get("url", "")
+                if "onedrive" in url.lower() or "sharepoint" in url.lower():
+                    download_onedrive_file(url, out_filename)
+                elif "zenodo" in url.lower() or "raw.githubusercontent.com" in url.lower():
+                    urllib.request.urlretrieve(url, filename=out_filename)
                 else:
-                    download_drive_file(item["url"], out_filename)
+                    download_drive_file(url, out_filename)
 
-                # Unzip if downloaded file is a zip
+                # Unzip if downloaded file is a zip archive
                 if os.path.exists(out_filename) and fextension == ".zip":
                     with ZipFile(out_filename, 'r') as zip_ref:
                         zip_ref.extractall(out_path)
         else:
-            print(f"Data already exists at {out_path}, skipping download.")
+            print(f"Data already exists at {existence_path}, skipping download.")
 
 # ---------------------------------------------------------
 # 5. TEST EXECUTION LOOP
