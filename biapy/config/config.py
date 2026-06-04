@@ -1385,11 +1385,18 @@ class Config:
         _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
         # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
         _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
-        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
+        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be
         # done, which will fail if a layer mismatch is found.
         _C.MODEL.SKIP_UNMATCHED_LAYERS = False
         # Epochs to save a checkpoint of the model apart from the best of the validation. Set it to -1 to not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
+        # List of regex patterns to match parameter names that should be frozen (i.e. excluded from gradient updates) during
+        # training. Each entry is a Python 're' pattern tested against the full parameter name (e.g. "encoder\.layer1\..*").
+        # Freezing is applied after loading the checkpoint so that the loaded weights are preserved. Parameters matched by
+        # any pattern will have 'requires_grad' set to False and will be excluded from the optimizer. An empty list (default)
+        # means no layers are frozen.
+        # Examples: ["backbone\.layer1\..*", "backbone\.layer2\.conv.*"]
+        _C.MODEL.FREEZE_LAYERS_MATCHING = []
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.2 BioImage Model Zoo (BMZ) options
@@ -1540,7 +1547,7 @@ class Config:
         _C.MODEL.LOAD_MODEL_FROM_CHECKPOINT = True
         # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
         _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
-        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
+        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be
         # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
         _C.MODEL.SKIP_UNMATCHED_LAYERS = False
         # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to

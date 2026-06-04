@@ -1358,6 +1358,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if item not in ["weights", "norm", "model_arch", "optimizer", "epoch"]:
             raise ValueError("'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' can only have items in ['weights', 'norm', 'model_arch', 'optimizer', 'epoch']")
     model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and "model_arch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT
+
+    for i, pattern in enumerate(cfg.MODEL.FREEZE_LAYERS_MATCHING):
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            raise ValueError(
+                f"'MODEL.FREEZE_LAYERS_MATCHING[{i}]' is not a valid regex pattern ('{pattern}'): {e}"
+            )
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":

@@ -8,6 +8,7 @@ metrics, logging, and post-processing for both 2D and 3D biomedical image analys
 """
 import math
 import os
+import re
 import datetime
 import warnings
 import time
@@ -878,6 +879,22 @@ class Base_Workflow(metaclass=ABCMeta):
             )
         else:
             self.start_epoch = 0
+
+        # Freeze layers matching the user-supplied regex patterns (applied after checkpoint loading so
+        # that the loaded weights are preserved but excluded from gradient updates).
+        if self.cfg.MODEL.FREEZE_LAYERS_MATCHING:
+            compiled = [re.compile(p) for p in self.cfg.MODEL.FREEZE_LAYERS_MATCHING]
+            frozen, trainable = [], []
+            for name, param in self.model_without_ddp.named_parameters():
+                if any(pat.search(name) for pat in compiled):
+                    param.requires_grad_(False)
+                    frozen.append(name)
+                else:
+                    trainable.append(name)
+            print(f"Frozen {len(frozen)} parameter tensor(s) matching MODEL.FREEZE_LAYERS_MATCHING:")
+            for n in frozen:
+                print(f"  [frozen]    {n}")
+            print(f"Trainable parameter tensors remaining: {len(trainable)}")
 
     def prepare_logging_tool(self):
         """Prepare looging tool."""
