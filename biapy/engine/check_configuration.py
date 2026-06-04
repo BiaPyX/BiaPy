@@ -8,6 +8,7 @@ post-processing options.
 """
 import os
 import re
+import warnings
 import numpy as np
 import collections
 from typing import Dict
@@ -364,13 +365,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     channel_loss_set = True
 
             if seed_channels == [] or seed_channels_thresh == [] or topo_surface_ch == "" or growth_mask_channels == [] or growth_mask_channel_ths == []:
-                print("WARNING: seems that the channels requested are custom so BiaPy did not fill some varibles by default.\n"
-                    "You will need to fill the following variables:\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS\n"
-                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH\n"
+                warnings.warn(
+                    "Seems that the channels requested are custom so BiaPy did not fill some variables by default. "
+                    "You will need to fill the following variables: "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS, "
+                    "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH."
                 )
             if seed_channels != []:
                 opts.extend(
@@ -446,8 +448,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             for ch in ("Z", "V", "H"):
                 if ch in chs:
                     if ch in dst:
-                        assert [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]] == [], (
-                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'norm', 'act' and 'mask_values' keys"
+                        assert [x for x in dst[ch].keys() if x not in ["norm", "act"]] == [], (
+                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'norm' and 'act' keys"
+                            " ('mask_values' is no longer accepted: foreground masking is derived automatically)"
                         )
                     norm = dst.get(ch, {}).get("norm", True)
                     act = dst.get(ch, {}).get("act", "")
@@ -456,8 +459,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     dst[ch] = {
                         "norm": norm,
                         "act": act,
-                        "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
+
+            # Gh / Gv / Gz — Gradient channels group
+            for ch in ("Gz", "Gv", "Gh"):
+                if ch in chs:
+                    if ch in dst:
+                        assert [x for x in dst[ch].keys() if x not in ["niter", "scale_flows", "gradient_type"]] == [], (
+                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'niter', 'scale_flows' and 'gradient_type' keys"
+                            " ('mask_values' is no longer accepted: foreground masking is derived automatically from the flow vector magnitude)"
+                        )
+
+                    dst[ch] = {
+                        "niter": dst.get(ch, {}).get("niter", 200),
+                        "scale_flows": dst.get(ch, {}).get("scale_flows", 5.0),
+                        "gradient_type": dst.get(ch, {}).get("gradient_type", "cellpose"),
+                    }
+
             # Db — boundary distance-to-boundary
             if "Db" in chs:
                 if "Db" in dst:
@@ -615,6 +633,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
                 if "R" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
+                if "Gv" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "gradient-flow"])
                 elif "E_offset" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
                 else:
@@ -637,8 +657,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # H / V / Z — distance channels group
             # Their values need to be consistent to be able to create unique folder names for the channel masks and to know whether to apply normalization by default or not, so we check them all together here.
-            found_keys = {"norm": None, "act": None, "mask_values": None, "dilation": None}
-            default_keys =  {"norm": False, "act": "", "mask_values": True, "dilation": [3, 25, 25]}
+            found_keys = {"norm": None, "act": None, "dilation": None}
+            default_keys = {"norm": False, "act": "", "dilation": [3, 25, 25]}
             for ch in ("Z", "V", "H"):
                 for key in found_keys.keys():
                     if ch in chs and ch in dst and key in dst[ch]:
@@ -652,7 +672,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 dst[ch] = {
                     "norm": found_keys["norm"] if found_keys["norm"] is not None else default_keys["norm"],
                     "act": found_keys["act"] if found_keys["act"] is not None else default_keys["act"],
-                    "mask_values": found_keys["mask_values"] if found_keys["mask_values"] is not None else default_keys["mask_values"],
                     "dilation": found_keys["dilation"] if found_keys["dilation"] is not None else default_keys["dilation"],
                 }
 
@@ -663,8 +682,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post", "F_cleft", "Z"]]:
                 suffix += f"_{ch}" if ch != "Z" else "_ZVH"
                 for entry in dst.get(ch, {}):
-                    eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
-                    suffix += f".{entry}-{eval}"
+                    # These do not affect the values in the channel masks so we ignore them for the unique folder name creation
+                    if entry not in ["act", "mask_values"]: 
+                        eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
+                        suffix += f".{entry}-{eval}"
 
             train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
@@ -673,12 +694,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
-            if set(sorted_original_instance_channels) == {"F_post", "Z", "V", "H"}:
-                opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", [1, 3]])
+        effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
 
-        if len(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO) > 0:
-            assert sum(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO) == len(sorted_original_instance_channels), "The total number of channels in 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' "
-            "need to be the same as the number of channels in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+        if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2:
+            raise ValueError(
+                f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True but "
+                f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has only {len(effective_channels_per_head)} "
+                f"entr{'y' if len(effective_channels_per_head) == 1 else 'ies'}, so no decoder separation can occur. "
+                f"Set 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' to a list with at least 2 entries whose values "
+                f"sum to the number of DATA_CHANNELS ({len(sorted_original_instance_channels)})."
+            )
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
             if not channel_loss_set:
@@ -686,7 +711,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for ch in sorted_original_instance_channels:
                     if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post", "F_cleft"]:
                         losses.append("bce")
-                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R"]:
+                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R", "Gv", "Gh", "Gz"]:
                         losses.append("l1")
                     elif ch in ["E_offset", "E_sigma", "E_seediness"]:
                         losses.append("embedseg")
@@ -1260,7 +1285,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
             raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-        print("WARNING: 'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
+        warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     
@@ -1297,7 +1322,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'MODEL.TORCHVISION_MODEL_NAME' needs to be configured when 'MODEL.SOURCE' is 'torchvision'"
             )
         if cfg.TEST.AUGMENTATION:
-            print("WARNING: 'TEST.AUGMENTATION' is not available using TorchVision models")
+            warnings.warn("'TEST.AUGMENTATION' is not available using TorchVision models")
         if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models")
         if cfg.PROBLEM.NDIM == "3D":
@@ -1370,7 +1395,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings']"
+            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings", "gradient-flow"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings', 'gradient-flow']"
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 assert x in [
                     "F",
@@ -1391,12 +1416,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "E_sigma",
                     "E_seediness",
                     "We",
-                    "M"
-                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We']"
+                    "M",
+                    "Gv",
+                    "Gh",
+                    "Gz",
+                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We', 'Gv', 'Gh', 'Gz']"
             
             # Legacy mask used in CartoCell
             if "M" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                print("WARNING: 'M' channel is a legacy mask channel used in CartoCell so the name is kept but the functionality is limited")
+                warnings.warn("'M' channel is a legacy mask channel used in CartoCell so the name is kept but the functionality is limited")
                 if cfg.PROBLEM.NDIM != "3D":
                     raise ValueError("'M' channel can only be used in 3D segmentation (CartoCell legacy approach)")
                 elif set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) != {"F", "C", "M"}:
@@ -1409,15 +1437,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "embeddings":
                 assert "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_sigma" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_seediness" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'E_offset', 'E_sigma' and 'E_seediness' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
                 assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 3, "'E_offset', 'E_sigma' and 'E_seediness' channels must be the only ones used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
+            elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "gradient-flow":
+                assert "Gv" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "Gh" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'Gv', 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow'"
+                if cfg.PROBLEM.NDIM == "2D":
+                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh"}, "'Gv' and 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '2D'"
+                else:
+                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh", "Gz"}, "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":  
+                for ch in ["R", "Gv", "Gh", "E_offset", "E_sigma", "E_seediness"]:
+                    if ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                        raise ValueError("'{}' channel can not be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'watershed'".format(ch))
                 if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                     if cfg.PROBLEM.NDIM != "3D":
                         raise ValueError("'A' channel can only be used in 3D segmentation")
                 if "Z" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and cfg.PROBLEM.NDIM == "2D":
                     raise ValueError("'Z' channel can only be used in 3D segmentation")
-                if "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db", "R"}, "'R' channel can only be used together with 'Db' channel"
-
                 if any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["Z", "V", "H"]]):
                     if "H" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "V" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                         raise ValueError("'H' channel can only be used together with 'V' channel")
@@ -1500,8 +1534,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 elif key in ("Z", "V", "H"):  # distance channels group
                     _assert_bool(val, "norm", ctx)
                     assert isinstance(val["norm"], bool)
-                    _assert_bool(val, "mask_values", ctx)
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
+                elif key in ("Gv", "Gh", "Gz"):  # gradient flow channels
+                   _assert_int(val, "niter", ctx, min_val=1)
+                   _assert_float(val, "scale_flows", ctx, min_val=0.0)
+                   _assert_str_in(val, "gradient_type", {"omnipose", "cellpose"}, ctx)
                 elif key  == "Db":  # distance channels group
                     _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
                     if val["val_type"] == "discretize":
@@ -1957,6 +1994,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'DATA.VAL.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too"
                 )
 
+        if cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO != []:
+            assert sum(cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO) == cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS, (
+                "The sum of the channels per head info needs to be equal to the total number of output channels defined in 'PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS'. "
+                f"Currently, the sum of 'PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO' is {sum(cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO)} while 'PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS' is {cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS}."
+            )
+        
     if cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.PREPROCESS.VAL:
         print(
             "WARNING: validation preprocessing will be done based on 'DATA.PREPROCESS.TRAIN', as 'DATA.VAL.FROM_TRAIN' is selected"
@@ -2151,14 +2194,38 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'TEST.BY_CHUNKS' can only be activated in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
             if cfg.PROBLEM.NDIM == "2D":
                 raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
+            _valid_phases = {"prediction", "instance_creation", "instance_merging"}
+            _instance_only_phases = {"instance_creation", "instance_merging"}
+            if not isinstance(cfg.TEST.BY_CHUNKS.PHASES, (list, tuple)) or len(cfg.TEST.BY_CHUNKS.PHASES) == 0:
+                raise ValueError("'TEST.BY_CHUNKS.PHASES' must be a non-empty list")
+            _unknown = set(cfg.TEST.BY_CHUNKS.PHASES) - _valid_phases
+            if _unknown:
+                raise ValueError(
+                    f"'TEST.BY_CHUNKS.PHASES' contains unknown phase(s): {sorted(_unknown)}. "
+                    f"Valid values are: {sorted(_valid_phases)}"
+                )
+            _used_instance_phases = _instance_only_phases & set(cfg.TEST.BY_CHUNKS.PHASES)
+            if _used_instance_phases and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+                raise ValueError(
+                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' are only valid "
+                    "for 'INSTANCE_SEG' workflows"
+                )
             if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
                 assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
                     "chunk_by_chunk",
                     "entire_pred",
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
-            if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == 'chunk_by_chunk':
-                    raise NotImplementedError("Chunk by chunk processing is not implemented yet for instance segmentation workflow")
+                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO < -1 or cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO == 0:
+                    raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO' must be -1 (auto) or a positive integer")
+                if not (0 < cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH <= 1):
+                    raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH' must be in (0, 1]")
+            if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_START < 0:
+                raise ValueError("'TEST.BY_CHUNKS.Z_START' must be -1 (disabled) or a non-negative integer")
+            if cfg.TEST.BY_CHUNKS.Z_END != -1 and cfg.TEST.BY_CHUNKS.Z_END <= 0:
+                raise ValueError("'TEST.BY_CHUNKS.Z_END' must be -1 (disabled) or a positive integer")
+            if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_END != -1:
+                if cfg.TEST.BY_CHUNKS.Z_START >= cfg.TEST.BY_CHUNKS.Z_END:
+                    raise ValueError("'TEST.BY_CHUNKS.Z_START' must be less than 'TEST.BY_CHUNKS.Z_END'")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
@@ -2543,7 +2610,47 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
-    
+            _inst_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
+            if model_arch not in _inst_supported:
+                raise ValueError(
+                    f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is only supported by {_inst_supported}. "
+                    f"Selected architecture '{model_arch}' does not support it."
+                )
+
+    if cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD:
+        if cfg.PROBLEM.TYPE != "DETECTION":
+            opts.extend(["PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD", False])
+        else:
+            if cfg.DATA.N_CLASSES <= 2:
+                raise ValueError(
+                    "'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' can only be True when 'DATA.N_CLASSES' is greater than 2"
+                )
+            if cfg.MODEL.LARGER_IO:
+                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.LOSS.CONTRAST.ENABLE:
+                raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
+            _det_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
+            if model_arch not in _det_supported:
+                raise ValueError(
+                    f"'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is only supported by {_det_supported}. "
+                    f"Selected architecture '{model_arch}' does not support it."
+                )
+
+    if cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
+        if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
+            opts.extend(["PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD", False])
+        else:
+            if cfg.MODEL.LARGER_IO:
+                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.LOSS.CONTRAST.ENABLE:
+                raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
+            _i2i_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
+            if model_arch not in _i2i_supported:
+                raise ValueError(
+                    f"'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is only supported by {_i2i_supported}. "
+                    f"Selected architecture '{model_arch}' does not support it."
+                )
+
     if cfg.MODEL.NORMALIZATION == "":
         opts.extend(["MODEL.NORMALIZATION", "in"])
     else:
@@ -2931,7 +3038,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1, 10)):
                 raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")
             if cfg.AUGMENTOR.ZOOM_IN_Z and dim_count == 2:
-                print("WARNING: Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
+                warnings.warn("Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
         assert cfg.AUGMENTOR.AFFINE_MODE in [
             "constant",
             "reflect",
@@ -3679,17 +3786,15 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
 
-        if "hrnet" in old_cfg["MODEL"]["ARCHITECTURE"].lower():
-            old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"
-
-        if "HRNET" in old_cfg["MODEL"]:
-            if "STAGE1" in old_cfg["MODEL"]["HRNET"]:
-                del old_cfg["MODEL"]["HRNET"]["STAGE1"]
+        if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower() or "HRNET" in old_cfg["MODEL"]:
+            hrnet_block = old_cfg["MODEL"].get("HRNET", {})
+            if "STAGE1" in hrnet_block:
+                del hrnet_block["STAGE1"]
 
             variant_str = None
             # 1. Migrate CUSTOM boolean to VARIANT string
-            if "CUSTOM" in old_cfg["MODEL"]["HRNET"]:
-                is_custom = old_cfg["MODEL"]["HRNET"].pop("CUSTOM")
+            if "CUSTOM" in hrnet_block:
+                is_custom = hrnet_block.pop("CUSTOM")
                 if is_custom:
                     variant_str = "custom"
             if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower():
@@ -3702,12 +3807,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 
             # Fallback if variant wasn't explicitly captured from old keys
             if variant_str is None:
-                variant_str = old_cfg["MODEL"]["HRNET"].get("VARIANT", "W18")
+                variant_str = hrnet_block.get("VARIANT", "W18")
             
-            old_cfg["MODEL"]["HRNET"]["VARIANT"] = str(variant_str)
+            hrnet_block["VARIANT"] = str(variant_str)
 
             # 2. Extract nested stages into the new dynamic flat lists
-            if "STAGE2" in old_cfg["MODEL"]["HRNET"]:
+            if "STAGE2" in hrnet_block:
                 num_stages = 0
                 num_modules = []
                 num_branches = []
@@ -3716,28 +3821,28 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 
                 for stage_idx in [2, 3, 4, 5]: # Checking up to STAGE5 just in case
                     stage_key = f"STAGE{stage_idx}"
-                    if stage_key in old_cfg["MODEL"]["HRNET"]:
+                    if stage_key in hrnet_block:
                         num_stages += 1
-                        stage_cfg = old_cfg["MODEL"]["HRNET"].pop(stage_key)
+                        stage_cfg = hrnet_block.pop(stage_key)
                         num_modules.append(stage_cfg.get("NUM_MODULES", 1))
                         num_branches.append(stage_cfg.get("NUM_BRANCHES", stage_idx))
                         num_blocks.append(stage_cfg.get("NUM_BLOCKS", [4] * stage_idx))
                         num_channels.append(stage_cfg.get("NUM_CHANNELS", [18 * (2**i) for i in range(stage_idx)]))
                 
                 if num_stages > 0:
-                    old_cfg["MODEL"]["HRNET"]["NUM_STAGES"] = num_stages
-                    old_cfg["MODEL"]["HRNET"]["NUM_MODULES"] = num_modules
-                    old_cfg["MODEL"]["HRNET"]["NUM_BRANCHES"] = num_branches
-                    old_cfg["MODEL"]["HRNET"]["NUM_BLOCKS"] = num_blocks
-                    old_cfg["MODEL"]["HRNET"]["NUM_CHANNELS"] = num_channels
+                    hrnet_block["NUM_STAGES"] = num_stages
+                    hrnet_block["NUM_MODULES"] = num_modules
+                    hrnet_block["NUM_BRANCHES"] = num_branches
+                    hrnet_block["NUM_BLOCKS"] = num_blocks
+                    hrnet_block["NUM_CHANNELS"] = num_channels
             
             # 3. Migrate Z_DOWN from bool to list and initialize YX_DOWN
-            n_stages = old_cfg["MODEL"]["HRNET"].get("NUM_STAGES", 3)
+            n_stages = hrnet_block.get("NUM_STAGES", 3)
             
-            if "Z_DOWN" in old_cfg["MODEL"]["HRNET"]:
-                z_down_val = old_cfg["MODEL"]["HRNET"]["Z_DOWN"]
+            if "Z_DOWN" in hrnet_block:
+                z_down_val = hrnet_block["Z_DOWN"]
                 if isinstance(z_down_val, bool):
-                    old_cfg["MODEL"]["HRNET"]["Z_DOWN"] = [2 if z_down_val else 1] * n_stages
+                    hrnet_block["Z_DOWN"] = [2 if z_down_val else 1] * n_stages
 
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]

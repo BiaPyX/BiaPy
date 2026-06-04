@@ -7,6 +7,7 @@ It handles data preparation, model setup, metrics, predictions, post-processing,
 and result saving for localization of objects in 2D and 3D images.
 """
 import os
+import warnings
 import torch
 import torch.distributed as dist
 import numpy as np
@@ -759,7 +760,7 @@ class Detection_Workflow(Base_Workflow):
                     all_channel_d_metrics[7] += d_metrics["Recall (class)"]
                     all_channel_d_metrics[8] += d_metrics["F1 (class)"]
                     all_channel_d_metrics[9] += d_metrics["TP (class)"]
-                    all_channel_d_metrics[9] += d_metrics["FN (class)"]
+                    all_channel_d_metrics[10] += d_metrics["FN (class)"]
 
                 # Save csv files with the associations between GT points and predicted ones
                 if gt_assoc is not None:
@@ -820,7 +821,7 @@ class Detection_Workflow(Base_Workflow):
                     z, y, x = cor
                     z, y, x = int(z), int(y), int(x)
                     if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
-                        print(f"WARNING: GT point [{z},{y},{x}] outside image with shape {pred_shape}. Skipping it in the summary image.")
+                        warnings.warn(f"GT point [{z},{y},{x}] outside image with shape {pred_shape}. Skipping it in the summary image.")
                         continue
                     
                     if gt_assoc is not None:
@@ -946,7 +947,7 @@ class Detection_Workflow(Base_Workflow):
                 index=False,
             )
 
-    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
         """
         Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
         its own implementation of this method.

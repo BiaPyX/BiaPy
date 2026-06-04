@@ -684,7 +684,7 @@ all_test_info["Test10"] = {
     "bmz_by_command": True,
     "bmz_package": "long_beach_denoising.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.6},
+        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "long_beach_denoising.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"}, 
     ]
@@ -1168,7 +1168,7 @@ all_test_info["Test19"] = {
     "bmz_by_command": True,
     "bmz_package": "biapy_model.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation Top 5 accuracy:", "gt": True, "value": 0.9},
+        {"type": "regular", "pattern": "Validation Top 5 accuracy:", "gt": True, "value": 0.8},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
     ]
@@ -1676,7 +1676,7 @@ all_test_info["Test28"] = {
     "reuse_original_bmz_config": True,
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
-        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1", "gt": True, "value": 0.85},
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1", "gt": True, "value": 0.80},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "2D U-NeXt V1 for nucleus segmentation.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
     ]

@@ -112,6 +112,7 @@ def load_and_prepare_train_data(
     norm_before_filter: bool = False,
     random_crops_in_DA: bool = False,
     y_upscaling: Tuple[int, ...] = (1, 1),
+    gt_channels_expected: int = 1,
     reflect_to_complete_shape: bool = False,
     convert_to_rgb: bool = False,
     is_y_mask: bool = False,
@@ -269,6 +270,9 @@ def load_and_prepare_train_data(
 
     y_upscaling : 2D/3D int tuple, optional
         Upscaling to be done when loading Y data. User for super-resolution workflow.
+
+    gt_channels_expected : int, optional
+        Expected number of channels in the GT.
 
     reflect_to_complete_shape : bool, optional
         Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
@@ -847,14 +851,14 @@ def load_and_prepare_train_data(
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
                     crop_shape[2] * y_upscaling[2],
-                    crop_shape[3],
+                    gt_channels_expected,
                 )
             else:
                 assert len(y_upscaling) == 2 and len(crop_shape) == 3
                 real_shape = (
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
-                    crop_shape[2],
+                    gt_channels_expected,
                 )
             load_images_to_dataset(
                 dataset=Y_train,
@@ -889,14 +893,14 @@ def load_and_prepare_train_data(
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
                     crop_shape[2] * y_upscaling[2],
-                    crop_shape[3],
+                    gt_channels_expected,
                 )
             else:
                 assert len(y_upscaling) == 2 and len(crop_shape) == 3
                 real_shape = (
                     crop_shape[0] * y_upscaling[0],
                     crop_shape[1] * y_upscaling[1],
-                    crop_shape[2],
+                    gt_channels_expected,
                 )
             load_images_to_dataset(
                 dataset=Y_val,
@@ -3249,7 +3253,7 @@ def load_img_data(
     file : str
         File of the data read. Useful to close it in case it is an H5 file.
     """
-    if looks_like_hdf5(path) or any(path.endswith(x) for x in [".zarr", ".n5"]):
+    if looks_like_hdf5(path) or any(path.endswith(x) for x in [".zarr", "n5", ".n5"]):
         from biapy.data.data_3D_manipulation import (
             read_chunked_data,
             read_chunked_nested_data,
@@ -3295,7 +3299,7 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
         elif looks_like_hdf5(path):
             img = h5py.File(path, "r")
             img = np.array(img[list(img)[0]])
-        elif path.endswith(".zarr") or path.endswith(".n5"):
+        elif path.endswith(".zarr") or path.endswith(".n5") or path.endswith("n5"):
             from biapy.data.data_3D_manipulation import read_chunked_data
 
             _, img = read_chunked_data(path)
@@ -3479,7 +3483,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     m = ""
     error = False
     for i in tqdm(range(len(ids))):
-        if looks_like_hdf5(ids[i]) or any(ids[i].endswith(x) for x in [".zarr", ".n5"]):
+        if looks_like_hdf5(ids[i]) or any(ids[i].endswith(x) for x in [".zarr", "n5", ".n5"]):
             raise ValueError(
                 "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )

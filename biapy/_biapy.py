@@ -1,3 +1,4 @@
+import io
 import os
 from pathlib import Path
 import re
@@ -74,6 +75,27 @@ from biapy.engine.check_configuration import (
 )
 from biapy.utils.util import create_file_sha256sum
 from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
+
+
+class _Tee:
+    """Write to multiple streams simultaneously (used to mirror stdout/stderr to a log file)."""
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+
+    def fileno(self):
+        return self._streams[0].fileno()
+
+    def isatty(self):
+        return False
 
 
 class BiaPy:
@@ -159,6 +181,15 @@ class BiaPy:
         self.cfg_file = os.path.join(self.cfg_bck_dir, self.cfg_filename)
 
         now = datetime.datetime.now()
+        self.log_timestamp = now.strftime("%Y_%m_%d_%H_%M_%S")
+        self._stdout_log_file = None
+
+        # Buffer everything from this point into memory so it can be written to the
+        # log file later (once we know which process is rank 0).
+        _early_buf = io.StringIO()
+        sys.stdout = _Tee(sys.__stdout__, _early_buf)
+        sys.stderr = _Tee(sys.__stderr__, _early_buf)
+
         print("Date     : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
         print("Arguments: {}".format(self.args))
         print("Job      : {}".format(self.job_identifier))
@@ -204,10 +235,28 @@ class BiaPy:
             self.num_gpus = 0
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
-        # GPU management
+        # GPU management — distributed rank is known after this call
         self.device = init_devices(self.args, cfg_manager.get_cfg_defaults())
         cfg_manager._C.merge_from_list(opts)
         self.cfg: CN = cfg_manager.get_cfg_defaults()
+
+        # Rank is now settled: open the real log file on rank 0, flush the early buffer
+        # into it, then keep mirroring stdout/stderr for the rest of the run.
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+        if is_main_process():
+            logs_dir = self.cfg.LOG.LOG_DIR
+            os.makedirs(logs_dir, exist_ok=True)
+            stdout_log_path = os.path.join(
+                logs_dir,
+                f"{self.job_identifier}_log_{self.log_timestamp}.txt",
+            )
+            self._stdout_log_file = open(stdout_log_path, "w", encoding="utf-8", buffering=1)
+            self._stdout_log_file.write(_early_buf.getvalue())
+            self._stdout_log_file.flush()
+            sys.stdout = _Tee(sys.__stdout__, self._stdout_log_file)
+            sys.stderr = _Tee(sys.__stderr__, self._stdout_log_file)
+        _early_buf.close()
 
         # Reproducibility
         set_seed(self.cfg.SYSTEM.SEED)
@@ -248,17 +297,18 @@ class BiaPy:
         print(f"Initializing {name}")
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*\n")
         self.workflow = getattr(mdl, name)(
-            self.cfg, 
-            self.job_identifier, 
-            self.device, 
+            self.cfg,
+            self.job_identifier,
+            self.device,
             system_dict={
                 "cpu_budget": cpu_budget,
                 "cpu_per_rank": cpu_per_rank,
                 "main_threads": main_threads,
                 "num_workers_hint": num_workers,
-            }, 
+            },
             args=self.args
         )
+        self.workflow.log_timestamp = self.log_timestamp
 
     def train(self):
         """Call training phase."""
@@ -1216,3 +1266,10 @@ class BiaPy:
         # self.wait_and_stop_ddp()
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
+
+        if self._stdout_log_file is not None:
+            sys.stdout = sys.__stdout__
+            sys.stderr = sys.__stderr__
+            self._stdout_log_file.flush()
+            self._stdout_log_file.close()
+            self._stdout_log_file = None

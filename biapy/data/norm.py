@@ -651,14 +651,6 @@ def undo_image_norm(
     else:  # zero_mean_unit_variance
         data = undo_zero_mean_unit_variance_normalization(data, norm_info)
 
-        if "float" not in str(norm_info["orig_dtype"]):
-            if isinstance(data, np.ndarray):
-                data = np.round(data)
-            else:  # torch.Tensor
-                data = torch.round(data)
-            mindata = data.min()
-            data = data + abs(mindata)  # type: ignore
-
     if isinstance(data, np.ndarray):
         data = data.astype(torch_numpy_dtype_dict[norm_info["orig_dtype"]][1])
     else:
@@ -742,6 +734,21 @@ def undo_zero_mean_unit_variance_normalization(
     std = [norm_info["per_channel_info"][str(c)].get("std", None) for c in range(data.shape[-1])]
 
     if isinstance(data, np.ndarray):
-        return (data * std) + mean
+        data = (data * std) + mean
     else:
-        return (data * torch.tensor(std, device=data.device)) + torch.tensor(mean, device=data.device)
+        data = (data * torch.tensor(std, device=data.device)) + torch.tensor(mean, device=data.device)
+
+    # Prevent values go outside expected range
+    if "float" not in str(norm_info["orig_dtype"]):
+        if isinstance(data, np.ndarray):
+            data = np.round(data)
+            dtype = torch_numpy_dtype_dict[norm_info["orig_dtype"]][1]
+            info = np.iinfo(dtype)
+            data = np.clip(data, info.min, info.max)
+        else:
+            data = torch.round(data)
+            dtype = torch_numpy_dtype_dict[norm_info["orig_dtype"]][0]
+            info = torch.iinfo(dtype)
+            data = torch.clamp(data, info.min, info.max)
+
+    return data

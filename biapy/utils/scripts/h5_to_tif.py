@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import warnings
 import argparse
 
 import h5py
@@ -69,7 +70,7 @@ def main() -> None:
     file, data = read_chunked_nested_data(h5file, data_path=args.dataset_key)
     data = np.array(data)
     if data.max() == 0:
-        print("Warning: data is all zeros, check that the dataset key is correct.")
+        warnings.warn("Data is all zeros, check that the dataset key is correct.")
 
     data = ensure_3d_shape(data)
     if isinstance(file, h5py.File):

@@ -10,6 +10,7 @@ It includes functionalities for:
 """
 import os
 import re
+import warnings
 import biapy
 import yaml
 import numpy as np
@@ -799,7 +800,7 @@ def create_model_doc(
     elif model_arch == "unext_v2":
         message += f"[{ref_count}] Woo, Sanghyun, et al. \"Convnext v2: Co-designing and scaling convnets with masked autoencoders.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2023.\n"
     else:
-        print(f"[WARNING] No reference available for model architecture '{model_arch}'")
+        warnings.warn(f"No reference available for model architecture '{model_arch}'")
         ref_count -= 1  # No reference added
     ref_count += 1
     if biapy_cfg.PROBLEM.TYPE == "INSTANCE_SEG":

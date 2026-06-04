@@ -487,7 +487,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         """
         pass
 
-    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
         """
         Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
         its own implementation of this method.

@@ -115,6 +115,8 @@ class chunked_test_pair_data_generator(IterableDataset):
         n_classes: int = 1,
         ignore_index: Optional[int] = None,
         instance_problem: bool = False,
+        z_start: int = -1,
+        z_end: int = -1,
     ):
         """
         Initialize the chunked_test_pair_data_generator.
@@ -155,6 +157,10 @@ class chunked_test_pair_data_generator(IterableDataset):
             Index to ignore in mask.
         instance_problem : bool, optional
             Whether the problem is instance segmentation.
+        z_start : int, optional
+            First Z slice (inclusive) to process. -1 means start from the beginning.
+        z_end : int, optional
+            Last Z slice (exclusive) to process. -1 means process until the end.
         """
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
@@ -218,20 +224,20 @@ class chunked_test_pair_data_generator(IterableDataset):
         assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
         if self.crop_shape[0] > self.z_dim:
             raise ValueError(
-                "Z Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis)".format(
-                    self.crop_shape[0], self.z_dim
+                "Z Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis). Shape provided: {} (axis order: {})".format(
+                    self.crop_shape[0], self.z_dim, self.X_parallel_data.shape, self.input_axes
                 )
             )
         if self.crop_shape[1] > self.y_dim:
             raise ValueError(
-                "Y Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis)".format(
-                    self.crop_shape[1], self.y_dim
+                "Y Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis). Data shape provided: {} (axis order: {})".format(
+                    self.crop_shape[1], self.y_dim, self.X_parallel_data.shape, self.input_axes
                 )
             )
         if self.crop_shape[2] > self.x_dim:
             raise ValueError(
-                "X Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis)".format(
-                    self.crop_shape[2], self.x_dim
+                "X Axis problem: {} greater than {} (you can reduce 'DATA.PATCH_SIZE' in that axis). Shape provided: {} (axis order: {})".format(
+                    self.crop_shape[2], self.x_dim, self.X_parallel_data.shape, self.input_axes
                 )
             )
         for i, p in enumerate(self.padding):
@@ -254,14 +260,26 @@ class chunked_test_pair_data_generator(IterableDataset):
         self.step_x = self.crop_shape[2] - (self.padding[2] * 2)
         self.vols_per_x = math.ceil(self.x_dim / self.step_x)
 
-        self.len = self.vols_per_z * self.vols_per_y * self.vols_per_x
+        # Clamp Z range to valid chunk indices
+        effective_z_start = 0 if z_start == -1 else z_start
+        effective_z_end = self.z_dim if z_end == -1 else z_end
+        self.z_vol_start = math.ceil(effective_z_start / self.step_z)
+        self.z_vol_end = min(math.ceil(effective_z_end / self.step_z), self.vols_per_z)
+        self.vols_per_z_effective = self.z_vol_end - self.z_vol_start
 
-        
+        self.len = self.vols_per_z_effective * self.vols_per_y * self.vols_per_x
+
         if is_main_process():
+            z_range_msg = ""
+            if z_start != -1 or z_end != -1:
+                z_range_msg = (
+                    f"Z range: slices [{effective_z_start}, {effective_z_end}) → "
+                    f"chunks [{self.z_vol_start}, {self.z_vol_end}) of {self.vols_per_z} total. "
+                )
             print(
                 f"Initialized chunked_test_pair_data_generator with sample {self.filename} and shape {self.X_parallel_data.shape}.\n"
                 f"Crop shape: {self.crop_shape}, padding: {self.padding}. Input axes: {self.input_axes}. Mask input axes: {self.mask_input_axes}.\n"
-                f"Output data axes order: {self.out_data_order}. "
+                f"Output data axes order: {self.out_data_order}. {z_range_msg}"
                 ""
             )
 
@@ -389,8 +407,8 @@ class chunked_test_pair_data_generator(IterableDataset):
         for vol_id in sampler:
             mask = None
 
-            z, y, x = np.unravel_index(vol_id, (self.vols_per_z, self.vols_per_y, self.vols_per_x))
-            z = int(z)
+            z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
+            z = int(z_local) + self.z_vol_start
             y = int(y)
             x = int(x)
 

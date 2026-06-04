@@ -51,6 +51,22 @@ from biapy.data.pre_processing import generate_ellipse_footprint
 
 ZarrOrH5Array = Union[zarr.Array, h5py.Dataset]
 
+def _otsu_auto_threshold(arr: NDArray) -> float:
+    """Compute Otsu threshold for arbitrary-range float arrays.
+
+    Falls back to normalizing arr to [0,1] and mapping back when the raw range
+    is too narrow for skimage's histogram (256 bins) to handle directly.
+    """
+    vmin, vmax = float(arr.min()), float(arr.max())
+    if vmin == vmax:
+        return vmin
+    try:
+        return float(threshold_otsu(arr))
+    except ValueError:
+        norm = (arr - vmin) / (vmax - vmin)
+        return float(threshold_otsu(norm)) * (vmax - vmin) + vmin
+
+
 def watershed_by_channels(
     data: NDArray,
     channels: List[str],
@@ -69,6 +85,7 @@ def watershed_by_channels(
     resolution: List[float|int]=[1., 1., 1.],
     watershed_by_2d_slices: bool=False,
     save_dir: Optional[str]=None,
+    verbose: bool=True,
 ):
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation algorithm.
@@ -185,7 +202,7 @@ def watershed_by_channels(
             seed_map = np.expand_dims(seed_map, 0)
             growth_mask = np.expand_dims(growth_mask, 0)
 
-        for i in tqdm(range(seed_map.shape[0])):
+        for i in tqdm(range(seed_map.shape[0]), disable=not verbose):
             if len(seed_morph_sequence) != 0:
                 for k, morph_function in enumerate(morph_funcs):
                     seed_map[i] = morph_function(seed_map[i], disk(radius=seed_morph_radius[k]))
@@ -201,11 +218,14 @@ def watershed_by_channels(
     seed_ths_used, growth_mask_ths_used = [], []
     # Affinities are expected to be alone so we can use them directly
     if "A" in seed_channels and len(seed_channels) == 1:
+        # Take the first three affinities only
+        data = data[..., [0, 1, 2]]
+
         # For now use the minimum values between all affinities (to enhance borders)
         foreground_probs = np.min(data, axis=-1)
 
         # Seed creation process
-        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else float(threshold_otsu(data)) 
+        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else _otsu_auto_threshold(data)
         seed_map = foreground_probs > th
         seed_ths_used.append(th)
 
@@ -215,7 +235,7 @@ def watershed_by_channels(
         growth_mask_ths_used.append(th)
 
         # Define the topographic surface to grow the seeds
-        topografic_surface = - (1 - foreground_probs)
+        topografic_surface = - foreground_probs
     else:
         # Seed creation process
         hvz_channels_processed = False
@@ -227,13 +247,13 @@ def watershed_by_channels(
                 else: # F, P, Db, D
                     seed_map = data[..., ch_pos]
                 
-                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else float(threshold_otsu(seed_map))
+                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else _otsu_auto_threshold(seed_map)
                 seed_ths_used.append(th)
 
                 seed_map = seed_map > th
             else:
                 if ch in ['F', 'B', 'P', 'C', 'Db', 'Dc', 'Dn', 'D', 'T']:
-                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else float(threshold_otsu(data[..., ch_pos]))
+                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else _otsu_auto_threshold(data[..., ch_pos])
                     seed_ths_used.append(th)
 
                     if ch in ["F", "P", "Db", "D"]:
@@ -278,7 +298,7 @@ def watershed_by_channels(
                     if any([x for x in hvz_ths if x != "auto"]):
                         th = float(np.min([x for x in hvz_ths if x != "auto"])) # Take the most restrictive
                     else:
-                        th = float(threshold_otsu(overall))
+                        th = _otsu_auto_threshold(overall)
                     for x in hvz_ths:
                         seed_ths_used.append(th)
 
@@ -296,12 +316,12 @@ def watershed_by_channels(
                 else: # F, Db, D
                     growth_mask = data[..., ch_pos]
 
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else float(threshold_otsu(growth_mask) / 2)
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else _otsu_auto_threshold(growth_mask) / 2
                 growth_mask_ths_used.append(th)
 
                 growth_mask = growth_mask > th
             else:
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else float(threshold_otsu(data[..., ch_pos]) / 2)
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else _otsu_auto_threshold(data[..., ch_pos]) / 2
                 growth_mask_ths_used.append(th)
 
                 if ch in ["F", "Db", "D"]:
@@ -311,7 +331,7 @@ def watershed_by_channels(
 
         # Define the topographic surface to grow the seeds
         if "overall" in locals():
-            topografic_surface = -(1.0 - overall) 
+            topografic_surface = 1.0 - overall
         else:
             ch_pos = channels.index(topo_surface_channel)
             if ch in ["C", "B", "Dn", "Dc"]:
@@ -328,8 +348,8 @@ def watershed_by_channels(
     seed_map = label(seed_map, connectivity=1)
     topografic_surface = gaussian(topografic_surface, sigma=1.0, truncate=1)
 
-    # Print the thresholds used
-    print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))
+    if verbose:
+        print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, max_size=thres_small_before)
@@ -348,9 +368,10 @@ def watershed_by_channels(
 
     # Apply marker controlled watershed
     if watershed_by_2d_slices:
-        print("Doing watershed by 2D slices")
+        if verbose:
+            print("Doing watershed by 2D slices")
         segm = np.zeros(seed_map.shape, dtype=appropiate_dtype)
-        for z in tqdm(range(len(segm))):
+        for z in tqdm(range(len(segm)), disable=not verbose):
             segm[z] = watershed(topografic_surface[z], seed_map[z], mask=growth_mask[z])
     else:
         segm = watershed(topografic_surface, seed_map, mask=growth_mask)

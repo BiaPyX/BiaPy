@@ -1508,6 +1508,19 @@ class instance_segmentation_loss:
         if self.separated_class_channel:
             self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights, reduction="none")
 
+    def _foreground_mask(self, y_true: torch.Tensor) -> "Optional[torch.Tensor]":
+        """Return a (B, 1, ...) float foreground mask from binary GT channels.
+
+        Checks for F or M first (foreground=1), then B (background=1 → foreground=0).
+        Returns None when no binary channel is present in the GT.
+        """
+        for j, ch in enumerate(self.out_channels):
+            if ch in ("F", "M"):
+                return (y_true[:, j : j + 1] > 0).float()
+            if ch == "B":
+                return (y_true[:, j : j + 1] == 0).float()
+        return None
+
     def __call__(self, y_pred, y_true):
         """
         Calculate instance segmentation loss.
@@ -1583,10 +1596,37 @@ class instance_segmentation_loss:
                 y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
                 y_true_slice = y_true[:, gt_ch_start:gt_ch_end].float()
 
-                # element-wise mask you wanted to use (float on same device)
+                # element-wise mask for the loss
                 mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
                 mask = None
-                if mask_vals:
+                if channel in ("Gv", "Gh", "Gz"):
+                    # Flow targets are unit vectors: magnitude is always 1 in the foreground
+                    # and (0, 0[, 0]) in the background.  A foreground pixel with purely
+                    # horizontal flow has Gv=0, so per-component (!=0) masking would wrongly
+                    # exclude it.  Sum of squared components is the correct foreground proxy.
+                    flow_channels = [j for j, ch in enumerate(self.out_channels) if ch in ("Gv", "Gh", "Gz")]
+                    mag_sq = sum(y_true[:, j : j + 1].float() ** 2 for j in flow_channels)
+                    mask = (mag_sq > 0).float()
+                elif channel in ("H", "V", "Z"):
+                    # HoVer-Net channels: values in [-1, 1] (signed), centroid = 0 = background.
+                    # Masking by (!=0) would exclude the entire center row/column of every cell.
+                    # Use a binary foreground channel (F/M/B) when present; otherwise train on
+                    # all pixels — background=0 is a valid target and the network learns to
+                    # predict 0 there naturally.
+                    mask = self._foreground_mask(y_true)
+                elif channel in ("Db", "Dc", "Dn", "R"):
+                    # Distance channels where legitimate foreground pixels can have value 0:
+                    #   Db: boundary pixels have Db=0 after per-cell normalization
+                    #   Dc: the centroid pixel has Dc=0 (most important point)
+                    #   Dn: isolated cells (no neighbor) have Dn=0
+                    #   R:  ray distances near boundary approach 0
+                    # Use a binary foreground channel (F/M/B) when available; fall back to
+                    # (y_true_slice > 0) which excludes background but also misses genuine
+                    # zero-valued foreground pixels (e.g. Dc at centroid, Db at boundary).
+                    mask = self._foreground_mask(y_true)
+                    if mask is None and mask_vals:
+                        mask = (y_true_slice > 0).float()
+                elif mask_vals:
                     mask = (y_true_slice != 0).float()
                     if self.ignore_values:
                         mask = mask * (y_true_slice != self.ignore_index).float()
@@ -1886,16 +1926,21 @@ def detection_metrics(
             df_fp = df_fp.drop(columns=["pred_class"])
     else:
         if df is not None:
-            gt_matched_classes = df["gt_class"].tolist()
-            pred_matched_classes = df["pred_class"].tolist()
-            TP_classes = len([1 for x, y in zip(gt_matched_classes, pred_matched_classes) if x == y])
-            FN_classes = len([1 for x, y in zip(gt_matched_classes, pred_matched_classes) if x != y])
+            # Class metrics must be computed only on true detections (TP by distance),
+            # not on all Hungarian associations.
+            tp_df = df[df["tag"] == "TP"]
+            if len(tp_df) > 0:
+                TP_classes = int((tp_df["gt_class"] == tp_df["pred_class"]).sum())
+                FN_classes = int((tp_df["gt_class"] != tp_df["pred_class"]).sum())
+            else:
+                TP_classes = 0
+                FN_classes = 0
         else:
             TP_classes = 0
             FN_classes = 0
 
         try:
-            precision_classes = TP_classes / (TP_classes + FP)
+            precision_classes = TP_classes / (TP_classes + FN_classes)
         except:
             precision_classes = 0
         try:

@@ -7,6 +7,7 @@ It handles data preparation, model setup, metrics, predictions, post-processing,
 and result saving for assigning unique IDs to each object in 2D and 3D images.
 """
 import os
+import math
 import torch
 import h5py
 import numpy as np
@@ -38,7 +39,8 @@ from biapy.data.post_processing.post_processing import (
     extract_synful_synapses,
     connect_pre_post_synapse_points_by_distance,
 )
-from biapy.data.post_processing.polygon_nms_postprocessing import stardist_instances_from_prediction
+from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
+from biapy.data.post_processing.gradient_tracking import flows_to_instances
 from biapy.data.pre_processing import create_instance_channels
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
@@ -49,6 +51,7 @@ from biapy.engine.metrics import (
     ContrastCELoss,
     SpatialEmbLoss,
 )
+import zarr
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
     is_main_process,
@@ -57,9 +60,19 @@ from biapy.utils.misc import (
     to_numpy_format,
     MetricLogger,
     os_walk_clean,
+    get_rank,
+    get_world_size,
 )
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
-from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data, ensure_3d_shape, load_synapse_gt_points
+from biapy.data.data_3D_manipulation import (
+    read_chunked_data,
+    read_chunked_nested_data,
+    ensure_3d_shape,
+    load_synapse_gt_points,
+    extract_patch_from_efficient_file,
+    insert_patch_in_efficient_file,
+    order_dimensions,
+)
 from biapy.data.dataset import PatchCoords
 
 
@@ -250,6 +263,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if set_model_output_channels:
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
+                elif channel in ["Gv", "Gh", "Gz"]:
+                    # Cellpose flow targets are unit vectors in [-1, 1]; tanh constrains
+                    # predictions to the same range and stabilises MSE training.
+                    self.head_activations.append("tanh")
+                    if set_model_output_channels:
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info[0] += "+" + channel
                 elif channel == "Db":
                     val_type = dst.get(channel, {}).get("val_type", "norm")
                     if val_type == "discretize":
@@ -371,7 +391,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 m = "IoU ({} channel)".format(channel) if channel != "A" else "IoU ({} channels)".format(channel)
                 self.train_metric_names += [m]
                 self.train_metric_best += ["max"]
-            elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R"]:
+            elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R", "Gv", "Gh", "Gz"]:
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
                 self.train_metric_names += ["L1 ({} channel)".format(channel)]
                 self.train_metric_best += ["min"]
@@ -602,6 +622,167 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         metric_logger.meters[list_names_to_use[i]].update(v)
         return out_metrics
 
+    def _effective_halo(self) -> tuple:
+        """Return per-axis halo sizes ``(hz, hy, hx)`` for chunk-boundary watershed.
+
+        When ``TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO`` is -1 the halo
+        is derived automatically as ``PATCH_SIZE[axis] // 8`` independently for
+        each axis.  A scalar non-negative value set by the user is broadcast to all
+        three axes.
+
+        Using per-axis values avoids over-extending the tiny Z axis (e.g. patch
+        Z=20 → hz=2) while keeping a generous halo in Y/X (e.g. patch 256 → h=32).
+        """
+        configured = self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO
+        if configured != -1:
+            v = int(configured)
+            return (v, v, v)
+        patch_size = self.cfg.DATA.PATCH_SIZE  # (Z, Y, X[, C])
+        hz = max(1, int(patch_size[0]) // 8)
+        hy = max(1, int(patch_size[1]) // 8)
+        hx = max(1, int(patch_size[2]) // 8)
+        return (hz, hy, hx)
+
+    def _create_instance_labels(self, pred: NDArray, save_dir: Optional[str] = None, verbose: bool = False):
+        """
+        Create instance label map from raw prediction channels (no I/O, no metrics).
+
+        Parameters
+        ----------
+        pred : NDArray
+            4-D array ``(Z, Y, X, C)``.
+
+        save_dir : str, optional
+            Directory for watershed debug data.  ``None`` disables debug output.
+
+        Returns
+        -------
+        pred_labels : NDArray
+            3-D uint32 array ``(Z, Y, X)`` with unique integer label per instance.
+        """
+        assert pred.ndim == 4, f"Expected 4D pred, got shape {pred.shape}"
+
+        if self.separated_class_channel:
+            pred = pred[..., :-1]
+
+        if "R" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            pred_labels, _ = stardist_instances_from_prediction(
+                pred[..., :self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R")].squeeze(),
+                pred[..., self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R"):].squeeze(),
+                prob_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH,
+                nms_iou_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH,
+                anisotropy=self.resolution[-self.dims:],
+                grid=self.stardist_grid,
+            )
+        elif "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            pred_labels = self.embedding_cluster.create_instances(
+                pred=pred if self.dims == 3 else pred[0],
+                fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,
+                min_mask_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM,
+                min_unclustered_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM,
+                min_object_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE,
+            )
+            if self.dims == 2:
+                pred_labels = np.expand_dims(pred_labels, 0)
+        elif any(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")):
+            channels = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            fg_channel = next((ch for ch in channels if ch in ("F", "M", "B")), "")
+            _pred_in = pred if self.dims == 3 else pred[0]
+            pred_labels = flows_to_instances(
+                pred=_pred_in,
+                channels=channels,
+                flow_type=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE,
+                fg_channel=fg_channel,
+                fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH,
+                flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD,
+                n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
+                dt=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DT,
+                suppressed=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED,
+                min_size=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE,
+                max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
+                resolution=list(self.resolution[-self.dims:]),
+            )
+            if self.dims == 2:
+                pred_labels = np.expand_dims(pred_labels, 0)
+        else:
+            pred_labels = watershed_by_channels(
+                data=pred,
+                channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                seed_channels=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS,
+                seed_channel_ths=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH,
+                topo_surface_channel=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL,
+                growth_mask_channels=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS,
+                growth_mask_channel_ths=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH,
+                remove_before=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_REMOVE_BEFORE_MW,
+                thres_small_before=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_REMOVE_SMALL_OBJ_BEFORE,
+                seed_morph_sequence=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE,
+                seed_morph_radius=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_RADIUS,
+                erode_and_dilate_growth_mask=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.ERODE_AND_DILATE_GROWTH_MASK,
+                fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.FORE_EROSION_RADIUS,
+                fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.FORE_DILATION_RADIUS,
+                resolution=self.resolution,
+                save_dir=save_dir,
+                watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES,
+                verbose=verbose,
+            )
+
+        if pred_labels.ndim == 2:
+            pred_labels = np.expand_dims(pred_labels, 0)
+
+        return pred_labels.astype(np.uint32)
+
+    @staticmethod
+    def _compute_global_id_remap(edges: List[Tuple[int, int]]) -> Dict[int, int]:
+        """Union-Find over boundary merge edges; returns {old_id: canonical_id}.
+
+        Only IDs that need to change are included in the returned dict.
+        Each component is represented by its minimum member ID, which avoids
+        collisions with isolated instance IDs that are not part of any edge.
+        """
+        if not edges:
+            return {}
+
+        all_ids: set = set()
+        for a, b in edges:
+            all_ids.add(a)
+            all_ids.add(b)
+
+        parent: Dict[int, int] = {i: i for i in all_ids}
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]  # path halving
+                x = parent[x]
+            return x
+
+        for a, b in edges:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[rb] = ra
+
+        # Minimum ID in each component becomes the canonical label
+        component_min: Dict[int, int] = {}
+        for uid in all_ids:
+            root = find(uid)
+            component_min[root] = min(component_min.get(root, uid), uid)
+
+        remap: Dict[int, int] = {}
+        for uid in all_ids:
+            new_id = component_min[find(uid)]
+            if new_id != uid:
+                remap[uid] = new_id
+        return remap
+
+    @staticmethod
+    def _apply_id_remap(patch: NDArray, remap: Dict[int, int]) -> NDArray:
+        """Vectorised per-chunk ID remapping via np.unique / inverse."""
+        flat = patch.ravel().astype(np.uint64)
+        unique_ids, inv = np.unique(flat, return_inverse=True)
+        mapped = np.array(
+            [remap.get(int(uid), int(uid)) for uid in unique_ids], dtype=np.uint64
+        )
+        return mapped[inv].reshape(patch.shape)
+
     def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, calculate_metrics: bool = True):
         """
         Instance segmentation workflow engine for test/inference.
@@ -632,55 +813,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ### INSTANCE SEGMENTATION ###
         #############################
         if not self.instances_already_created:
-            # Multi-head: instances + classification
+            # Multi-head: capture class channel before _create_instance_labels strips it
             if self.separated_class_channel:
                 class_channel = np.expand_dims(pred[..., -1], -1)
-                pred = pred[..., :-1]
 
             w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
             check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_CHECK_MW else None
-
-            if "R" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                print("Creating instances with Stardist procedure . . .")
-                pred_labels, _ = stardist_instances_from_prediction(
-                    pred[..., :self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R")].squeeze(), 
-                    pred[..., self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R"):].squeeze(), 
-                    prob_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH, 
-                    nms_iou_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH, 
-                    anisotropy=self.resolution[-self.dims:], # as a 1 is added at the beginning for 2D
-                    grid=self.stardist_grid, 
-                )
-            elif "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                pred_labels = self.embedding_cluster.create_instances(
-                    pred=pred if self.dims == 3 else pred[0],
-                    fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,
-                    min_mask_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM,
-                    min_unclustered_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM,
-                    min_object_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE
-                )
-                if self.dims == 2:
-                    pred_labels = np.expand_dims(pred_labels, 0)
-            else:
-                print("Creating instances with watershed . . .")
-                pred_labels = watershed_by_channels(
-                    data=pred,
-                    channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                    seed_channels=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS,
-                    seed_channel_ths=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH,
-                    topo_surface_channel=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL,
-                    growth_mask_channels=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS,
-                    growth_mask_channel_ths=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH,
-                    remove_before=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_REMOVE_BEFORE_MW,
-                    thres_small_before=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_REMOVE_SMALL_OBJ_BEFORE,
-                    seed_morph_sequence=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE,
-                    seed_morph_radius=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_RADIUS,
-                    erode_and_dilate_growth_mask=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.ERODE_AND_DILATE_GROWTH_MASK,
-                    fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.FORE_EROSION_RADIUS,
-                    fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.FORE_DILATION_RADIUS,
-                    resolution=self.resolution,
-                    save_dir=check_wa,
-                    watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES,
-                )
+            pred_labels = self._create_instance_labels(pred, save_dir=check_wa, verbose=self.cfg.TEST.VERBOSE)
 
             # Multi-head: instances + classification
             if self.separated_class_channel:
@@ -1590,14 +1729,453 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         Place any code that needs to be done after predicting all patches in "by chunks" setting.
         This function is called on all ranks.
+
+        For ``PROBLEM.INSTANCE_SEG.TYPE == "regular"`` and
+        ``TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk"`` this runs five passes:
+
+        A. Per-chunk instance labelling via :meth:`after_one_chunk_workflow_process` (base-class loop).
+        B. Global-offset assignment — each chunk *k* adds ``k * MAX_INSTANCES_PER_CHUNK`` to every
+           non-zero label so that IDs are unique across the whole volume.
+        C. Boundary-edge extraction — for every pair of spatially adjacent chunks we read the
+           shared boundary face and collect pairs of IDs that co-occur, indicating the same
+           physical instance was split by the tile boundary.
+        D. Union-Find on rank 0 to resolve connected components; the resulting remap is broadcast
+           to all ranks.
+        E. Relabelling — every chunk is rewritten with the canonical global ID for each instance.
         """
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-                raise NotImplementedError
-            else: 
+                # Instances go to PER_IMAGE_INSTANCES (same as the non-chunked pipeline).
+                self.test_chunked_workflow_process_vars["out_dir"] = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES
+                # Use uint64 to hold large globally-offset IDs.
+                self.test_chunked_workflow_process_vars["dtype_str"] = "uint64"
+
+                phases = self.cfg.TEST.BY_CHUNKS.PHASES
+                run_pass_a = "instance_creation" in phases
+                run_merging = "instance_merging" in phases
+
+                if not run_pass_a and not run_merging:
+                    return
+
+                save_out_tif = self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF
+
+                self._halo = self._effective_halo()
+                print(f"[Rank {get_rank()} ({os.getpid()})] Effective halo: {self._halo}")
+
+                if run_pass_a:
+                    # Temporarily suppress TIF creation inside the base-class pass.
+                    # The base class would save it after Pass A with un-merged local IDs,
+                    # which is wrong. We create the final TIF ourselves after Pass E.
+                    if save_out_tif:
+                        self.cfg.defrost()
+                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
+                        self.cfg.freeze()
+
+                    # ---- Pass A: per-chunk instance labelling (base-class loop, all ranks) ----
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Pass A: creating per-chunk instance labels . . .")
+                    super().after_all_chunk_prediction_workflow_process()
+
+                    if save_out_tif:
+                        self.cfg.defrost()
+                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = True
+                        self.cfg.freeze()
+
+                    # Retrieve grid parameters from the generator
+                    from biapy.data.generators.chunked_workflow_process_generator import (
+                        chunked_workflow_process_generator as _CWP,
+                    )
+                    tgen: _CWP = self.test_generator.dataset  # type: ignore
+                    zarr_path  = tgen._shared_zarr_path()
+                    axes_order = tgen.out_data_order
+                    z_dim, y_dim, x_dim = tgen.z_dim, tgen.y_dim, tgen.x_dim
+                    step_z, step_y, step_x = tgen.step_z, tgen.step_y, tgen.step_x
+                    vols_per_z = tgen.vols_per_z
+                    vols_per_y = tgen.vols_per_y
+                    vols_per_x = tgen.vols_per_x
+                else:
+                    # ---- Skip Pass A: derive grid params from config + existing label Zarr ----
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Pass A skipped ('instance_creation' not in PHASES), "
+                        "reusing existing instance label Zarr."
+                    )
+                    if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+                        axes_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
+                    else:
+                        axes_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+                    base_filename = os.path.splitext(self.current_sample["X_filename"])[0]
+                    zarr_path = os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, base_filename + ".zarr"
+                    )
+                    if not os.path.exists(zarr_path):
+                        raise FileNotFoundError(
+                            f"Pass A was skipped but the instance Zarr was not found: {zarr_path}"
+                        )
+                    _existing = zarr.open(zarr_path, mode="r", zarr_format=3)
+                    _, z_dim, _, y_dim, x_dim = order_dimensions(_existing.shape, axes_order)
+                    assert isinstance(z_dim, int) and isinstance(y_dim, int) and isinstance(x_dim, int)
+                    patch_size = self.cfg.DATA.PATCH_SIZE
+                    step_z = int(patch_size[0])
+                    step_y = int(patch_size[1])
+                    step_x = int(patch_size[2])
+                    vols_per_z = math.ceil(z_dim / step_z)
+                    vols_per_y = math.ceil(y_dim / step_y)
+                    vols_per_x = math.ceil(x_dim / step_x)
+
+                if not run_merging:
+                    return
+
+                total_chunks = vols_per_z * vols_per_y * vols_per_x
+
+                rank        = get_rank()
+                world_size  = get_world_size()
+
+                # Helper: linear chunk index → PatchCoords
+                def _chunk_coords(linear_idx: int) -> PatchCoords:
+                    zi, yi, xi = np.unravel_index(
+                        linear_idx, (vols_per_z, vols_per_y, vols_per_x)
+                    )
+                    z0 = int(zi) * step_z;  z1 = min(z0 + step_z, z_dim)
+                    y0 = int(yi) * step_y;  y1 = min(y0 + step_y, y_dim)
+                    x0 = int(xi) * step_x;  x1 = min(x0 + step_x, x_dim)
+                    return PatchCoords(z_start=z0, z_end=z1, y_start=y0, y_end=y1,
+                                       x_start=x0, x_end=x1)
+
+                my_chunk_indices = list(range(rank, total_chunks, world_size))
+
+                zarr_data = zarr.open(zarr_path, mode="r+", zarr_format=3)
+
+                # ---- Pass B1: collect per-chunk max ID (all ranks, disjoint) ----
+                print(
+                    f"[Rank {get_rank()} ({os.getpid()})] Pass B: collecting per-chunk max IDs from "
+                    f"{len(my_chunk_indices)}/{total_chunks} chunks . . ."
+                )
+                local_max_ids: Dict[int, int] = {}
+                for idx in my_chunk_indices:
+                    coords = _chunk_coords(idx)
+                    patch = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
+                    local_max_ids[idx] = int(patch.max())
+
+                # Gather max IDs from all ranks so every rank can compute prefix sums.
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    gathered_max: List = [None] * world_size
+                    dist.all_gather_object(gathered_max, local_max_ids)
+                    all_max_ids: Dict[int, int] = {}
+                    for d in gathered_max:
+                        if d:
+                            all_max_ids.update(d)
+                else:
+                    all_max_ids = local_max_ids
+
+                # Prefix-sum offsets: offset[k] = sum of max IDs of chunks 0 … k-1.
+                # This guarantees non-overlapping ID ranges without any fixed constant.
+                chunk_offsets: List[int] = [0] * total_chunks
+                for k in range(1, total_chunks):
+                    chunk_offsets[k] = chunk_offsets[k - 1] + all_max_ids.get(k - 1, 0)
+
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Pass B: chunk offsets computed "
+                        f"(max global ID will be {chunk_offsets[-1] + all_max_ids.get(total_chunks - 1, 0)})"
+                    )
+
+                # ---- Pass B2: apply offsets (all ranks, disjoint) ----
+                for i, idx in enumerate(my_chunk_indices):
+                    offset = np.uint64(chunk_offsets[idx])
+                    if offset == 0:
+                        if self.cfg.TEST.VERBOSE:
+                            print(
+                                f"[Rank {get_rank()} ({os.getpid()})] Pass B: chunk {i+1}/{len(my_chunk_indices)} "
+                                f"(linear idx {idx}) no offset needed (first chunk)"
+                            )
+                        continue
+                    coords = _chunk_coords(idx)
+                    patch = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
+                    nonzero = patch > 0
+                    patch[nonzero] = patch[nonzero].astype(np.uint64) + offset
+                    insert_patch_in_efficient_file(
+                        zarr_data, patch.astype(np.uint64), coords,
+                        axes_order, "ZYXC", mode="replace",
+                    )
+                    if self.cfg.TEST.VERBOSE:
+                        print(
+                            f"[Rank {get_rank()} ({os.getpid()})] Pass B: chunk {i+1}/{len(my_chunk_indices)} "
+                            f"(linear idx {idx}, coords {coords}) offset by {offset}"
+                        )
+
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Pass B done. Waiting for all ranks . . .")
+                    dist.barrier()
+
+                # ---- Pass C: extract boundary edges (all ranks, disjoint set of faces) ----
+                all_boundaries: List[Tuple[int, int, int, str]] = []
+                for zi in range(vols_per_z - 1):
+                    for yi in range(vols_per_y):
+                        for xi in range(vols_per_x):
+                            all_boundaries.append((zi, yi, xi, "z"))
+                for zi in range(vols_per_z):
+                    for yi in range(vols_per_y - 1):
+                        for xi in range(vols_per_x):
+                            all_boundaries.append((zi, yi, xi, "y"))
+                for zi in range(vols_per_z):
+                    for yi in range(vols_per_y):
+                        for xi in range(vols_per_x - 1):
+                            all_boundaries.append((zi, yi, xi, "x"))
+
+                my_boundaries = all_boundaries[rank::world_size]
+                print(
+                    f"[Rank {get_rank()} ({os.getpid()})] Pass C: extracting boundary edges from "
+                    f"{len(my_boundaries)}/{len(all_boundaries)} boundary faces . . ."
+                )
+
+                # Strip-based IoU boundary matching.
+                #
+                # For each boundary between adjacent chunks A and B we read the last
+                # H voxels of A and the first H voxels of B along the split axis.
+                # Using H > 1 gives a more reliable IoU estimate than a single face,
+                # especially for cells that taper near the boundary.
+                #
+                # We use IoU = cnt / (size_a + size_b - cnt) rather than
+                # cnt / min(size_a, size_b).  The min-based metric gives 1.0 whenever
+                # a small cell's face is entirely inside a large unrelated cell's face,
+                # causing a chain of spurious merges.  IoU is near 1.0 only when BOTH
+                # cells have nearly the same cross-section (true split cell) and drops
+                # to near 0 for a small cell inside a large cell's footprint.
+                # Pass C compares exactly the two voxel-thin face slices that are
+                # physically adjacent across each chunk boundary.  Multi-slice strips
+                # are wrong here: a cell of width W < strip would appear at local
+                # indices [strip-W .. strip-1] in face_a and [0 .. W-1] in face_b;
+                # the AND mask at the same local index would yield zero overlap and
+                # the cell would never be merged.  Using a single face slice from
+                # each side means both patches cover the same cross-sectional
+                # positions (they differ only in the boundary axis by one voxel) so
+                # the comparison is always well-defined.
+                from collections import Counter
+                local_edges: set = set()
+
+                for b in my_boundaries:
+                    zi, yi, xi, direction = b
+                    z0_a = zi * step_z;  y0_a = yi * step_y;  x0_a = xi * step_x
+                    z1_a = min(z0_a + step_z, z_dim)
+                    y1_a = min(y0_a + step_y, y_dim)
+                    x1_a = min(x0_a + step_x, x_dim)
+
+                    if direction == "z":
+                        z0_b = (zi + 1) * step_z
+                        face_a_coords = PatchCoords(
+                            z_start=z1_a - 1, z_end=z1_a,
+                            y_start=y0_a, y_end=y1_a, x_start=x0_a, x_end=x1_a,
+                        )
+                        face_b_coords = PatchCoords(
+                            z_start=z0_b, z_end=z0_b + 1,
+                            y_start=y0_a, y_end=y1_a, x_start=x0_a, x_end=x1_a,
+                        )
+                    elif direction == "y":
+                        y0_b = (yi + 1) * step_y
+                        face_a_coords = PatchCoords(
+                            z_start=z0_a, z_end=z1_a,
+                            y_start=y1_a - 1, y_end=y1_a, x_start=x0_a, x_end=x1_a,
+                        )
+                        face_b_coords = PatchCoords(
+                            z_start=z0_a, z_end=z1_a,
+                            y_start=y0_b, y_end=y0_b + 1, x_start=x0_a, x_end=x1_a,
+                        )
+                    else:  # x
+                        x0_b = (xi + 1) * step_x
+                        face_a_coords = PatchCoords(
+                            z_start=z0_a, z_end=z1_a,
+                            y_start=y0_a, y_end=y1_a, x_start=x1_a - 1, x_end=x1_a,
+                        )
+                        face_b_coords = PatchCoords(
+                            z_start=z0_a, z_end=z1_a,
+                            y_start=y0_a, y_end=y1_a, x_start=x0_b, x_end=x0_b + 1,
+                        )
+
+                    face_a = extract_patch_from_efficient_file(zarr_data, face_a_coords, axes_order)
+                    face_b = extract_patch_from_efficient_file(zarr_data, face_b_coords, axes_order)
+
+                    # Both face slices have the same cross-sectional shape (they are
+                    # one-voxel thick along the boundary axis); flatten to 1-D so
+                    # index i corresponds to the same spatial position in both.
+                    flat_a = face_a.ravel().astype(np.int64)
+                    flat_b = face_b.ravel().astype(np.int64)
+
+                    if flat_a.size != flat_b.size:
+                        continue
+
+                    mask = (flat_a > 0) & (flat_b > 0)
+                    if not mask.any():
+                        continue
+
+                    # Count co-occurring pixels per (a_id, b_id) pair and per-instance
+                    # face sizes, then apply the normalised-overlap threshold.
+                    overlap_counts: Dict[Tuple[int,int], int] = Counter()
+                    size_a: Dict[int, int] = Counter()
+                    size_b: Dict[int, int] = Counter()
+                    for a_id, b_id in zip(flat_a[mask], flat_b[mask]):
+                        overlap_counts[(int(a_id), int(b_id))] += 1
+                    for a_id in flat_a[flat_a > 0]:
+                        size_a[int(a_id)] += 1
+                    for b_id in flat_b[flat_b > 0]:
+                        size_b[int(b_id)] += 1
+
+                    thresh = self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH
+                    for (a_id, b_id), cnt in overlap_counts.items():
+                        union = size_a[a_id] + size_b[b_id] - cnt
+                        if union > 0 and cnt / union > thresh:
+                            local_edges.add((int(min(a_id, b_id)), int(max(a_id, b_id))))
+
+                local_edge_list: List[Tuple[int, int]] = list(local_edges)
+                print(
+                    f"[Rank {get_rank()} ({os.getpid()})] Pass C done: found {len(local_edge_list)} local merge edges."
+                )
+
+                # ---- Gather edges from all ranks ----
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    gathered: List = [None] * world_size
+                    dist.all_gather_object(gathered, local_edge_list)
+                    all_edges: List[Tuple[int, int]] = [
+                        e for sublist in gathered if sublist for e in sublist
+                    ]
+                else:
+                    all_edges = local_edge_list
+
+                # ---- Pass D: Union-Find on rank 0, then broadcast ----
+                if is_main_process():
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Pass D: computing global ID remap "
+                        f"from {len(all_edges)} total merge edges . . ."
+                    )
+                    remap = self._compute_global_id_remap(all_edges)
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Pass D done: {len(remap)} IDs will be remapped."
+                    )
+                else:
+                    remap = None
+
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    remap_container: List = [remap]
+                    dist.broadcast_object_list(remap_container, src=0)
+                    remap = remap_container[0]
+
+                if remap is None:
+                    remap = {}
+
+                # ---- Pass E: relabelling (all ranks, disjoint chunks) ----
+                if remap:
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Pass E: relabelling "
+                        f"{len(my_chunk_indices)}/{total_chunks} chunks . . ."
+                    )
+                    for i, idx in enumerate(my_chunk_indices):
+                        coords = _chunk_coords(idx)
+                        patch  = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
+                        patch_relabeled = self._apply_id_remap(patch, remap)
+                        insert_patch_in_efficient_file(
+                            zarr_data, patch_relabeled, coords,
+                            axes_order, "ZYXC", mode="replace",
+                        )
+                        if self.cfg.TEST.VERBOSE:
+                            print(
+                                f"[Rank {get_rank()} ({os.getpid()})] Pass E: chunk {i+1}/{len(my_chunk_indices)} "
+                                f"(linear idx {idx}) relabelled."
+                            )
+                else:
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Pass E: no cross-boundary merges needed, skipping relabelling.")
+
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Pass E done. Waiting for all ranks . . .")
+                    dist.barrier()
+
+                print(f"[Rank {get_rank()} ({os.getpid()})] Chunk-by-chunk instance merging complete. Result: {zarr_path}")
+
+                # Save TIF of the final merged labels if requested.
+                if save_out_tif:
+                    if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                        dist.barrier()
+                    if is_main_process():
+                        if not run_pass_a:
+                            # tgen was not created when skipping Pass A — save directly.
+                            data = np.array(zarr.open(zarr_path, mode="r", zarr_format=3))
+                            data = ensure_3d_shape(data)
+                            out_filename = os.path.splitext(os.path.basename(zarr_path))[0] + ".tif"
+                            save_tif(
+                                np.expand_dims(data, 0),
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                                [out_filename],
+                                verbose=True,
+                            )
+                        else:
+                            tgen.save_parallel_data_as_tif()
+                    if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                        dist.barrier()
+
+            else:
                 pass
-        else: # synapses
+        else:  # synapses
             pass
+
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        patch_in_data : List[PatchCoords]
+            Spatial coordinates of each chunk in the full volume.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            chunk_by_chunk = (self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk")
+            result = []
+            for chunk, coords in zip(chunks, patch_in_data):
+
+                if chunk_by_chunk:
+                    # Run watershed on a halo-extended region so seeds near chunk
+                    # boundaries have context from neighbouring chunks.  Only the
+                    # inner result is kept — no side zarr is needed.
+                    # This follows torch-em's predict_with_halo pattern: compute
+                    # with halo, write only the inner block.
+                    tgen = self.test_generator.dataset
+                    hz, hy, hx = self._halo
+                    z_dim, y_dim, x_dim = tgen.z_dim, tgen.y_dim, tgen.x_dim
+
+                    z0_h = max(0, coords.z_start - hz)
+                    z1_h = min(z_dim, coords.z_end + hz)
+                    y0_h = max(0, coords.y_start - hy)
+                    y1_h = min(y_dim, coords.y_end + hy)
+                    x0_h = max(0, coords.x_start - hx)
+                    x1_h = min(x_dim, coords.x_end + hx)
+
+                    halo_raw = extract_patch_from_efficient_file(
+                        tgen.X_parallel_data,
+                        PatchCoords(z_start=z0_h, z_end=z1_h, y_start=y0_h, y_end=y1_h,
+                                    x_start=x0_h, x_end=x1_h),
+                        tgen.out_data_order,
+                    )  # (Z+2H, Y+2H, X+2H, C)
+
+                    labels_halo = self._create_instance_labels(halo_raw)
+
+                    # Crop to inner region only
+                    dz0 = coords.z_start - z0_h;  dz1 = dz0 + (coords.z_end - coords.z_start)
+                    dy0 = coords.y_start - y0_h;  dy1 = dy0 + (coords.y_end - coords.y_start)
+                    dx0 = coords.x_start - x0_h;  dx1 = dx0 + (coords.x_end - coords.x_start)
+                    labels = labels_halo[dz0:dz1, dy0:dy1, dx0:dx1]
+                else:
+                    labels = self._create_instance_labels(chunk)
+
+                result.append(np.expand_dims(labels, -1))  # (Z, Y, X, 1) uint32
+            return result
+        else:
+            raise NotImplementedError
 
     def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Execute steps needed after merging all predicted patches into the original image in "by chunks" setting."""
@@ -1607,12 +2185,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         points_available = {}
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-                raise NotImplementedError
+                pass
             else:
-                # Load H5/Zarr and convert it into numpy array
                 fpath = os.path.join(
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(filename)[0] + ".zarr"
                 )
+                # Load H5/Zarr and convert it into numpy array
                 pred_file, pred = read_chunked_data(fpath)
                 pred = np.squeeze(np.array(pred, dtype=self.dtype))
                 if isinstance(pred_file, h5py.File):

@@ -641,7 +641,9 @@ def create_chunked_test_generator(
         dtype_str=dtype_str,
         n_classes=cfg.DATA.N_CLASSES,
         ignore_index=cfg.LOSS.IGNORE_INDEX,
-        instance_problem = cfg.PROBLEM.TYPE == "INSTANCE_SEG",
+        instance_problem=cfg.PROBLEM.TYPE == "INSTANCE_SEG",
+        z_start=cfg.TEST.BY_CHUNKS.Z_START,
+        z_end=cfg.TEST.BY_CHUNKS.Z_END,
     )
 
     # ---- Choose num_workers for this DataLoader ----
@@ -757,6 +759,8 @@ def create_chunked_workflow_process_generator(
         crop_shape=cfg.DATA.PATCH_SIZE,
         out_dir=out_dir,
         dtype_str=dtype_str,
+        z_start=cfg.TEST.BY_CHUNKS.Z_START,
+        z_end=cfg.TEST.BY_CHUNKS.Z_END,
     )
 
     # ---- Choose num_workers for this DataLoader ----

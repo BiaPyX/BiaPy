@@ -38,6 +38,7 @@ Threshold  Images   TP      FP      FN      Precision   Recall
 import argparse
 import os
 import sys
+import warnings
 from glob import glob
 from typing import Dict, List, Tuple
 
@@ -237,7 +238,7 @@ def evaluate_threshold_dir(gt_dir: str, pred_dir: str, exts: List[str], iou_thre
             evaluated += 1
 
         except Exception as e:
-            print(f"[WARN] Skipping '{stem}': {e}", file=sys.stderr)
+            warnings.warn(f"Skipping '{stem}': {e}")
             continue
 
     return tp_tot, fp_tot, fn_tot, evaluated
