@@ -204,10 +204,11 @@ class test_pair_data_generator(Dataset):
         sample = self.X.sample_list[idx]
         sample_extra_info = {}
 
-        img, img_file = load_img_data(
+        img, img_file, img_meta = load_img_data(
             self.X.dataset_info[sample.fid].path,
             is_3d=(self.ndim == 3),
             data_within_zarr_path=sample.get_path_in_zarr(),
+            load_meta=True,
         )
 
         if looks_like_hdf5(self.X.dataset_info[sample.fid].path) or any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5"]):
@@ -217,6 +218,9 @@ class test_pair_data_generator(Dataset):
                 )
             if img_file and isinstance(img_file, h5py.File):
                 sample_extra_info["img_file_to_close"] = img_file
+
+        if img_meta is not None:
+            sample_extra_info["img_meta"] = img_meta
 
         if self.provide_Y:
             # "gt_associated_id" available only in PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER

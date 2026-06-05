@@ -311,6 +311,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
                 [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
+                meta=self.current_sample.get("img_meta"),
             )
 
         return pred[key]
@@ -429,6 +430,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
             [self.current_sample["X_filename"]],
             verbose=self.cfg.TEST.VERBOSE,
+            meta=self.current_sample.get("img_meta"),
         )
 
     def after_full_image(self, pred: NDArray):
@@ -454,6 +456,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
             [self.current_sample["X_filename"]],
             verbose=self.cfg.TEST.VERBOSE,
+            meta=self.current_sample.get("img_meta"),
         )
 
     def after_all_images(self):

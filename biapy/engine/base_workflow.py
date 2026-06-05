@@ -1917,6 +1917,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
                         [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
                     )
 
                 # Calculate the metrics
@@ -1949,6 +1950,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                         [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
                     )
             else:
                 # Load prediction from file
@@ -2026,6 +2028,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
                     [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:

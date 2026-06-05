@@ -858,6 +858,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     out_dir,
                     filenames,
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
             else:
                 save_tif(
@@ -865,6 +866,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     out_dir,
                     filenames,
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
             # Add extra dimension if working in 2D
@@ -1040,6 +1042,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
                         [os.path.splitext(filenames[0])[0] + "_th_{}.tif".format(thr)],
                         verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
                     )
                     del colored_result
 
@@ -1213,6 +1216,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     out_dir_post_proc,
                     filenames,
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
             else:
                 save_tif(
@@ -1220,6 +1224,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     out_dir_post_proc,
                     filenames,
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
             if (
@@ -1328,6 +1333,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
                             [os.path.splitext(filenames[0])[0] + "_post-proc_th_{}.tif".format(thr)],
                             verbose=self.cfg.TEST.VERBOSE,
+                            meta=self.current_sample.get("img_meta"),
                         )
                         del colored_result
 
@@ -2387,6 +2393,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     out_dir,
                     [str(filename) + "_points.tif"],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
                 # Create another tif with the GT points, coloring them based on their ID in the dataframe (if available) and dilating them to make them more visible.
@@ -2404,7 +2411,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     out_dir,
                     [str(filename) + "_gt_ids.tif"],
                     verbose=self.cfg.TEST.VERBOSE,
-                )        
+                    meta=self.current_sample.get("img_meta"),
+                )
 
                 # Create another tif with the predicted points colored in green if they are TP and in red if they are FP, and with the GT points colored in blue. 
                 # This is useful to visually check the quality of the predictions and the errors. We do this only if GT is available, otherwise we don't know which 
@@ -2446,7 +2454,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             out_dir,
                             [str(filename) + f"_{key}_point_assoc.tif"],
                             verbose=self.cfg.TEST.VERBOSE,
-                        )   
+                            meta=self.current_sample.get("img_meta"),
+                        )
 
     def after_full_image(self, pred: NDArray):
         """
@@ -2876,6 +2885,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
                 [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
+                meta=self.current_sample.get("img_meta"),
             )
 
         return None

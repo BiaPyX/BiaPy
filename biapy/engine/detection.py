@@ -462,6 +462,7 @@ class Detection_Workflow(Base_Workflow):
                     out_dir,
                     [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
                 if self.separated_class_channel:
@@ -504,6 +505,7 @@ class Detection_Workflow(Base_Workflow):
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
             del points_pred_mask
 
@@ -845,6 +847,7 @@ class Detection_Workflow(Base_Workflow):
                     self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                     [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
                 # FP
@@ -868,6 +871,7 @@ class Detection_Workflow(Base_Workflow):
                     self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                     [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
         return df

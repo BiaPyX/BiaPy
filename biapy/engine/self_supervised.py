@@ -628,6 +628,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
                 [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
+                meta=self.current_sample.get("img_meta"),
             )
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                 assert isinstance(pred_mask, np.ndarray) and isinstance(pred_visi, np.ndarray)
@@ -636,12 +637,14 @@ class Self_supervised_Workflow(Base_Workflow):
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
                     [fname + "_masked.tif"],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
                 save_tif(
                     pred_visi,
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
                     [fname + "_reconstruction_and_visible.tif"],
                     verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
                 )
 
         # Calculate metrics

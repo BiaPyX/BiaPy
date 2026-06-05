@@ -523,6 +523,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
                 [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
+                meta=self.current_sample.get("img_meta"),
             )
 
         # Calculate metrics

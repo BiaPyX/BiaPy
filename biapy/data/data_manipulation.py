@@ -57,6 +57,7 @@ from typing import (
     Optional,
     Callable,
     Any,
+    Union,
 )
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
@@ -3229,8 +3230,11 @@ def onehot_encoding_to_img(encoded_image: NDArray) -> NDArray:
 
 
 def load_img_data(
-    path: str, is_3d: bool = False, data_within_zarr_path: Optional[str] = None
-) -> Tuple[NDArray[Any], str]:
+    path: str,
+    is_3d: bool = False,
+    data_within_zarr_path: Optional[str] = None,
+    load_meta: bool = False,
+) -> Union[Tuple[NDArray[Any], str], Tuple[NDArray[Any], str, Optional[Dict]]]:
     """
     Load data from a given path.
 
@@ -3245,6 +3249,11 @@ def load_img_data(
     data_within_zarr_path : str, optional
         Path to find the data within the Zarr file. E.g. 'volumes.labels.neuron_ids'.
 
+    load_meta : bool, optional
+        Whether to load and return image metadata as a third return value.
+        Only populated for standard image formats (e.g. TIFF); returns ``None``
+        for Zarr/HDF5 paths. See :func:`imread` for the structure of the dict.
+
     Returns
     -------
     data : Zarr, H5 or Numpy 3D/4D array
@@ -3252,6 +3261,10 @@ def load_img_data(
 
     file : str
         File of the data read. Useful to close it in case it is an H5 file.
+
+    meta : dict or None, optional
+        Only returned when ``load_meta=True``. Metadata dict as described in
+        :func:`imread`, or ``None`` when reading Zarr/HDF5 files.
     """
     if looks_like_hdf5(path) or any(path.endswith(x) for x in [".zarr", "n5", ".n5"]):
         from biapy.data.data_3D_manipulation import (
@@ -3263,14 +3276,23 @@ def load_img_data(
             file, data = read_chunked_nested_data(path, data_within_zarr_path)
         else:
             file, data = read_chunked_data(path)
+        if load_meta:
+            return data, file, None  # type: ignore
     else:
-        data = read_img_as_ndarray(path, is_3d=is_3d)
+        if load_meta:
+            data, metadata = read_img_as_ndarray(path, is_3d=is_3d, load_meta=True)  # type: ignore
+        else:
+            data = read_img_as_ndarray(path, is_3d=is_3d)
         file = path
+        if load_meta:
+            return data, file, metadata  # type: ignore
 
     return data, file  # type: ignore
 
 
-def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
+def read_img_as_ndarray(
+    path: str, is_3d: bool = False, load_meta: bool = False
+) -> Union[NDArray, Tuple[NDArray, Optional[Dict]]]:
     """
     Read an image from a given path.
 
@@ -3282,14 +3304,24 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
     is_3d : bool, optional
         Whether if the expected image to read is 3D or not.
 
+    load_meta : bool, optional
+        Whether to load and return image metadata as a second return value.
+        Only populated for TIFF files; returns ``None`` for all other formats.
+        See :func:`imread` for the structure of the metadata dict.
+
     Returns
     -------
     img : Numpy 3D/4D array
         Image read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
+
+    meta : dict or None, optional
+        Only returned when ``load_meta=True``. Metadata dict as described in
+        :func:`imread`, or ``None`` when the format does not carry metadata.
     """
     try:
         # Read image
         axes_position = None
+        metadata = None
         if path.endswith(".npy"):
             img = np.load(path)
         elif path.endswith(".pt"):
@@ -3305,7 +3337,10 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
             _, img = read_chunked_data(path)
             img = np.array(img)
         else:
-            img, axes_position = imread(path)
+            if load_meta:
+                img, axes_position, metadata = imread(path, load_meta=True)
+            else:
+                img, axes_position = imread(path)
         img = np.squeeze(img)
 
         if not is_3d:
@@ -3314,10 +3349,14 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
             img = ensure_3d_shape(img, path, data_axes_order=axes_position)
     except Exception as e:
         raise ValueError(f"Error reading image from path {path}. Error message: {e}")
+    if load_meta:
+        return img, metadata
     return img
 
 
-def imread(path: str) -> NDArray | Tuple[NDArray, Optional[str]]:
+def imread(
+    path: str, load_meta: bool = False
+) -> Union[Tuple[NDArray, Optional[str]], Tuple[NDArray, Optional[str], Optional[Dict]]]:
     """
     Read an image from a given path.
 
@@ -3328,22 +3367,51 @@ def imread(path: str) -> NDArray | Tuple[NDArray, Optional[str]]:
     path : str
         Path to the image to read.
 
+    load_meta : bool, optional
+        Whether to load and return TIFF metadata as a third return value. Only
+        populated for TIFF files; returns an empty dict for all other formats.
+
     Returns
     -------
     img : Numpy array
         Image read.
+
+    axes : str or None
+        Axes string extracted from TIFF series metadata (e.g. ``'ZCYX'``), or
+        ``None`` when not available.
+
+    meta : dict, optional
+        Only returned when ``load_meta=True``. Dictionary with any of the
+        following keys when present in the file: ``'imagej_metadata'``,
+        ``'ome_metadata'``, ``'tags'`` (a ``{name: value}`` dict of TIFF page
+        tags).
     """
     if path.lower().endswith((".tiff", ".tif")):
         try:
             with tifffile.TiffFile(path) as tif:
-                return tif.series[0].asarray(), tif.series[0].axes
+                img = tif.series[0].asarray()
+                axes = tif.series[0].axes
+                if load_meta:
+                    meta: Dict = {"axes": axes}
+                    if tif.imagej_metadata is not None:
+                        meta["imagej_metadata"] = tif.imagej_metadata
+                    if tif.ome_metadata is not None:
+                        meta["ome_metadata"] = tif.ome_metadata
+                    if tif.pages:
+                        meta["tags"] = {tag.name: tag.value for tag in tif.pages[0].tags.values()}
+                    return img, axes, meta
+                return img, axes
         except:
+            if load_meta:
+                return tifffile.imread(path), None, {}
             return tifffile.imread(path), None
     else:
+        if load_meta:
+            return imageio.imread(path), None, {}
         return imageio.imread(path), None
 
 
-def imwrite(path: str, image: NDArray):
+def imwrite(path: str, image: NDArray, meta: Optional[Dict] = None):
     """
     Write ``data`` in the given ``path``.
 
@@ -3352,23 +3420,95 @@ def imwrite(path: str, image: NDArray):
     Parameters
     ----------
     path : str
-        Path to the image to read.
+        Path to the image to write.
 
     image : Numpy array
         Image to store.
+
+    meta : dict, optional
+        Metadata dict as returned by :func:`imread` with ``load_meta=True``.
+        When provided, the following information is restored in the output file:
+
+        * **Axis layout** — inferred from ``meta['axes']``:
+
+          - *T only* (e.g. ``TYX``, ``TXY``): frame count is moved from the Z
+            slot to the T slot so ImageJ reads it as a time series.
+          - *T + Z* (e.g. ``TZYX``, ``TXYZ``): T and Z are reconstructed from
+            ``imagej_metadata['frames']`` / ``['slices']``.
+          - *Z only or plain 2D*: no change.
+
+        * **Spatial resolution** — ``XResolution``, ``YResolution``, and
+          ``ResolutionUnit`` from ``meta['tags']``.
+        * **ImageJ metadata** — ``unit``, ``min``, ``max``, ``loop``, ``fps``,
+          ``spacing``, and ``Info`` (software/acquisition notes) from
+          ``meta['imagej_metadata']``.
     """
     image = np.array(image)
     if path.lower().endswith((".tiff", ".tif")):
         assert image.ndim == 6, f"Image to write needs to have 6 dimensions (axes: TZCYXS). Image shape: {image.shape}"
+
+        # ---- axis reordering ------------------------------------------------
+        ij_source: Dict = {}
+        if meta is not None:
+            original_axes = (meta.get("axes") or "").upper()
+            has_t = "T" in original_axes
+            has_z = "Z" in original_axes
+            ij_source = meta.get("imagej_metadata") or {}
+            if has_t and not has_z:
+                # Pure time series (e.g. TYX, TXY): the n-frame count landed in
+                # the Z slot of the 6-D array; move it to the T slot so ImageJ
+                # reads the output as frames rather than slices.
+                image = np.swapaxes(image, 0, 1)
+            elif has_t and has_z:
+                # Combined T+Z (e.g. TZYX, TXYZ): BiaPy flattened T*Z into a
+                # single "Z" slot. Recover original sizes from ImageJ metadata
+                # and reshape so T and Z are separate dimensions again.
+                n_frames = int(ij_source.get("frames", 1))
+                n_slices = int(ij_source.get("slices", 1))
+                t_outer, z_inner, c, y, x, s = image.shape
+                if n_frames * n_slices == z_inner:
+                    image = image.reshape(n_frames, n_slices, c, y, x, s)
+            # else: pure Z-stack (ZYX, CZYX, …) or plain 2D (YX, CYX, …) → no change
+
+        # ---- build tifffile kwargs ------------------------------------------
+        tif_metadata: Dict = {"axes": "TZCYXS"}
+        # ImageJ metadata fields that carry acquisition / display information.
+        # Note: images/frames/slices/channels are intentionally omitted here;
+        # tifffile recomputes them from the actual array shape.
+        for src_key, dst_key in (
+            ("unit", "unit"),
+            ("min", "min"),
+            ("max", "max"),
+            ("loop", "loop"),
+            ("fps", "fps"),
+            ("spacing", "spacing"),
+        ):
+            if src_key in ij_source:
+                tif_metadata[dst_key] = ij_source[src_key]
+        if "Info" in ij_source:
+            tif_metadata["info"] = ij_source["Info"]
+
+        write_kwargs: Dict = {
+            "imagej": True,
+            "metadata": tif_metadata,
+            "compression": "zlib",
+            "compressionargs": {"level": 8},
+        }
+
+        # Spatial resolution (stored in TIFF tags as (numerator, denominator) rationals).
+        tags = (meta or {}).get("tags") or {}
+        xres = tags.get("XResolution")
+        yres = tags.get("YResolution")
+        if xres is not None and yres is not None:
+            def _rat(r: Any) -> float:
+                return r[0] / r[1] if isinstance(r, (tuple, list)) and len(r) == 2 and r[1] != 0 else float(r)
+            write_kwargs["resolution"] = (_rat(xres), _rat(yres))
+            resunit = tags.get("ResolutionUnit")
+            if resunit is not None:
+                write_kwargs["resolutionunit"] = resunit
+
         try:
-            tifffile.imwrite(
-                path,
-                image,
-                imagej=True,
-                metadata={"axes": "TZCYXS"},
-                compression="zlib",
-                compressionargs={"level": 8},
-            )
+            tifffile.imwrite(path, image, **write_kwargs)
         except:
             tifffile.imwrite(path, image, imagej=True, metadata={"axes": "TZCYXS"})
     else:
@@ -3554,7 +3694,13 @@ def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
     return mistmatch_message
 
 
-def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, verbose: bool = True):
+def save_tif(
+    X: NDArray,
+    data_dir: str,
+    filenames: Optional[List[str]] = None,
+    verbose: bool = True,
+    meta: Optional[Dict] = None,
+):
     """
     Save images in the given directory.
 
@@ -3577,6 +3723,11 @@ def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, v
 
     verbose : bool, optional
          To print saving information.
+
+    meta : dict, optional
+        Metadata dict as returned by :func:`imread` with ``load_meta=True``.
+        Passed through to :func:`imwrite` to preserve the original axis
+        ordering (e.g. time series vs. Z-stack).
     """
     if verbose:
         s = X.shape if not isinstance(X, list) else X[0].shape
@@ -3612,7 +3763,7 @@ def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, v
                 aux = np.expand_dims(X[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(X[i][0].transpose((0, 3, 1, 2)), -1).astype(_dtype)
-        imwrite(f, np.expand_dims(aux, 0))
+        imwrite(f, np.expand_dims(aux, 0), meta=meta)
 
 
 def save_tif_pair_discard(
