@@ -2610,12 +2610,25 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
         opts.extend(["PROBLEM.SUPER_RESOLUTION.UPSCALING", (1,) * dim_count])
 
+    larger_io_supported_with_separated_decoders = {
+        "unet",
+        "resunet",
+        "resunet++",
+        "attention_unet",
+        "seunet",
+        "resunet_se",
+    }
+
     if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
             opts.extend(["PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD", False])
         else:
-            if cfg.MODEL.LARGER_IO:
-                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.MODEL.LARGER_IO and model_arch not in larger_io_supported_with_separated_decoders:
+                raise ValueError(
+                    "'MODEL.LARGER_IO' with 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is only supported for "
+                    "U-Net-like models: ['unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se']. "
+                    f"Provided architecture: '{cfg.MODEL.ARCHITECTURE}'"
+                )
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
             _inst_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
@@ -2633,8 +2646,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError(
                     "'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' can only be True when 'DATA.N_CLASSES' is greater than 2"
                 )
-            if cfg.MODEL.LARGER_IO:
-                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.MODEL.LARGER_IO and model_arch not in larger_io_supported_with_separated_decoders:
+                raise ValueError(
+                    "'MODEL.LARGER_IO' with 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is only supported for "
+                    "U-Net-like models: ['unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se']. "
+                    f"Provided architecture: '{cfg.MODEL.ARCHITECTURE}'"
+                )
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is True")
             _det_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
@@ -2648,8 +2665,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
             opts.extend(["PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD", False])
         else:
-            if cfg.MODEL.LARGER_IO:
-                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.MODEL.LARGER_IO and model_arch not in larger_io_supported_with_separated_decoders:
+                raise ValueError(
+                    "'MODEL.LARGER_IO' with 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is only supported for "
+                    "U-Net-like models: ['unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se']. "
+                    f"Provided architecture: '{cfg.MODEL.ARCHITECTURE}'"
+                )
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is True")
             _i2i_supported = ["unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"]
