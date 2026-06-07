@@ -3795,7 +3795,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
 
         if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower() or "HRNET" in old_cfg["MODEL"]:
-            hrnet_block = old_cfg["MODEL"].get("HRNET", {})
+            if "HRNET" not in old_cfg["MODEL"]:
+                old_cfg["MODEL"]["HRNET"] = {}
+            hrnet_block = old_cfg["MODEL"]["HRNET"]
             if "STAGE1" in hrnet_block:
                 del hrnet_block["STAGE1"]
 
@@ -3818,7 +3820,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 variant_str = hrnet_block.get("VARIANT", "W18")
             
             hrnet_block["VARIANT"] = str(variant_str)
-
             # 2. Extract nested stages into the new dynamic flat lists
             if "STAGE2" in hrnet_block:
                 num_stages = 0
