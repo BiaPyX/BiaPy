@@ -190,38 +190,38 @@ class test_single_data_generator(Dataset):
 
         if img_meta is not None:
             sample_extra_info["img_meta"] = img_meta
-        else:
-            # Skip processing image
-            discard = False
-            if self.filter_samples:
-                assert self.filter_vals is not None and self.filter_signs is not None
-                discard = sample_satisfy_conds(
-                    img,
-                    self.filter_props,
-                    self.filter_vals,
-                    self.filter_signs,
-                )
-            sample_extra_info["discard"] = discard
 
-            if not discard:
-                # Preprocess test data
-                if self.preprocess_data:
-                    sample_extra_info["rescaled_shape"] = img.shape
-                    img = self.preprocess_data(
-                        self.preprocess_cfg,
-                        x_data=[img],
-                        is_2d=(self.ndim == 2),
-                    )[0]
-                    
-                # Reflect data to complete the needed shape
-                if not self.crop_center and self.reflect_to_complete_shape:
-                    reflected_orig_shape = img.shape
-                    img = pad_and_reflect(
-                        img,
-                        self.data_shape,
-                        verbose=True,
-                    )
-                    sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
+        # Skip processing image
+        discard = False
+        if self.filter_samples:
+            assert self.filter_vals is not None and self.filter_signs is not None
+            discard = sample_satisfy_conds(
+                img,
+                self.filter_props,
+                self.filter_vals,
+                self.filter_signs,
+            )
+        sample_extra_info["discard"] = discard
+
+        if not discard:
+            # Preprocess test data
+            if self.preprocess_data:
+                sample_extra_info["rescaled_shape"] = img.shape
+                img = self.preprocess_data(
+                    self.preprocess_cfg,
+                    x_data=[img],
+                    is_2d=(self.ndim == 2),
+                )[0]
+
+            # Reflect data to complete the needed shape
+            if not self.crop_center and self.reflect_to_complete_shape:
+                reflected_orig_shape = img.shape
+                img = pad_and_reflect(
+                    img,
+                    self.data_shape,
+                    verbose=True,
+                )
+                sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
 
         img_class = self.X.dataset_info[sample.fid].get_class_num()
 
