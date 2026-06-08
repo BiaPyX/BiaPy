@@ -20,10 +20,12 @@ Adapted from:
 https://github.com/yjn870/WDSR-pytorch/tree/master
 """
 import math
-from typing import Sequence
+from typing import List, Optional, Sequence
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+
+from biapy.models.blocks import get_activation
 
 
 class wdsr(nn.Module):
@@ -46,6 +48,8 @@ class wdsr(nn.Module):
         num_res_blocks=16,
         res_block_expansion=6,
         num_channels=1,
+        out_channels=None,
+        head_activations: Optional[List[str]] = None,
     ):
         """
         Initialize the WDSR model.
@@ -69,18 +73,29 @@ class wdsr(nn.Module):
             The expansion factor for the intermediate channels within each residual block.
             This defines the "wide activation". Defaults to 6.
         num_channels : int, optional
-            The number of input and output image channels (e.g., 1 for grayscale, 3 for RGB).
+            The number of input image channels (e.g., 1 for grayscale, 3 for RGB).
             Defaults to 1.
+        out_channels : int, optional
+            Number of output image channels after PixelShuffle. When ``None`` (default),
+            falls back to ``num_channels`` so existing behaviour is preserved.
+        head_activations : List[str], optional
+            Activation function names for the output head (e.g. ``["sigmoid"]``,
+            ``["softmax"]``, ``["linear"]``). The ``"ce_"`` prefix is stripped
+            automatically. When ``None``, no activation is applied (``"linear"``).
         """
         super(wdsr, self).__init__()
         # Extract the single integer scale factor from the input
         if type(scale) is not int and isinstance(scale, Sequence):
             scale = scale[0]
-        
+        if out_channels is None:
+            out_channels = num_channels
+        act_name = (head_activations[0] if head_activations else "linear").lower().removeprefix("ce_")
+        self.output_activation = get_activation(act_name)
+
         kernel_size = 3 # Kernel size for main body convolutions
         skip_kernel_size = 5 # Kernel size for the skip connection convolution
         weight_norm = torch.nn.utils.weight_norm # Alias for weight normalization utility
-        num_outputs = scale * scale * num_channels # Output channels needed for PixelShuffle
+        num_outputs = scale * scale * out_channels # Output channels needed for PixelShuffle
 
         # Main body of the WDSR model
         body = []
@@ -157,7 +172,7 @@ class wdsr(nn.Module):
         """
         x = self.body(x) + self.skip(x)
         x = self.shuf(x)
-        return x
+        return self.output_activation(x)
 
 
 class Block(nn.Module):

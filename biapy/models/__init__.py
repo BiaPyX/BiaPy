@@ -336,12 +336,14 @@ def build_model(
             args = dict(
                 ndim=ndim,
                 filters=cfg.MODEL.RCAN_CONV_FILTERS,
-                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else 1,
                 num_rg=cfg.MODEL.RCAN_RG_BLOCK_NUM,
                 num_rcab=cfg.MODEL.RCAN_RCAB_BLOCK_NUM,
                 reduction=cfg.MODEL.RCAN_REDUCTION_RATIO,
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
-                upscaling_layer=cfg.MODEL.RCAN_UPSCALING_LAYER,
+                upscaling_layer=cfg.MODEL.RCAN_UPSCALING_LAYER if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else False,
+                out_channels=sum(output_channels),
+                head_activations=head_activations,
             )
             model = rcan(**args)  # type: ignore
             callable_model = rcan  # type: ignore
@@ -349,19 +351,23 @@ def build_model(
             args = dict(
                 ndim=ndim,
                 input_shape=cfg.DATA.PATCH_SIZE,
-                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else 1,
                 n_ResGroup=4,
                 n_RCAB=4,
+                out_channels=sum(output_channels),
+                head_activations=head_activations,
             )
             model = DFCAN(**args)  # type: ignore
             callable_model = DFCAN  # type: ignore
         elif modelname == "wdsr":
             args = dict(
-                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else 1,
                 num_filters=32,
                 num_res_blocks=8,
                 res_block_expansion=6,
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
+                out_channels=sum(output_channels),
+                head_activations=head_activations,
             )
             model = wdsr(**args)  # type: ignore
             callable_model = wdsr  # type: ignore
@@ -387,16 +393,18 @@ def build_model(
             callable_model = MaskedAutoencoderViT  # type: ignore
         elif modelname == "nafnet":
             args = dict(
-                img_channel=cfg.DATA.PATCH_SIZE[-1], 
-                width=cfg.MODEL.NAFNET.WIDTH, 
+                img_channel=cfg.DATA.PATCH_SIZE[-1],
+                width=cfg.MODEL.NAFNET.WIDTH,
                 middle_blk_num=cfg.MODEL.NAFNET.MIDDLE_BLK_NUM,
                 enc_blk_nums=cfg.MODEL.NAFNET.ENC_BLK_NUMS,
                 dec_blk_nums=cfg.MODEL.NAFNET.DEC_BLK_NUMS,
-                drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0], 
+                drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0],
                 dw_expand=cfg.MODEL.NAFNET.DW_EXPAND,
                 ffn_expand=cfg.MODEL.NAFNET.FFN_EXPAND,
                 discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,
                 patchgan_base_filters=cfg.MODEL.NAFNET.PATCHGAN.BASE_FILTERS,
+                out_channels=sum(output_channels),
+                head_activations=head_activations,
             )
             callable_model = NAFNet   # type: ignore
             model = callable_model(**args)  # type: ignore

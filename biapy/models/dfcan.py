@@ -17,11 +17,13 @@ The implementation is adapted from the original DFCAN-pytorch repository.
 """
 # Adapted from https://github.com/L0-zhang/DFCAN-pytorch
 
-from typing import Sequence, Type
+from typing import List, Optional, Sequence, Type
 
 import torch
 import torch.nn as nn
 import torch.fft
+
+from biapy.models.blocks import get_activation
 
 
 def fftshift2d(img, size_psc=128):
@@ -238,7 +240,7 @@ class DFCAN(nn.Module):
       microscopy <https://www.nature.com/articles/s41592-020-01048-5>`_.
     """
 
-    def __init__(self, ndim, input_shape, scale=2, n_ResGroup=4, n_RCAB=4):
+    def __init__(self, ndim, input_shape, scale=2, n_ResGroup=4, n_RCAB=4, out_channels=None, head_activations: Optional[List[str]] = None):
         """
         Initialize the DFCAN model for super-resolution.
 
@@ -263,6 +265,14 @@ class DFCAN(nn.Module):
             The number of `ResGroup` blocks to use in the network. Defaults to 4.
         n_RCAB : int, optional
             The number of `RCAB` blocks within each `ResGroup`. Defaults to 4.
+        out_channels : int, optional
+            Number of output image channels. When ``None`` (default), falls back to
+            ``input_shape[-1]`` so existing behaviour is preserved.
+        head_activations : List[str], optional
+            Activation function names for the output head (e.g. ``["sigmoid"]``,
+            ``["softmax"]``, ``["linear"]``). The ``"ce_"`` prefix is stripped
+            automatically. Defaults to ``["sigmoid"]`` to preserve the original
+            DFCAN behaviour.
         """
         super().__init__()
         if type(scale) is not int and isinstance(scale, Sequence):
@@ -270,6 +280,10 @@ class DFCAN(nn.Module):
         self.ndim = ndim
         size_psc = input_shape[0]
         conv = nn.Conv3d if self.ndim == 3 else nn.Conv2d
+        if out_channels is None:
+            out_channels = input_shape[-1]
+        act_name = (head_activations[0] if head_activations else "sigmoid").lower().removeprefix("ce_")
+        self.output_activation = get_activation(act_name)
 
         self.input = nn.Sequential(
             conv(input_shape[-1], 64, kernel_size=3, stride=1, padding="same"),
@@ -284,10 +298,7 @@ class DFCAN(nn.Module):
             nn.GELU(),
         )
         self.pixel_shuffle = nn.PixelShuffle(scale)
-        self.conv_sigmoid = nn.Sequential(
-            conv(64, input_shape[-1], kernel_size=3, stride=1, padding="same"),
-            nn.Sigmoid(),
-        )
+        self.conv_out = conv(64, out_channels, kernel_size=3, stride=1, padding="same")
 
     def forward(self, x) -> torch.Tensor:
         """
@@ -317,5 +328,5 @@ class DFCAN(nn.Module):
         x = self.RGs(x)
         x = self.conv_gelu(x)
         x = self.pixel_shuffle(x)  # upsampling
-        x = self.conv_sigmoid(x)
-        return x
+        x = self.conv_out(x)
+        return self.output_activation(x)

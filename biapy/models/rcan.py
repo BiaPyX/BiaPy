@@ -26,10 +26,12 @@ Reference:
 Adapted from:
 https://github.com/yjn870/RCAN-pytorch
 """
-from typing import Sequence
+from typing import List, Optional, Sequence
 
 import torch
 from torch import nn
+
+from biapy.models.blocks import get_activation
 
 class ChannelAttention(nn.Module):
     """
@@ -246,6 +248,8 @@ class rcan(nn.Module):
         num_rcab=20,
         reduction=16,
         upscaling_layer=True,
+        out_channels=None,
+        head_activations: Optional[List[str]] = None,
     ):
         """
         Initialize the RCAN model.
@@ -260,7 +264,7 @@ class rcan(nn.Module):
         ndim : int
             The number of spatial dimensions of the input data (2 for 2D, 3 for 3D).
         num_channels : int, optional
-            The number of input and output image channels (e.g., 3 for RGB). Defaults to 3.
+            The number of input image channels (e.g., 3 for RGB). Defaults to 3.
         filters : int, optional
             The number of feature maps (channels) used throughout the main body of
             the network (e.g., within RGs and RCABs). Defaults to 64.
@@ -277,17 +281,28 @@ class rcan(nn.Module):
             If True, an upscaling layer (using PixelShuffle) is included before the
             final convolutional layer to perform super-resolution. If False, the
             model outputs at the same resolution as the input features. Defaults to True.
+        out_channels : int, optional
+            Number of output image channels. When ``None`` (default), falls back to
+            ``num_channels`` so existing behaviour is preserved.
+        head_activations : List[str], optional
+            Activation function names for the output head (e.g. ``["sigmoid"]``,
+            ``["softmax"]``, ``["linear"]``). The ``"ce_"`` prefix is stripped
+            automatically. When ``None``, no activation is applied (``"linear"``).
         """
         super(rcan, self).__init__()
         if type(scale) is not int and isinstance(scale, Sequence):
             scale = scale[0]
         self.ndim = ndim
         self.upscaling_layer = upscaling_layer
+        if out_channels is None:
+            out_channels = num_channels
+        act_name = (head_activations[0] if head_activations else "linear").lower().removeprefix("ce_")
+        self.output_activation = get_activation(act_name)
         if ndim == 2:
             conv = nn.Conv2d
         else:
             conv = nn.Conv3d
-        
+
         # Shallow Feature Extraction (SF)
         self.sf = conv(num_channels, filters, kernel_size=3, padding="same")
 
@@ -303,9 +318,9 @@ class rcan(nn.Module):
                 conv(filters, filters * (scale**2), kernel_size=3, padding="same"),
                 nn.PixelShuffle(scale),
             )
-        
+
         # Final Reconstruction Layer
-        self.conv2 = conv(filters, num_channels, kernel_size=3, padding="same")
+        self.conv2 = conv(filters, out_channels, kernel_size=3, padding="same")
 
     def forward(self, x) -> torch.Tensor:
         """
@@ -339,4 +354,4 @@ class rcan(nn.Module):
         if self.upscaling_layer:
             x = self.upscale(x)
         x = self.conv2(x)
-        return x
+        return self.output_activation(x)

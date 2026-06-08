@@ -2697,11 +2697,53 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
             )
         if cfg.PROBLEM.TYPE in [
-            "SEMANTIC_SEG",
             "INSTANCE_SEG",
             "DETECTION",
-            "DENOISING",
         ]:
+            if model_arch not in [
+                "unet",
+                "resunet",
+                "resunet++",
+                "seunet",
+                "attention_unet",
+                "resunet_se",
+                "unetr",
+                "multiresunet",
+                "unext_v1",
+                "unext_v2",
+                "hrnet",
+                "stunet",
+            ]:
+                raise ValueError(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
+                        cfg.PROBLEM.TYPE
+                    )
+                )
+        elif cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
+            if model_arch not in [
+                "edsr",
+                "rcan",
+                "dfcan",
+                "wdsr",
+                "unet",
+                "resunet",
+                "resunet++",
+                "seunet",
+                "attention_unet",
+                "resunet_se",
+                "unetr",
+                "multiresunet",
+                "unext_v1",
+                "unext_v2",
+                "hrnet",
+                "stunet",
+            ]:
+                raise ValueError(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
+                        cfg.PROBLEM.TYPE
+                    )
+                )
+        elif cfg.PROBLEM.TYPE == "DENOISING":
             if model_arch not in [
                 "unet",
                 "resunet",

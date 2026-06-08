@@ -29,12 +29,15 @@ Chu, Xiaojie and Chen, Liangyu and Yu, Wenqing. "NAFSSR: Stereo Image
 Super-Resolution Using NAFNet." CVPR Workshops, 2022.
 """
 
+from typing import List, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from yacs.config import CfgNode as CN
 from torchinfo import summary
 
+from biapy.models.blocks import get_activation
 from biapy.models.patchgan import PatchGANDiscriminator
 
 class SimpleGate(nn.Module):
@@ -205,24 +208,26 @@ class NAFNet(nn.Module):
     """
 
     def __init__(
-        self, 
-        img_channel=3, 
-        width=16, 
-        middle_blk_num=1, 
-        enc_blk_nums=[], 
+        self,
+        img_channel=3,
+        width=16,
+        middle_blk_num=1,
+        enc_blk_nums=[],
         dec_blk_nums=[],
-        drop_out_rate=0.0,   
-        dw_expand=2,         
+        drop_out_rate=0.0,
+        dw_expand=2,
         ffn_expand=2,
         discriminator_arch=None,
-        patchgan_base_filters=64,     
+        patchgan_base_filters=64,
+        out_channels=None,
+        head_activations: Optional[List[str]] = None,
     ):
         """Initialize a NAFNet model.
 
         Parameters
         ----------
         img_channel : int, optional
-            Number of input/output image channels.
+            Number of input image channels.
         width : int, optional
             Base number of channels.
         middle_blk_num : int, optional
@@ -237,6 +242,14 @@ class NAFNet(nn.Module):
             Expansion ratio for depthwise branch.
         ffn_expand : int, optional
             Expansion ratio for feed-forward branch.
+        out_channels : int, optional
+            Number of output image channels. When ``None`` (default), falls back to
+            ``img_channel`` so existing behaviour is preserved. When different from
+            ``img_channel``, a 1×1 projection is added for the residual skip path.
+        head_activations : List[str], optional
+            Activation function names for the output head (e.g. ``["sigmoid"]``,
+            ``["softmax"]``, ``["linear"]``). The ``"ce_"`` prefix is stripped
+            automatically. When ``None``, no activation is applied (``"linear"``).
 
         Notes
         -----
@@ -244,9 +257,18 @@ class NAFNet(nn.Module):
         divisible by the encoder downsampling factor.
         """
         super().__init__()
+        if out_channels is None:
+            out_channels = img_channel
+        act_name = (head_activations[0] if head_activations else "linear").lower().removeprefix("ce_")
+        self.output_activation = get_activation(act_name)
 
         self.intro = nn.Conv2d(in_channels=img_channel, out_channels=width, kernel_size=3, padding=1, stride=1, groups=1, bias=True)
-        self.ending = nn.Conv2d(in_channels=width, out_channels=img_channel, kernel_size=3, padding=1, stride=1, groups=1, bias=True)
+        self.ending = nn.Conv2d(in_channels=width, out_channels=out_channels, kernel_size=3, padding=1, stride=1, groups=1, bias=True)
+        # Learned projection for the input skip when channel counts differ
+        self.skip_proj = (
+            nn.Conv2d(img_channel, out_channels, kernel_size=1, bias=False)
+            if out_channels != img_channel else None
+        )
 
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
@@ -290,7 +312,7 @@ class NAFNet(nn.Module):
         discriminator = None
         if discriminator_arch == "patchgan":
             discriminator = PatchGANDiscriminator(
-                in_channels=img_channel,
+                in_channels=out_channels,
                 base_filters=patchgan_base_filters,
             )
 
@@ -348,9 +370,10 @@ class NAFNet(nn.Module):
             x = decoder(x)
 
         x = self.ending(x)
-        x = x + inp
+        skip = self.skip_proj(inp) if self.skip_proj is not None else inp
+        x = x + skip
 
-        pred = x[:, :, :H, :W]
+        pred = self.output_activation(x[:, :, :H, :W])
 
         if self.discriminator is not None:
             return {"pred": pred}
