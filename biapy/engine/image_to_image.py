@@ -119,7 +119,11 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.model_output_channel_info = ["pred{}".format(i) for i in range(len(self.model_output_channels))]
         self.gt_channels_expected = self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
         self.separated_class_channel = False
-        self.head_activations = ["linear"] * self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
+        if self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT != []:
+            assert len(self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT) == self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS, "The number of activations defined in cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT must be the same as the number of output channels defined in cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS or cfg.PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO"    
+            self.head_activations = self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT
+        else:
+            self.head_activations = ["linear"] * self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
 
         super().define_activations_and_channels()
 

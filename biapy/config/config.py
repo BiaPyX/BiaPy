@@ -549,6 +549,9 @@ class Config:
         # for a real use case and a more detailed description:
         #   - https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html
         _C.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER = False
+        # Activation function to be applied to the output channels of the model. It can be a string or a list of strings if 
+        # different activation functions are desired for different channels. Leave empty to use linear activation.
+        _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT = []
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3. Dataset
