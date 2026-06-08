@@ -1617,42 +1617,7 @@ class Config:
         # Whether to maintain or not the upscaling layer. 
         _C.MODEL.RCAN_UPSCALING_LAYER = True
 
-        # These parameters can be used as a template for building custom HRNet versions
-        _C.MODEL.HRNET = CN()
-        # Whether to downsample the input in Z or not
-        _C.MODEL.HRNET.Z_DOWN = True
-        # Type of block to use in HRNet. Options: 'BASIC', 'BOTTLENECK', 'CONVNEXT_V1' and 'CONVNEXT_V2'
-        _C.MODEL.HRNET.BLOCK_TYPE = 'BASIC'
-        # Indicate whether to use a custom configuration for HRNet or use a predefined one. If set to True 
-        # MODEL.HRNET.STAGE2, MODEL.HRNET.STAGE3 and MODEL.HRNET.STAGE4 will be used. If False, the configuration
-        # will be set depending on the selected architecture (see PROBLEM.MODEL_ARCHITECTURE)
-        _C.MODEL.HRNET.HEAD_TYPE = "FCN" # Options: "OCR", "ASPP", "PSP", "FCN"
-        _C.MODEL.HRNET.CUSTOM = False
-
-        # These stages are used for HRNet18, HRNet32, HRNet48 and HRNet64
-        _C.MODEL.HRNET.STAGE2 = CN()
-        _C.MODEL.HRNET.STAGE2.NUM_MODULES = 1
-        _C.MODEL.HRNET.STAGE2.NUM_BRANCHES = 2
-        _C.MODEL.HRNET.STAGE2.NUM_BLOCKS = [4, 4]
-        _C.MODEL.HRNET.STAGE2.NUM_CHANNELS = [18, 36]
-        _C.MODEL.HRNET.STAGE3 = CN()
-        _C.MODEL.HRNET.STAGE3.NUM_MODULES = 4
-        _C.MODEL.HRNET.STAGE3.NUM_BRANCHES = 3
-        _C.MODEL.HRNET.STAGE3.NUM_BLOCKS = [4, 4, 4]
-        _C.MODEL.HRNET.STAGE3.NUM_CHANNELS = [18, 36, 72]
-        _C.MODEL.HRNET.STAGE4 = CN()
-        _C.MODEL.HRNET.STAGE4.NUM_MODULES = 3
-        _C.MODEL.HRNET.STAGE4.NUM_BRANCHES = 4
-        _C.MODEL.HRNET.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
-        _C.MODEL.HRNET.STAGE4.NUM_CHANNELS = [18, 36, 72, 144]
-
-        _C.MODEL.STUNET = CN()
-        # Variant of the STUNet model. Options are: 'small', 'base', 'large'
-        _C.MODEL.STUNET.VARIANT = 'base'
-        # Whether to use a pretrained version of STUNet on ImageNet
-        _C.MODEL.STUNET.PRETRAINED = False
-        
-        # NafNet 
+        # NafNet
         _C.MODEL.NAFNET = CN()
         # Base number of channels (width) used in the first layer and base levels.
         _C.MODEL.NAFNET.WIDTH = 16
