@@ -1886,17 +1886,20 @@ all_test_info["Test32"] = {
         "DATA": {
             "PATCH_SIZE": "(128, 128, 1)",
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "noisy"),
-                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "gt"),
+                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "train", "noisy"),
+                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "train", "gt"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "noisy"),
-                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "gt"),
+                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "test", "noisy"),
+                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "test", "gt"),
                 "LOAD_GT": True,
             },
             "VAL": {
-                "FROM_TRAIN": True,
+                "FROM_TRAIN": False,
+                "PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "val", "noisy"),
+                "GT_PATH": os.path.join(data_folder, "denoising", "NAFNet_denoising_data", "NAFNet_denoising_data", "val", "gt"),
+                "IN_MEMORY": True,
             },
             "NORMALIZATION": {
                 "TYPE": "scale_range",
@@ -1954,8 +1957,10 @@ all_test_info["Test32"] = {
         },
     },
     "internal_checks": [
-        {"type": "regular", "pattern": "Test MAE:", "gt": False, "value": 1.0},
-        {"type": "regular", "pattern": "Test MSE:", "gt": False, "value": 1.0},
+        {"type": "regular", "pattern": "Train MAE:", "gt": False, "value": 0.1},
+        {"type": "regular", "pattern": "Validation MAE:", "gt": False, "value": 0.1},
+        {"type": "regular", "pattern": "Validation loss:", "gt": False, "value": 55},
+        {"type": "regular", "pattern": "Test MAE:", "gt": False, "value": 6000},
     ]
 }
 
