@@ -2203,21 +2203,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.NDIM == "2D":
                 raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
             _valid_phases = {"prediction", "instance_creation", "instance_merging"}
-            _instance_only_phases = {"instance_creation", "instance_merging"}
             if not isinstance(cfg.TEST.BY_CHUNKS.PHASES, (list, tuple)) or len(cfg.TEST.BY_CHUNKS.PHASES) == 0:
                 raise ValueError("'TEST.BY_CHUNKS.PHASES' must be a non-empty list")
-            _unknown = set(cfg.TEST.BY_CHUNKS.PHASES) - _valid_phases
-            if _unknown:
-                raise ValueError(
-                    f"'TEST.BY_CHUNKS.PHASES' contains unknown phase(s): {sorted(_unknown)}. "
-                    f"Valid values are: {sorted(_valid_phases)}"
-                )
-            _used_instance_phases = _instance_only_phases & set(cfg.TEST.BY_CHUNKS.PHASES)
-            if _used_instance_phases and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-                raise ValueError(
-                    f"Phases {sorted(_used_instance_phases)} in 'TEST.BY_CHUNKS.PHASES' are only valid "
-                    "for 'INSTANCE_SEG' workflows"
-                )
+            assert set(cfg.TEST.BY_CHUNKS.PHASES).issubset(_valid_phases), f"'TEST.BY_CHUNKS.PHASES' can only contain these values: {_valid_phases}"
             if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
                 assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
                     "chunk_by_chunk",
