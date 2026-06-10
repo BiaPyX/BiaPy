@@ -1004,6 +1004,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     and is_main_process()
                 ):
                     save_model(
+                        output_dir=self.cfg.PATHS.CHECKPOINT,
                         cfg=self.cfg,
                         biapy_version=biapy.__version__,
                         jobname=self.job_identifier,
@@ -1036,7 +1037,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.cfg.PATHS.CHECKPOINT,
                         "{}-checkpoint-best.pth".format(self.job_identifier),
                     )
-                    import pdb; pdb.set_trace()
                     print(
                         "Val loss improved from {} to {}, saving model to {}".format(
                             self.val_best_loss, test_stats["loss"], f
@@ -1050,6 +1050,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     if is_main_process():
                         self.checkpoint_path = save_model(
+                            output_dir=self.cfg.PATHS.CHECKPOINT,
                             cfg=self.cfg,
                             biapy_version=biapy.__version__,
                             jobname=self.job_identifier,
@@ -1147,18 +1148,25 @@ class Base_Workflow(metaclass=ABCMeta):
             print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished, step 1) . . . ")
             dist.barrier()
 
+        # After training, clear CHECKPOINT_FILE so subsequent loads (BMZ prep, test phase)
+        # use the job's checkpoint directory instead of the fine-tuning source file.
+        if self.cfg.PATHS.CHECKPOINT_FILE != "":
+            self.cfg.merge_from_list(["PATHS.CHECKPOINT_FILE", ""])
+
         # Save output sample to export the model to BMZ
+        self.latest_checkpoint_loaded = False
         if "test_output" not in self.bmz_config:
             assert self.model_without_ddp
             self.model_without_ddp.eval()
             # Load best checkpoint on validation to ensure it
-            _ = load_model_checkpoint(
+            _, self.checkpoint_path = load_model_checkpoint(
                 cfg=self.cfg,
                 jobname=self.job_identifier,
                 model_without_ddp=self.model_without_ddp,
                 device=self.device,
                 skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
             )
+            self.latest_checkpoint_loaded = True
 
             # Save BMZ input/output so the user could export the model to BMZ later
             self.prepare_bmz_data(self.bmz_config["test_input"])
@@ -1350,8 +1358,8 @@ class Base_Workflow(metaclass=ABCMeta):
             # Save BMZ input/output so the user could export the model to BMZ later
             self.prepare_bmz_data(self.bmz_config["test_input"])
 
-        # Load best checkpoint on validation
-        if self.cfg.TRAIN.ENABLE:
+        # Load best checkpoint
+        if self.cfg.TRAIN.ENABLE and not self.latest_checkpoint_loaded:
             self.start_epoch, self.checkpoint_path = load_model_checkpoint(
                 cfg=self.cfg,
                 jobname=self.job_identifier,

@@ -305,7 +305,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None, extension="pth"):
+def save_model(output_dir, cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None, extension="pth"):
     """
     Save the model checkpoint to the specified path.
 
@@ -315,6 +315,8 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
 
     Parameters
     ----------
+    output_dir : str or Path
+        Directory where the checkpoint will be saved.
     cfg : YACS CN object
         The configuration object.
     biapy_version : str
@@ -339,7 +341,7 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
     Path
         The path to the saved checkpoint file.
     """
-    output_dir = Path(cfg.PATHS.CHECKPOINT)
+    output_dir = Path(output_dir)
     checkpoint_paths = [output_dir / "{}-checkpoint-{}.{}".format(jobname, str(epoch), extension)]
 
     for checkpoint_path in checkpoint_paths:
