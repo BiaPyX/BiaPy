@@ -539,7 +539,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         checkpoint_state_dict = checkpoint
 
     if not skip_unmatched_layers:
-        model_without_ddp.load_state_dict(checkpoint_state_dict, strict=False)
+        model_without_ddp.load_state_dict(checkpoint_state_dict, strict=True)
     else:
         # Filter out layers with mismatched shapes
         filtered_state_dict = {}
