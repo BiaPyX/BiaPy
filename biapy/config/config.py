@@ -1541,8 +1541,6 @@ class Config:
         _C.MODEL.LARGER_IO = False
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
-        # When loading checkpoints whether only model's weights are going to be loaded or optimizer, epochs and loss_scaler.
-        _C.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS = True
         # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''.
         # Options: 'best_on_val' or 'last_on_train'
         _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
@@ -1553,7 +1551,7 @@ class Config:
         # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be
         # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
         _C.MODEL.SKIP_UNMATCHED_LAYERS = False
-        # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to
+        # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_EPOCH. Set it to -1 to
         # not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
         # Number of ConvNeXtBlocks in each level.

@@ -3753,6 +3753,10 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             if old_cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] and load_checkpoint:
                 old_cfg["MODEL"]["ITEMS_TO_LOAD_FROM_CHECKPOINT"] = ["weights", "norm", "model_arch"]
             del old_cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"]
+        if "LOAD_CHECKPOINT_ONLY_WEIGHTS" in old_cfg["MODEL"]:
+            if old_cfg["MODEL"]["LOAD_CHECKPOINT_ONLY_WEIGHTS"]:
+                old_cfg["MODEL"]["ITEMS_TO_LOAD_FROM_CHECKPOINT"] = ["weights"]
+            del old_cfg["MODEL"]["LOAD_CHECKPOINT_ONLY_WEIGHTS"]
         if "BATCH_NORMALIZATION" in old_cfg["MODEL"]:
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
                 old_cfg["MODEL"]["NORMALIZATION"] = "bn"
