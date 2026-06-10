@@ -308,7 +308,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         
                         # Check if the merge is coherent
                         self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
-                        self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
                         check_configuration(self.cfg, self.job_identifier)
         
         # Load BioImage Model Zoo pretrained model information
@@ -1037,6 +1036,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.cfg.PATHS.CHECKPOINT,
                         "{}-checkpoint-best.pth".format(self.job_identifier),
                     )
+                    import pdb; pdb.set_trace()
                     print(
                         "Val loss improved from {} to {}, saving model to {}".format(
                             self.val_best_loss, test_stats["loss"], f

@@ -1367,7 +1367,30 @@ class Config:
         _C.MODEL.STUNET.PRETRAINED = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 5.1.6 Checkpoint options
+        # 5.1.6 NafNet architecture options
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.MODEL.NAFNET = CN()
+        # Base number of channels (width) used in the first layer and base levels.
+        _C.MODEL.NAFNET.WIDTH = 16
+        # Number of NAFBlocks stacked at the bottleneck (deepest level).
+        _C.MODEL.NAFNET.MIDDLE_BLK_NUM = 12
+        # Number of NAFBlocks assigned to each downsampling level of the encoder.
+        _C.MODEL.NAFNET.ENC_BLK_NUMS = [2, 2, 4, 8]
+        # Number of NAFBlocks assigned to each upsampling level of the decoder.
+        _C.MODEL.NAFNET.DEC_BLK_NUMS = [2, 2, 2, 2]
+        # Channel expansion factor for the depthwise convolution within the gating unit.
+        _C.MODEL.NAFNET.DW_EXPAND = 2
+        # Expansion factor for the hidden layer within the feed-forward network.
+        _C.MODEL.NAFNET.FFN_EXPAND = 2
+        # Discriminator architecture
+        _C.MODEL.NAFNET.ARCHITECTURE_D = "patchgan"
+        # Discriminator PATCHGAN
+        _C.MODEL.NAFNET.PATCHGAN = CN()
+        # Number of initial convolutional filters in the first layer of the discriminator.
+        _C.MODEL.NAFNET.PATCHGAN.BASE_FILTERS = 64
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 5.1.7 Checkpoint options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         # To load a model (and more items if available) from a given checkpoint. Items that can be loaded are defined in 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT'.
         _C.MODEL.LOAD_CHECKPOINT = False
@@ -1389,7 +1412,8 @@ class Config:
         # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
         _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
         # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be
-        # done, which will fail if a layer mismatch is found.
+        # done, which will fail if a layer mismatch is found. Only applicable if "weights" is in 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT'. It is useful
+        # to set it to True when fine-tunning a model with a different head.
         _C.MODEL.SKIP_UNMATCHED_LAYERS = False
         # Epochs to save a checkpoint of the model apart from the best of the validation. Set it to -1 to not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
@@ -1503,141 +1527,6 @@ class Config:
         # 'keypointrcnn_resnet50_fpn'
         #
         _C.MODEL.TORCHVISION_MODEL_NAME = ""
-
-        #
-        # BIAPY BACKEND MODELS
-        #
-        # Architecture of the network. Possible values are:
-        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2'
-        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2'
-        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2'
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 'unext_v1', 'unext_v2', 'nafnet'
-        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2'
-        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2'
-        #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
-        #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2'
-        _C.MODEL.ARCHITECTURE = "unet"
-        # Number of feature maps on each level of the network.
-        _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
-        # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr'
-        # a list with just one number must be provided
-        _C.MODEL.DROPOUT_VALUES = [0.0, 0.0, 0.0, 0.0, 0.0]
-        # Normalization layer (one of 'bn', 'sync_bn' 'in', 'gn' or 'none').
-        _C.MODEL.NORMALIZATION = "bn"
-        # Kernel size
-        _C.MODEL.KERNEL_SIZE = 3
-        # Upsampling layer to use in the model. Options: ["upsampling", "convtranspose"]
-        _C.MODEL.UPSAMPLE_LAYER = "convtranspose"
-        # Activation function to use along the model
-        _C.MODEL.ACTIVATION = "ELU"
-        # Number of classes including the background class (that should be using 0 label)
-        _C.DATA.N_CLASSES = 2
-        # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
-        # anysotropic datasets set it to get better performance
-        _C.MODEL.Z_DOWN = [0, 0, 0, 0]
-        # For each level of the model (U-Net levels), set to true or false if the dimensions of the feature maps are isotropic.
-        _C.MODEL.ISOTROPY = [True, True, True, True, True]
-        # Include extra convolutional layers with larger kernel at the beginning and end of the U-Net-like model.
-        _C.MODEL.LARGER_IO = False
-        # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
-        _C.MODEL.LOAD_CHECKPOINT = False
-        # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''.
-        # Options: 'best_on_val' or 'last_on_train'
-        _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
-        # Whether to load the model from the checkpoint instead of builiding it following 'MODEL.ARCHITECTURE' when 'MODEL.SOURCE' is "biapy"
-        _C.MODEL.LOAD_MODEL_FROM_CHECKPOINT = True
-        # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
-        _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
-        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be
-        # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
-        _C.MODEL.SKIP_UNMATCHED_LAYERS = False
-        # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_EPOCH. Set it to -1 to
-        # not do it.
-        _C.MODEL.SAVE_CKPT_FREQ = -1
-        # Number of ConvNeXtBlocks in each level.
-        _C.MODEL.CONVNEXT_LAYERS = [2, 2, 2, 2, 2]  # CONVNEXT_LAYERS
-        # Maximum Stochastic Depth probability for the U-NeXt model.
-        _C.MODEL.CONVNEXT_SD_PROB = 0.1
-        # Layer Scale parameter for the U-NeXt model.
-        _C.MODEL.CONVNEXT_LAYER_SCALE = 1e-6
-        # Size of the stem kernel in the U-NeXt model.
-        _C.MODEL.CONVNEXT_STEM_K_SIZE = 2
-
-        # TRANSFORMERS MODELS
-        # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting
-        # the rest of the ViT parameters can be modified as other options will set them automatically.
-        _C.MODEL.VIT_MODEL = "custom"
-        # Size of the patches that are extracted from the input image.
-        _C.MODEL.VIT_TOKEN_SIZE = 16
-        # Dimension of the embedding space
-        _C.MODEL.VIT_EMBED_DIM = 768
-        # Number of transformer encoder layers
-        _C.MODEL.VIT_NUM_LAYERS = 12
-        # Number of heads in the multi-head attention layer.
-        _C.MODEL.VIT_NUM_HEADS = 12
-        # Size of the dense layers of the final classifier. This value will mutiply 'VIT_EMBED_DIM'
-        _C.MODEL.VIT_MLP_RATIO = 4.0
-        # Normalization layer epsion
-        _C.MODEL.VIT_NORM_EPS = 1e-6
-
-        # Dimension of the embedding space for the MAE decoder
-        _C.MODEL.MAE_DEC_HIDDEN_SIZE = 512
-        # Number of transformer decoder layers
-        _C.MODEL.MAE_DEC_NUM_LAYERS = 8
-        # Number of heads in the multi-head attention layer.
-        _C.MODEL.MAE_DEC_NUM_HEADS = 16
-        # Size of the dense layers of the final classifier
-        _C.MODEL.MAE_DEC_MLP_DIMS = 2048
-        # Type of the masking strategy. Options: ["grid", "random"]
-        _C.MODEL.MAE_MASK_TYPE = "grid"
-        # Percentage of the input image to mask (applied only when MODEL.MAE_MASK_TYPE == "random"). Value between 0 and 1.
-        _C.MODEL.MAE_MASK_RATIO = 0.5
-
-        # UNETR
-        # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
-        _C.MODEL.UNETR_VIT_HIDD_MULT = 3
-        # Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is doubled.
-        _C.MODEL.UNETR_VIT_NUM_FILTERS = 16
-        # Decoder activation
-        _C.MODEL.UNETR_DEC_ACTIVATION = "relu"
-        # Decoder convolutions' kernel size
-        _C.MODEL.UNETR_DEC_KERNEL_SIZE = 3
-
-        # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
-        _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"
-
-        # RCAN
-        # Number of RG modules
-        _C.MODEL.RCAN_RG_BLOCK_NUM = 10
-        # Number of RCAB modules in each RG block
-        _C.MODEL.RCAN_RCAB_BLOCK_NUM = 20
-        # Filters in the convolutions
-        _C.MODEL.RCAN_CONV_FILTERS = 16
-        # Channel reduction ratio for channel attention
-        _C.MODEL.RCAN_REDUCTION_RATIO = 16
-        # Whether to maintain or not the upscaling layer. 
-        _C.MODEL.RCAN_UPSCALING_LAYER = True
-
-        # NafNet
-        _C.MODEL.NAFNET = CN()
-        # Base number of channels (width) used in the first layer and base levels.
-        _C.MODEL.NAFNET.WIDTH = 16
-        # Number of NAFBlocks stacked at the bottleneck (deepest level).
-        _C.MODEL.NAFNET.MIDDLE_BLK_NUM = 12
-        # Number of NAFBlocks assigned to each downsampling level of the encoder.
-        _C.MODEL.NAFNET.ENC_BLK_NUMS = [2, 2, 4, 8]
-        # Number of NAFBlocks assigned to each upsampling level of the decoder.
-        _C.MODEL.NAFNET.DEC_BLK_NUMS = [2, 2, 2, 2]
-        # Channel expansion factor for the depthwise convolution within the gating unit.
-        _C.MODEL.NAFNET.DW_EXPAND = 2
-        # Expansion factor for the hidden layer within the feed-forward network.
-        _C.MODEL.NAFNET.FFN_EXPAND = 2
-        # Discriminator architecture
-        _C.MODEL.NAFNET.ARCHITECTURE_D = "patchgan"
-        # Discriminator PATCHGAN
-        _C.MODEL.NAFNET.PATCHGAN = CN()
-        # Number of initial convolutional filters in the first layer of the discriminator.
-        _C.MODEL.NAFNET.PATCHGAN.BASE_FILTERS = 64
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 6. Loss definition options
