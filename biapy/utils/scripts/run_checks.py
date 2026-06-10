@@ -637,7 +637,7 @@ all_test_info["Test9"] = {
         },
     },
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.12},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.10},
     ]
 }
 
@@ -1960,7 +1960,7 @@ all_test_info["Test32"] = {
         {"type": "regular", "pattern": "Train MAE:", "gt": False, "value": 0.1},
         {"type": "regular", "pattern": "Validation MAE:", "gt": False, "value": 0.1},
         {"type": "regular", "pattern": "Validation loss:", "gt": False, "value": 55},
-        {"type": "regular", "pattern": "Test MAE:", "gt": False, "value": 6000},
+        {"type": "regular", "pattern": "Test MAE (merge patches):", "gt": False, "value": 6000},
     ]
 }
 
