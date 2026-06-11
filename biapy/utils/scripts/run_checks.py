@@ -894,7 +894,8 @@ all_test_info["Test14"] = {
         },
         "MODEL": {
             "ARCHITECTURE": "rcan",
-            "LOAD_CHECKPOINT": True
+            "LOAD_CHECKPOINT": True,
+            "SKIP_UNMATCHED_LAYERS": True,
         },
         "TEST": {
             "ENABLE": True,
