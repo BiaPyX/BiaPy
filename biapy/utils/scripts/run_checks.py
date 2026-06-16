@@ -896,6 +896,7 @@ all_test_info["Test14"] = {
             "ARCHITECTURE": "rcan",
             "LOAD_CHECKPOINT": True,
             "SKIP_UNMATCHED_LAYERS": True,
+            "ITEMS_TO_LOAD_FROM_CHECKPOINT": ['weights', 'norm'],
         },
         "TEST": {
             "ENABLE": True,

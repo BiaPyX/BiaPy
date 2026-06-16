@@ -305,7 +305,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         # Restore some model config
                         self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config["BMZ"]
                         self.cfg["MODEL"]["OUT_CHECKPOINT_FORMAT"] = tmp_BMZ_config["OUT_CHECKPOINT_FORMAT"]
-                        
+                        self.cfg["MODEL"]["SKIP_UNMATCHED_LAYERS"] = tmp_BMZ_config["SKIP_UNMATCHED_LAYERS"]
+
                         # Check if the merge is coherent
                         self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
                         check_configuration(self.cfg, self.job_identifier)
