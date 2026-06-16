@@ -13,7 +13,8 @@ import time
 import requests
 import collections.abc
 import re
-import ast 
+import ast
+import socket
 
 # ---------------------------------------------------------
 # ARGUMENT PARSING
@@ -2334,6 +2335,23 @@ def print_result(finished_good, jobname, int_checks):
         print(f"** {jobname} job: [ERROR] ({sum(finished_good)} of {int_checks} internal checks passed)")
 
 
+_used_master_ports = set()
+
+def _get_free_master_port(low=1500, high=7000):
+    """Return a port that is both unused by this session and not currently bound."""
+    while True:
+        port = int(np.random.randint(low=low, high=high, size=1)[0])
+        if port in _used_master_ports:
+            continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("", port))
+            except OSError:
+                continue
+        _used_master_ports.add(port)
+        return port
+
+
 def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
     # Declare the log file
     jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
@@ -2349,7 +2367,7 @@ def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_packa
         cmd = ["python", "-u"]
         if multigpu:
             cmd.extend(["-m", "torch.distributed.run", "--nproc_per_node="+str(ngpus),
-                f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}"])
+                f"--master-port={_get_free_master_port()}"])
         cmd.extend([bmz_script, 
             "--code_dir", BIAPY_FOLDER,
             "--jobname", test_info["jobname"],
@@ -2365,7 +2383,7 @@ def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_packa
     else:
         if multigpu:
             cmd = ["python", "-u", "-m", "torch.distributed.run", "--nproc_per_node="+str(ngpus),
-                f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}", "main.py",
+                f"--master-port={_get_free_master_port()}", "main.py",
                 "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name", test_info["jobname"], "--run_id", "1",
                 "--gpu", gpus]
         else:
