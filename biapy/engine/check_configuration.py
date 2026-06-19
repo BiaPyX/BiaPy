@@ -444,37 +444,57 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "mode": dst.get("C", {}).get("mode", "thick"),
                 }
 
-            # H / V / Z — distance channels group
-            for ch in ("Z", "V", "H"):
-                if ch in chs:
-                    if ch in dst:
-                        assert [x for x in dst[ch].keys() if x not in ["norm", "act"]] == [], (
-                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'norm' and 'act' keys"
-                            " ('mask_values' is no longer accepted: foreground masking is derived automatically)"
-                        )
-                    norm = dst.get(ch, {}).get("norm", True)
-                    act = dst.get(ch, {}).get("act", "")
-                    if act == "" and norm:
-                        act = "sigmoid"
-                    dst[ch] = {
-                        "norm": norm,
-                        "act": act,
-                    }
+            # H / V / Z — distance channels group (grouped: configure only one, settings propagate to all)
+            hvz_chs_present = [ch for ch in ("Z", "V", "H") if ch in chs]
+            if hvz_chs_present:
+                hvz_with_opts = [ch for ch in hvz_chs_present if ch in dst]
+                if len(hvz_with_opts) > 1:
+                    raise ValueError(
+                        f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' contains options for multiple channels of the "
+                        f"'H'/'V'/'Z' group {hvz_with_opts}. These channels always share the same settings — "
+                        f"configure only one of them and the values will be propagated to the rest."
+                    )
+                if hvz_with_opts:
+                    source_ch = hvz_with_opts[0]
+                    assert [k for k in dst[source_ch] if k not in ["norm", "act"]] == [], (
+                        f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}' can only have 'norm' and 'act' keys"
+                        " ('mask_values' is no longer accepted: foreground masking is derived automatically)"
+                    )
+                    norm = dst[source_ch].get("norm", True)
+                    act = dst[source_ch].get("act", "")
+                else:
+                    norm = True
+                    act = ""
+                if act == "" and norm:
+                    act = "sigmoid"
+                resolved_hvz = {"norm": norm, "act": act}
+                for ch in hvz_chs_present:
+                    dst[ch] = resolved_hvz.copy()
 
-            # Gh / Gv / Gz — Gradient channels group
-            for ch in ("Gz", "Gv", "Gh"):
-                if ch in chs:
-                    if ch in dst:
-                        assert [x for x in dst[ch].keys() if x not in ["niter", "scale_flows", "gradient_type"]] == [], (
-                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'niter', 'scale_flows' and 'gradient_type' keys"
-                            " ('mask_values' is no longer accepted: foreground masking is derived automatically from the flow vector magnitude)"
-                        )
-
-                    dst[ch] = {
-                        "niter": dst.get(ch, {}).get("niter", 200),
-                        "scale_flows": dst.get(ch, {}).get("scale_flows", 5.0),
-                        "gradient_type": dst.get(ch, {}).get("gradient_type", "cellpose"),
-                    }
+            # Gh / Gv / Gz — Gradient channels group (grouped: configure only one, settings propagate to all)
+            gflow_chs_present = [ch for ch in ("Gz", "Gv", "Gh") if ch in chs]
+            if gflow_chs_present:
+                gflow_with_opts = [ch for ch in gflow_chs_present if ch in dst]
+                if len(gflow_with_opts) > 1:
+                    raise ValueError(
+                        f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' contains options for multiple channels of the "
+                        f"'Gv'/'Gh'/'Gz' group {gflow_with_opts}. These channels always share the same settings — "
+                        f"configure only one of them and the values will be propagated to the rest."
+                    )
+                if gflow_with_opts:
+                    source_ch = gflow_with_opts[0]
+                    assert [k for k in dst[source_ch] if k not in ["niter", "gradient_type"]] == [], (
+                        f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}' can only have 'niter' and 'gradient_type' keys"
+                        " ('mask_values' is no longer accepted: foreground masking is derived automatically from the flow vector magnitude)"
+                    )
+                    niter = dst[source_ch].get("niter", 200)
+                    gradient_type = dst[source_ch].get("gradient_type", "cellpose")
+                else:
+                    niter = 200
+                    gradient_type = "cellpose"
+                resolved_gflow = {"niter": niter, "gradient_type": gradient_type}
+                for ch in gflow_chs_present:
+                    dst[ch] = resolved_gflow.copy()
 
             # Db — boundary distance-to-boundary
             if "Db" in chs:
@@ -630,6 +650,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if replace_channels:
                 opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", sorted_original_instance_channels])
             
+            if "Gv" in sorted_original_instance_channels:
+                gradient_type = dst.get("Gv", {}).get("gradient_type", "cellpose")
+                cellpose_type = cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE
+                if gradient_type != cellpose_type:
+                    raise ValueError(
+                        f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0][\"Gv\"][\"gradient_type\"]' is '{gradient_type}' "
+                        f"but 'PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE' is '{cellpose_type}'. "
+                        "Both must match: the GT is generated with 'gradient_type' and post-processing uses 'CELLPOSE.TYPE'."
+                    )
+
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
                 if "R" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
@@ -1545,7 +1575,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
                 elif key in ("Gv", "Gh", "Gz"):  # gradient flow channels
                    _assert_int(val, "niter", ctx, min_val=1)
-                   _assert_float(val, "scale_flows", ctx, min_val=0.0)
                    _assert_str_in(val, "gradient_type", {"omnipose", "cellpose"}, ctx)
                 elif key  == "Db":  # distance channels group
                     _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
