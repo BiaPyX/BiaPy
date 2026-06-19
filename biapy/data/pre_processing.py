@@ -1117,6 +1117,7 @@ def unet_border_weight_map(
 
     inst = instances.astype(np.int32, copy=False)
     shp = inst.shape
+    ndim = inst.ndim
 
     # collect unique instance ids excluding background
     ids = np.unique(inst)
@@ -1126,42 +1127,48 @@ def unet_border_weight_map(
     # treat background as a pseudo-second instance so we still emphasize the object boundary.
     if ids.size == 1:
         lab = ids[0]
-
-        # Distance to the (only) instance: zeros inside the instance
         d_obj = edt.edt(inst != lab, anisotropy=resolution, parallel=-1).astype(np.float32, copy=False)
-
-        # Distance to background: zeros in background
         d_bg = edt.edt(inst != 0, anisotropy=resolution, parallel=-1).astype(np.float32, copy=False)
-
         denom = 2.0 * (sigma ** 2)
         w_border = w0 * np.exp(-((d_obj + d_bg) ** 2) / denom, dtype=np.float32)
-        w_border = w_border.astype(np.float32, copy=False)
-
         if apply_only_background:
             w_border *= (inst == 0)
-
         return w_border
 
     # Need at least two distinct instances for the (d1 + d2) term to be meaningful
     if ids.size < 2:
         return np.zeros(shp, dtype=np.float32)
 
-    # Compute distance-to-each-instance via EDT on the complement of that instance
-    # distances[k, ...] = distance to instance ids[k]
-    distances = np.empty((ids.size, *shp), dtype=np.float32)
-    for k, lab in tqdm(enumerate(ids), total=len(ids)):
-        # edt computes distance to zeros -> pass mask that's zero *inside* the object
-        # equivalently: distance to the boundary of object `lab`
-        distances[k] = edt.edt(inst != lab, anisotropy=resolution, parallel=-1)
+    # Per-axis bounding-box padding in voxels: beyond 3*sigma the exponential term
+    # is < exp(-9/2) < 0.01, so no update outside this radius can matter.
+    res = np.asarray(resolution, dtype=np.float64) if resolution is not None else np.ones(ndim, dtype=np.float64)
+    pad_per_axis = (np.ceil(3.0 * sigma / res) + 1).astype(int)
 
-    # nearest and second-nearest distances at each voxel/pixel
-    d1 = distances.min(axis=0)
-    d2 = np.partition(distances, 1, axis=0)[1]
+    # Stream through instances maintaining only the two smallest distances per voxel.
+    # Memory: O(3 * volume) instead of O(N_instances * volume).
+    d1 = np.full(shp, np.inf, dtype=np.float32)
+    d2 = np.full(shp, np.inf, dtype=np.float32)
+
+    for lab in tqdm(ids, total=len(ids)):
+        # Restrict EDT to a padded bounding box around this instance.
+        coords = np.argwhere(inst == lab)
+        lo = np.maximum(coords.min(axis=0) - pad_per_axis, 0)
+        hi = np.minimum(coords.max(axis=0) + pad_per_axis + 1, shp)
+        slices = tuple(slice(int(l), int(h)) for l, h in zip(lo, hi))
+
+        # EDT on the subvolume: distance to the nearest non-lab voxel.
+        d_sub = edt.edt(inst[slices] != lab, anisotropy=resolution, parallel=-1).astype(np.float32, copy=False)
+
+        # Merge into running top-2 minimums.
+        d1_sub = d1[slices]
+        d2_sub = d2[slices]
+        new_is_smaller = d_sub < d1_sub
+        d2[slices] = np.where(new_is_smaller, d1_sub, np.minimum(d2_sub, d_sub))
+        d1[slices] = np.minimum(d1_sub, d_sub)
 
     # Border emphasis term
     denom = 2.0 * (sigma ** 2)
     w_border = w0 * np.exp(-((d1 + d2) ** 2) / denom, dtype=np.float32)
-    w_border = w_border.astype(np.float32, copy=False)
 
     if apply_only_background:
         w_border *= (inst == 0)
