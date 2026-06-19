@@ -513,17 +513,15 @@ class Embedding_cluster:
         spatial_emb = offsets + coords  # (D, *spatial)
 
         count = 1
+        labels = np.zeros(spatial, dtype=np.int64)
         mask_fg = seed_map > fg_thresh
         if mask_fg.sum() > min_mask_sum:
-            labels = np.zeros(spatial, dtype=np.int64)
             seed_map_cpu = seed_map.cpu().detach().numpy()
             seed_map_cpu_smooth = gaussian_filter(seed_map_cpu, sigma=1)
-            coords = peak_local_max(seed_map_cpu_smooth)
-            zeros = np.zeros((coords.shape[0], 1), dtype=np.uint8)
-            coords = np.hstack((zeros, coords))
+            peak_coords = peak_local_max(seed_map_cpu_smooth)
 
-            mask_local_max_cpu = np.zeros(seed_map_cpu.shape, dtype=np.bool)
-            mask_local_max_cpu[tuple(coords[:,-D:].T)] = True
+            mask_local_max_cpu = np.zeros(seed_map_cpu.shape, dtype=bool)
+            mask_local_max_cpu[tuple(peak_coords.T)] = True
             mask_local_max = torch.from_numpy(mask_local_max_cpu).bool().to(self.device)
             mask_seed = mask_fg * mask_local_max
 
@@ -532,8 +530,8 @@ class Embedding_cluster:
             sigma_seed_masked = sigma[mask_seed.expand_as(sigma)].view(D, -1)  # sigma for seed candidate pixels
             seed_map_seed_masked = seed_map[mask_seed].view(1, -1)  # seediness for seed candidate pixels
 
-            unprocessed = torch.ones(mask_seed.sum()).short().to(self.device) # unclustered seed candidate pixels
-            unclustered = torch.ones(mask_fg.sum()).short().to(self.device) # unclustered fg candidate pixels
+            unprocessed = torch.ones(mask_seed.sum()).short().to(self.device)
+            unclustered = torch.ones(mask_fg.sum()).short().to(self.device)
             labels_masked = torch.zeros(mask_fg.sum()).short().to(self.device)
             while unprocessed.sum() > min_unclustered_sum:
                 seed = (seed_map_seed_masked * unprocessed.float()).argmax().item()

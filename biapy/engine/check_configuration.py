@@ -576,8 +576,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 # }
 
             # E — learned per-pixel features
-            if "E" in chs:
-                if "E" in dst:
+            if "E_offset" in chs:
+                if "E_offset" in dst:
                     assert [x for x in dst["E"].keys() if x not in ["center_mode", "medoid_max_points"]] == [], (
                         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'E' can only have 'center_mode' and 'medoid_max_points' keys"
                     )
@@ -1645,7 +1645,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
         else:
             # Set loss weights for the embedding representation
-            if (cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1) or cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1,)):
+            if all([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS if x == 1]):
                 # Corresponds to foreground weight, instance center offset, variance and seediness
                 opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS", [10,1,10,1]]) # Embedseg default weights
 

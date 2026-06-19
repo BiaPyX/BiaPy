@@ -443,33 +443,59 @@ def build_model(
 
     # Special handling for instance segmentation models with sigma outputs
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and "E_sigma" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-        init_embedding_output(model, n_sigma=2 if cfg.PROBLEM.NDIM == "2D" else 3)
+        init_embedding_output(model, n_sigma=2 if cfg.PROBLEM.NDIM == "2D" else 3, output_channel_info=output_channel_info)
 
     return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride  # type: ignore
 
 
-def init_embedding_output(model: nn.Module, n_sigma: int = 2):
+def init_embedding_output(model: nn.Module, n_sigma: int = 2, output_channel_info: Optional[List[str]] = None) -> None:
     """
-    Initialize the output layer of the model for embedding.
+    Initialize the sigma channels of the embedding output head(s).
+
+    Sets weight=0 and bias=1 on the E_sigma output channels so the model starts
+    with tight Gaussians: the loss computes s = exp(sigma * 10), so bias=1 gives
+    s = exp(10) ≈ 22026, concentrating the soft mask near each object center.
 
     Parameters
     ----------
     model : nn.Module
-        The model whose output layer needs to be initialized.
+        The model to initialize. Must have a ``heads`` attribute (``nn.Sequential``
+        where each element is the Conv layer for one output head).
     n_sigma : int
-        Number of sigma channels to initialize.
+        Number of sigma channels (equal to the number of spatial dimensions).
+    output_channel_info : List[str]
+        One string per output head, each a ``"+"``-separated list of channel labels
+        produced by ``define_activations_and_channels()``, e.g.
+        ``["E_offset_0+E_offset_1+E_sigma_0+E_sigma_1+E_seediness"]``.
     """
-    try:
-        with torch.no_grad():
-            print("Initialize last layer with size: ", model.last_block.weight.size())
-            print("*************************")
-            model.last_block.weight[0:n_sigma, :,  :, :].fill_(0)
-            model.last_block.bias[0:n_sigma].fill_(0)
+    if output_channel_info is None:
+        raise ValueError("output_channel_info must be provided to initialize embedding output")
 
-            model.last_block.weight[n_sigma : n_sigma + n_sigma, :,  :, :].fill_(0)
-            model.last_block.bias[n_sigma : n_sigma + n_sigma].fill_(1)
-    except:
-        raise ValueError("Could not initialize embedding output layer. Check the model structure.")
+    # Find which head and which offset within that head the E_sigma channels start at
+    sigma_head_idx = None
+    sigma_offset = None
+    for head_idx, head_info in enumerate(output_channel_info):
+        for ch_offset, ch_name in enumerate(head_info.split("+")):
+            if ch_name.startswith("E_sigma_"):
+                sigma_head_idx = head_idx
+                sigma_offset = ch_offset
+                break
+        if sigma_head_idx is not None:
+            break
+
+    if sigma_head_idx is None:
+        raise ValueError(
+            "Could not find E_sigma channels in output_channel_info: {}".format(output_channel_info)
+        )
+
+    head_conv = model.heads[sigma_head_idx]
+    print(
+        "Initialize embedding sigma channels: head {}, output indices [{}:{}], "
+        "conv weight size: {}".format(sigma_head_idx, sigma_offset, sigma_offset + n_sigma, head_conv.weight.size())
+    )
+    with torch.no_grad():
+        head_conv.weight[sigma_offset : sigma_offset + n_sigma].fill_(0)
+        head_conv.bias[sigma_offset : sigma_offset + n_sigma].fill_(1)
 
 def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
     """

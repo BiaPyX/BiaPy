@@ -2298,7 +2298,7 @@ class SpatialEmbLoss(nn.Module):
         ndims: int = 2, 
         center_mode: str = "centroid",      # "centroid" or "medoid"
         medoid_max_points: Optional[int] = 10000,  # cap to avoid O(N^2) on huge objects
-        channel_weights: List[float] = [1.0, 1.0, 1.0],
+        channel_weights: List[float] = [1.0, 1.0, 1.0, 1.0],
     ):
         super().__init__()
 
@@ -2426,8 +2426,9 @@ class SpatialEmbLoss(nn.Module):
             coords = self.xyzm[:3, :Z, :H, :W].contiguous()
             total_voxels = Z * H * W
 
-        # Remove the extra channel dimension in instances
-        instances = instances[:, 0]
+        # Remove the extra channel dimension in instances; cast to int32 because
+        # UInt16 is not supported by CUDA indexing operations (unique, eq, etc.)
+        instances = instances[:, 0].to(torch.int32)
 
         # Channel partition
         emb_ch = D                   # 2 for 2D, 3 for 3D
@@ -2435,6 +2436,7 @@ class SpatialEmbLoss(nn.Module):
         seed_ch = 1
 
         loss = prediction.new_tensor(0.0)
+        iou = 0.0
 
         for b in range(B):
             # Spatial embedding (tanh) + coordinate grid
@@ -2447,7 +2449,7 @@ class SpatialEmbLoss(nn.Module):
             var_loss = prediction.new_tensor(0.0)
             instance_loss = prediction.new_tensor(0.0)
             seed_loss = prediction.new_tensor(0.0)
-            iou = prediction.new_tensor(0.0)
+            batch_iou = 0.0
             obj_count = 0
 
             instance = instances[b].unsqueeze(0)       # (1, ...)
@@ -2486,14 +2488,14 @@ class SpatialEmbLoss(nn.Module):
                 )
 
                 # Measure IoU at 0.5 threshold
-                iou += self._calculate_binary_iou(dist > 0.5, in_mask)
+                batch_iou += self._calculate_binary_iou(dist > 0.5, in_mask)
 
                 obj_count += 1
 
             if obj_count > 0:
                 instance_loss = instance_loss / obj_count
                 var_loss = var_loss / obj_count
-                iou = iou / obj_count
+                iou += batch_iou / obj_count
 
             seed_loss = seed_loss / total_voxels
 
@@ -2501,10 +2503,10 @@ class SpatialEmbLoss(nn.Module):
 
         loss = loss / B
         iou = iou / B
-        
+
         return {
-            "losses": [loss + prediction.sum() * 0], 
-            "metrics": {"IoU": float(iou)}
+            "losses": [loss + prediction.sum() * 0],
+            "metrics": {"IoU": iou}
         }
 
 class VGG(nn.Module):
