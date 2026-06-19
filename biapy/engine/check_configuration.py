@@ -553,15 +553,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # R — star-convex/radial distances
             if "R" in chs:
                 if "R" in dst:
-                    assert [x for x in dst["R"].keys() if x not in ["nrays", "norm", "mask_values"]] == [], (
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'R' can only have 'nrays', 'norm' and 'mask_values' keys"
+                    assert [x for x in dst["R"].keys() if x not in ["nrays", "mask_values"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'R' can only have 'nrays' and 'mask_values' keys"
                     )
                 nrays = dst.get("R", {}).get("nrays", "")
                 if nrays == "":
                     nrays = 32 if cfg.PROBLEM.NDIM == "2D" else 96
                 dst["R"] = {
                     "nrays": nrays,
-                    "norm": dst.get("R", {}).get("norm", True),
                     "mask_values": dst.get("R", {}).get("mask_values", True),
                 }
 
@@ -1602,7 +1601,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
                 elif key == "R":  # star-convex/radial
                     _assert_int(val, "nrays", ctx, min_val=1)
-                    _assert_bool(val, "norm", ctx)
                     _assert_bool(val, "mask_values", ctx)
 
                 elif key == "T":  # touching thickness

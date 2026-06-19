@@ -1265,7 +1265,6 @@ def radial_distances(
     rays: NDArray,
     max_dist: Optional[float] = None,
     spacing: Optional[Sequence[float]] = None,
-    max_iters: int = 50,
 ) -> NDArray:
     """
     Compute radial distances from each foreground pixel to the instance boundary along specified rays.
@@ -1275,13 +1274,13 @@ def radial_distances(
     labels : NDArray
         2D or 3D array of instance labels (0 = background, 1..N = instances).
     rays : (n_rays, 2) or (n_rays, 3) Numpy array
-        Unit vectors along which to compute distances.
+        Unit vectors along which to compute distances. Expected in Cartesian order [x,y] or [x,y,z]
+        as returned by generate_rays.
     max_dist : float, optional
         Maximum distance to cap at. If None, no capping is done.
     spacing : sequence of float, optional
-        Physical spacing of the data in each dimension. If None, assumes isotropic spacing of 1.0.
-    max_iters : int
-        Maximum number of steps to march along each ray.
+        Physical spacing of the data in axis order [y,x] for 2D or [z,y,x] for 3D.
+        If None, assumes isotropic spacing of 1.0.
 
     Returns
     -------
@@ -1296,28 +1295,29 @@ def radial_distances(
     shape = labels.shape
     n_rays = rays.shape[0]
 
-    # normalize rays in index space (row/col[/z] units)
-    rays_idx = rays.astype(np.float32)
-    norms = np.linalg.norm(rays_idx, axis=1, keepdims=True) + 1e-12
-    rays_idx /= norms
+    # generate_rays returns Cartesian [x,y] or [x,y,z] order; convert to index [row,col] or
+    # [z_idx,y_idx,x_idx] by reversing axes so marching steps match dist_to_coord_nd reconstruction.
+    rays_cart = rays.astype(np.float32)
+    rays_cart /= (np.linalg.norm(rays_cart, axis=1, keepdims=True) + 1e-12)
+    rays_idx = rays_cart[:, ::-1].copy()  # Cartesian→index: [x,y]→[y,x] or [x,y,z]→[z,y,x]
 
-    # per-ray physical step length for one unit in index space
+    # per-ray physical step length: rays_idx and spacing are both in index/axis order
     ray_step_phys = np.linalg.norm(rays_idx * spacing, axis=1)  # shape (n_rays,)
 
     D = np.zeros(shape + (n_rays,), np.float32)
 
     fg = np.argwhere(labels > 0)
-    H, W = shape[0], shape[1] if ndim == 2 else (shape[0], shape[1])  # for bounds
+    max_steps = int(np.ceil(np.linalg.norm(shape))) + 1  # guaranteed to reach any boundary
     for (i, j, *rest) in fg:
         inst_id = int(labels[i, j]) if ndim == 2 else int(labels[i, j, rest[0]])
         p0 = np.array([i, j] if ndim == 2 else [i, j, rest[0]], np.float32)  # pixel center reference
 
         for k in range(n_rays):
-            u = rays_idx[k]  # unit in index space
+            u = rays_idx[k]  # unit direction in index space
             x = np.zeros(ndim, np.float32)  # accumulated offset in index space
 
-            # march in unit steps like the ref (||u||=1)
-            for _ in range(max_iters * (max(shape) + 2)):  # safe cap
+            # march in unit steps until hitting a boundary or leaving the image
+            for _ in range(max_steps):
                 x += u
                 p_samp = p0 + x
                 # rounded sampling

@@ -403,7 +403,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         super().define_activations_and_channels()
 
-        self.stardist_grid = (1,1)
+        self.stardist_grid = (1,) * self.dims
 
     def define_metrics(self):
         """
@@ -440,7 +440,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.train_metric_best += ["max"]
             elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R", "Gv", "Gh", "Gz"]:
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
-                self.train_metric_names += ["L1 ({} channel)".format(channel)]
+                self.train_metric_names += [m]
                 self.train_metric_best += ["min"]
             elif channel == "E_offset":
                 self.train_metric_names += ["IoU"]
