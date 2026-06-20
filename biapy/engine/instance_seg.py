@@ -248,47 +248,59 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 cumulative += h
                 head_boundaries.append(cumulative)
 
+            def _head_for(out_ch, channel_label):
+                h = next((k for k, b in enumerate(head_boundaries) if out_ch < b), None)
+                if h is None:
+                    total = head_boundaries[-1] if head_boundaries else 0
+                    raise ValueError(
+                        f"Output channel index {out_ch} (while mapping '{channel_label}') exceeds the "
+                        f"total channels declared in CHANNELS_PER_HEAD_INFO ({total}). "
+                        f"Make sure CHANNELS_PER_HEAD_INFO sums to the actual number of output channels "
+                        f"produced by DATA_CHANNELS."
+                    )
+                return h
+
             out_ch = 0  # current output channel index
             for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 if channel in ["Db", "A", "R", "E_offset", "E_sigma"]:
                     if channel == "A":
                         z_affinities = dst.get("A", {}).get("z_affinities", [1])
                         for j in range(len(z_affinities)):
-                            h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                            h = _head_for(out_ch, channel + "z_{}".format(z_affinities[j]))
                             self.model_output_channel_info[h] += "+" + channel + "z_{}".format(z_affinities[j])
                             out_ch += 1
                         y_affinities = dst.get("A", {}).get("y_affinities", [1])
                         for j in range(len(y_affinities)):
-                            h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                            h = _head_for(out_ch, channel + "y_{}".format(y_affinities[j]))
                             self.model_output_channel_info[h] += "+" + channel + "y_{}".format(y_affinities[j])
                             out_ch += 1
                         x_affinities = dst.get("A", {}).get("x_affinities", [1])
                         for j in range(len(x_affinities)):
-                            h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                            h = _head_for(out_ch, channel + "x_{}".format(x_affinities[j]))
                             self.model_output_channel_info[h] += "+" + channel + "x_{}".format(x_affinities[j])
                             out_ch += 1
                     elif channel == "R":
                         for j in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
-                            h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                            h = _head_for(out_ch, channel + "_{}".format(j))
                             self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
                             out_ch += 1
                     elif channel in ["E_offset", "E_sigma"]:
                         for j in range(self.dims):
-                            h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                            h = _head_for(out_ch, channel + "_{}".format(j))
                             self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
                             out_ch += 1
                     elif channel == "Db":
                         if dst.get(channel, {}).get("val_type", "norm") == "discretize":
                             for j in range(11):  # Default 10 bins + background
-                                h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                                h = _head_for(out_ch, channel + "_bin{}".format(j))
                                 self.model_output_channel_info[h] += "+" + channel + "_bin{}".format(j)
                                 out_ch += 1
                         else:
-                            h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                            h = _head_for(out_ch, channel)
                             self.model_output_channel_info[h] += "+" + channel
                             out_ch += 1
                 else:
-                    h = next(k for k, b in enumerate(head_boundaries) if out_ch < b)
+                    h = _head_for(out_ch, channel)
                     self.model_output_channel_info[h] += "+" + channel
                     out_ch += 1
         else:

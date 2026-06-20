@@ -358,36 +358,50 @@ class Config:
         #    [link]: https://www.nature.com/articles/s41592-022-01639-4
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE = CN()
         # Post-processing strategy to use for flow-field-based instance creation. Options:
-        #   - 'cellpose': Euler integration with time-suppressed steps (dt/(t+1)) followed by
-        #     histogram peak detection and nearest-peak assignment. A flow consistency check then
-        #     removes instances whose predicted flow diverges from a centroid-pointing approximation.
+        #   - 'cellpose': Euler integration followed by histogram peak detection and nearest-peak
+        #     assignment. A flow consistency check can optionally remove instances whose predicted
+        #     flow diverges from a centroid-pointing approximation (controlled by FLOW_THRESHOLD).
         #     Suited for Cellpose-style flows (heat-diffusion potential gradient).
-        #   - 'omnipose': Euler integration with constant step size followed by DBSCAN clustering
-        #     on convergence positions. The flow consistency check is skipped. Suited for
-        #     Omnipose-style flows (per-cell EDT gradient), which converge precisely to the
-        #     cell skeleton rather than a centroid.
+        #   - 'omnipose': Euler integration followed by DBSCAN clustering on convergence positions.
+        #     The flow consistency check is skipped. Suited for Omnipose-style flows (per-cell EDT
+        #     gradient), which converge precisely to the cell skeleton rather than a centroid.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE = "cellpose"
         # Foreground probability threshold. Pixels/voxels with a predicted foreground probability
         # above this value are considered foreground and will be traced through the flow field.
         # Applies when a dedicated binary channel ('F', 'M', or 'B') is present in DATA_CHANNELS.
+        # Matches Cellpose default (cellprob_threshold=0.0 in logit space = sigmoid 0.5).
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH = 0.5
         # Flow-consistency threshold to discard spurious instances after Euler integration.
         # Measured as mean cosine-similarity error (0 = perfect, 2 = opposite direction).
-        # Instances with error > this threshold are removed. Set to 0 to disable.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.4
+        # Instances with error > this threshold are removed. Set to 0 to disable (recommended
+        # for non-round or elongated cells, where the centroid-pointing approximation fails).
+        # Matches Cellpose default (flow_threshold=0.4). Set to 0 if cells are not round.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.0
         # Number of Euler integration steps used to trace each foreground pixel through the
-        # flow field until it converges to an attractor.
+        # flow field until it converges to an attractor. Matches Cellpose default (niter=200).
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS = 200
-        # Step size (dt) for each Euler integration step.
+        # Step size for each Euler integration step (in pixels, applied to unit-normalised flows).
+        # With SUPPRESSED=False each pixel moves exactly DT pixels per step; N_STEPS * DT is the
+        # maximum travel distance. DT=1.0 works well for any cell size with unit-normalised flows.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DT = 1.0
-        # Whether to use Cellpose-style step suppression (dt / (t+1)) that slows each step as
-        # integration progresses, improving convergence for noisy flow fields.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED = True
+        # Whether to decay the step size as dt/(t+1) (True) or use a constant step dt (False).
+        # False matches Cellpose 4.x behaviour (constant step throughout integration), which allows
+        # pixels to travel N_STEPS * DT pixels and converge correctly for cells of any size.
+        # True (old behaviour) gives only ~5.9 * DT pixels of total travel, which is insufficient
+        # for cells larger than ~12 px diameter and is NOT the standard Cellpose approach.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED = False
         # Minimum number of pixels in a connected component to be kept as a valid instance.
-        # Smaller objects are discarded after clustering.
+        # Smaller objects are discarded after clustering. Matches Cellpose default (min_size=15).
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE = 15
-        # Maximum pixel distance from a pixel's convergence position to a valid attractor peak.
-        # Pixels whose convergence position falls farther than this from any peak are discarded.
+        # Role differs by TYPE:
+        #   - 'cellpose': maximum pixel distance from a pixel's convergence position to the nearest
+        #     histogram attractor peak. Pixels farther than this are discarded as noise. Matches
+        #     Cellpose's ~5-pixel peak-extension window (get_masks kernel_size=3 × 5 iterations).
+        #   - 'omnipose': DBSCAN eps radius (pixels). Convergence positions within this distance
+        #     are linked into the same cluster (= the same cell's medial-axis skeleton). Must be
+        #     large enough to stitch adjacent skeleton points of the same cell together, but small
+        #     enough not to bridge the skeletons of two touching cells. More sensitive than for
+        #     Cellpose; tune this if cells are merged or incorrectly split.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST = 5.0
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

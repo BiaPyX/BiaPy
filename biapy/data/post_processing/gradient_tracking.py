@@ -172,8 +172,12 @@ def _euler_integrate(
     dt : float
         Physical-unit step size per iteration.
     suppressed : bool
-        If True, decay the step size as ``dt / (t + 1)`` (Cellpose default).
-        Constant step size is used otherwise.
+        If True, decay the step size as ``dt / (t + 1)``, giving a total travel
+        distance of approximately ``5.9 * dt`` pixels (harmonic series). Only
+        useful for very small cells or as a convergence aid for very noisy flows.
+        If False (Cellpose 4.x default), use a constant step ``dt`` per iteration;
+        total travel is ``n_steps * dt`` pixels, allowing convergence for any cell
+        size.
     res_per_axis : (ndim,) float array
         Physical voxel size per axis ``[z, y, x]`` (or ``[y, x]`` for 2D).
         Used to convert a physical displacement to a pixel displacement.
@@ -516,7 +520,7 @@ def flows_to_instances(
     flow_threshold: float = 0.4,
     n_steps: int = 200,
     dt: float = 1.0,
-    suppressed: bool = True,
+    suppressed: bool = False,
     min_size: int = 15,
     max_cluster_dist: float = 5.0,
     resolution: List[float] = [1.0, 1.0, 1.0],
@@ -581,9 +585,12 @@ def flows_to_instances(
     dt : float, optional
         Physical-unit step size per iteration.  Default 1.0.
     suppressed : bool, optional
-        *Cellpose only.*  Use time-suppressed step ``dt / (t + 1)``.
-        Constant step size is used when False.  Always False for Omnipose
-        regardless of this value.  Default True.
+        *Cellpose only.*  If False (default, matches Cellpose 4.x), use a
+        constant step ``dt`` per iteration — total travel = ``n_steps * dt``
+        pixels, sufficient for cells of any size.  If True, decay the step as
+        ``dt / (t + 1)`` — total travel ≈ ``5.9 * dt`` pixels, which can be
+        too short for cells larger than ~12 px diameter.  Always forced False
+        for Omnipose.  Default False.
     min_size : int, optional
         Minimum instance size in voxels; smaller instances are discarded.
         Default 15.
