@@ -1634,20 +1634,26 @@ class instance_segmentation_loss:
                 if y_pred_slice.shape[-self.ndim :] != y_true_slice.shape[-self.ndim :]:
                     y_true_slice = scale_target(y_true_slice, y_pred_slice.shape[-self.ndim :])
 
-                # class-rebalance / ignore_index weights for BCE
+                # class-rebalance weight (per-pixel spatial map) for BCE only.
+                # CrossEntropyLoss.weight expects a 1-D (C,) per-class tensor, not a spatial
+                # map, so weight_binary_ratio is not applicable there.
                 weight = None
-                if self.losses_to_use[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
+                if self.losses_to_use[i] == "bce" and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
                     if self.class_rebalance_within_channels:
                         weight = weight_binary_ratio(y_true_slice).float()
                     if self.ignore_values:
                         ignore_mask = (y_true_slice != self.ignore_index).float()
                         weight = ignore_mask if weight is None else weight * ignore_mask
 
-                # instantiate criterion with no reduction so we can mask safely
+                spatial_weight = None  # combined spatial weight, built below for BCE only
+
+                # instantiate criterion with no reduction so we can mask/weight safely
                 if self.losses_to_use[i] == "bce":
-                    crit = torch.nn.BCEWithLogitsLoss(weight=weight, reduction="none")
+                    # weight is applied manually below so it can be additively combined with
+                    # w_borders following the U-Net formula: w(x) = w_c(x) + w_border(x).
+                    crit = torch.nn.BCEWithLogitsLoss(reduction="none")
                 elif self.losses_to_use[i] == "ce":
-                    crit = torch.nn.CrossEntropyLoss(weight=weight, reduction="none")
+                    crit = torch.nn.CrossEntropyLoss(reduction="none")
                     y_true_slice = y_true_slice.long().squeeze(1)
                 elif self.losses_to_use[i] in ["l1", "mae"]:
                     crit = torch.nn.L1Loss(reduction="none")
@@ -1661,17 +1667,38 @@ class instance_segmentation_loss:
                     y_true_slice = y_true_slice.float()
 
                 loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
-                    
-                # multiply by spatial border weights after crit
-                if w_borders is not None:
+
+                # For BCE: build combined spatial weight w(x) = w_c(x) + w_border(x).
+                # Addition keeps the border bump independent of the class-balance magnitude,
+                # avoiding compounding amplification from multiplication.
+                if self.losses_to_use[i] == "bce":
+                    if weight is not None and w_borders is not None:
+                        spatial_weight = weight + w_borders
+                    elif w_borders is not None:
+                        spatial_weight = w_borders
+                    elif weight is not None:
+                        spatial_weight = weight
+                    if spatial_weight is not None:
+                        loss_tensor = loss_tensor * spatial_weight
+                elif w_borders is not None:
+                    # For all other loss types apply w_borders multiplicatively (no additive
+                    # class-balance term exists for them).
                     loss_tensor = loss_tensor * w_borders
 
                 # apply optional element mask AFTER computing the per-element loss
                 if mask is not None:
                     loss_tensor = loss_tensor * mask
-                    denom = mask.sum().clamp_min(1.0)
+                    if spatial_weight is not None:
+                        # Normalise by total weight inside the mask so the loss scale is
+                        # invariant to the magnitude of the combined weight map.
+                        denom = (spatial_weight * mask).sum().clamp_min(1.0)
+                    else:
+                        denom = mask.sum().clamp_min(1.0)
                 else:
-                    denom = torch.tensor(loss_tensor.numel(), device=loss_tensor.device, dtype=loss_tensor.dtype)
+                    if spatial_weight is not None:
+                        denom = spatial_weight.sum().clamp_min(1.0)
+                    else:
+                        denom = torch.tensor(loss_tensor.numel(), device=loss_tensor.device, dtype=loss_tensor.dtype)
 
                 channel_loss_val = loss_tensor.sum() / denom
                 inter_output_loss += self.channel_weights[i] * channel_loss_val
