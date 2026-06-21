@@ -430,24 +430,25 @@ class Embedding_cluster:
         ndims : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
         """
+        self.device = device
+        # Pixel sizes (coordinate extents); stored so coords can be rebuilt for larger inputs.
+        self.pixel_z = anisotropy[0] if ndims == 3 else 1
+        self.pixel_y = anisotropy[1]
+        self.pixel_x = anisotropy[2]
+        self.ndims = ndims
+
         # Grid sizes (used to build the coordinate map buffer; sliced to input size on forward)
         grid_z = patch_size[0] if ndims == 3 else 1
         grid_y = patch_size[-3]
         grid_x = patch_size[-2]
-        # Pixel sizes (coordinate extents)
-        pixel_z = anisotropy[0] if ndims == 3 else 1
-        pixel_y = anisotropy[1]
-        pixel_x = anisotropy[2]
-        self.device = device
 
-        # Build max-size 3D coordinate grid buffer; for 2D we will slice z=1.
-        # This lets one class handle both 2D (uses x,y) and 3D (uses x,y,z).
-        xm = ( torch.linspace(0, pixel_x, grid_x).view(1, 1, 1, -1).expand(1, grid_z, grid_y, grid_x))
-        ym = (torch.linspace(0, pixel_y, grid_y).view(1, 1, -1, 1).expand(1, grid_z, grid_y, grid_x))
-        zm = (torch.linspace(0, pixel_z, grid_z).view(1, -1, 1, 1).expand(1, grid_z, grid_y, grid_x))
+        self.xyzm = self._build_xyzm(grid_z, grid_y, grid_x)
 
-        # Stack as (3, Z, Y, X); for 2D we’ll slice to (2, Y, X) at forward time.
-        self.xyzm = torch.cat((xm, ym, zm), 0).to(self.device)  # (3, Z, Y, X)
+    def _build_xyzm(self, grid_z: int, grid_y: int, grid_x: int) -> "torch.Tensor":
+        xm = torch.linspace(0, self.pixel_x, grid_x).view(1, 1, 1, -1).expand(1, grid_z, grid_y, grid_x)
+        ym = torch.linspace(0, self.pixel_y, grid_y).view(1, 1, -1, 1).expand(1, grid_z, grid_y, grid_x)
+        zm = torch.linspace(0, self.pixel_z, grid_z).view(1, -1, 1, 1).expand(1, grid_z, grid_y, grid_x)
+        return torch.cat((xm, ym, zm), 0).to(self.device)  # (3, Z, Y, X)
         
     def create_instances(
         self,
@@ -494,14 +495,16 @@ class Embedding_cluster:
 
         pred = torch.from_numpy(np.moveaxis(pred, -1, 0)).to(self.device)  # (C, *spatial)
 
-        # Spatial sizes
+        # Spatial sizes — grow coord buffer if test image is larger than training patch size
         if D == 2:
             H, W = pred.shape[1], pred.shape[2]
-            # coords: (2, H, W) from self.xyzm (3, Z, Y, X)
+            if H > self.xyzm.shape[2] or W > self.xyzm.shape[3]:
+                self.xyzm = self._build_xyzm(1, H, W)
             coords = self.xyzm[:2, 0, :H, :W].contiguous()
         else:
             Z, H, W = pred.shape[1], pred.shape[2], pred.shape[3]
-            # coords: (3, Z, H, W)
+            if Z > self.xyzm.shape[1] or H > self.xyzm.shape[2] or W > self.xyzm.shape[3]:
+                self.xyzm = self._build_xyzm(Z, H, W)
             coords = self.xyzm[:3, :Z, :H, :W].contiguous()
 
         # unpack heads
