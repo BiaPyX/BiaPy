@@ -449,11 +449,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if hvz_chs_present:
                 hvz_with_opts = [ch for ch in hvz_chs_present if ch in dst]
                 if len(hvz_with_opts) > 1:
-                    raise ValueError(
-                        f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' contains options for multiple channels of the "
-                        f"'H'/'V'/'Z' group {hvz_with_opts}. These channels always share the same settings — "
-                        f"configure only one of them and the values will be propagated to the rest."
-                    )
+                    # Allow identical entries written by a previous check_configuration call (idempotency)
+                    _vals = [dst[ch] for ch in hvz_with_opts]
+                    if not all(v == _vals[0] for v in _vals[1:]):
+                        raise ValueError(
+                            f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' contains options for multiple channels of the "
+                            f"'H'/'V'/'Z' group {hvz_with_opts}. These channels always share the same settings — "
+                            f"configure only one of them and the values will be propagated to the rest."
+                        )
                 if hvz_with_opts:
                     source_ch = hvz_with_opts[0]
                     assert [k for k in dst[source_ch] if k not in ["norm", "act"]] == [], (
@@ -476,11 +479,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if gflow_chs_present:
                 gflow_with_opts = [ch for ch in gflow_chs_present if ch in dst]
                 if len(gflow_with_opts) > 1:
-                    raise ValueError(
-                        f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' contains options for multiple channels of the "
-                        f"'Gv'/'Gh'/'Gz' group {gflow_with_opts}. These channels always share the same settings — "
-                        f"configure only one of them and the values will be propagated to the rest."
-                    )
+                    # Allow identical entries written by a previous check_configuration call (idempotency)
+                    _vals = [dst[ch] for ch in gflow_with_opts]
+                    if not all(v == _vals[0] for v in _vals[1:]):
+                        raise ValueError(
+                            f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' contains options for multiple channels of the "
+                            f"'Gv'/'Gh'/'Gz' group {gflow_with_opts}. These channels always share the same settings — "
+                            f"configure only one of them and the values will be propagated to the rest."
+                        )
                 if gflow_with_opts:
                     source_ch = gflow_with_opts[0]
                     assert [k for k in dst[source_ch] if k not in ["niter", "gradient_type"]] == [], (
@@ -597,12 +603,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # E — learned per-pixel features
             if "E_offset" in chs:
                 if "E_offset" in dst:
-                    assert [x for x in dst["E"].keys() if x not in ["center_mode", "medoid_max_points"]] == [], (
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'E' can only have 'center_mode' and 'medoid_max_points' keys"
+                    assert [x for x in dst["E_offset"].keys() if x not in ["center_mode", "medoid_max_points"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'E_offset' can only have 'center_mode' and 'medoid_max_points' keys"
                     )
                 dst["E_offset"] = {
-                    "center_mode": dst.get("E", {}).get("center_mode", "medoid"),
-                    "medoid_max_points": dst.get("E", {}).get("medoid_max_points", 10000),
+                    "center_mode": dst.get("E_offset", {}).get("center_mode", "medoid"),
+                    "medoid_max_points": dst.get("E_offset", {}).get("medoid_max_points", 10000),
                 }
                 dst["E_sigma"] = {}
                 dst["E_seediness"] = {}
