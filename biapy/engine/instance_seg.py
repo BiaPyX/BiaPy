@@ -760,6 +760,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 min_size=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE,
                 max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
                 resolution=list(self.resolution[-self.dims:]),
+                auto_adjust=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.AUTO_ADJUST,
             )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)

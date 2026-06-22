@@ -282,7 +282,7 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS = ""
         # Defines how the instances are created. Options:
         #   - "watershed" to use watershed algorithm
-        #   - "agglomeration" to use agglomeration algorithm
+        #   - "gradient-flow" to use gradient flow algorithm (Cellpose/Omnipose)
         #   - "stardist" to use stardist algorithm
         #   - "embeddings" to use embedding-based clustering algorithms
         _C.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS = ""
@@ -403,6 +403,17 @@ class Config:
         #     enough not to bridge the skeletons of two touching cells. More sensitive than for
         #     Cellpose; tune this if cells are merged or incorrectly split.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST = 5.0
+        # Automatically adjust MIN_SIZE and MAX_CLUSTER_DIST from the foreground
+        # channel of each test image. Requires a dedicated foreground channel
+        # ('F', 'M', or 'B') in DATA_CHANNELS. When enabled, BiaPy labels the
+        # connected components in the thresholded foreground map, estimates the
+        # equivalent radius at the 15th percentile of component sizes, and
+        # overrides MIN_SIZE and MAX_CLUSTER_DIST for that image:
+        #   MIN_SIZE        ← max(1, int(0.5 × estimated_small_cell_area))
+        #   MAX_CLUSTER_DIST ← max(5.0, estimated_radius)
+        # Useful when cells of mixed scales are present and manual tuning is
+        # difficult. Ignored when TYPE is 'omnipose'. Default: False.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.AUTO_ADJUST = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.2.4 EmbedSeg-like post-processing options for instance segmentation

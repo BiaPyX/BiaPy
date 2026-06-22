@@ -145,6 +145,74 @@ def _interpolate_flow(flow_components: List[NDArray], positions: NDArray) -> NDA
     )
 
 
+def _estimate_cell_radius(
+    fg_channel: NDArray,
+    fg_thresh: float,
+    is_3d: bool,
+    min_components: int = 3,
+    size_percentile: float = 15.0,
+) -> Optional[float]:
+    """
+    Estimate a representative small-cell radius from the foreground channel.
+
+    Thresholds ``fg_channel``, labels connected components, and returns the
+    equivalent radius at ``size_percentile`` of the area/volume distribution.
+    Used to auto-tune ``min_size`` and ``max_cluster_dist`` for Cellpose
+    post-processing when cells of mixed scales are present.
+
+    Parameters
+    ----------
+    fg_channel : ndarray
+        2-D (Y, X) or 3-D (Z, Y, X) foreground probability map (sigmoid space).
+    fg_thresh : float
+        Threshold applied to ``fg_channel`` to obtain the binary mask.
+    is_3d : bool
+        Whether the data is 3-D.
+    min_components : int
+        Minimum number of connected components required to return an estimate.
+        If fewer are found the function returns None.
+    size_percentile : float
+        Percentile of the component-size distribution used to represent
+        "small cells". Lower values are more sensitive to the smallest cells.
+
+    Returns
+    -------
+    radius : float or None
+        Equivalent radius (pixels) at ``size_percentile``, or None if the
+        estimate is unreliable (too few components).
+    stats : dict or None
+        Dictionary with diagnostic fields:
+        ``n_components``, ``min_area``, ``max_area``, ``median_area``,
+        ``percentile_area`` (the area used for radius), ``size_percentile``.
+        None when radius is None.
+    """
+    binary = (fg_channel > fg_thresh).astype(bool)
+    labeled, n_labels = cc_label(binary, return_num=True)
+    if n_labels < min_components:
+        return None, None
+
+    sizes = np.bincount(labeled.ravel())[1:]   # skip background (label 0)
+    sizes = sizes[sizes > 0]
+    if len(sizes) < min_components:
+        return None, None
+
+    small_area = float(np.percentile(sizes, size_percentile))
+    if is_3d:
+        radius = (3.0 * small_area / (4.0 * np.pi)) ** (1.0 / 3.0)
+    else:
+        radius = np.sqrt(small_area / np.pi)
+
+    stats = {
+        "n_components": int(len(sizes)),
+        "min_area": int(sizes.min()),
+        "max_area": int(sizes.max()),
+        "median_area": float(np.median(sizes)),
+        "percentile_area": small_area,
+        "size_percentile": size_percentile,
+    }
+    return radius, stats
+
+
 def _euler_integrate(
     flow_components: List[NDArray],
     fg_coords: NDArray,
@@ -524,6 +592,7 @@ def flows_to_instances(
     min_size: int = 15,
     max_cluster_dist: float = 5.0,
     resolution: List[float] = [1.0, 1.0, 1.0],
+    auto_adjust: bool = False,
 ) -> NDArray:
     """
     Convert predicted Cellpose / Omnipose flow fields into an instance label map.
@@ -603,6 +672,19 @@ def flows_to_instances(
         Physical voxel size ``[z, y, x]`` used to convert physical flow steps to
         pixel steps during integration.  For isotropic data use ``[1, 1, 1]``.
         Default [1.0, 1.0, 1.0].
+    auto_adjust : bool, optional
+        *Cellpose only.*  If True, analyse the foreground channel (``fg_channel``
+        must be set) to estimate a representative small-cell radius for this
+        image and override ``min_size`` and ``max_cluster_dist`` accordingly:
+
+        * ``min_size``  ← max(1, int(0.5 × estimated_small_cell_area))
+        * ``max_cluster_dist`` ← max(5.0, estimated_radius)
+
+        This adapts post-processing to images that contain cells of mixed
+        scales without requiring manual parameter tuning.  If the foreground
+        channel is absent or too few connected components are detected, the
+        provided values of ``min_size`` and ``max_cluster_dist`` are kept.
+        Ignored when ``flow_type="omnipose"``.  Default False.
 
     Returns
     -------
@@ -631,6 +713,34 @@ def flows_to_instances(
         fg_raw = pred[..., ch.index(fg_channel)].astype(np.float32)
         # B=1 means background → invert
         fg_mask = (fg_raw < fg_thresh) if fg_channel == "B" else (fg_raw > fg_thresh)
+
+        # ── 2a. Auto-adjust min_size / max_cluster_dist (Cellpose only) ───
+        if auto_adjust and flow_type == "cellpose":
+            _fg_for_estimate = 1.0 - fg_raw if fg_channel == "B" else fg_raw
+            radius, stats = _estimate_cell_radius(_fg_for_estimate, fg_thresh, is_3d)
+            if radius is not None:
+                small_area = (4.0 / 3.0 * np.pi * radius ** 3) if is_3d else (np.pi * radius ** 2)
+                adj_min_size = max(1, int(0.5 * small_area))
+                adj_max_cluster_dist = max(5.0, radius)
+                print(
+                    f"  [auto_adjust] foreground component analysis ({stats['n_components']} components detected):\n"
+                    f"    area  — min={stats['min_area']} px, "
+                    f"median={stats['median_area']:.0f} px, "
+                    f"max={stats['max_area']} px\n"
+                    f"    {stats['size_percentile']:.0f}th-percentile area={stats['percentile_area']:.1f} px "
+                    f"→ equivalent radius={radius:.1f} px\n"
+                    f"    min_size:        {min_size} → {adj_min_size}\n"
+                    f"    max_cluster_dist: {max_cluster_dist:.1f} → {adj_max_cluster_dist:.1f}"
+                )
+                min_size = adj_min_size
+                max_cluster_dist = adj_max_cluster_dist
+            else:
+                print(
+                    "  [auto_adjust] too few foreground components to estimate cell radius "
+                    "(need ≥ 3 separated instances in the foreground channel); "
+                    "keeping provided values: "
+                    f"min_size={min_size}, max_cluster_dist={max_cluster_dist:.1f}"
+                )
     else:
         # Background flow is identically zero by construction (GT masking ensures
         # this); any pixel with non-zero magnitude is foreground.
