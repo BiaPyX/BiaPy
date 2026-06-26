@@ -1958,16 +1958,19 @@ def detection_metrics(
             tp_df = df[df["tag"] == "TP"]
             if len(tp_df) > 0:
                 TP_classes = int((tp_df["gt_class"] == tp_df["pred_class"]).sum())
+                FP_classes = int((tp_df["gt_class"] != tp_df["pred_class"]).sum())
                 FN_classes = int((tp_df["gt_class"] != tp_df["pred_class"]).sum())
             else:
                 TP_classes = 0
+                FP_classes = 0
                 FN_classes = 0
         else:
             TP_classes = 0
+            FP_classes = 0
             FN_classes = 0
 
         try:
-            precision_classes = TP_classes / (TP_classes + FN_classes)
+            precision_classes = TP_classes / (TP_classes + FP_classes)
         except:
             precision_classes = 0
         try:
