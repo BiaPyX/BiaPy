@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
+from sklearn.metrics import precision_score, recall_score, f1_score
 from torchmetrics import JaccardIndex
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from pytorch_msssim import SSIM
@@ -1958,28 +1959,27 @@ def detection_metrics(
             tp_df = df[df["tag"] == "TP"]
             if len(tp_df) > 0:
                 TP_classes = int((tp_df["gt_class"] == tp_df["pred_class"]).sum())
-                FP_classes = int((tp_df["gt_class"] != tp_df["pred_class"]).sum())
                 FN_classes = int((tp_df["gt_class"] != tp_df["pred_class"]).sum())
             else:
                 TP_classes = 0
-                FP_classes = 0
                 FN_classes = 0
         else:
             TP_classes = 0
-            FP_classes = 0
             FN_classes = 0
 
-        try:
-            precision_classes = TP_classes / (TP_classes + FP_classes)
-        except:
+        if TP_classes + FN_classes > 0:
+            precision_classes = precision_score(
+                tp_df["gt_class"], tp_df["pred_class"], average="macro", zero_division=0
+            )
+            recall_classes = recall_score(
+                tp_df["gt_class"], tp_df["pred_class"], average="macro", zero_division=0
+            )
+            F1_classes = f1_score(
+                tp_df["gt_class"], tp_df["pred_class"], average="macro", zero_division=0
+            )
+        else:
             precision_classes = 0
-        try:
-            recall_classes = TP_classes / (TP_classes + FN_classes)
-        except:
             recall_classes = 0
-        try:
-            F1_classes = 2 * ((precision_classes * recall_classes) / (precision_classes + recall_classes))
-        except:
             F1_classes = 0
 
     if verbose:
