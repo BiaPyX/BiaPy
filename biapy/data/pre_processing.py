@@ -771,7 +771,7 @@ def labels_into_channels(
 
     # ---------- Gv / Gh / Gz (flow-like channels) ----------
     if 'Gv' in mode:
-        niter = channel_extra_opts.get("Gv", {}).get("niter", 200)
+        niter = channel_extra_opts.get("Gv", {}).get("niter", "auto")
         gtype = channel_extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
         Gv = np.zeros_like(vol, dtype=np.float32)
         Gh = np.zeros_like(vol, dtype=np.float32)
@@ -824,61 +824,75 @@ def labels_into_channels(
                 centers = tuple(int(c[idx]) for c in coords)
 
                 # 2. Iterative Diffusion Process
-                # We initialize the center with a value and let it diffuse strictly within the mask
-                heat = np.zeros_like(mask, dtype=np.float32)
-                heat[centers] = 1.0
-                
-                # Pre-calculate diffusion normalization
-                # 2D (4 neighbors) -> 0.25 | 3D (6 neighbors) -> 0.1666...
-                diff_coeff = 1.0 / (2 * vol.ndim)
+                # Matches Cellpose's _extend_centers exactly:
+                #   - Moore (8-connected in 2D / 26-connected in 3D) averaging including self
+                #   - Accumulating center: T[center] += 1 each step (not clamped to 1)
+                #   - niter = 2*sum(shape) per cell when "auto" (Cellpose's CPU formula)
+                # Pad by 1 on each side so all Moore-neighbor accesses stay in-bounds,
+                # equivalent to Cellpose's +2 bounding-box padding with +1 coord shift.
+                pad = 1
+                heat = np.zeros(tuple(s + 2 * pad for s in mask.shape), dtype=np.float64)
+                p_coords = tuple(c + pad for c in coords)    # padded mask-pixel indices
+                p_center = tuple(c + pad for c in centers)   # padded center index
 
-                for _ in range(niter):
-                    # Accumulate neighbor values with zero-boundary conditions.
-                    # np.roll wraps around bounding-box edges (periodic BC), which
-                    # is wrong; explicit slice-based shifts give Dirichlet BC (0 outside).
-                    neighbor_sum = np.zeros_like(heat)
-                    for axis in range(heat.ndim):
-                        slc_src = [slice(None)] * heat.ndim
-                        slc_dst = [slice(None)] * heat.ndim
-                        slc_src[axis] = slice(None, -1)   # value at index i
-                        slc_dst[axis] = slice(1, None)    # goes to neighbor i+1
-                        neighbor_sum[tuple(slc_dst)] += heat[tuple(slc_src)]
-                        slc_src[axis] = slice(1, None)    # value at index i+1
-                        slc_dst[axis] = slice(None, -1)   # goes to neighbor i
-                        neighbor_sum[tuple(slc_dst)] += heat[tuple(slc_src)]
+                # niter = 2*(ly+lx) matches Cellpose masks_to_flows_cpu (dynamics.py line 307)
+                n_iter_cell = 2 * int(sum(mask.shape)) if niter == "auto" else niter
 
-                    new_heat = neighbor_sum * diff_coeff
-                    heat[coords] = new_heat[coords]
+                if mask.ndim == 2:
+                    y_c, x_c = p_coords
+                    ymed, xmed = p_center
+                    for _ in range(n_iter_cell):
+                        heat[ymed, xmed] += 1.0
+                        heat[y_c, x_c] = (1.0 / 9.0) * (
+                            heat[y_c,     x_c    ] +
+                            heat[y_c - 1, x_c    ] + heat[y_c + 1, x_c    ] +
+                            heat[y_c,     x_c - 1] + heat[y_c,     x_c + 1] +
+                            heat[y_c - 1, x_c - 1] + heat[y_c - 1, x_c + 1] +
+                            heat[y_c + 1, x_c - 1] + heat[y_c + 1, x_c + 1]
+                        )
+                else:  # 3D: 26-connected Moore neighborhood (1/27)
+                    z_c, y_c, x_c = p_coords
+                    zmed, ymed, xmed = p_center
+                    for _ in range(n_iter_cell):
+                        heat[zmed, ymed, xmed] += 1.0
+                        neigh = np.zeros(len(z_c), dtype=np.float64)
+                        for dz in (-1, 0, 1):
+                            for dy in (-1, 0, 1):
+                                for dx in (-1, 0, 1):
+                                    neigh += heat[z_c + dz, y_c + dy, x_c + dx]
+                        heat[z_c, y_c, x_c] = neigh / 27.0
 
-                    # Keep the source hot
-                    heat[centers] = 1.0
-
-                # 3. Calculate Gradients
-                # np.gradient needs at least 2 elements per axis.  Skip cells that
-                # are only 1 pixel wide along any axis (their flow stays 0).
-                if any(s < 2 for s in heat.shape):
+                # 3. Calculate Gradients on the padded heat so boundary mask pixels get
+                # a proper central difference (padded zeros act as Dirichlet BC).
+                # Skip cells that are only 1 pixel wide (gradient undefined).
+                if any(s < 2 for s in mask.shape):
                     continue
-                # np.gradient returns a list of arrays: [d0, d1, d2] -> [dz, dy, dx] in 3D
-                # Pass voxel spacing so anisotropic data produces correct flow directions.
+                # np.gradient returns [d0, d1, ...] = [dz, dy, dx] in 3D or [dy, dx] in 2D
+                # Pass voxel spacing for correct gradient magnitude on anisotropic data.
                 if vol.ndim == 3:
                     grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
                 else:
                     grads = np.gradient(heat, resolution[1], resolution[2])
-                
-                # 4. Normalize the flows
-                mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
-                grads = [g / mag for g in grads]
-                
+
+                # 4. Normalize the flows (extract at padded mask-pixel positions)
+                mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads) + 1e-6)
+
                 # 5. Apply mask and save to global arrays
                 if vol.ndim == 3:
                     # grads[0]=dz, grads[1]=dy, grads[2]=dx
-                    Gz[slc][mask] = grads[0][mask]
-                    Gv[slc][mask] = grads[1][mask]
-                    Gh[slc][mask] = grads[2][mask]
+                    Gz[slc][mask] = grads[0][p_coords] / mag
+                    Gv[slc][mask] = grads[1][p_coords] / mag
+                    Gh[slc][mask] = grads[2][p_coords] / mag
                 else:
                     # grads[0]=dy, grads[1]=dx
-                    Gv[slc][mask] = grads[0][mask]
-                    Gh[slc][mask] = grads[1][mask]
+                    Gv[slc][mask] = grads[0][p_coords] / mag
+                    Gh[slc][mask] = grads[1][p_coords] / mag
+
+            # We multiply by 5 to scale the flow values to a range of [-5, 5] to match Cellpose
+            Gv *= 5.0
+            Gh *= 5.0
+            if vol.ndim == 3:
+                Gz *= 5.0
 
         # Map back to the new_mask channels
         if "Gz" in mode and Gz is not None:

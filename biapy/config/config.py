@@ -380,40 +380,13 @@ class Config:
         # Number of Euler integration steps used to trace each foreground pixel through the
         # flow field until it converges to an attractor. Matches Cellpose default (niter=200).
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS = 200
-        # Step size for each Euler integration step (in pixels, applied to unit-normalised flows).
-        # With SUPPRESSED=False each pixel moves exactly DT pixels per step; N_STEPS * DT is the
-        # maximum travel distance. DT=1.0 works well for any cell size with unit-normalised flows.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DT = 1.0
-        # Whether to decay the step size as dt/(t+1) (True) or use a constant step dt (False).
-        # False matches Cellpose 4.x behaviour (constant step throughout integration), which allows
-        # pixels to travel N_STEPS * DT pixels and converge correctly for cells of any size.
-        # True (old behaviour) gives only ~5.9 * DT pixels of total travel, which is insufficient
-        # for cells larger than ~12 px diameter and is NOT the standard Cellpose approach.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED = False
-        # Minimum number of pixels in a connected component to be kept as a valid instance.
-        # Smaller objects are discarded after clustering. Matches Cellpose default (min_size=15).
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE = 15
-        # Role differs by TYPE:
-        #   - 'cellpose': maximum pixel distance from a pixel's convergence position to the nearest
-        #     histogram attractor peak. Pixels farther than this are discarded as noise. Matches
-        #     Cellpose's ~5-pixel peak-extension window (get_masks kernel_size=3 × 5 iterations).
-        #   - 'omnipose': DBSCAN eps radius (pixels). Convergence positions within this distance
-        #     are linked into the same cluster (= the same cell's medial-axis skeleton). Must be
-        #     large enough to stitch adjacent skeleton points of the same cell together, but small
-        #     enough not to bridge the skeletons of two touching cells. More sensitive than for
-        #     Cellpose; tune this if cells are merged or incorrectly split.
+        # Omnipose only. DBSCAN eps radius (pixels): convergence positions within this distance
+        # are linked into the same cluster (= the same cell's medial-axis skeleton). Must be
+        # large enough to stitch adjacent skeleton points of the same cell together, but small
+        # enough not to bridge the skeletons of two touching cells. Tune this if cells are merged
+        # or incorrectly split. Ignored when TYPE is 'cellpose', which uses 5-step 3×3 expansion
+        # in histogram space with no distance gate. Default: 5.0.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST = 5.0
-        # Automatically adjust MIN_SIZE and MAX_CLUSTER_DIST from the foreground
-        # channel of each test image. Requires a dedicated foreground channel
-        # ('F', 'M', or 'B') in DATA_CHANNELS. When enabled, BiaPy labels the
-        # connected components in the thresholded foreground map, estimates the
-        # equivalent radius at the 15th percentile of component sizes, and
-        # overrides MIN_SIZE and MAX_CLUSTER_DIST for that image:
-        #   MIN_SIZE        ← max(1, int(0.5 × estimated_small_cell_area))
-        #   MAX_CLUSTER_DIST ← max(5.0, estimated_radius)
-        # Useful when cells of mixed scales are present and manual tuning is
-        # difficult. Ignored when TYPE is 'omnipose'. Default: False.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.AUTO_ADJUST = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.2.4 EmbedSeg-like post-processing options for instance segmentation

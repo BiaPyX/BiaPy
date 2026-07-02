@@ -323,9 +323,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
                 elif channel in ["Gv", "Gh", "Gz"]:
-                    # Cellpose flow targets are unit vectors in [-1, 1]; tanh constrains
-                    # predictions to the same range and stabilises MSE training.
-                    self.head_activations.append("tanh")
+                    self.head_activations.append("linear")
                     if set_model_output_channels:
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
@@ -755,12 +753,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH,
                 flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD,
                 n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
-                dt=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DT,
-                suppressed=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SUPPRESSED,
-                min_size=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MIN_SIZE,
                 max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
                 resolution=list(self.resolution[-self.dims:]),
-                auto_adjust=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.AUTO_ADJUST,
             )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)

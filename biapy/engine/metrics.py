@@ -1601,13 +1601,16 @@ class instance_segmentation_loss:
                 mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
                 mask = None
                 if channel in ("Gv", "Gh", "Gz"):
-                    # Flow targets are unit vectors: magnitude is always 1 in the foreground
-                    # and (0, 0[, 0]) in the background.  A foreground pixel with purely
-                    # horizontal flow has Gv=0, so per-component (!=0) masking would wrongly
-                    # exclude it.  Sum of squared components is the correct foreground proxy.
-                    flow_channels = [j for j, ch in enumerate(self.out_channels) if ch in ("Gv", "Gh", "Gz")]
-                    mag_sq = sum(y_true[:, j : j + 1].float() ** 2 for j in flow_channels)
-                    mask = (mag_sq > 0).float()
+                    if any(ch in ("F", "B", "M") for ch in self.out_channels):
+                        mask = self._foreground_mask(y_true)
+                    else:
+                        # Flow targets are unit vectors: magnitude is always 1 in the foreground
+                        # and (0, 0[, 0]) in the background.  A foreground pixel with purely
+                        # horizontal flow has Gv=0, so per-component (!=0) masking would wrongly
+                        # exclude it.  Sum of squared components is the correct foreground proxy.
+                        flow_channels = [j for j, ch in enumerate(self.out_channels) if ch in ("Gv", "Gh", "Gz")]
+                        mag_sq = sum(y_true[:, j : j + 1].float() ** 2 for j in flow_channels)
+                        mask = (mag_sq > 0).float()
                 elif channel in ("H", "V", "Z"):
                     # HoVer-Net channels: values in [-1, 1] (signed), centroid = 0 = background.
                     # Masking by (!=0) would exclude the entire center row/column of every cell.

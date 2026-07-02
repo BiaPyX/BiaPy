@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.ndimage import map_coordinates, maximum_filter1d
-from scipy.spatial import cKDTree
 from skimage.measure import label as cc_label
 from skimage.morphology import remove_small_objects
 from skimage.segmentation import relabel_sequential
@@ -145,88 +144,19 @@ def _interpolate_flow(flow_components: List[NDArray], positions: NDArray) -> NDA
     )
 
 
-def _estimate_cell_radius(
-    fg_channel: NDArray,
-    fg_thresh: float,
-    is_3d: bool,
-    min_components: int = 3,
-    size_percentile: float = 15.0,
-) -> Optional[float]:
-    """
-    Estimate a representative small-cell radius from the foreground channel.
-
-    Thresholds ``fg_channel``, labels connected components, and returns the
-    equivalent radius at ``size_percentile`` of the area/volume distribution.
-    Used to auto-tune ``min_size`` and ``max_cluster_dist`` for Cellpose
-    post-processing when cells of mixed scales are present.
-
-    Parameters
-    ----------
-    fg_channel : ndarray
-        2-D (Y, X) or 3-D (Z, Y, X) foreground probability map (sigmoid space).
-    fg_thresh : float
-        Threshold applied to ``fg_channel`` to obtain the binary mask.
-    is_3d : bool
-        Whether the data is 3-D.
-    min_components : int
-        Minimum number of connected components required to return an estimate.
-        If fewer are found the function returns None.
-    size_percentile : float
-        Percentile of the component-size distribution used to represent
-        "small cells". Lower values are more sensitive to the smallest cells.
-
-    Returns
-    -------
-    radius : float or None
-        Equivalent radius (pixels) at ``size_percentile``, or None if the
-        estimate is unreliable (too few components).
-    stats : dict or None
-        Dictionary with diagnostic fields:
-        ``n_components``, ``min_area``, ``max_area``, ``median_area``,
-        ``percentile_area`` (the area used for radius), ``size_percentile``.
-        None when radius is None.
-    """
-    binary = (fg_channel > fg_thresh).astype(bool)
-    labeled, n_labels = cc_label(binary, return_num=True)
-    if n_labels < min_components:
-        return None, None
-
-    sizes = np.bincount(labeled.ravel())[1:]   # skip background (label 0)
-    sizes = sizes[sizes > 0]
-    if len(sizes) < min_components:
-        return None, None
-
-    small_area = float(np.percentile(sizes, size_percentile))
-    if is_3d:
-        radius = (3.0 * small_area / (4.0 * np.pi)) ** (1.0 / 3.0)
-    else:
-        radius = np.sqrt(small_area / np.pi)
-
-    stats = {
-        "n_components": int(len(sizes)),
-        "min_area": int(sizes.min()),
-        "max_area": int(sizes.max()),
-        "median_area": float(np.median(sizes)),
-        "percentile_area": small_area,
-        "size_percentile": size_percentile,
-    }
-    return radius, stats
-
-
 def _euler_integrate(
     flow_components: List[NDArray],
     fg_coords: NDArray,
     n_steps: int,
-    dt: float,
-    suppressed: bool,
     res_per_axis: NDArray,
 ) -> NDArray:
     """
     Euler-integrate the flow field from each foreground pixel position.
 
-    Flow vectors are defined in physical space (unit magnitude after normalisation).
-    The integration converts each physical step to voxel-index steps using the
-    provided resolution so that anisotropic data is handled correctly.
+    Flows are passed in already scaled to ``≈ ±1 px`` magnitude (raw network
+    output ``≈ ±5`` divided by 5, background zeroed — identical to Cellpose).
+    Each step displaces a pixel by ``flow / res`` voxels; no additional ``dt``
+    factor is applied.
 
     Parameters
     ----------
@@ -237,15 +167,6 @@ def _euler_integrate(
         Starting voxel coordinates of every foreground pixel.
     n_steps : int
         Number of integration steps.
-    dt : float
-        Physical-unit step size per iteration.
-    suppressed : bool
-        If True, decay the step size as ``dt / (t + 1)``, giving a total travel
-        distance of approximately ``5.9 * dt`` pixels (harmonic series). Only
-        useful for very small cells or as a convergence aid for very noisy flows.
-        If False (Cellpose 4.x default), use a constant step ``dt`` per iteration;
-        total travel is ``n_steps * dt`` pixels, allowing convergence for any cell
-        size.
     res_per_axis : (ndim,) float array
         Physical voxel size per axis ``[z, y, x]`` (or ``[y, x]`` for 2D).
         Used to convert a physical displacement to a pixel displacement.
@@ -261,13 +182,13 @@ def _euler_integrate(
 
     pos = fg_coords.astype(np.float32).copy()
 
-    for t in range(n_steps):
+    for _ in range(n_steps):
         # Bilinear interpolation of each flow component at current positions
         flow_at = _interpolate_flow(flow_components, pos)          # (N, ndim)
 
-        # Convert physical step → pixel step: Δpix[d] = Δphys[d] / res[d]
-        factor = dt / (t + 1) if suppressed else dt
-        pos = pos + factor * (flow_at / res[np.newaxis, :])
+        # Flows are already divided by 5 (raw ≈ ±5 → ±1 px/step), matching
+        # Cellpose exactly.  Convert physical step → pixel step via resolution.
+        pos = pos + (flow_at / res[np.newaxis, :])
 
         # Keep positions inside the volume
         for d in range(ndim):
@@ -276,70 +197,27 @@ def _euler_integrate(
     return pos
 
 
-def _attractor_peaks(
-    final_pos: NDArray,
-    shape: tuple,
-    rpad: int = 20,
-    min_count: int = 5,
-) -> NDArray:
-    """
-    Detect attractor peaks in the histogram of post-integration convergence positions.
-
-    Follows Cellpose's histogram-maximum strategy: a position is a peak if it is
-    a local maximum (within a 5-bin window per axis) with at least ``min_count``
-    pixels converging to it.
-
-    Parameters
-    ----------
-    final_pos : (N, ndim) float array
-        Convergence positions after Euler integration.
-    shape : tuple of int
-        Spatial shape of the volume (without channel axis).
-    rpad : int
-        Padding added around the volume in histogram bins to capture pixels
-        that drifted slightly outside bounds.
-    min_count : int
-        Minimum number of converging pixels for a position to be a peak.
-
-    Returns
-    -------
-    peaks : (K, ndim) float array
-        Peak positions in image voxel coordinates.  May be empty (shape (0, ndim)).
-    """
-    ndim = final_pos.shape[1]
-    edges = [np.arange(-0.5 - rpad, shape[d] + 0.5 + rpad, 1.0) for d in range(ndim)]
-    h, _ = np.histogramdd(final_pos, bins=edges)
-
-    # Local-maximum filter with window 5 along each axis
-    hmax = h.copy()
-    for d in range(ndim):
-        hmax = maximum_filter1d(hmax, 5, axis=d)
-
-    peak_mask = (h - hmax > -1e-6) & (h >= min_count)
-    # Histogram indices → image coordinates (subtract padding offset)
-    peak_hist_idx = np.stack(np.nonzero(peak_mask), axis=1).astype(float)
-    peaks = peak_hist_idx - rpad
-
-    return peaks  # (K, ndim)
-
-
 def _cluster_to_instances(
     final_pos: NDArray,
     fg_coords: NDArray,
     shape: tuple,
-    min_size: int,
-    max_cluster_dist: float,
 ) -> NDArray:
     """
-    Build an instance label map by assigning foreground pixels to attractor peaks.
+    Build an instance label map using Cellpose's exact histogram-peak + expansion strategy.
 
-    Algorithm:
-    1. Find peaks in the histogram of ``final_pos`` (Cellpose strategy).
-    2. Assign each foreground pixel to its nearest peak within ``max_cluster_dist``.
-    3. Split any disconnected region sharing the same peak label into separate
-       instances (handles the rare case where noise causes two far-apart pixels to
-       converge to the same attractor).
-    4. Relabel sequentially and remove objects smaller than ``min_size``.
+    1. Truncate convergence positions to integers (Cellpose: ``.astype("int32")``).
+    2. Build a padded 1-px convergence histogram.
+    3. Find peaks: local maxima within a 5-bin window per axis with **h > 10**
+       (Cellpose hardcoded threshold).
+    4. Sort seeds ascending by convergence count so the strongest seed wins
+       when two expanded regions overlap (mirrors the torch version).
+    5. Expand each seed independently for exactly **5 iterations** of 3×3
+       (2D) or 3×3×3 (3D) neighbourhood growth, keeping only bins where
+       **h > 2** (Cellpose hardcoded expansion gate).
+    6. Build the histogram label map M; look up each fg pixel's label via its
+       truncated integer convergence position.
+    7. Split any disconnected region sharing the same label into separate
+       instances.
 
     Parameters
     ----------
@@ -349,11 +227,6 @@ def _cluster_to_instances(
         Source foreground pixel voxel coordinates.
     shape : tuple of int
         Spatial shape of the volume.
-    min_size : int
-        Minimum instance size in voxels.
-    max_cluster_dist : float
-        Maximum pixel distance from a convergence position to a valid attractor
-        peak.  Pixels farther away are treated as background noise.
 
     Returns
     -------
@@ -361,31 +234,84 @@ def _cluster_to_instances(
         Instance label map. 0 = background.
     """
     ndim = final_pos.shape[1]
+    rpad = 20
 
-    # 1. Find attractor peaks
-    peaks = _attractor_peaks(final_pos, shape, min_count=max(1, min_size // 2))
+    # 1. Truncate convergence positions to integers (Cellpose: .astype("int32"))
+    pflows = [final_pos[:, d].astype(np.int32) for d in range(ndim)]
 
-    labels = np.zeros(shape, dtype=np.int32)
-    if peaks.shape[0] == 0:
-        return labels
+    # 2. Build padded convergence histogram
+    edges = [np.arange(-0.5 - rpad, shape[d] + 0.5 + rpad, 1.0) for d in range(ndim)]
+    h, _ = np.histogramdd(tuple(pflows), bins=edges)
 
-    # 2. Assign each fg pixel to its nearest valid peak
-    tree = cKDTree(peaks)
-    dists, peak_ids = tree.query(final_pos, k=1)
-    valid = dists < max_cluster_dist
+    # 3. Find peaks: local maxima with h > 10 (Cellpose hardcoded seed threshold)
+    hmax = h.copy()
+    for d in range(ndim):
+        hmax = maximum_filter1d(hmax, 5, axis=d)
+    seeds_idx = np.nonzero(np.logical_and(h - hmax > -1e-6, h > 10))
 
-    # Peak-assignment map: value = peak_id + 1 (so 0 means unassigned)
+    out = np.zeros(shape, dtype=np.int32)
+    if len(seeds_idx[0]) == 0:
+        return out
+
+    # 4. Sort seeds ascending by convergence count (strongest last → wins on overlap)
+    Nmax = h[seeds_idx]
+    isort = np.argsort(Nmax)  # ascending
+    seeds_idx = tuple(s[isort] for s in seeds_idx)
+    n_seeds = len(seeds_idx[0])
+
+    # 5. Expand each seed for exactly 5 iterations of 3×3 (or 3×3×3) neighbourhood,
+    #    keeping only bins where h > 2 (Cellpose hardcoded expansion gate).
+    #    This mirrors get_masks_torch's iterative max-pool on local 11×11 patches.
+    if ndim == 3:
+        offsets = np.array(list(np.ndindex(3, 3, 3))) - 1   # (27, 3)
+    else:
+        offsets = np.array(list(np.ndindex(3, 3))) - 1      # (9, 2)
+    hshape = np.array(h.shape)
+
+    # Initialise each seed as a single-bin region (shape (1, ndim))
+    pix = [np.array([[seeds_idx[d][k] for d in range(ndim)]]) for k in range(n_seeds)]
+
+    for _ in range(5):
+        for k in range(n_seeds):
+            curr = pix[k]   # (N, ndim)
+            if len(curr) == 0:
+                continue
+            # All 3×3 (or 3×3×3) neighbours of every current bin: (N·9, ndim)
+            neighbours = (
+                curr[:, np.newaxis, :] + offsets[np.newaxis, :, :]
+            ).reshape(-1, ndim)
+            # In-bounds filter (rpad=20 ensures we never truly leave h, but kept for safety)
+            inbounds = np.all(
+                (neighbours >= 0) & (neighbours < hshape), axis=1
+            )
+            neighbours = neighbours[inbounds]
+            if len(neighbours) == 0:
+                pix[k] = neighbours
+                continue
+            # Gate: only keep bins where h > 2
+            valid = h[tuple(neighbours[:, d] for d in range(ndim))] > 2
+            neighbours = neighbours[valid]
+            if len(neighbours) > 0:
+                pix[k] = np.unique(neighbours, axis=0)
+            else:
+                pix[k] = neighbours
+
+    # 6. Build histogram label map and look up each fg pixel's label
+    M = np.zeros(h.shape, dtype=np.int32)
+    for k in range(n_seeds):
+        if len(pix[k]) > 0:
+            M[tuple(pix[k][:, d] for d in range(ndim))] = k + 1
+
+    bin_idx = tuple(
+        np.clip(pflows[d] + rpad, 0, h.shape[d] - 1) for d in range(ndim)
+    )
     pk_labels = np.zeros(shape, dtype=np.int32)
-    for i in range(len(fg_coords)):
-        if valid[i]:
-            pk_labels[tuple(fg_coords[i])] = int(peak_ids[i]) + 1
+    pk_labels[tuple(fg_coords[:, d] for d in range(ndim))] = M[bin_idx]
 
-    # 3. Split disconnected regions sharing the same peak label
-    #    Each unique peak label is processed independently so adjacent regions
-    #    with *different* peak labels are never merged.
+    # 7. Split disconnected regions sharing the same label
     final_labels = np.zeros(shape, dtype=np.int32)
     current_id = 0
-    for pk in range(1, int(peaks.shape[0]) + 1):
+    for pk in range(1, n_seeds + 1):
         mask = pk_labels == pk
         if not mask.any():
             continue
@@ -395,9 +321,6 @@ def _cluster_to_instances(
             final_labels[mask] = cc[mask] + current_id
             current_id += n
 
-    # 4. Remove small objects and relabel
-    if min_size > 0:
-        final_labels = remove_small_objects(final_labels, min_size=min_size)
     final_labels, _, _ = relabel_sequential(final_labels)
     return final_labels.astype(np.int32)
 
@@ -406,7 +329,6 @@ def _dbscan_cluster(
     final_pos: NDArray,
     fg_coords: NDArray,
     shape: tuple,
-    min_size: int,
     eps: float,
 ) -> NDArray:
     """
@@ -423,7 +345,6 @@ def _dbscan_cluster(
     2. Map DBSCAN cluster IDs back to foreground pixel coordinates.
     3. Split any disconnected region sharing the same DBSCAN label into separate
        instances (preserves fine-grained boundaries).
-    4. Relabel sequentially and remove objects smaller than ``min_size``.
 
     Parameters
     ----------
@@ -433,8 +354,6 @@ def _dbscan_cluster(
         Source foreground pixel voxel coordinates.
     shape : tuple of int
         Spatial shape of the volume.
-    min_size : int
-        Minimum instance size in voxels.
     eps : float
         DBSCAN neighbourhood radius in pixels.  Equivalent to ``max_cluster_dist``
         in :func:`_cluster_to_instances`.
@@ -471,8 +390,6 @@ def _dbscan_cluster(
             final_labels[mask] = cc[mask] + current_id
             current_id += n
 
-    if min_size > 0:
-        final_labels = remove_small_objects(final_labels, min_size=min_size)
     final_labels, _, _ = relabel_sequential(final_labels)
     return final_labels.astype(np.int32)
 
@@ -587,12 +504,8 @@ def flows_to_instances(
     fg_thresh: float = 0.5,
     flow_threshold: float = 0.4,
     n_steps: int = 200,
-    dt: float = 1.0,
-    suppressed: bool = False,
-    min_size: int = 15,
     max_cluster_dist: float = 5.0,
     resolution: List[float] = [1.0, 1.0, 1.0],
-    auto_adjust: bool = False,
 ) -> NDArray:
     """
     Convert predicted Cellpose / Omnipose flow fields into an instance label map.
@@ -601,17 +514,19 @@ def flows_to_instances(
 
     **Cellpose** (``flow_type="cellpose"``, default):
       Flows are the gradient of a per-instance heat-diffusion potential.
-      Post-processing uses time-suppressed Euler integration (step = dt/(t+1))
-      followed by histogram peak detection and cKDTree assignment.  A flow
-      consistency check then discards instances whose predicted flow diverges
-      from a centroid-pointing approximation.
+      Post-processing uses constant-step Euler integration (≈1 px per step after
+      dividing raw ≈±5 network output by 5, matching Cellpose's ``dP/5``
+      normalisation in dynamics.py), followed by histogram peak detection and
+      5-iteration 3×3 neighbourhood expansion (Cellpose's iterative max-pool
+      strategy).  A flow consistency check then discards instances whose predicted
+      flow diverges from a centroid-pointing approximation.
 
     **Omnipose** (``flow_type="omnipose"``):
       Flows are the gradient of the per-cell Euclidean Distance Transform (EDT).
-      Post-processing uses constant-step Euler integration (``suppressed`` is
-      forced to False) followed by DBSCAN clustering on convergence positions.
-      The flow consistency check is skipped because Omnipose flows are accurate
-      by construction (they always point toward the EDT maximum / skeleton).
+      Post-processing uses constant-step Euler integration followed by DBSCAN
+      clustering on convergence positions.  The flow consistency check is skipped
+      because Omnipose flows are accurate by construction (they always point toward
+      the EDT maximum / skeleton).
 
     Common pipeline for both modes:
 
@@ -619,8 +534,9 @@ def flows_to_instances(
     2. Build the foreground mask from a dedicated channel or from the flow magnitude.
     3. Re-normalise predicted flow vectors to unit length.
     4. Euler-integrate each foreground pixel along the flow field (anisotropy-aware).
-    5. *Cellpose*: detect attractor peaks via histogram + ``maximum_filter1d``; assign
-       pixels to their nearest peak via cKDTree.
+    5. *Cellpose*: detect attractor peaks (h > 10); expand each peak for 5 iterations
+       of 3×3 neighbourhood growth gated by h > 2 (Cellpose's iterative max-pooling);
+       assign each fg pixel the label of its integer convergence position in the map.
        *Omnipose*: cluster convergence positions with DBSCAN (``eps = max_cluster_dist``).
     6. Split disconnected regions that share a cluster label into separate instances.
     7. *Cellpose only*: optionally remove instances with inconsistent flow.
@@ -650,41 +566,19 @@ def flows_to_instances(
         so 0 = perfect, 2 = opposite.  Set ≤ 0 to skip this check.
         Default 0.4 (matches Cellpose default).  Ignored when ``flow_type="omnipose"``.
     n_steps : int, optional
-        Number of Euler integration steps.  Default 200.
-    dt : float, optional
-        Physical-unit step size per iteration.  Default 1.0.
-    suppressed : bool, optional
-        *Cellpose only.*  If False (default, matches Cellpose 4.x), use a
-        constant step ``dt`` per iteration — total travel = ``n_steps * dt``
-        pixels, sufficient for cells of any size.  If True, decay the step as
-        ``dt / (t + 1)`` — total travel ≈ ``5.9 * dt`` pixels, which can be
-        too short for cells larger than ~12 px diameter.  Always forced False
-        for Omnipose.  Default False.
-    min_size : int, optional
-        Minimum instance size in voxels; smaller instances are discarded.
-        Default 15.
+        Kept for API compatibility; the value is always overridden internally to
+        200, which is Cellpose's ``niter`` default when no image rescaling is
+        applied (``resample=False`` path).  Default 200.
     max_cluster_dist : float, optional
-        *Cellpose*: maximum pixel distance from a pixel's convergence position
-        to a valid attractor peak; pixels farther away are treated as noise.
-        *Omnipose*: DBSCAN ``eps`` neighbourhood radius in pixels.
-        Default 5.0.
+        *Omnipose only.*  DBSCAN ``eps`` neighbourhood radius in pixels.
+        Convergence positions within this distance are linked into the same
+        cluster (= the same cell's medial-axis skeleton).  Ignored when
+        ``flow_type="cellpose"``, which uses 5-step 3×3 expansion in histogram
+        space with no distance gate.  Default 5.0.
     resolution : list of float, optional
         Physical voxel size ``[z, y, x]`` used to convert physical flow steps to
         pixel steps during integration.  For isotropic data use ``[1, 1, 1]``.
         Default [1.0, 1.0, 1.0].
-    auto_adjust : bool, optional
-        *Cellpose only.*  If True, analyse the foreground channel (``fg_channel``
-        must be set) to estimate a representative small-cell radius for this
-        image and override ``min_size`` and ``max_cluster_dist`` accordingly:
-
-        * ``min_size``  ← max(1, int(0.5 × estimated_small_cell_area))
-        * ``max_cluster_dist`` ← max(5.0, estimated_radius)
-
-        This adapts post-processing to images that contain cells of mixed
-        scales without requiring manual parameter tuning.  If the foreground
-        channel is absent or too few connected components are detected, the
-        provided values of ``min_size`` and ``max_cluster_dist`` are kept.
-        Ignored when ``flow_type="omnipose"``.  Default False.
 
     Returns
     -------
@@ -713,34 +607,6 @@ def flows_to_instances(
         fg_raw = pred[..., ch.index(fg_channel)].astype(np.float32)
         # B=1 means background → invert
         fg_mask = (fg_raw < fg_thresh) if fg_channel == "B" else (fg_raw > fg_thresh)
-
-        # ── 2a. Auto-adjust min_size / max_cluster_dist (Cellpose only) ───
-        if auto_adjust and flow_type == "cellpose":
-            _fg_for_estimate = 1.0 - fg_raw if fg_channel == "B" else fg_raw
-            radius, stats = _estimate_cell_radius(_fg_for_estimate, fg_thresh, is_3d)
-            if radius is not None:
-                small_area = (4.0 / 3.0 * np.pi * radius ** 3) if is_3d else (np.pi * radius ** 2)
-                adj_min_size = max(1, int(0.5 * small_area))
-                adj_max_cluster_dist = max(5.0, radius)
-                print(
-                    f"  [auto_adjust] foreground component analysis ({stats['n_components']} components detected):\n"
-                    f"    area  — min={stats['min_area']} px, "
-                    f"median={stats['median_area']:.0f} px, "
-                    f"max={stats['max_area']} px\n"
-                    f"    {stats['size_percentile']:.0f}th-percentile area={stats['percentile_area']:.1f} px "
-                    f"→ equivalent radius={radius:.1f} px\n"
-                    f"    min_size:        {min_size} → {adj_min_size}\n"
-                    f"    max_cluster_dist: {max_cluster_dist:.1f} → {adj_max_cluster_dist:.1f}"
-                )
-                min_size = adj_min_size
-                max_cluster_dist = adj_max_cluster_dist
-            else:
-                print(
-                    "  [auto_adjust] too few foreground components to estimate cell radius "
-                    "(need ≥ 3 separated instances in the foreground channel); "
-                    "keeping provided values: "
-                    f"min_size={min_size}, max_cluster_dist={max_cluster_dist:.1f}"
-                )
     else:
         # Background flow is identically zero by construction (GT masking ensures
         # this); any pixel with non-zero magnitude is foreground.
@@ -751,15 +617,21 @@ def flows_to_instances(
     if not fg_mask.any():
         return np.zeros(spatial_shape, dtype=np.int32)
 
-    # ── 3. Re-normalise flow to unit vectors ──────────────────────────────
-    #    The network output (tanh) is already near unit length but not exact.
+    # ── 2b. n_steps ───────────────────────────────────────────────────────────
+    # Cellpose uses niter=200 when no image rescaling is done.
+    # The formula niter = diameter/diam_mean * 200 only applies in Cellpose's
+    # resample=True path (flows resized back to original scale).  Since BiaPy
+    # does not rescale the input image, always use the base value of 200.
+    n_steps = 200
+
+    # ── 3. Scale and mask flows (Cellpose: dP * (cellprob > thresh) / 5) ──────
+    # Raw network output ≈ ±5 (linear activation, 5× targets).  Divide by 5 to
+    # get ≈ ±1 px effective step, then zero background pixels — exactly mirroring
+    # Cellpose dynamics.py line 905.
+    Gv = (Gv * fg_mask / 5.0).astype(np.float32)
+    Gh = (Gh * fg_mask / 5.0).astype(np.float32)
     if Gz is not None:
-        mag = np.sqrt(Gv ** 2 + Gh ** 2 + Gz ** 2) + 1e-8
-        Gz = (Gz / mag).astype(np.float32)
-    else:
-        mag = np.sqrt(Gv ** 2 + Gh ** 2) + 1e-8
-    Gv = (Gv / mag).astype(np.float32)
-    Gh = (Gh / mag).astype(np.float32)
+        Gz = (Gz * fg_mask / 5.0).astype(np.float32)
 
     # ── 4. Foreground pixel coordinates ──────────────────────────────────
     fg_coords = np.stack(np.nonzero(fg_mask), axis=1)  # (N, ndim)
@@ -772,21 +644,18 @@ def flows_to_instances(
     flow_comps: List[NDArray] = ([Gz, Gv, Gh] if Gz is not None else [Gv, Gh])  # type: ignore[list-item]
 
     # ── 6. Euler integration ──────────────────────────────────────────────
-    # Omnipose always uses constant step size; Cellpose uses time-suppressed steps.
-    _suppressed = False if flow_type == "omnipose" else suppressed
     print(f"  Flow integration ({flow_type}): {len(fg_coords):,} foreground pixels, {n_steps} steps ...")
-    final_pos = _euler_integrate(flow_comps, fg_coords, n_steps, dt, _suppressed, res)
+    final_pos = _euler_integrate(flow_comps, fg_coords, n_steps, res)
 
     # ── 7. Cluster convergence positions into instances ───────────────────
     print("  Clustering convergence positions ...")
     if flow_type == "omnipose":
         # DBSCAN on convergence positions: each cluster = one cell.
-        # eps = max_cluster_dist (same semantic: how close positions must be to
-        # belong to the same instance).
-        labels = _dbscan_cluster(final_pos, fg_coords, spatial_shape, min_size, max_cluster_dist)
+        # eps = max_cluster_dist (how close positions must be to belong to the same instance).
+        labels = _dbscan_cluster(final_pos, fg_coords, spatial_shape, max_cluster_dist)
     else:
-        # Cellpose: histogram peak detection + nearest-peak assignment.
-        labels = _cluster_to_instances(final_pos, fg_coords, spatial_shape, min_size, max_cluster_dist)
+        # Cellpose: histogram peak detection + 5-step 3×3 expansion.
+        labels = _cluster_to_instances(final_pos, fg_coords, spatial_shape)
 
     # ── 8. Optional flow consistency check (Cellpose only) ────────────────
     # Omnipose flows point toward the EDT skeleton by construction, so the
