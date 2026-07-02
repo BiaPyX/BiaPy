@@ -360,9 +360,6 @@ class test_pair_data_generator(Dataset):
         """
         img, mask, sample, msample, sample_extra_info, norm_extra_info = self.load_sample(index)
 
-        if isinstance(img, np.ndarray):
-            img.flags.writeable = False
-
         test_sample = {
             "X": img,
             "X_norm": norm_extra_info,
