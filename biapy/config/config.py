@@ -1729,6 +1729,11 @@ class Config:
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
         # Decide in which thresholds to create a colored image of the TPs, FNs and FPs
         _C.TEST.MATCHING_STATS_THS_COLORED_IMG = []
+        # How to aggregate the matching statistics across the dataset. If ``True`` the metrics (accuracy/AP_dsb,
+        # precision, recall, etc.) are computed per image and then averaged over images (macro-average), which matches
+        # the "AP_dsb" definition reported by EmbedSeg/StarDist. If ``False`` the TP/FP/FN counts are pooled across all
+        # images and the metrics are computed once from those totals (micro-average).
+        _C.TEST.MATCHING_STATS_BY_IMAGE = True
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 8.1 Test/inference by chunks options

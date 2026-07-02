@@ -2597,17 +2597,21 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.stats["inst_stats_merge_patches"] = wrapper_matching_dataset_lazy(
                         self.all_matching_stats_merge_patches,
                         self.cfg.TEST.MATCHING_STATS_THS,
+                        by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
                     )
                 # As 3D stack
                 if len(self.all_matching_stats_as_3D_stack) > 0:
                     self.stats["inst_stats_as_3D_stack"] = wrapper_matching_dataset_lazy(
                         self.all_matching_stats_as_3D_stack,
                         self.cfg.TEST.MATCHING_STATS_THS,
+                        by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
                     )
                 # Full image
                 if len(self.all_matching_stats) > 0:
                     self.stats["inst_stats"] = wrapper_matching_dataset_lazy(
-                        self.all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS
+                        self.all_matching_stats,
+                        self.cfg.TEST.MATCHING_STATS_THS,
+                        by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
                     )
                 if self.post_processing["instance_post"]:
                     # Merge patches
@@ -2615,18 +2619,21 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.stats["inst_stats_merge_patches_post"] = wrapper_matching_dataset_lazy(
                             self.all_matching_stats_merge_patches_post,
                             self.cfg.TEST.MATCHING_STATS_THS,
+                            by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
                         )
                     # As 3D stack
                     if len(self.all_matching_stats_as_3D_stack_post) > 0:
                         self.stats["inst_stats_as_3D_stack_post"] = wrapper_matching_dataset_lazy(
                             self.all_matching_stats_as_3D_stack_post,
                             self.cfg.TEST.MATCHING_STATS_THS,
+                            by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
                         )
                     # Full image
                     if len(self.all_matching_stats_post) > 0:
                         self.stats["inst_stats_post"] = wrapper_matching_dataset_lazy(
                             self.all_matching_stats_post,
                             self.cfg.TEST.MATCHING_STATS_THS,
+                            by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
                         )
 
                 # Multi-head: instances + classification
