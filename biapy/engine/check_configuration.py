@@ -125,6 +125,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
 
+            inst_creation_process = cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS
+            if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
+                if "R" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
+                    inst_creation_process = "stardist"
+                if "Gv" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "gradient-flow"])
+                    inst_creation_process = "gradient-flow"
+                elif "E_offset" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
+                    inst_creation_process = "embeddings"
+                else:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
+                    inst_creation_process = "watershed"
+
             # Set default values for some configurations that are more common, such as 'C', 'BC', 'BP', 'BD', 
             # 'BCM', 'BCD' and 'A'.
             seed_channels, seed_channels_thresh, growth_mask_channels, growth_mask_channel_ths = [], [], [], []
@@ -364,7 +379,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", ['ce']])
                     channel_loss_set = True
 
-            if seed_channels == [] or seed_channels_thresh == [] or topo_surface_ch == "" or growth_mask_channels == [] or growth_mask_channel_ths == []:
+            if inst_creation_process == "watershed" and (seed_channels == [] or seed_channels_thresh == [] or topo_surface_ch == "" or growth_mask_channels == [] or growth_mask_channel_ths == []):
                 warnings.warn(
                     "Seems that the channels requested are custom so BiaPy did not fill some variables by default. "
                     "You will need to fill the following variables: "
@@ -493,10 +508,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}' can only have 'niter' and 'gradient_type' keys"
                         " ('mask_values' is no longer accepted: foreground masking is derived automatically from the flow vector magnitude)"
                     )
-                    niter = dst[source_ch].get("niter", 200)
+                    niter = dst[source_ch].get("niter", "auto")
                     gradient_type = dst[source_ch].get("gradient_type", "cellpose")
                 else:
-                    niter = 200
+                    niter = "auto"
                     gradient_type = "cellpose"
                 resolved_gflow = {"niter": niter, "gradient_type": gradient_type}
                 for ch in gflow_chs_present:
@@ -664,16 +679,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         f"but 'PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE' is '{cellpose_type}'. "
                         "Both must match: the GT is generated with 'gradient_type' and post-processing uses 'CELLPOSE.TYPE'."
                     )
-
-            if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
-                if "R" in sorted_original_instance_channels:
-                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
-                if "Gv" in sorted_original_instance_channels:
-                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "gradient-flow"])
-                elif "E_offset" in sorted_original_instance_channels:
-                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
-                else:
-                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
 
         else: # synapses
             chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
@@ -1579,7 +1584,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     assert isinstance(val["norm"], bool)
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
                 elif key in ("Gv", "Gh", "Gz"):  # gradient flow channels
-                   _assert_int(val, "niter", ctx, min_val=1)
+                   # niter may be "auto" (use Cellpose's 2*(ly+lx) per-cell formula) or a fixed integer
+                   assert "niter" in val, f"'{ctx}' must have 'niter' key"
+                   if val["niter"] != "auto":
+                       _assert_int(val, "niter", ctx, min_val=1)
                    _assert_str_in(val, "gradient_type", {"omnipose", "cellpose"}, ctx)
                 elif key  == "Db":  # distance channels group
                     _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
