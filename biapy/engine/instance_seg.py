@@ -755,6 +755,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
                 max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
                 resolution=list(self.resolution[-self.dims:]),
+                diameter=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER,
+                diam_mean=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN,
             )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)

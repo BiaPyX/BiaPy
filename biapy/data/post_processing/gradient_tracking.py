@@ -1,7 +1,6 @@
 import numpy as np
-from scipy.ndimage import map_coordinates, maximum_filter1d
+from scipy.ndimage import map_coordinates, maximum_filter1d, find_objects
 from skimage.measure import label as cc_label
-from skimage.morphology import remove_small_objects
 from skimage.segmentation import relabel_sequential
 from typing import List, Optional
 from numpy.typing import NDArray
@@ -394,70 +393,171 @@ def _dbscan_cluster(
     return final_labels.astype(np.int32)
 
 
-def _flow_consistency_error(
+def _mask_to_unit_flow(
+    mask: NDArray,
+    resolution: NDArray,
+) -> tuple:
+    """
+    Regenerate the unit flow field of a single mask via heat diffusion.
+
+    Reproduces the *same* per-cell diffusion used to build the training targets
+    in :func:`biapy.data.pre_processing.labels_into_channels` (``gradient_type
+    ="cellpose"``): heat is injected at the mask pixel closest to the centroid
+    and diffused with a Moore-neighbourhood average for ``2 * sum(shape)``
+    iterations; the normalised gradient of that field is the flow.  Because the
+    generation matches the ground-truth exactly, a *correct* predicted mask
+    yields a regenerated flow that matches the network flow (error ≈ 0), while a
+    spurious fragment of a larger cell produces a flow pointing at the fragment's
+    own centre — very different from the network flow, giving a large error.
+
+    Parameters
+    ----------
+    mask : (y, x) or (z, y, x) bool array
+        Cropped binary mask of a single instance.
+    resolution : (ndim,) float array
+        Physical voxel size per axis, used for an anisotropy-correct gradient.
+
+    Returns
+    -------
+    unit_flow : (ndim, N) float array
+        Unit-normalised flow at the mask's foreground pixels, axis order
+        (Gv, Gh) in 2D or (Gz, Gv, Gh) in 3D.
+    coords : tuple of arrays
+        ``np.nonzero(mask)`` in the cropped frame — the pixel order the flow
+        columns correspond to.
+    """
+    coords = np.nonzero(mask)
+    centroid = np.array([c.mean() for c in coords])
+    coord_stack = np.stack(coords, axis=1).astype(np.float32)
+    idx = int(np.argmin(np.sum((coord_stack - centroid) ** 2, axis=1)))
+    centers = tuple(int(c[idx]) for c in coords)
+
+    pad = 1
+    heat = np.zeros(tuple(s + 2 * pad for s in mask.shape), dtype=np.float64)
+    p_coords = tuple(c + pad for c in coords)
+    p_center = tuple(c + pad for c in centers)
+    n_iter = 2 * int(sum(mask.shape))
+
+    if mask.ndim == 2:
+        y_c, x_c = p_coords
+        ymed, xmed = p_center
+        for _ in range(n_iter):
+            heat[ymed, xmed] += 1.0
+            heat[y_c, x_c] = (1.0 / 9.0) * (
+                heat[y_c, x_c] +
+                heat[y_c - 1, x_c] + heat[y_c + 1, x_c] +
+                heat[y_c, x_c - 1] + heat[y_c, x_c + 1] +
+                heat[y_c - 1, x_c - 1] + heat[y_c - 1, x_c + 1] +
+                heat[y_c + 1, x_c - 1] + heat[y_c + 1, x_c + 1]
+            )
+        # Cellpose masks_to_flows applies log(1+T) before the gradient
+        # (dynamics.py). Padding/background stay 0 (log(1+0)=0), so applying it
+        # to the whole array is equivalent to Cellpose's mask-pixel-only version.
+        heat = np.log(1.0 + heat)
+        grads = np.gradient(heat, resolution[0], resolution[1])
+    else:
+        z_c, y_c, x_c = p_coords
+        zmed, ymed, xmed = p_center
+        for _ in range(n_iter):
+            heat[zmed, ymed, xmed] += 1.0
+            neigh = np.zeros(len(z_c), dtype=np.float64)
+            for dz in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        neigh += heat[z_c + dz, y_c + dy, x_c + dx]
+            heat[z_c, y_c, x_c] = neigh / 27.0
+        # Cellpose masks_to_flows applies log(1+T) before the gradient
+        # (dynamics.py). Padding/background stay 0 (log(1+0)=0), so applying it
+        # to the whole array is equivalent to Cellpose's mask-pixel-only version.
+        heat = np.log(1.0 + heat)
+        grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
+
+    mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads) + 1e-6)
+    unit_flow = np.stack([g[p_coords] / mag for g in grads], axis=0)  # (ndim, N)
+    return unit_flow, coords
+
+
+def _flow_error(
     Gv: NDArray,
     Gh: NDArray,
     labels: NDArray,
     Gz: Optional[NDArray] = None,
+    resolution: NDArray = None,
 ) -> dict:
     """
-    Compute a per-instance flow consistency error.
+    Per-instance flow error, matching Cellpose ``metrics.flow_error``.
 
-    For each instance the *expected* flow is approximated as the unit vector
-    pointing from every foreground pixel toward the instance centroid.  The
-    error is ``1 - cosine_similarity(predicted_flow, expected_flow)`` averaged
-    over the instance's foreground pixels, so:
+    For every predicted mask the flow field is *regenerated from the mask*
+    (:func:`_mask_to_unit_flow`) and compared, as a mean squared error, against
+    the network-predicted flow at the same pixels.  This is Cellpose's exact
+    quality metric (``dynamics.remove_bad_flow_masks`` → ``metrics.flow_error``)
+    and is the mechanism that removes the spurious fragments produced when a
+    large cell is over-segmented into several instances: each fragment's own
+    diffusion flow disagrees with the network flow (which points to the true
+    cell centre), so its error exceeds the threshold and it is discarded.
 
-    * 0  → predicted flow points perfectly toward the centroid (ideal).
-    * 1  → predicted flow is orthogonal to the centroid direction.
-    * 2  → predicted flow points away from the centroid (spurious instance).
-
-    .. note::
-        This is an approximation.  For elongated or non-convex cells the true
-        Cellpose / Omnipose flow does not point toward the centroid, so the
-        error may be inflated.  For Omnipose (EDT-gradient flows) prefer a
-        lower threshold or disable the check entirely.
+    The network flows ``Gv``/``Gh``/``Gz`` are expected already divided by 5
+    (as done in :func:`flows_to_instances`), i.e. ≈ unit magnitude, matching the
+    unit ``dP_masks`` regenerated here — the same convention as Cellpose's
+    ``dP_masks - dP_net / 5``.  In 3D the Z term is down-weighted by 0.5, exactly
+    as Cellpose does.
 
     Parameters
     ----------
     Gv, Gh : (Y, X) or (Z, Y, X) float arrays
-        Predicted y / x flow components.
+        Network y / x flow components (already scaled to ≈ ±1).
     labels : same-shape int array
         Instance label map (0 = background).
     Gz : (Z, Y, X) float array, optional
-        Predicted z flow component (3D only).
+        Network z flow component (3D only).
+    resolution : (ndim,) float array, optional
+        Physical voxel size per axis.  Defaults to isotropic ``1``.
 
     Returns
     -------
-    errors : dict {label_id (int): error (float)}
+    errors : dict {label_id (int): mean squared flow error (float)}
     """
+    ndim = labels.ndim
     is_3d = Gz is not None
+    if resolution is None:
+        res = np.ones(ndim, dtype=np.float32)
+    else:
+        res = np.asarray(resolution[-ndim:], dtype=np.float32)
+
     errors: dict = {}
-
-    for lab in np.unique(labels):
-        if lab == 0:
+    slices = find_objects(labels)
+    for i, slc in enumerate(slices):
+        lab = i + 1
+        if slc is None:
             continue
-        coords = np.stack(np.nonzero(labels == lab), axis=1).astype(float)  # (N, ndim)
-        centroid = coords.mean(axis=0)
+        sub = labels[slc] == lab
 
-        # Expected unit vector: each pixel → centroid
-        delta = centroid[np.newaxis, :] - coords
-        norms = np.linalg.norm(delta, axis=1, keepdims=True) + 1e-8
-        expected = delta / norms  # (N, ndim)
+        # Cells too small to diffuse (1-px wide along any axis) get error 0 so
+        # they are never removed by this check — matching Cellpose, which cannot
+        # form a gradient for them either.
+        if sub.sum() < 2 or any(s < 2 for s in sub.shape):
+            errors[lab] = 0.0
+            continue
 
-        # Predicted flow at the same integer pixel coordinates
-        ci = coords.astype(int)
-        idx = tuple(ci[:, d] for d in range(ci.shape[1]))
+        unit_flow, coords = _mask_to_unit_flow(sub, res)  # (ndim, N), local coords
+
+        # Network flow at the same pixels, same (C-order) ordering as `coords`.
         if is_3d:
-            pred_flow = np.stack([Gz[idx], Gv[idx], Gh[idx]], axis=1)
+            net = np.stack(
+                [Gz[slc][sub], Gv[slc][sub], Gh[slc][sub]], axis=0
+            )  # (3, N)
+            err = (
+                0.5 * (unit_flow[0] - net[0]) ** 2
+                + (unit_flow[1] - net[1]) ** 2
+                + (unit_flow[2] - net[2]) ** 2
+            ).mean()
         else:
-            pred_flow = np.stack([Gv[idx], Gh[idx]], axis=1)
+            net = np.stack([Gv[slc][sub], Gh[slc][sub]], axis=0)  # (2, N)
+            err = (
+                (unit_flow[0] - net[0]) ** 2 + (unit_flow[1] - net[1]) ** 2
+            ).mean()
 
-        pred_norms = np.linalg.norm(pred_flow, axis=1, keepdims=True) + 1e-8
-        pred_unit = pred_flow / pred_norms
-
-        cosine_sim = float((expected * pred_unit).sum(axis=1).mean())
-        errors[int(lab)] = 1.0 - cosine_sim
+        errors[lab] = float(err)
 
     return errors
 
@@ -475,7 +575,7 @@ def _remove_bad_flow_masks(
     labels : int32 ndarray
         Instance label map (not modified in place).
     errors : dict {label_id: float}
-        Per-instance flow error from :func:`_flow_consistency_error`.
+        Per-instance flow error from :func:`_flow_error`.
     flow_threshold : float
         Instances with ``error > flow_threshold`` are removed.
 
@@ -496,6 +596,24 @@ def _remove_bad_flow_masks(
     return out.astype(np.int32)
 
 
+def _resize_spatial(arr: NDArray, out_shape: tuple, order: int) -> NDArray:
+    """
+    Resize a 2D/3D array to ``out_shape`` (Cellpose ``transforms.resize_image``).
+
+    ``order=1`` (bilinear) is used for flow fields / probabilities and ``order=0``
+    (nearest, ``cv2.INTER_NEAREST`` in Cellpose) for label maps so integer ids are
+    preserved.  Anti-aliasing is disabled to match Cellpose's plain interpolation.
+    """
+    from skimage.transform import resize as _sk_resize
+
+    if tuple(arr.shape) == tuple(out_shape):
+        return arr
+    return _sk_resize(
+        arr, out_shape, order=order, preserve_range=True,
+        anti_aliasing=False, mode="edge",
+    )
+
+
 def flows_to_instances(
     pred: NDArray,
     channels: List[str],
@@ -506,6 +624,8 @@ def flows_to_instances(
     n_steps: int = 200,
     max_cluster_dist: float = 5.0,
     resolution: List[float] = [1.0, 1.0, 1.0],
+    diameter: float = 30.0,
+    diam_mean: float = 30.0,
 ) -> NDArray:
     """
     Convert predicted Cellpose / Omnipose flow fields into an instance label map.
@@ -518,8 +638,9 @@ def flows_to_instances(
       dividing raw ≈±5 network output by 5, matching Cellpose's ``dP/5``
       normalisation in dynamics.py), followed by histogram peak detection and
       5-iteration 3×3 neighbourhood expansion (Cellpose's iterative max-pool
-      strategy).  A flow consistency check then discards instances whose predicted
-      flow diverges from a centroid-pointing approximation.
+      strategy).  A flow error check (Cellpose ``remove_bad_flow_masks``) then
+      regenerates each mask's flow by diffusion and discards instances whose
+      regenerated flow disagrees with the network flow.
 
     **Omnipose** (``flow_type="omnipose"``):
       Flows are the gradient of the per-cell Euclidean Distance Transform (EDT).
@@ -540,7 +661,6 @@ def flows_to_instances(
        *Omnipose*: cluster convergence positions with DBSCAN (``eps = max_cluster_dist``).
     6. Split disconnected regions that share a cluster label into separate instances.
     7. *Cellpose only*: optionally remove instances with inconsistent flow.
-    8. Remove small objects and relabel sequentially.
 
     Parameters
     ----------
@@ -561,14 +681,15 @@ def flows_to_instances(
     fg_thresh : float, optional
         Sigmoid-space threshold applied to ``fg_channel``.  Default 0.5.
     flow_threshold : float, optional
-        *Cellpose only.*  Flow consistency error above which an instance is
-        removed. The error is ``1 - cosine_similarity(predicted, centroid-pointing)``,
-        so 0 = perfect, 2 = opposite.  Set ≤ 0 to skip this check.
-        Default 0.4 (matches Cellpose default).  Ignored when ``flow_type="omnipose"``.
+        *Cellpose only.*  Flow error above which an instance is removed.  The
+        error is the mean squared difference between the mask's diffusion-
+        regenerated flow and the network flow (Cellpose ``metrics.flow_error``),
+        so 0 = perfect match.  Set ≤ 0 to skip this check.  Default 0.4 (matches
+        Cellpose default).  Ignored when ``flow_type="omnipose"``.
     n_steps : int, optional
-        Kept for API compatibility; the value is always overridden internally to
-        200, which is Cellpose's ``niter`` default when no image rescaling is
-        applied (``resample=False`` path).  Default 200.
+        Kept for API compatibility; ignored.  The integration step count is
+        derived from the diameter as Cellpose does, ``niter = (1/rescale) * 200
+        = (diameter/diam_mean) * 200``.  Default 200.
     max_cluster_dist : float, optional
         *Omnipose only.*  DBSCAN ``eps`` neighbourhood radius in pixels.
         Convergence positions within this distance are linked into the same
@@ -579,6 +700,16 @@ def flows_to_instances(
         Physical voxel size ``[z, y, x]`` used to convert physical flow steps to
         pixel steps during integration.  For isotropic data use ``[1, 1, 1]``.
         Default [1.0, 1.0, 1.0].
+    diameter : float, optional
+        *Cellpose only.*  Expected cell diameter (pixels) in the input.  Flows are
+        resized by ``rescale = diam_mean / diameter`` so cells become ~``diam_mean``
+        before the dynamics run, then labels are resized back — Cellpose's
+        rescaling that prevents large cells from fragmenting into several
+        instances.  Set equal to ``diam_mean`` (the default) to disable rescaling.
+        Default 30.0.
+    diam_mean : float, optional
+        *Cellpose only.*  Diameter the flow model was trained at (Cellpose's
+        ``diam_mean``: 30 for cyto, 17 for nuclei).  Default 30.0.
 
     Returns
     -------
@@ -617,12 +748,38 @@ def flows_to_instances(
     if not fg_mask.any():
         return np.zeros(spatial_shape, dtype=np.int32)
 
-    # ── 2b. n_steps ───────────────────────────────────────────────────────────
-    # Cellpose uses niter=200 when no image rescaling is done.
-    # The formula niter = diameter/diam_mean * 200 only applies in Cellpose's
-    # resample=True path (flows resized back to original scale).  Since BiaPy
-    # does not rescale the input image, always use the base value of 200.
-    n_steps = 200
+    # ── 2b. Cellpose diameter rescaling ───────────────────────────────────
+    # Cellpose resizes the image so every cell becomes ~diam_mean (30 px) before
+    # running the dynamics, then resizes the resulting label map back
+    # (models.py: resize by rescale, get_masks, resize labels to original).
+    # This is what makes a large cell's flow field converge to a single sharp
+    # histogram peak instead of fragmenting into several. We reproduce it by
+    # resizing the flow fields + foreground by rescale = diam_mean / diameter,
+    # doing all the work at that scale, and resizing the final labels back.
+    # Applied for Cellpose only (Omnipose clusters convergence positions directly
+    # and does not rescale).  Note: the rescale is applied uniformly to every
+    # spatial axis; strongly anisotropic 3D data is only approximately handled.
+    rescale = float(diam_mean) / float(diameter) if diameter > 0 else 1.0
+    do_rescale = flow_type == "cellpose" and abs(rescale - 1.0) > 1e-3
+    if do_rescale:
+        work_shape = tuple(max(1, int(round(s * rescale))) for s in spatial_shape)
+        Gv = _resize_spatial(Gv, work_shape, order=1).astype(np.float32)
+        Gh = _resize_spatial(Gh, work_shape, order=1).astype(np.float32)
+        if Gz is not None:
+            Gz = _resize_spatial(Gz, work_shape, order=1).astype(np.float32)
+        fg_mask = _resize_spatial(fg_mask.astype(np.float32), work_shape, order=1) > 0.5
+        if not fg_mask.any():
+            return np.zeros(spatial_shape, dtype=np.int32)
+    else:
+        work_shape = spatial_shape
+
+    # ── 2c. Integration step count (Cellpose: niter = (1/rescale) * 200) ───
+    # models.py: niter = 1/rescale * 200, i.e. (diameter/diam_mean) * 200.
+    # With diameter == diam_mean this is the familiar 200. Omnipose keeps 200.
+    if flow_type == "cellpose":
+        n_steps = max(1, int(round((1.0 / rescale) * 200)))
+    else:
+        n_steps = 200
 
     # ── 3. Scale and mask flows (Cellpose: dP * (cellprob > thresh) / 5) ──────
     # Raw network output ≈ ±5 (linear activation, 5× targets).  Divide by 5 to
@@ -638,13 +795,16 @@ def flows_to_instances(
 
     # ── 5. Resolution slice matching ndim ────────────────────────────────
     #    resolution is always stored as [z, y, x]; for 2D take the last two.
+    #    Ratios are what matter for the integration step, and they are preserved
+    #    by the uniform rescale above, so the native resolution is kept as-is.
     res = np.array(resolution[-ndim:], dtype=np.float32)
 
     # Ordered flow tuple: (Gz, Gv, Gh) for 3D, (Gv, Gh) for 2D
     flow_comps: List[NDArray] = ([Gz, Gv, Gh] if Gz is not None else [Gv, Gh])  # type: ignore[list-item]
 
     # ── 6. Euler integration ──────────────────────────────────────────────
-    print(f"  Flow integration ({flow_type}): {len(fg_coords):,} foreground pixels, {n_steps} steps ...")
+    print(f"  Flow integration ({flow_type}): {len(fg_coords):,} foreground pixels, {n_steps} steps "
+          f"(rescale={rescale:.3f}, work_shape={work_shape}) ...")
     final_pos = _euler_integrate(flow_comps, fg_coords, n_steps, res)
 
     # ── 7. Cluster convergence positions into instances ───────────────────
@@ -652,21 +812,29 @@ def flows_to_instances(
     if flow_type == "omnipose":
         # DBSCAN on convergence positions: each cluster = one cell.
         # eps = max_cluster_dist (how close positions must be to belong to the same instance).
-        labels = _dbscan_cluster(final_pos, fg_coords, spatial_shape, max_cluster_dist)
+        labels = _dbscan_cluster(final_pos, fg_coords, work_shape, max_cluster_dist)
     else:
         # Cellpose: histogram peak detection + 5-step 3×3 expansion.
-        labels = _cluster_to_instances(final_pos, fg_coords, spatial_shape)
+        labels = _cluster_to_instances(final_pos, fg_coords, work_shape)
 
-    # ── 8. Optional flow consistency check (Cellpose only) ────────────────
-    # Omnipose flows point toward the EDT skeleton by construction, so the
-    # centroid-based consistency approximation is not meaningful there.
+    # ── 8. Optional flow error check (Cellpose only) ──────────────────────
+    # Regenerates each mask's flow via diffusion and compares to the network
+    # flow (Cellpose remove_bad_flow_masks). This removes the spurious fragments
+    # produced when a large cell is over-segmented. Runs at the working (rescaled)
+    # resolution, exactly as Cellpose does inside get_masks before resizing back.
+    # Skipped for Omnipose, whose EDT-gradient flows are not reproduced here.
     if flow_type == "cellpose" and flow_threshold > 0.0 and int(labels.max()) > 0:
-        print(f"  Flow consistency check (threshold={flow_threshold}) ...")
-        errors = _flow_consistency_error(Gv, Gh, labels, Gz)
+        print(f"  Flow error check (threshold={flow_threshold}) ...")
+        errors = _flow_error(Gv, Gh, labels, Gz, resolution=res)
         n_before = int(labels.max())
         labels = _remove_bad_flow_masks(labels, errors, flow_threshold)
         n_removed = n_before - int(labels.max())
         if n_removed:
             print(f"    Removed {n_removed} instance(s) with inconsistent flow.")
+
+    # ── 9. Resize labels back to native resolution (Cellpose: resize_image
+    #      with nearest-neighbour interpolation) ───────────────────────────
+    if do_rescale:
+        labels = _resize_spatial(labels, spatial_shape, order=0).astype(np.int32)
 
     return labels

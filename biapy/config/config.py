@@ -358,9 +358,9 @@ class Config:
         #    [link]: https://www.nature.com/articles/s41592-022-01639-4
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE = CN()
         # Post-processing strategy to use for flow-field-based instance creation. Options:
-        #   - 'cellpose': Euler integration followed by histogram peak detection and nearest-peak
-        #     assignment. A flow consistency check can optionally remove instances whose predicted
-        #     flow diverges from a centroid-pointing approximation (controlled by FLOW_THRESHOLD).
+        #   - 'cellpose': Euler integration followed by histogram peak detection and 3×3 expansion.
+        #     A flow-error check can optionally remove instances whose flow, regenerated from the
+        #     mask, disagrees with the network-predicted flow (controlled by FLOW_THRESHOLD).
         #     Suited for Cellpose-style flows (heat-diffusion potential gradient).
         #   - 'omnipose': Euler integration followed by DBSCAN clustering on convergence positions.
         #     The flow consistency check is skipped. Suited for Omnipose-style flows (per-cell EDT
@@ -371,15 +371,34 @@ class Config:
         # Applies when a dedicated binary channel ('F', 'M', or 'B') is present in DATA_CHANNELS.
         # Matches Cellpose default (cellprob_threshold=0.0 in logit space = sigmoid 0.5).
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH = 0.5
-        # Flow-consistency threshold to discard spurious instances after Euler integration.
-        # Measured as mean cosine-similarity error (0 = perfect, 2 = opposite direction).
-        # Instances with error > this threshold are removed. Set to 0 to disable (recommended
-        # for non-round or elongated cells, where the centroid-pointing approximation fails).
-        # Matches Cellpose default (flow_threshold=0.4). Set to 0 if cells are not round.
+        # Flow-error threshold to discard spurious instances after Euler integration. For each mask
+        # the flow field is regenerated from the mask (by heat diffusion) and compared, as a mean
+        # squared error, against the network-predicted flow. This is Cellpose's remove_bad_flow_masks
+        # / metrics.flow_error, and it is what prunes the fragments left when a large cell is over-
+        # segmented (each fragment's flow points to its own centre, not the true cell centre).
+        # 0 = perfect match; instances with error > this threshold are removed. Set to 0 to disable
+        # the check. Matches Cellpose default (flow_threshold=0.4). Ignored when TYPE is 'omnipose'.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.0
-        # Number of Euler integration steps used to trace each foreground pixel through the
-        # flow field until it converges to an attractor. Matches Cellpose default (niter=200).
+        # Number of Euler integration steps used to trace each foreground pixel through the flow
+        # field until it converges to an attractor. NOTE: for TYPE 'cellpose' this value is
+        # overridden internally by Cellpose's formula niter = (DIAMETER / DIAM_MEAN) * 200, which
+        # ties the step count to the cell size; it is kept only for reference / the 'omnipose' path.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS = 200
+        # Cellpose only. Expected cell diameter, in pixels, of the objects in the input data. Flows
+        # are resized by rescale = DIAM_MEAN / DIAMETER so cells become ~DIAM_MEAN pixels before the
+        # dynamics are run, and the resulting label map is resized back to the original resolution
+        # afterwards. This mirrors Cellpose's image rescaling and is what prevents large cells from
+        # fragmenting into several instances (over-segmentation): at the rescaled size each cell's
+        # flow field converges to a single sharp histogram peak. It also sets the integration step
+        # count to niter = (DIAMETER / DIAM_MEAN) * 200 (overriding N_STEPS). Set DIAMETER equal to
+        # DIAM_MEAN to disable rescaling. Ignored when TYPE is 'omnipose'. Default: 30.0.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER = 30.0
+        # Cellpose only. Reference cell diameter, in pixels, that the flow model was trained at, i.e.
+        # Cellpose's diam_mean (30 for the 'cyto' model, 17 for the 'nuclei' model). Together with
+        # DIAMETER it sets the rescaling factor rescale = DIAM_MEAN / DIAMETER. Change this only if
+        # your flows were generated/trained for a target cell size other than 30 px. Ignored when
+        # TYPE is 'omnipose'. Default: 30.0.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN = 30.0
         # Omnipose only. DBSCAN eps radius (pixels): convergence positions within this distance
         # are linked into the same cluster (= the same cell's medial-axis skeleton). Must be
         # large enough to stitch adjacent skeleton points of the same cell together, but small
