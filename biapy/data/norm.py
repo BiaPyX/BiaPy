@@ -364,8 +364,12 @@ def update_mask_norm_info(old_mask_norm_info: Dict, new_mask_norm_info: Dict) ->
         if old_mask_type is None:
             new_norm["per_channel_info"][channel] = copy.deepcopy(channel_info)
 
-        # Set the most restrictive type: "no_bin" > "classes" > "bin"
-        if channel_info["type"] == "no_bin":
+        # Set the most restrictive type: "flow" / "no_bin" > "classes" > "bin". "flow" is a
+        # non-binary direction field (Cellpose Gv/Gh/Gz) and is treated like "no_bin" for
+        # restrictiveness while keeping its distinct tag.
+        if channel_info["type"] == "flow":
+            new_norm["per_channel_info"][channel]["type"] = "flow"
+        elif channel_info["type"] == "no_bin":
             new_norm["per_channel_info"][channel]["type"] = "no_bin"
         elif channel_info["type"] == "classes":
             new_norm["per_channel_info"][channel]["type"] = "classes"

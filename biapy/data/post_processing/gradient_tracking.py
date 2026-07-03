@@ -614,6 +614,76 @@ def _resize_spatial(arr: NDArray, out_shape: tuple, order: int) -> NDArray:
     )
 
 
+def _estimate_cell_radius(
+    fg_mask: NDArray,
+    is_3d: bool,
+    percentile: float = 50.0,
+    min_components: int = 3,
+) -> tuple:
+    """
+    Estimate a representative cell radius (pixels) from a binary foreground mask.
+
+    Connected components of ``fg_mask`` are measured and the equivalent radius at
+    ``percentile`` of the per-object size distribution is returned.  With the
+    default ``percentile=50`` this is the *median* object radius, matching
+    Cellpose's median-diameter convention (``utils.diameters``); the diameter
+    (``2 * radius``) can be fed straight into the rescaling of
+    :func:`flows_to_instances`.  This lets a test set whose images have different
+    cell scales be handled without a fixed value — Cellpose's ``diameter=0`` path.
+
+    .. note::
+        The estimate is taken from the *foreground* connected components, so cells
+        that touch merge into one component and inflate the radius.  For heavily
+        touching cells prefer an explicit ``diameter``, or measure it from an
+        actual segmentation.
+
+    Parameters
+    ----------
+    fg_mask : (Y, X) or (Z, Y, X) bool array
+        Binary foreground mask.
+    is_3d : bool
+        Whether the data is 3-D (sphere-equivalent radius) or 2-D (disc).
+    percentile : float, optional
+        Percentile of the per-object size distribution used as the representative
+        size.  50 = median (Cellpose convention).  Default 50.
+    min_components : int, optional
+        Minimum number of components required for a reliable estimate.  Below this
+        the function returns ``(None, None)``.  Default 3.
+
+    Returns
+    -------
+    radius : float or None
+        Representative object radius in pixels, or None if unreliable.
+    stats : dict or None
+        Diagnostic fields (component count, size range), or None.
+    """
+    labeled, n_labels = cc_label(fg_mask, return_num=True)
+    if n_labels < min_components:
+        return None, None
+
+    sizes = np.bincount(labeled.ravel())[1:]          # drop background (label 0)
+    sizes = sizes[sizes > 0].astype(np.float64)
+    if len(sizes) < min_components:
+        return None, None
+
+    # Per-object equivalent radius, then take the requested percentile (median by
+    # default) — Cellpose measures the median of per-object equivalent sizes.
+    if is_3d:
+        radii = (3.0 * sizes / (4.0 * np.pi)) ** (1.0 / 3.0)
+    else:
+        radii = np.sqrt(sizes / np.pi)
+    radius = float(np.percentile(radii, percentile))
+
+    stats = {
+        "n_components": int(len(sizes)),
+        "min_area": int(sizes.min()),
+        "max_area": int(sizes.max()),
+        "median_area": float(np.median(sizes)),
+        "percentile": percentile,
+    }
+    return radius, stats
+
+
 def flows_to_instances(
     pred: NDArray,
     channels: List[str],
@@ -705,8 +775,11 @@ def flows_to_instances(
         resized by ``rescale = diam_mean / diameter`` so cells become ~``diam_mean``
         before the dynamics run, then labels are resized back — Cellpose's
         rescaling that prevents large cells from fragmenting into several
-        instances.  Set equal to ``diam_mean`` (the default) to disable rescaling.
-        Default 30.0.
+        instances.  Set equal to ``diam_mean`` to disable rescaling.  Set to
+        ``0`` (or any value ≤ 0) to auto-estimate the diameter per image from the
+        median foreground object size (:func:`_estimate_cell_radius`), mirroring
+        Cellpose's ``diameter=0`` behaviour — useful when different images have
+        different cell scales.  Default 30.0.
     diam_mean : float, optional
         *Cellpose only.*  Diameter the flow model was trained at (Cellpose's
         ``diam_mean``: 30 for cyto, 17 for nuclei).  Default 30.0.
@@ -748,7 +821,24 @@ def flows_to_instances(
     if not fg_mask.any():
         return np.zeros(spatial_shape, dtype=np.int32)
 
-    # ── 2b. Cellpose diameter rescaling ───────────────────────────────────
+    # ── 2b. Diameter: auto-estimate per image when not provided ───────────
+    # Cellpose estimates one diameter per image when diameter<=0 (its trained
+    # SizeModel). BiaPy has no such model, so it measures the median object size
+    # directly from the foreground mask (_estimate_cell_radius). This lets a test
+    # set whose images have different cell scales be handled without a fixed
+    # value. An explicit positive diameter skips estimation.
+    if flow_type == "cellpose" and diameter <= 0:
+        radius, stats = _estimate_cell_radius(fg_mask, is_3d)
+        if radius is not None and radius > 0:
+            diameter = 2.0 * radius
+            print(f"  Auto-estimated diameter: {diameter:.1f} px "
+                  f"(median of {stats['n_components']} foreground components)")
+        else:
+            diameter = diam_mean
+            print(f"  Diameter auto-estimate unreliable (too few objects); "
+                  f"falling back to diam_mean={diam_mean}")
+
+    # ── 2c. Cellpose diameter rescaling ───────────────────────────────────
     # Cellpose resizes the image so every cell becomes ~diam_mean (30 px) before
     # running the dynamics, then resizes the resulting label map back
     # (models.py: resize by rescale, get_masks, resize labels to original).
@@ -773,7 +863,7 @@ def flows_to_instances(
     else:
         work_shape = spatial_shape
 
-    # ── 2c. Integration step count (Cellpose: niter = (1/rescale) * 200) ───
+    # ── 2d. Integration step count (Cellpose: niter = (1/rescale) * 200) ───
     # models.py: niter = 1/rescale * 200, i.e. (diameter/diam_mean) * 200.
     # With diameter == diam_mean this is the familiar 200. Omnipose keeps 200.
     if flow_type == "cellpose":

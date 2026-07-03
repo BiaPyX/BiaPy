@@ -221,11 +221,22 @@ class DatasetFile:
 
         class_name : str, optional
             Human-readable class label for the sample.
+
+        Notes
+        -----
+        The ``diameter`` attribute (Cellpose cell diameter in pixels, ``None`` by default) is not a
+        constructor argument; it is populated later by
+        :func:`biapy.data.pre_processing.set_cellpose_diameters` and used to rescale patches during
+        the Cellpose/Omnipose flow training.
         """
         self.path = path
         self.shape = shape
         self.norm_info = norm_info
         self.orig_dtype = ""
+        # Cellpose cell diameter (pixels) of this file, set from the per-image stats JSON produced
+        # when the instance channels are created. Used to rescale patches during training. None when
+        # unknown (no rescale).
+        self.diameter = None
         if input_axes is not None:
             self.input_axes = input_axes
         if parallel_data is not None:

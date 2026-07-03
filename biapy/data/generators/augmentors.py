@@ -19,7 +19,7 @@ from skimage.exposure import adjust_gamma
 from skimage.filters import gaussian
 from scipy.ndimage import binary_dilation as binary_dilation_scipy
 from scipy.ndimage import rotate
-from typing import Tuple, Union, Optional, List
+from typing import Tuple, Union, Optional, List, Dict
 from numpy.typing import NDArray
 from scipy.ndimage import median_filter, shift as shift_nd
 from skimage.transform import AffineTransform, ProjectiveTransform, warp
@@ -1819,6 +1819,255 @@ def resize_img(img: NDArray, shape: Tuple[int, ...]) -> NDArray:
     )
 
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Cellpose-style flow (direction-field) transforms
+#
+# Flow channels (Gv=y, Gh=x, Gz=z) are unit direction vectors, so under a geometric
+# transform their spatial layout must be moved *and* their components re-oriented, exactly
+# as Cellpose does in ``transforms.random_rotate_and_resize``. ``flow_heat`` maps each
+# component to its channel index inside the ``heat`` array: {"vy": i, "vx": j, "vz": k}
+# (any entry may be missing/None). The signs below were verified against
+# ``scipy.ndimage.rotate(axes=(1,0)/(2,1))`` and the array-reversal used by the flip
+# augmentors.
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+def rotate_flow_vectors(heat: Optional[NDArray], flow_heat: Optional[Dict], angle_deg: float) -> Optional[NDArray]:
+    """
+    Rotate the in-plane flow vector components to match an in-plane spatial rotation.
+
+    After the ``heat`` array has been rotated spatially (in the Y-X plane) with
+    ``scipy.ndimage.rotate``, the flow vectors it carries must be rotated by the same angle so they
+    keep pointing the right way. The two in-plane components (``Gv`` = y, ``Gh`` = x) are rotated by
+    ``angle_deg``; the out-of-plane ``Gz`` component is left unchanged (an in-plane rotation does not
+    affect it). The sign convention was verified against ``scipy.ndimage.rotate(axes=(1,0)/(2,1))``
+    and matches Cellpose's ``random_rotate_and_resize`` flow-vector rotation.
+
+    Parameters
+    ----------
+    heat : Numpy array or None
+        Float channels array holding the flow components, e.g. ``(y, x, c)`` in 2D or
+        ``(z, y, x, c)`` in 3D. Modified in place and returned. ``None`` is passed through unchanged.
+
+    flow_heat : dict or None
+        Mapping of flow components to their channel index inside ``heat``: ``{"vy": i, "vx": j,
+        "vz": k}`` (any entry may be missing). If ``None``/empty or the in-plane components are
+        absent, ``heat`` is returned unchanged.
+
+    angle_deg : float
+        Rotation angle in degrees, the same value passed to the spatial rotation.
+
+    Returns
+    -------
+    heat : Numpy array or None
+        ``heat`` with the in-plane flow components rotated (same object as the input).
+    """
+    if heat is None or not flow_heat:
+        return heat
+    iy, ix = flow_heat.get("vy"), flow_heat.get("vx")
+    if iy is None or ix is None:
+        return heat
+    th = np.deg2rad(float(angle_deg))
+    c, s = np.cos(th), np.sin(th)
+    vy = heat[..., iy].copy()
+    vx = heat[..., ix].copy()
+    heat[..., iy] = c * vy - s * vx
+    heat[..., ix] = s * vy + c * vx
+    return heat
+
+
+def flip_flow_vectors(heat: Optional[NDArray], flow_heat: Optional[Dict], axis: str) -> Optional[NDArray]:
+    """
+    Negate the flow vector component along a reflected spatial axis.
+
+    When ``heat`` has been flipped along a spatial axis, the flow component parallel to that axis
+    must change sign so the vectors stay consistent with the flipped geometry (a reflection reverses
+    the direction along the mirrored axis only). Verified against the array-reversals used by
+    :func:`flip_horizontal` / :func:`flip_vertical`.
+
+    Parameters
+    ----------
+    heat : Numpy array or None
+        Float channels array holding the flow components. Modified in place and returned. ``None`` is
+        passed through unchanged.
+
+    flow_heat : dict or None
+        Mapping of flow components to their channel index inside ``heat`` (``{"vy": i, "vx": j,
+        "vz": k}``). If ``None``/empty or the relevant component is absent, ``heat`` is returned
+        unchanged.
+
+    axis : {"y", "x", "z"}
+        Spatial axis that was reversed: ``"y"`` negates ``Gv``, ``"x"`` negates ``Gh``, ``"z"``
+        negates ``Gz``.
+
+    Returns
+    -------
+    heat : Numpy array or None
+        ``heat`` with the corresponding flow component negated (same object as the input).
+    """
+    if heat is None or not flow_heat:
+        return heat
+    idx = flow_heat.get({"y": "vy", "x": "vx", "z": "vz"}[axis])
+    if idx is not None:
+        heat[..., idx] = -heat[..., idx]
+    return heat
+
+
+def scale_flow_vectors(
+    heat: Optional[NDArray], flow_heat: Optional[Dict], s_y: float, s_x: float, s_z: float = 1.0
+) -> Optional[NDArray]:
+    """
+    Re-orient flow vectors after an anisotropic resize.
+
+    Applies ``v' = normalize(diag(s_z, s_y, s_x) · v)`` to each flow vector, preserving its original
+    magnitude and changing only its direction. This is a no-op for an isotropic resize (``s_y == s_x``
+    with no Z present, or all factors equal); it is needed in 3D when only the in-plane (Y, X) axes
+    are scaled and Z is left unchanged, so the ``Gz`` component's relative weight is corrected.
+
+    Parameters
+    ----------
+    heat : Numpy array or None
+        Float channels array holding the flow components. Modified in place and returned. ``None`` is
+        passed through unchanged.
+
+    flow_heat : dict or None
+        Mapping of flow components to their channel index inside ``heat`` (``{"vy": i, "vx": j,
+        "vz": k}``). If ``None``/empty, ``heat`` is returned unchanged.
+
+    s_y : float
+        Scale factor applied to the Y axis (and thus the ``Gv`` component).
+
+    s_x : float
+        Scale factor applied to the X axis (and thus the ``Gh`` component).
+
+    s_z : float, optional
+        Scale factor applied to the Z axis (and thus the ``Gz`` component). Default ``1.0``.
+
+    Returns
+    -------
+    heat : Numpy array or None
+        ``heat`` with the flow components re-oriented (same object as the input).
+    """
+    if heat is None or not flow_heat:
+        return heat
+    iy, ix, iz = flow_heat.get("vy"), flow_heat.get("vx"), flow_heat.get("vz")
+    vy = heat[..., iy] if iy is not None else np.array(0.0, dtype=np.float32)
+    vx = heat[..., ix] if ix is not None else np.array(0.0, dtype=np.float32)
+    vz = heat[..., iz] if iz is not None else np.array(0.0, dtype=np.float32)
+    mag0 = np.sqrt(vy ** 2 + vx ** 2 + vz ** 2)
+    ny, nx, nz = s_y * vy, s_x * vx, s_z * vz
+    mag1 = np.sqrt(ny ** 2 + nx ** 2 + nz ** 2) + 1e-12
+    ratio = mag0 / mag1
+    if iy is not None:
+        heat[..., iy] = ny * ratio
+    if ix is not None:
+        heat[..., ix] = nx * ratio
+    if iz is not None:
+        heat[..., iz] = nz * ratio
+    return heat
+
+
+def flow_rescale(
+    image: NDArray,
+    mask: Optional[NDArray],
+    heat: Optional[NDArray],
+    factor: float,
+    flow_heat: Optional[Dict] = None,
+    mode: str = "reflect",
+    mask_type: str = "mask",
+) -> Tuple[NDArray, Optional[NDArray], Optional[NDArray]]:
+    """
+    Rescale a patch in-plane (Y, X) by ``factor`` so cells reach a target diameter, then crop/pad
+    back to the original shape. Mimics Cellpose's diameter rescaling during training.
+
+    Interpolation is per channel-type: image and ``heat`` (flows, distances, …) are linear, the
+    binary ``mask`` uses nearest-neighbour. In 3D ``(z, y, x, c)`` only Y and X are scaled; Z is
+    preserved and the flow vectors are re-oriented for the resulting anisotropy. Flow *values* are
+    otherwise unchanged (they are unit-length directions, scale-invariant under an isotropic resize).
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to rescale. E.g. ``(y, x, c)`` in 2D or ``(z, y, x, c)`` in 3D.
+    mask : 3D/4D Numpy array, optional
+        Binary mask channels.
+    heat : 3D/4D Numpy array, optional
+        Float channels (including the flow channels indexed by ``flow_heat``).
+    factor : float
+        In-plane resize factor (``diam_mean / diameter``). ``factor > 1`` enlarges cells (then
+        centre-crops), ``factor < 1`` shrinks them (then pads).
+    flow_heat : dict, optional
+        Mapping of flow components to their channel index inside ``heat``.
+    mode : str, optional
+        Padding/extension mode used by the resize and pad.
+    mask_type : str, optional
+        ``"mask"`` (nearest) or ``"image"`` (linear) interpolation for ``mask``.
+
+    Returns
+    -------
+    image, mask, heat : Numpy arrays
+        Rescaled arrays with the original spatial shape.
+    """
+    assert image.ndim in [3, 4], f"Image must be 3D or 4D, got shape {image.shape}"
+    if factor <= 0 or abs(factor - 1.0) <= 1e-3:
+        return image, mask, heat
+
+    mask_order = 0 if mask_type == "mask" else 1
+    is_3d = image.ndim == 4
+
+    if is_3d:
+        z, y, x = image.shape[0], image.shape[1], image.shape[2]
+        target = (z, max(1, int(round(y * factor))), max(1, int(round(x * factor))))
+    else:
+        y, x = image.shape[0], image.shape[1]
+        target = (max(1, int(round(y * factor))), max(1, int(round(x * factor))))
+
+    def _rs(arr: NDArray, order: int) -> NDArray:
+        return resize(
+            arr,
+            target + (arr.shape[-1],),
+            order=order,
+            mode=mode,
+            clip=True,
+            preserve_range=True,
+            anti_aliasing=(order != 0 and factor < 1.0),
+        ).astype(arr.dtype, copy=False)
+
+    orig_img_shape = image.shape
+    image = _rs(image, 1)
+    if mask is not None:
+        orig_mask_shape = mask.shape
+        mask = _rs(mask, mask_order)
+    if heat is not None:
+        heat = _rs(heat, 1)
+
+    def _pad_tuple(orig_shape: Tuple[int, ...], cur_shape: Tuple[int, ...]) -> Tuple[Tuple[int, int], ...]:
+        pads = []
+        for d in range(len(orig_shape) - 1):
+            diff = orig_shape[d] - cur_shape[d]
+            pads.append((diff // 2, math.ceil(diff / 2)))
+        pads.append((0, 0))
+        return tuple(pads)
+
+    if factor >= 1.0:
+        image = center_crop_single(image, orig_img_shape[:-1])
+        if mask is not None:
+            mask = center_crop_single(mask, orig_mask_shape[:-1])
+        if heat is not None:
+            heat = center_crop_single(heat, orig_img_shape[:-1])
+    else:
+        image = np.pad(image, _pad_tuple(orig_img_shape, image.shape), mode)
+        if mask is not None:
+            mask = np.pad(mask, _pad_tuple(orig_mask_shape, mask.shape), mode)
+        if heat is not None:
+            heat = np.pad(heat, _pad_tuple(orig_img_shape, heat.shape), mode)
+
+    # Correct flow directions for the in-plane-only (anisotropic) resize. Only matters in 3D where
+    # the Z axis was not scaled; in 2D (s_y == s_x) this is a no-op.
+    if heat is not None and flow_heat and flow_heat.get("vz") is not None:
+        heat = scale_flow_vectors(heat, flow_heat, s_y=factor, s_x=factor, s_z=1.0)
+
+    return image, mask, heat
+
+
 def rotation(
     img: NDArray,
     mask: Optional[NDArray] = None,
@@ -1826,6 +2075,7 @@ def rotation(
     angles: Union[Tuple[int, int], List[int]] = [],
     mode: str = "reflect",
     mask_type: str = "mask",
+    flow_heat: Optional[Dict] = None,
 ) -> Union[
     NDArray,
     Tuple[NDArray, Optional[NDArray], Optional[NDArray]],
@@ -1852,6 +2102,12 @@ def rotation(
 
     mask_type : str, optional
         How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
+
+    flow_heat : dict, optional
+        Mapping of Cellpose flow components to their channel index inside ``heat``
+        (``{"vy": i, "vx": j, "vz": k}``). When given, the in-plane flow vectors carried by ``heat``
+        are additionally rotated by the same angle (see :func:`rotate_flow_vectors`) so they stay
+        consistent with the rotated geometry. ``None`` (default) leaves ``heat`` as a plain heatmap.
 
     Returns
     -------
@@ -1921,6 +2177,8 @@ def rotation(
     heat_out = None
     if heat is not None:
         heat_out = _rotate(heat, axes_img, order=1)
+        # Re-orient the in-plane flow vectors (Gv, Gh) by the same angle as the spatial rotation.
+        heat_out = rotate_flow_vectors(heat_out, flow_heat, angle)
 
     return img_out if mask is None and heat is None else (img_out, mask_out, heat_out)
 
@@ -2378,7 +2636,7 @@ def shift(
     return img, mask, heat
 
 
-def flip_horizontal(image: NDArray, mask: Optional[NDArray] = None, heat: Optional[NDArray] = None):
+def flip_horizontal(image: NDArray, mask: Optional[NDArray] = None, heat: Optional[NDArray] = None, flow_heat: Optional[Dict] = None):
     """
     Flip an image (and optional mask/heatmap) horizontally (left-right).
 
@@ -2392,6 +2650,12 @@ def flip_horizontal(image: NDArray, mask: Optional[NDArray] = None, heat: Option
 
     heat : 3D/4D Numpy array, optional
         Heatmap (float mask) to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    flow_heat : dict, optional
+        Mapping of Cellpose flow components to their channel index inside ``heat``
+        (``{"vy": i, "vx": j, "vz": k}``). This flip reverses the Y axis, so the ``Gv`` (y) flow
+        component in ``heat`` is negated (see :func:`flip_flow_vectors`). ``None`` (default) leaves
+        ``heat`` as a plain heatmap.
 
     Returns
     -------
@@ -2418,10 +2682,12 @@ def flip_horizontal(image: NDArray, mask: Optional[NDArray] = None, heat: Option
         img = image[:, ::-1]
         mask = mask[:, ::-1] if mask is not None else None
         heat = heat[:, ::-1] if heat is not None else None
+    # This reverses the Y axis (axis 0 in 2D, axis 1 in 3D) -> negate the Gv (y) flow component.
+    heat = flip_flow_vectors(heat, flow_heat, "y")
     return img, mask, heat
 
 
-def flip_vertical(image: NDArray, mask: Optional[NDArray] = None, heat: Optional[NDArray] = None):
+def flip_vertical(image: NDArray, mask: Optional[NDArray] = None, heat: Optional[NDArray] = None, flow_heat: Optional[Dict] = None):
     """
     Flip an image (and optional mask/heatmap) vertically (up-down).
 
@@ -2435,6 +2701,12 @@ def flip_vertical(image: NDArray, mask: Optional[NDArray] = None, heat: Optional
 
     heat : 3D/4D Numpy array, optional
         Heatmap (float mask) to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    flow_heat : dict, optional
+        Mapping of Cellpose flow components to their channel index inside ``heat``
+        (``{"vy": i, "vx": j, "vz": k}``). This flip reverses the X axis, so the ``Gh`` (x) flow
+        component in ``heat`` is negated (see :func:`flip_flow_vectors`). ``None`` (default) leaves
+        ``heat`` as a plain heatmap.
 
     Returns
     -------
@@ -2461,6 +2733,8 @@ def flip_vertical(image: NDArray, mask: Optional[NDArray] = None, heat: Optional
         img = image[:, :, ::-1]
         mask = mask[:, :, ::-1] if mask is not None else None
         heat = heat[:, :, ::-1] if heat is not None else None
+    # This reverses the X axis (axis 1 in 2D, axis 2 in 3D) -> negate the Gh (x) flow component.
+    heat = flip_flow_vectors(heat, flow_heat, "x")
     return img, mask, heat
 
 

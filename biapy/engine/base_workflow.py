@@ -96,6 +96,7 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
+from biapy.data.pre_processing import set_cellpose_diameters
 from biapy.data.norm import normalize_image, normalize_mask
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.dataset import PatchCoords
@@ -218,6 +219,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.mask_path = ""
         self.is_y_mask = False
+        # Cellpose training-time cell diameter (pixels) used to rescale patches to PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN.
+        # None disables the rescaling. Set in load_train_data() for the Cellpose workflow.
+        self.cellpose_diameter = None
         self.model_output_channels = []
         self.model_output_channel_info = []
         self.head_activations = []
@@ -575,6 +579,7 @@ class Base_Workflow(metaclass=ABCMeta):
             "input_img_axes": self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
             "input_mask_axes": self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER,
         }
+
         (
             self.X_train,
             self.Y_train,
@@ -640,6 +645,10 @@ class Base_Workflow(metaclass=ABCMeta):
             save_filtered_images_dir=self.cfg.PATHS.FIL_SAMPLES_DIR,
             save_filtered_images_num=self.cfg.DATA.SAVE_FILTERED_IMAGES_NUM,
         )
+
+        # Attach the per-image Cellpose diameter to each GT DatasetFile so the train generator can
+        # rescale each patch by DIAM_MEAN / diameter (mirroring Cellpose's diameter normalization).
+        self.cellpose_diameter = set_cellpose_diameters(self.cfg, self.Y_train, self.Y_val)
 
         # Ensure all the processes have read the data
         if is_dist_avail_and_initialized():

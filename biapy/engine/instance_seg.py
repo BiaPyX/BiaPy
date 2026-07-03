@@ -719,6 +719,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         assert pred.ndim == 4, f"Expected 4D pred, got shape {pred.shape}"
 
+        # Undo the Cellpose test-time input rescale (if any): resize the prediction back to the native
+        # resolution so all downstream processing (including flows_to_instances and its own diameter
+        # rescale) runs at the original scale exactly as without the test rescale. Flow channels are
+        # unit directions, so a linear resize is correct.
+        orig_shape = None
+        if isinstance(getattr(self, "current_sample", None), dict):
+            orig_shape = self.current_sample.get("cellpose_orig_shape")
+        if orig_shape is not None:
+            if self.dims == 2:
+                target = (pred.shape[0], int(orig_shape[0]), int(orig_shape[1]), pred.shape[-1])
+            else:
+                target = (int(orig_shape[0]), int(orig_shape[1]), int(orig_shape[2]), pred.shape[-1])
+            if target[:-1] != pred.shape[:-1]:
+                pred = resize(
+                    pred, target, order=1, mode="reflect", clip=True,
+                    preserve_range=True, anti_aliasing=False,
+                ).astype(pred.dtype, copy=False)
+
         if self.separated_class_channel:
             pred = pred[..., :-1]
 

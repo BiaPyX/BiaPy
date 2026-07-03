@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     Literal,
     Dict,
+    List,
 )
 import warnings
 import numpy as np
@@ -332,6 +333,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
 
+    flow_channels : dict, optional
+        Cellpose flow channels present in the mask, mapping each role to its channel index:
+        ``{"Gv": i, "Gh": j, "Gz": k}`` (any role may be absent). These channels are direction fields
+        (not plain heatmaps): they are tagged ``"flow"`` in the per-channel normalization info and are
+        re-oriented (rotated/flipped/rescaled), not just moved, by the augmentation pipeline. Empty
+        (default) for non-flow workflows.
+
+    cellpose_diam_mean : float, optional
+        Cellpose reference diameter (pixels) the model is trained at (``DIAM_MEAN``). When > 0 and
+        ``flow_channels`` is non-empty, each training patch is rescaled in-plane by
+        ``DIAM_MEAN / diameter`` (the per-file diameter, read from ``DatasetFile.diameter``) so cells
+        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale.
+
+    cellpose_scale_jitter : float, optional
+        Random scale jitter applied on top of the diameter rescale (Cellpose's ``scale_range``): the
+        factor is multiplied by ``s ~ U[1 - jitter, 1 + jitter]``. ``0.0`` (default) disables jitter.
+
     random_crop_scale : tuple of ints, optional
         Scale factor the mask used in super-resolution workflow. E.g. ``(2,2)``.
 
@@ -444,6 +462,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         n2v_structMask=np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]),
         n2v_load_gt: bool = False,
         instance_problem: bool = False,
+        flow_channels: Dict = {},
+        cellpose_diam_mean: float = 0.0,
+        cellpose_scale_jitter: float = 0.0,
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
         preprocess_f=None,
@@ -505,7 +526,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.length = len(self.X.sample_list)
 
         self.real_length = self.length
-        self.no_bin_channel_found = False 
+        self.no_bin_channel_found = False
+
+        # Cellpose flow channels are direction fields, not plain heatmaps. ``flow_channels`` maps each
+        # role ("Gv"/"Gh"/"Gz") to its channel index within the mask, so they can be tagged in the
+        # per-channel normalization info and re-oriented (not just moved) by the augmentation pipeline.
+        self.flow_channels = dict(flow_channels)
+        # Positions of the flow components inside the split-off ``heat`` array, filled in once the
+        # mask normalization info is known ({"vy": i, "vx": j, "vz": k}). Used for the vector-aware
+        # rotation/flip/rescale transforms.
+        self.flow_heat = {}
+        # Per-sample Cellpose diameter rescale: each patch is rescaled by DIAM_MEAN / diameter (the
+        # diameter is read per source file from DatasetFile.diameter in __getitem__), with optional
+        # random jitter. DIAM_MEAN <= 0 disables it.
+        self.cellpose_diam_mean = float(cellpose_diam_mean)
+        self.cellpose_scale_jitter = float(cellpose_scale_jitter)
+        self.do_cellpose_rescale = da and len(self.flow_channels) > 0 and self.cellpose_diam_mean > 0
         self.shape = shape
 
         # X data analysis
@@ -547,11 +583,32 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 else:
                     self.mask_norm = update_mask_norm_info(self.mask_norm, new_mask_norm)
 
+            # Tag the flow channels (Gv/Gh/Gz) with a dedicated "flow" type so the augmentation
+            # pipeline can distinguish direction fields from ordinary non-binary heatmaps: they are
+            # interpolated as floats (like "no_bin") but cannot simply be rotated/flipped as scalar
+            # maps. They are auto-detected as "no_bin" above; here we override that tag.
+            for j in self.flow_channels.values():
+                if j in self.mask_norm["per_channel_info"]:
+                    self.mask_norm["per_channel_info"][j]["type"] = "flow"
+                    self.mask_norm["per_channel_info"][j]["div"] = False
+
             # Check if any channel is not binary to set no_bin_channel_found to True
             self.no_bin_channel_found = any(
-                self.mask_norm["per_channel_info"][j]["type"] == "no_bin"
+                self.mask_norm["per_channel_info"][j]["type"] in ("no_bin", "flow")
                 for j in range(len(self.mask_norm["per_channel_info"]))
             )
+
+            # Map each flow role to its position within the split-off ``heat`` array (the number of
+            # non-binary channels appearing before it, since ``heat`` keeps only those). Used by the
+            # vector-aware rotation/flip/rescale augmentors.
+            if self.no_bin_channel_found and self.flow_channels:
+                per = self.mask_norm["per_channel_info"]
+                role_to_comp = {"Gv": "vy", "Gh": "vx", "Gz": "vz"}
+                for role, midx in self.flow_channels.items():
+                    if role not in role_to_comp or midx not in per:
+                        continue
+                    hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
+                    self.flow_heat[role_to_comp[role]] = hpos
         else:
             self.mask_norm = self.norm_module
 
@@ -986,6 +1043,38 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         return self.__getitem__(index)
 
+    def cellpose_rescale_factor(self, index: int) -> float:
+        """
+        Compute the per-sample Cellpose diameter rescale factor for the sample at ``index``.
+
+        The factor is ``DIAM_MEAN / diameter`` where ``diameter`` is read from the source GT file
+        (``DatasetFile.diameter``, set from the per-image stats JSON produced when the instance
+        channels were created), with the optional random ``SCALE_JITTER`` applied on top. Returns
+        ``1.0`` (no rescale) when rescaling is disabled or the diameter is unknown.
+
+        Parameters
+        ----------
+        index : int
+            Sample index.
+
+        Returns
+        -------
+        float
+            In-plane rescale factor to feed to :func:`apply_transform`.
+        """
+        if not self.do_cellpose_rescale:
+            return 1.0
+        idx = index % self.real_length
+        msample = self.Y.sample_list[idx]
+        diameter = getattr(self.Y.dataset_info[msample.fid], "diameter", None)
+        if diameter is None or diameter <= 0:
+            return 1.0
+        factor = self.cellpose_diam_mean / float(diameter)
+        if self.cellpose_scale_jitter > 0.0:
+            jit = self.cellpose_scale_jitter
+            factor *= random.uniform(1.0 - jit, 1.0 + jit)
+        return factor
+
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate one pair of data.
@@ -1012,7 +1101,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 extra_img = np.random.randint(0, self.length - 1) if self.length > 2 else 0
                 e_img, e_mask = self.load_sample(extra_img)
 
-            img, mask = self.apply_transform(img, mask, e_im=e_img, e_mask=e_mask)
+            img, mask = self.apply_transform(
+                img, mask, e_im=e_img, e_mask=e_mask,
+                rescale_factor=self.cellpose_rescale_factor(index),
+            )
 
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
@@ -1034,6 +1126,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask: NDArray,
         e_im: Optional[NDArray],
         e_mask: Optional[NDArray],
+        rescale_factor: float = 1.0,
     ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a probability.
@@ -1054,6 +1147,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or
             ``(y, x, z, channels)`` in ``3D``.
 
+        rescale_factor : float, optional
+            Per-sample Cellpose in-plane rescale factor (``DIAM_MEAN / diameter``, jitter already
+            applied) used to resize the patch so cells become ~``DIAM_MEAN`` pixels before any other
+            geometric augmentation. ``1.0`` (default) disables it. Only used when flow channels are
+            present (see :meth:`cellpose_rescale_factor` and :func:`flow_rescale`).
+
         Returns
         -------
         image : 3D/4D Numpy array
@@ -1071,7 +1170,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 e_new_mask = []
                 e_heat = []
             for j in range(mask.shape[-1]):
-                if self.mask_norm["per_channel_info"][j]["type"] == "no_bin":
+                if self.mask_norm["per_channel_info"][j]["type"] in ("no_bin", "flow"):
                     heat.append(np.expand_dims(mask[..., j], -1))
                     if self.cutmix:
                         e_heat.append(np.expand_dims(e_mask[..., j], -1)) # type: ignore
@@ -1094,6 +1193,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             del new_mask
             if self.cutmix:
                 del e_new_mask
+
+        # Cellpose-style diameter rescale (applied first, before any other geometric augmentation):
+        # resize the patch in-plane so cells become ~DIAM_MEAN pixels. ``rescale_factor`` is the
+        # per-sample DIAM_MEAN / diameter, already jittered in __getitem__. Binary channels use
+        # nearest-neighbour, flow/float channels use linear interpolation; the flow directions are
+        # re-oriented for the (in-plane-only) resize. See flow_rescale.
+        if self.do_cellpose_rescale and rescale_factor > 0 and abs(rescale_factor - 1.0) > 1e-3:
+            image, mask, heat = flow_rescale(
+                image,
+                mask=mask,
+                heat=heat,
+                factor=rescale_factor,
+                flow_heat=self.flow_heat,
+                mode=self.affine_mode,
+                mask_type=self.norm_module["target_type"],
+            )
 
         # Convert to grayscale
         if self.grayscale and random.uniform(0, 1) < self.da_prob:
@@ -1124,6 +1239,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 angles=self.rnd_rot_range,
                 mode=self.affine_mode,
                 mask_type=self.norm_module["target_type"],
+                flow_heat=self.flow_heat,
             )  # type: ignore
 
         # Apply square rotations
@@ -1135,6 +1251,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 angles=[90, 180, 270],
                 mode=self.affine_mode,
                 mask_type=self.norm_module["target_type"],
+                flow_heat=self.flow_heat,
             )  # type: ignore
 
         # Apply cblur
@@ -1257,12 +1374,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = flip_vertical(
-                image, mask=mask, heat=heat
+                image, mask=mask, heat=heat, flow_heat=self.flow_heat
             ) # type: ignore
 
         if self.hflip and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = flip_horizontal(
-                image, mask=mask, heat=heat
+                image, mask=mask, heat=heat, flow_heat=self.flow_heat
             ) # type: ignore
             
         if self.g_blur and random.uniform(0, 1) < self.da_prob:
@@ -1294,7 +1411,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             new_mask = []
             hi, mi = 0, 0
             for j in range(len(self.mask_norm["per_channel_info"])):
-                if self.mask_norm["per_channel_info"][j]["type"] == "no_bin":
+                if self.mask_norm["per_channel_info"][j]["type"] in ("no_bin", "flow"):
                     new_mask.append(np.expand_dims(heat[..., hi], -1))
                     hi += 1
                 else:

@@ -54,6 +54,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         mask: NDArray,
         e_im: Optional[NDArray] = None,
         e_mask: Optional[NDArray] = None,
+        rescale_factor: float = 1.0,
     ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a probability.
@@ -72,6 +73,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         e_mask : 4D Numpy array
             Extra mask to help transforming ``mask``. E.g. ``(z, y, x, channels)``.
 
+        rescale_factor : float, optional
+            Per-sample Cellpose in-plane rescale factor (``DIAM_MEAN / diameter``), forwarded to the
+            base :meth:`PairBaseDataGenerator.apply_transform`. ``1.0`` (default) disables it.
+
         Returns
         -------
         image : 4D Numpy array
@@ -88,8 +93,15 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                 e_im  = e_im[::-1, ...]
             if e_mask is not None:
                 e_mask = e_mask[::-1, ...]
+            # Reversing the Z axis must negate the Gz flow component. This runs before the base
+            # generator splits the flows into `heat`, so operate on the full mask at its channel index.
+            gz_idx = self.flow_channels.get("Gz")
+            if gz_idx is not None and gz_idx < mask.shape[-1]:
+                mask[..., gz_idx] = -mask[..., gz_idx]
+                if e_mask is not None and gz_idx < e_mask.shape[-1]:
+                    e_mask[..., gz_idx] = -e_mask[..., gz_idx]
 
-        return super().apply_transform(image, mask, e_im, e_mask)
+        return super().apply_transform(image, mask, e_im, e_mask, rescale_factor=rescale_factor)
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
         """

@@ -391,14 +391,45 @@ class Config:
         # fragmenting into several instances (over-segmentation): at the rescaled size each cell's
         # flow field converges to a single sharp histogram peak. It also sets the integration step
         # count to niter = (DIAMETER / DIAM_MEAN) * 200 (overriding N_STEPS). Set DIAMETER equal to
-        # DIAM_MEAN to disable rescaling. Ignored when TYPE is 'omnipose'. Default: 30.0.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER = 30.0
+        # DIAM_MEAN to disable rescaling. Set DIAMETER to 0 to auto-estimate it per image from the
+        # median foreground object size (mirrors Cellpose's diameter=0 / SizeModel behaviour) — use
+        # this when different images in the dataset have different cell scales. Ignored when TYPE
+        # is 'omnipose'.
+        # This value also drives the test-time INPUT rescale (the image is rescaled before the
+        # network so it sees ~DIAM_MEAN cells, as in training, and the prediction is resized back to
+        # native afterwards, leaving the flow tracking above unchanged). The diameter used at test is
+        # resolved as:
+        #   * DIAMETER > 0  -> rescale each test image by DIAM_MEAN / DIAMETER.
+        #   * DIAMETER == 0 -> use the median of the TRAINING per-image diameters, loaded from the
+        #     training cellpose_diameters*.json in DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR (no test GT
+        #     is ever required).
+        #   * DIAMETER == 0 and no training JSON (missing, or the training data changed) -> no input
+        #     rescale; the network runs at native resolution and only the DIAMETER<=0 post-processing
+        #     auto-estimate above (which refines niter and the flow rescale from the predicted
+        #     foreground) is applied.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER = 0.0
         # Cellpose only. Reference cell diameter, in pixels, that the flow model was trained at, i.e.
         # Cellpose's diam_mean (30 for the 'cyto' model, 17 for the 'nuclei' model). Together with
         # DIAMETER it sets the rescaling factor rescale = DIAM_MEAN / DIAMETER. Change this only if
         # your flows were generated/trained for a target cell size other than 30 px. Ignored when
         # TYPE is 'omnipose'. Default: 30.0.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN = 30.0
+        # Random scale jitter applied on top of the automatic diameter rescale during training
+        # (Cellpose's scale_range). Whenever a flow channel (Gv/Gh/Gz) is present, every training
+        # patch is rescaled by DIAM_MEAN / DIAMETER so cells become ~DIAM_MEAN pixels before being
+        # fed to the network (mirroring Cellpose's diameter normalization: rescale = diam_mean /
+        # diam_train), where DIAMETER is the value set above or, when DIAMETER <= 0, the value
+        # auto-estimated from the training GT while the data is loaded (see
+        # load_and_prepare_train_data). The rescale is applied as the first geometric augmentation,
+        # channel by channel: binary channels use nearest-neighbour and the float flow channels use
+        # linear interpolation. The flow *values* are left unchanged since they are unit-length
+        # direction vectors (scale-invariant under an isotropic resize). This SCALE_JITTER draws an
+        # extra random factor s ~ U[1 - SCALE_JITTER, 1 + SCALE_JITTER] so each patch is rescaled by
+        # DIAM_MEAN / DIAMETER * s. 0.0 disables the jitter (pure diameter normalization); Cellpose
+        # uses 0.5. Applies to both 'cellpose' and 'omnipose' flows and only to the train generator.
+        # Set DIAMETER == DIAM_MEAN and SCALE_JITTER == 0.0 to disable the training rescale entirely.
+        # Must be in [0, 1). Default: 0.0.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER = 0.0
         # Omnipose only. DBSCAN eps radius (pixels): convergence positions within this distance
         # are linked into the same cluster (= the same cell's medial-axis skeleton). Must be
         # large enough to stitch adjacent skeleton points of the same cell together, but small

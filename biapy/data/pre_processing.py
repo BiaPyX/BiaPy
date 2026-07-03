@@ -4,6 +4,8 @@ Pre-processing utilities for image and mask data in deep learning workflows.
 This module provides pre-processing functions for instance segmentation, detection mask creation, self-supervised learning data generation, semantic segmentation probability maps, and general image processing operations such as resizing, blurring, edge detection, histogram matching, and CLAHE. It supports both 2D and 3D data formats and integrates with BiaPy configuration objects for flexible data pipelines.
 """
 import os
+import glob
+import json
 import warnings
 import edt
 import h5py
@@ -58,6 +60,206 @@ from biapy.data.data_manipulation import (
 #########################
 # INSTANCE SEGMENTATION #
 #########################
+def cellpose_diameter_from_areas(areas, is_3d: bool = False) -> float:
+    """
+    Compute the Cellpose-style median cell diameter (pixels) from a list of per-object areas (voxel
+    counts).
+
+    Each object's equivalent diameter is ``2*sqrt(area/pi)`` in 2D (so the median equals Cellpose's
+    ``median(sqrt(counts))/(sqrt(pi)/2)``) or the sphere-equivalent ``2*(3V/4pi)^(1/3)`` in 3D. This
+    is the shared core of :func:`cellpose_diameter_stats`; it is also used to combine per-object
+    counts accumulated patch by patch (Zarr/H5).
+
+    Parameters
+    ----------
+    areas : array-like
+        Per-object voxel counts (background excluded).
+    is_3d : bool, optional
+        Whether the data is 3-D.
+
+    Returns
+    -------
+    float
+        Median object diameter in pixels, or ``0.0`` when no object is present.
+    """
+    areas = np.asarray(list(areas), dtype=np.float64) if not isinstance(areas, np.ndarray) else areas.astype(np.float64)
+    areas = areas[areas > 0]
+    if areas.size == 0:
+        return 0.0
+    if is_3d:
+        diams = 2.0 * (3.0 * areas / (4.0 * np.pi)) ** (1.0 / 3.0)
+    else:
+        diams = 2.0 * np.sqrt(areas / np.pi)
+    return float(np.median(diams))
+
+
+def cellpose_diameter_stats(instance_labels: NDArray, is_3d: bool = False) -> Dict:
+    """
+    Compute the Cellpose-style median cell diameter (pixels) of an instance-label image.
+
+    Mirrors Cellpose's ``utils.diameters`` (see :func:`cellpose_diameter_from_areas`). In 3D the
+    sphere-equivalent diameter is used (no in-plane/anisotropy correction; prefer an explicit
+    ``PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER`` for strongly anisotropic 3D data).
+
+    Parameters
+    ----------
+    instance_labels : Numpy array
+        Instance-label image, optionally with a trailing channel axis. E.g. ``(y, x)``, ``(y, x, 1)``,
+        ``(z, y, x)`` or ``(z, y, x, 1)``.
+    is_3d : bool, optional
+        Whether the data is 3-D.
+
+    Returns
+    -------
+    dict
+        ``{"diameter": float, "n_objects": int}``. ``diameter`` is 0.0 when no foreground is present.
+    """
+    lab = np.asarray(instance_labels)
+    if lab.ndim == 4 or (lab.ndim == 3 and not is_3d):
+        lab = lab[..., 0]
+    vals, counts = np.unique(lab.astype(np.int64), return_counts=True)
+    counts = counts[vals != 0].astype(np.float64)
+    return {"diameter": cellpose_diameter_from_areas(counts, is_3d), "n_objects": int(counts.size)}
+
+
+def save_cellpose_diameter_stats(stats: Dict, channels_dir: str):
+    """
+    Write per-image Cellpose diameter stats to a per-rank JSON shard in the instance-channels folder.
+
+    Per-rank shards avoid write races when the channels are created with several processes; they are
+    merged back by :func:`load_cellpose_diameter_stats`.
+
+    Parameters
+    ----------
+    stats : dict
+        Mapping of image basename -> ``{"diameter": float, "n_objects": int}``.
+    channels_dir : str
+        Directory where the instance-channel masks (flows) are stored.
+    """
+    if not stats or not channels_dir:
+        return
+    os.makedirs(channels_dir, exist_ok=True)
+    fname = os.path.join(channels_dir, "cellpose_diameters_rank{}.json".format(get_rank()))
+    with open(fname, "w") as f:
+        json.dump(stats, f, indent=2)
+
+
+def load_cellpose_diameter_stats(channels_dir: str) -> Dict:
+    """
+    Load and merge the per-image Cellpose diameter JSON shard(s) written during channel creation.
+
+    Parameters
+    ----------
+    channels_dir : str
+        Directory where the instance-channel masks (flows) and the ``cellpose_diameters*.json``
+        shard(s) are stored.
+
+    Returns
+    -------
+    dict
+        Mapping of image basename -> diameter (pixels). Empty if no JSON is found.
+    """
+    if not channels_dir or not os.path.isdir(channels_dir):
+        return {}
+    # Accumulate an n_objects-weighted diameter per file. A file normally appears in a single shard,
+    # but a Zarr/H5 file whose patches were split across ranks yields one (partial) entry per rank;
+    # weighting by object count combines them into a single representative diameter.
+    accum = {}  # basename -> [weighted_sum, weight]
+    for shard in sorted(glob.glob(os.path.join(channels_dir, "cellpose_diameters*.json"))):
+        try:
+            with open(shard) as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        for name, info in data.items():
+            if isinstance(info, dict):
+                d, n = info.get("diameter"), info.get("n_objects", 1)
+            else:
+                d, n = info, 1
+            if d is not None and d > 0:
+                b = os.path.basename(name)
+                w = float(max(1, int(n)))
+                ws, wt = accum.get(b, (0.0, 0.0))
+                accum[b] = (ws + float(d) * w, wt + w)
+    return {b: ws / wt for b, (ws, wt) in accum.items() if wt > 0}
+
+
+def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
+    """
+    Attach the per-image Cellpose diameter (pixels) to each GT ``DatasetFile``.
+
+    For the Cellpose/Omnipose flow workflow this lets the train generator rescale every patch by
+    ``DIAM_MEAN / diameter`` so cells become ~``DIAM_MEAN`` pixels (mirroring Cellpose's diameter
+    normalization). When ``PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER > 0`` that value is used for all
+    files; otherwise the per-image diameters written to ``cellpose_diameters*.json`` when the instance
+    channels were created are used. Files without a known diameter are left unscaled.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
+    Y_train : BiaPyDataset
+        Training GT dataset whose ``DatasetFile`` entries get ``.diameter`` set (in place).
+    Y_val : BiaPyDataset, optional
+        Validation GT dataset (same treatment).
+
+    Returns
+    -------
+    float or None
+        Representative diameter (``DIAMETER`` if set, else the median across training files), or
+        ``None`` when no diameter is available. Useful for logging and the test-time default.
+    """
+    if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+        return None
+    if not any(ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")):
+        return None
+
+    diam_cfg = cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
+    global_diam = float(diam_cfg) if (diam_cfg and diam_cfg > 0) else None
+
+    def _attach(dataset, channels_dir):
+        if dataset is None:
+            return []
+        diam_map = {} if global_diam is not None else load_cellpose_diameter_stats(channels_dir)
+        collected = []
+        for dfile in dataset.dataset_info:
+            if global_diam is not None:
+                d = global_diam
+            else:
+                d = diam_map.get(os.path.basename(dfile.path))
+                d = d if (d is not None and d > 0) else None
+            dfile.diameter = d
+            if d:
+                collected.append(d)
+        return collected
+
+    train_diams = _attach(Y_train, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)
+    _attach(Y_val, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)
+
+    if global_diam is not None:
+        representative = global_diam
+    elif train_diams:
+        representative = float(np.median(train_diams))
+    else:
+        representative = None
+
+    if is_main_process():
+        if representative:
+            print(
+                "Cellpose training diameter: {:.2f} px (DIAM_MEAN={}); median in-plane rescale ~{:.3f}".format(
+                    representative,
+                    cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN,
+                    float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN) / representative,
+                )
+            )
+        else:
+            print(
+                "No Cellpose diameter stats found (no cellpose_diameters*.json and DIAMETER <= 0); "
+                "training patches will NOT be rescaled."
+            )
+    return representative
+
+
 def create_instance_channels(cfg: CN, data_type: str = "train"):
     """
     Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
@@ -170,6 +372,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             world_size = get_world_size()
             N = len(Y)
             it = range(rank, N, world_size)
+            # Per-image Cellpose diameter stats, accumulated patch by patch. Because a cell can span
+            # several patches, its voxel count is summed per (file, label) and the diameter is
+            # computed per file at the end. Only needed when flow channels are produced.
+            compute_diam = any(ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz"))
+            file_label_counts = {}
             for i in tqdm(it, disable=not is_main_process()):
                 # Extract the patch to process
                 patch_coords = Y[i]["patch_coords"]
@@ -181,6 +388,16 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 )
                 if img.ndim == 3:
                     img = np.expand_dims(img, -1)
+
+                # Accumulate per-(file, label) voxel counts from the raw instance labels of this patch
+                # (before they are encoded into channels below).
+                if compute_diam:
+                    fbase = os.path.basename(Y[i]["filepath"])
+                    lbls, cnts = np.unique(img[..., 0].astype(np.int64), return_counts=True)
+                    lc = file_label_counts.setdefault(fbase, {})
+                    for lb, cnt in zip(lbls.tolist(), cnts.tolist()):
+                        if lb != 0:
+                            lc[lb] = lc.get(lb, 0) + int(cnt)
 
                 # Create the instance mask
                 if cfg.DATA.N_CLASSES > 2:
@@ -289,14 +506,35 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             # Close last open H5 file
             if mask and isinstance(imgfile, h5py.File):
                 imgfile.close()
+
+            # Compute the per-file diameter from the accumulated counts and persist it next to the
+            # flow representations.
+            if compute_diam and file_label_counts:
+                is_3d = cfg.PROBLEM.NDIM == "3D"
+                diam_stats = {
+                    fbase: {
+                        "diameter": cellpose_diameter_from_areas(list(lc.values()), is_3d),
+                        "n_objects": len(lc),
+                    }
+                    for fbase, lc in file_label_counts.items()
+                }
+                save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR)
     else:
         rank = get_rank()
         world_size = get_world_size()
         N = len(Y)
         it = range(rank, N, world_size)
+        # Per-image Cellpose diameter stats, only needed when flow channels are produced.
+        compute_diam = any(ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz"))
+        diam_stats = {}
         for i in tqdm(it, disable=not is_main_process()):
             img_path = os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i])
             img = read_img_as_ndarray(img_path, is_3d=not cfg.PROBLEM.NDIM == "2D")
+
+            # Measure the cell diameter from the raw instance labels (before they are encoded into
+            # channels) so training can rescale each image to ~DIAM_MEAN pixels, as Cellpose does.
+            if compute_diam:
+                diam_stats[Y[i]] = cellpose_diameter_stats(img, is_3d=(cfg.PROBLEM.NDIM == "3D"))
 
             if cfg.DATA.N_CLASSES > 2:
                 if img.shape[-1] != 2:
@@ -329,6 +567,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 filenames=[Y[i]],
                 verbose=False,
             )
+
+        # Persist the per-image Cellpose diameter stats next to the flow representations so that
+        # subsequent runs can rescale each image to ~DIAM_MEAN pixels during training.
+        if compute_diam:
+            save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR)
 
 def unique_labels_fast(a: np.ndarray):
     """

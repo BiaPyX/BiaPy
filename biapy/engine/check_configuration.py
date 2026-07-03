@@ -680,6 +680,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "Both must match: the GT is generated with 'gradient_type' and post-processing uses 'CELLPOSE.TYPE'."
                     )
 
+                if not (0.0 <= cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER < 1.0):
+                    raise ValueError(
+                        "'PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER' must be in [0, 1), but is "
+                        f"{cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER}."
+                    )
+
         else: # synapses
             chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
