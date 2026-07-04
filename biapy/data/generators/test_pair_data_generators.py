@@ -301,21 +301,32 @@ class test_pair_data_generator(Dataset):
                 # become ~DIAM_MEAN pixels, matching what the network saw during training. The native
                 # (pre-rescale) spatial shape is recorded so the workflow can resize the prediction
                 # back afterwards (leaving the downstream flow tracking unchanged). Done before the
-                # reflect/tiling so those operate on the rescaled image.
+                # reflect/tiling so those operate on the rescaled image. The GT mask (if available) is
+                # rescaled by the same in-plane factor so X and Y stay shape-consistent through the
+                # reflect/tiling; the mask uses nearest-neighbour to preserve its (integer) values.
                 if self.do_cellpose_test_rescale:
                     sample_extra_info["cellpose_orig_shape"] = img.shape
                     sample_extra_info["cellpose_rescale_factor"] = self.cellpose_test_factor
                     f = self.cellpose_test_factor
-                    if self.ndim == 3:
-                        z, y, x = img.shape[0], img.shape[1], img.shape[2]
-                        new_shape = (z, max(1, int(round(y * f))), max(1, int(round(x * f))), img.shape[-1])
-                    else:
-                        y, x = img.shape[0], img.shape[1]
-                        new_shape = (max(1, int(round(y * f))), max(1, int(round(x * f))), img.shape[-1])
-                    img = resize(
-                        img, new_shape, order=1, mode="reflect", clip=True,
-                        preserve_range=True, anti_aliasing=(f < 1.0),
-                    ).astype(img.dtype, copy=False)
+
+                    def _cellpose_resize(arr, order):
+                        if self.ndim == 3:
+                            spatial = (arr.shape[0], max(1, int(round(arr.shape[1] * f))), max(1, int(round(arr.shape[2] * f))))
+                        else:
+                            spatial = (max(1, int(round(arr.shape[0] * f))), max(1, int(round(arr.shape[1] * f))))
+                        return resize(
+                            arr, spatial + (arr.shape[-1],), order=order, mode="reflect", clip=True,
+                            preserve_range=True, anti_aliasing=(order != 0 and f < 1.0),
+                        ).astype(arr.dtype, copy=False)
+
+                    img = _cellpose_resize(img, 1)
+                    if self.provide_Y and mask is not None:
+                        mask = _cellpose_resize(np.asarray(mask), 0)
+
+                    # Record what was done for logging in the workflow.
+                    sample_extra_info["cellpose_resized_shape"] = img.shape
+                    sample_extra_info["cellpose_diameter"] = self.cellpose_diameter
+                    sample_extra_info["cellpose_diam_mean"] = self.cellpose_diam_mean
 
                 # Reflect data to complete the needed shape
                 if self.reflect_to_complete_shape:
