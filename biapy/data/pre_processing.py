@@ -122,50 +122,64 @@ def cellpose_diameter_stats(instance_labels: NDArray, is_3d: bool = False) -> Di
     return {"diameter": cellpose_diameter_from_areas(counts, is_3d), "n_objects": int(counts.size)}
 
 
-def save_cellpose_diameter_stats(stats: Dict, channels_dir: str):
+def save_cellpose_diameter_stats(stats: Dict, channels_dir: str, split: str):
     """
-    Write per-image Cellpose diameter stats to a per-rank JSON shard in the instance-channels folder.
+    Write per-image Cellpose diameter stats to a per-rank JSON shard.
 
-    Per-rank shards avoid write races when the channels are created with several processes; they are
-    merged back by :func:`load_cellpose_diameter_stats`.
+    The JSON is written to the **parent** of ``channels_dir`` (not inside it), because BiaPy expects
+    the instance-channels folder to contain only images. The ``split`` (``"train"``/``"val"``/
+    ``"test"``) is encoded in the filename so the train/val/test shards do not collide when their
+    channel folders share a parent. Per-rank shards avoid write races when the channels are created
+    with several processes; they are merged back by :func:`load_cellpose_diameter_stats`.
 
     Parameters
     ----------
     stats : dict
         Mapping of image basename -> ``{"diameter": float, "n_objects": int}``.
     channels_dir : str
-        Directory where the instance-channel masks (flows) are stored.
+        Directory where the instance-channel masks (flows) are stored. The JSON goes to its parent.
+    split : str
+        Data split the stats belong to (``"train"``, ``"val"`` or ``"test"``); encoded in the filename.
     """
     if not stats or not channels_dir:
         return
-    os.makedirs(channels_dir, exist_ok=True)
-    fname = os.path.join(channels_dir, "cellpose_diameters_rank{}.json".format(get_rank()))
+    parent = os.path.dirname(os.path.normpath(channels_dir))
+    os.makedirs(parent, exist_ok=True)
+    fname = os.path.join(parent, "cellpose_diameters_{}_rank{}.json".format(split, get_rank()))
     with open(fname, "w") as f:
         json.dump(stats, f, indent=2)
 
 
-def load_cellpose_diameter_stats(channels_dir: str) -> Dict:
+def load_cellpose_diameter_stats(channels_dir: str, split: str) -> Dict:
     """
     Load and merge the per-image Cellpose diameter JSON shard(s) written during channel creation.
+
+    The shards are read from the **parent** of ``channels_dir`` and filtered by ``split`` (matching
+    how :func:`save_cellpose_diameter_stats` writes them).
 
     Parameters
     ----------
     channels_dir : str
-        Directory where the instance-channel masks (flows) and the ``cellpose_diameters*.json``
-        shard(s) are stored.
+        Directory where the instance-channel masks (flows) are stored. The ``cellpose_diameters_
+        {split}_rank*.json`` shard(s) are looked up in its parent.
+    split : str
+        Data split to load (``"train"``, ``"val"`` or ``"test"``).
 
     Returns
     -------
     dict
         Mapping of image basename -> diameter (pixels). Empty if no JSON is found.
     """
-    if not channels_dir or not os.path.isdir(channels_dir):
+    if not channels_dir:
+        return {}
+    parent = os.path.dirname(os.path.normpath(channels_dir))
+    if not os.path.isdir(parent):
         return {}
     # Accumulate an n_objects-weighted diameter per file. A file normally appears in a single shard,
     # but a Zarr/H5 file whose patches were split across ranks yields one (partial) entry per rank;
     # weighting by object count combines them into a single representative diameter.
     accum = {}  # basename -> [weighted_sum, weight]
-    for shard in sorted(glob.glob(os.path.join(channels_dir, "cellpose_diameters*.json"))):
+    for shard in sorted(glob.glob(os.path.join(parent, "cellpose_diameters_{}_rank*.json".format(split)))):
         try:
             with open(shard) as f:
                 data = json.load(f)
@@ -217,10 +231,10 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
     diam_cfg = cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
     global_diam = float(diam_cfg) if (diam_cfg and diam_cfg > 0) else None
 
-    def _attach(dataset, channels_dir):
+    def _attach(dataset, channels_dir, split):
         if dataset is None:
             return []
-        diam_map = {} if global_diam is not None else load_cellpose_diameter_stats(channels_dir)
+        diam_map = {} if global_diam is not None else load_cellpose_diameter_stats(channels_dir, split)
         collected = []
         for dfile in dataset.dataset_info:
             if global_diam is not None:
@@ -231,10 +245,27 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
             dfile.diameter = d
             if d:
                 collected.append(d)
+
+        # Report where the diameters came from for this split.
+        if is_main_process():
+            n_files = len(dataset.dataset_info)
+            if global_diam is not None:
+                print("Cellpose [{}] diameter: using configured PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER"
+                      " = {:.2f} px for all {} file(s).".format(split, global_diam, n_files))
+            elif collected:
+                json_dir = os.path.dirname(os.path.normpath(channels_dir))
+                print("Cellpose [{}] diameter: loaded per-image values for {}/{} file(s) from "
+                      "'{}' (cellpose_diameters_{}_rank*.json).".format(
+                          split, len(collected), n_files, json_dir, split))
+            else:
+                json_dir = os.path.dirname(os.path.normpath(channels_dir))
+                print("Cellpose [{}] diameter: no diameter found (looked for "
+                      "cellpose_diameters_{}_rank*.json in '{}' and DIAMETER <= 0); {} file(s) left "
+                      "unscaled.".format(split, split, json_dir, n_files))
         return collected
 
-    train_diams = _attach(Y_train, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)
-    _attach(Y_val, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)
+    train_diams = _attach(Y_train, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR, "train")
+    _attach(Y_val, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR, "val")
 
     if global_diam is not None:
         representative = global_diam
@@ -518,7 +549,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                     }
                     for fbase, lc in file_label_counts.items()
                 }
-                save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR)
+                save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, data_type)
     else:
         rank = get_rank()
         world_size = get_world_size()
@@ -571,7 +602,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
         # Persist the per-image Cellpose diameter stats next to the flow representations so that
         # subsequent runs can rescale each image to ~DIAM_MEAN pixels during training.
         if compute_diam:
-            save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR)
+            save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, data_type)
 
 def unique_labels_fast(a: np.ndarray):
     """
