@@ -648,11 +648,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for entry in dst.get(ch, {}):
                     eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
                     suffix += f".{entry}-{eval}"
-            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+            # Derive the base directory from GT_PATH/PATH (the same source update_dependencies uses)
+            # instead of INSTANCE_CHANNELS_MASK_DIR, which may already carry the suffix from a previous
+            # check_configuration call. This keeps the appending idempotent when check_configuration
+            # runs more than once on the same cfg (e.g. after loading a checkpoint or a BMZ model).
+            train_base = cfg.DATA.TRAIN.PATH if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TRAIN.GT_PATH
+            val_base = cfg.DATA.VAL.PATH if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.VAL.GT_PATH
+            test_base = cfg.DATA.TEST.PATH if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TEST.GT_PATH
+            train_channel_mask_dir = train_base + suffix
             opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
-            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+            val_channel_mask_dir = val_base + suffix
             opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
-            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+            test_channel_mask_dir = test_base + suffix
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
             replace_channels = False
@@ -733,11 +740,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
                         suffix += f".{entry}-{eval}"
 
-            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+            # Derive the base directory from GT_PATH/PATH (the same source update_dependencies uses)
+            # instead of INSTANCE_CHANNELS_MASK_DIR, which may already carry the suffix from a previous
+            # check_configuration call. This keeps the appending idempotent when check_configuration
+            # runs more than once on the same cfg (e.g. after loading a checkpoint or a BMZ model).
+            train_base = cfg.DATA.TRAIN.PATH if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TRAIN.GT_PATH
+            val_base = cfg.DATA.VAL.PATH if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.VAL.GT_PATH
+            test_base = cfg.DATA.TEST.PATH if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TEST.GT_PATH
+            train_channel_mask_dir = train_base + suffix
             opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
-            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+            val_channel_mask_dir = val_base + suffix
             opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
-            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+            test_channel_mask_dir = test_base + suffix
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
         effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
