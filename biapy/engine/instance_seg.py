@@ -53,6 +53,7 @@ from biapy.engine.metrics import (
 )
 import zarr
 from biapy.engine.base_workflow import Base_Workflow
+from biapy.engine.workflow_utils.cellpose import CellposeTestPhaseMixin
 from biapy.utils.misc import (
     is_main_process,
     is_dist_avail_and_initialized,
@@ -76,7 +77,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.data.dataset import PatchCoords
 
 
-class Instance_Segmentation_Workflow(Base_Workflow):
+class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
     """
     Instance segmentation workflow where the goal is to assign an unique id, i.e. integer, to each object of the input image.
     
@@ -704,6 +705,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         Create instance label map from raw prediction channels (no I/O, no metrics).
 
+        For Cellpose flow channels, first undoes the test-time input rescale (Cellpose
+        ``resample=True``): resizes the flows back to the native resolution and runs the dynamics
+        there, so the pipeline matches Cellpose exactly.
+
         Parameters
         ----------
         pred : NDArray
@@ -719,14 +724,30 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         assert pred.ndim == 4, f"Expected 4D pred, got shape {pred.shape}"
 
-        # Undo the Cellpose test-time input rescale (if any): resize the prediction back to the native
-        # resolution so all downstream processing (including flows_to_instances and its own diameter
-        # rescale) runs at the original scale exactly as without the test rescale. Flow channels are
-        # unit directions, so a linear resize is correct.
-        orig_shape = None
+        # Undo the Cellpose test-time input rescale (if any), following Cellpose's default
+        # ``resample=True`` path exactly. The input image was rescaled by ``rescale = diam_mean/diameter``
+        # before the network, so the predicted flows + foreground are at the rescaled resolution. Here
+        # we resize them BACK to the native resolution (one bilinear resize — flows are unit directions,
+        # so linear interpolation is correct). The dynamics then run at the native resolution with
+        # ``niter = (1/rescale)*200``, driven by ``diameter`` passed to flows_to_instances below with
+        # ``already_rescaled=True`` (so flows_to_instances does NOT rescale the flow field a second
+        # time). When the rescaled image had to be padded up to the patch size, first crop that padding
+        # away (the valid region is at the bottom-right).
+        cellpose_rescaled = False       # were the flows produced from a rescaled input?
+        cellpose_diameter = None        # native per-image diameter (px), for the niter rule
+        orig_shape, resized_shape = None, None
         if isinstance(getattr(self, "current_sample", None), dict):
             orig_shape = self.current_sample.get("cellpose_orig_shape")
+            resized_shape = self.current_sample.get("cellpose_resized_shape")
+            cellpose_diameter = self.current_sample.get("cellpose_diameter")
         if orig_shape is not None:
+            cellpose_rescaled = True
+            # pred is (Z, Y, X, C); Y and X are axes 1 and 2 in both 2D (Z=1) and 3D.
+            if resized_shape is not None:
+                ry = int(resized_shape[0] if self.dims == 2 else resized_shape[1])
+                rx = int(resized_shape[1] if self.dims == 2 else resized_shape[2])
+                if pred.shape[1] > ry or pred.shape[2] > rx:
+                    pred = pred[:, -ry:, -rx:, :]
             if self.dims == 2:
                 target = (pred.shape[0], int(orig_shape[0]), int(orig_shape[1]), pred.shape[-1])
             else:
@@ -763,6 +784,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             channels = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             fg_channel = next((ch for ch in channels if ch in ("F", "M", "B")), "")
             _pred_in = pred if self.dims == 3 else pred[0]
+            # Cellpose resample=True: when the test input was rescaled, the flows have just been resized
+            # back to native above, so we run the dynamics at native resolution. Pass the native
+            # per-image diameter so flows_to_instances sets niter = (1/rescale)*200, and set
+            # already_rescaled=True so it does NOT rescale the flow field again.
+            diam_mean = self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN
+            diameter = (
+                float(cellpose_diameter) if (cellpose_rescaled and cellpose_diameter)
+                else self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
+            )
             pred_labels = flows_to_instances(
                 pred=_pred_in,
                 channels=channels,
@@ -773,8 +803,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
                 max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
                 resolution=list(self.resolution[-self.dims:]),
-                diameter=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER,
-                diam_mean=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN,
+                diameter=diameter,
+                diam_mean=diam_mean,
+                already_rescaled=cellpose_rescaled,
             )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)
@@ -1653,6 +1684,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """Process a sample in the inference phase."""
         if self.cfg.MODEL.SOURCE != "torchvision":
             self.instances_already_created = False
+            # Cellpose test-time input rescale (resample=True strategy): resolve the per-image diameter
+            # (configured, first-pass estimate, or training median) and rescale the input before
+            # inference. The flows are resized back to native in _create_instance_labels.
+            if self._cellpose_test_rescale_active():
+                self._apply_cellpose_test_rescale()
             super().process_test_sample()
         else:
             # Skip processing image

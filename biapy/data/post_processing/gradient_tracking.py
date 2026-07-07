@@ -214,9 +214,9 @@ def _cluster_to_instances(
        (2D) or 3×3×3 (3D) neighbourhood growth, keeping only bins where
        **h > 2** (Cellpose hardcoded expansion gate).
     6. Build the histogram label map M; look up each fg pixel's label via its
-       truncated integer convergence position.
-    7. Split any disconnected region sharing the same label into separate
-       instances.
+       truncated integer convergence position, then relabel sequentially. One
+       peak = one instance (matching Cellpose's ``get_masks``, which does not
+       split pixels sharing a peak by connectivity).
 
     Parameters
     ----------
@@ -307,20 +307,9 @@ def _cluster_to_instances(
     pk_labels = np.zeros(shape, dtype=np.int32)
     pk_labels[tuple(fg_coords[:, d] for d in range(ndim))] = M[bin_idx]
 
-    # 7. Split disconnected regions sharing the same label
-    final_labels = np.zeros(shape, dtype=np.int32)
-    current_id = 0
-    for pk in range(1, n_seeds + 1):
-        mask = pk_labels == pk
-        if not mask.any():
-            continue
-        cc = cc_label(mask, connectivity=ndim)
-        n = int(cc.max())
-        if n > 0:
-            final_labels[mask] = cc[mask] + current_id
-            current_id += n
-
-    final_labels, _, _ = relabel_sequential(final_labels)
+    # 7. Relabel sequentially so instance ids are contiguous. One peak = one instance; we deliberately
+    #    do NOT split pixels sharing a peak by connectivity, matching Cellpose's get_masks.
+    final_labels, _, _ = relabel_sequential(pk_labels)
     return final_labels.astype(np.int32)
 
 
@@ -696,6 +685,7 @@ def flows_to_instances(
     resolution: List[float] = [1.0, 1.0, 1.0],
     diameter: float = 30.0,
     diam_mean: float = 30.0,
+    already_rescaled: bool = False,
 ) -> NDArray:
     """
     Convert predicted Cellpose / Omnipose flow fields into an instance label map.
@@ -783,6 +773,12 @@ def flows_to_instances(
     diam_mean : float, optional
         *Cellpose only.*  Diameter the flow model was trained at (Cellpose's
         ``diam_mean``: 30 for cyto, 17 for nuclei).  Default 30.0.
+    already_rescaled : bool, optional
+        *Cellpose only.*  Set ``True`` when the input was rescaled by ``diam_mean/diameter``
+        before the network and the flows were resized back to native (Cellpose ``resample=True``):
+        the flow field is then NOT rescaled again here, and ``niter`` is set to ``(1/rescale)*200``.
+        When ``False`` (e.g. by-chunks), the flow field is rescaled here (``resample=False``) with
+        ``niter=200`` and the labels resized back.  Default ``False``.
 
     Returns
     -------
@@ -839,18 +835,22 @@ def flows_to_instances(
                   f"falling back to diam_mean={diam_mean}")
 
     # ── 2c. Cellpose diameter rescaling ───────────────────────────────────
-    # Cellpose resizes the image so every cell becomes ~diam_mean (30 px) before
-    # running the dynamics, then resizes the resulting label map back
-    # (models.py: resize by rescale, get_masks, resize labels to original).
-    # This is what makes a large cell's flow field converge to a single sharp
-    # histogram peak instead of fragmenting into several. We reproduce it by
-    # resizing the flow fields + foreground by rescale = diam_mean / diameter,
-    # doing all the work at that scale, and resizing the final labels back.
-    # Applied for Cellpose only (Omnipose clusters convergence positions directly
-    # and does not rescale).  Note: the rescale is applied uniformly to every
-    # spatial axis; strongly anisotropic 3D data is only approximately handled.
+    # Cellpose runs the dynamics so that every cell is ~diam_mean (30 px). There are two equivalent
+    # ways to get there, both used by Cellpose:
+    #   * resample=True (Cellpose default): the *input* is rescaled by diam_mean/diameter before the
+    #     network, the flows are resized back to the original resolution, and the dynamics run at that
+    #     original resolution with niter = (1/rescale)*200. BiaPy's test path does this, resizing the
+    #     input in the workflow and the flows back to native in _create_instance_labels; it then calls
+    #     us with ``already_rescaled=True`` so we do NOT rescale again (that would resample the flow
+    #     field twice and over-segment cells).
+    #   * resample=False: rescale the flow field here by rescale = diam_mean/diameter, run the dynamics
+    #     at that (smaller) resolution with niter = 200, and resize the label map back. Used when the
+    #     input was NOT pre-rescaled (e.g. the by-chunks path), i.e. ``already_rescaled=False``.
+    # Applied for Cellpose only (Omnipose clusters convergence positions directly and does not rescale).
+    # Note: the rescale is applied uniformly to every spatial axis; strongly anisotropic 3D data is
+    # only approximately handled.
     rescale = float(diam_mean) / float(diameter) if diameter > 0 else 1.0
-    do_rescale = flow_type == "cellpose" and abs(rescale - 1.0) > 1e-3
+    do_rescale = flow_type == "cellpose" and not already_rescaled and abs(rescale - 1.0) > 1e-3
     if do_rescale:
         work_shape = tuple(max(1, int(round(s * rescale))) for s in spatial_shape)
         Gv = _resize_spatial(Gv, work_shape, order=1).astype(np.float32)
@@ -863,11 +863,13 @@ def flows_to_instances(
     else:
         work_shape = spatial_shape
 
-    # ── 2d. Integration step count (Cellpose: niter = (1/rescale) * 200) ───
-    # models.py: niter = 1/rescale * 200, i.e. (diameter/diam_mean) * 200.
-    # With diameter == diam_mean this is the familiar 200. Omnipose keeps 200.
+    # ── 2d. Integration step count (Cellpose: models.py niter rule) ────────
+    # Cellpose: niter0 = 200 if not resample else (1/rescale)*200. i.e. the step count depends on the
+    # DYNAMICS resolution: when we resize the flows to ~diam_mean cells (do_rescale, resample=False) we
+    # need ~200 steps; when we integrate at the native resolution where cells are ~diameter px
+    # (already_rescaled or diameter==diam_mean) we need (diameter/diam_mean)*200 = (1/rescale)*200.
     if flow_type == "cellpose":
-        n_steps = max(1, int(round((1.0 / rescale) * 200)))
+        n_steps = 200 if do_rescale else max(1, int(round((1.0 / rescale) * 200)))
     else:
         n_steps = 200
 

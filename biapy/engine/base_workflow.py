@@ -1700,6 +1700,22 @@ class Base_Workflow(metaclass=ABCMeta):
         if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
 
+        # Report the Cellpose test-time input rescale (if it was applied to this sample).
+        if "cellpose_orig_shape" in self.current_sample and is_main_process():
+            factor = self.current_sample.get("cellpose_rescale_factor", 1.0)
+            diameter = self.current_sample.get("cellpose_diameter")
+            diam_mean = self.current_sample.get("cellpose_diam_mean")
+            print(
+                "[Cellpose test rescale] diameter={} px, DIAM_MEAN={} -> factor={:.4f}; "
+                "shape {} -> {} (prediction will be resized back to the original shape).".format(
+                    "{:.2f}".format(diameter) if diameter is not None else "?",
+                    "{:.1f}".format(diam_mean) if diam_mean is not None else "?",
+                    factor,
+                    self.current_sample["cellpose_orig_shape"],
+                    self.current_sample.get("cellpose_resized_shape", "?"),
+                )
+            )
+            
         #################
         ### PER PATCH ###
         #################

@@ -5,7 +5,6 @@ import numpy as np
 from typing import List, Tuple, Dict, Any, Callable, Optional
 from numpy.typing import NDArray
 
-from skimage.transform import resize
 from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_and_reflect
 from biapy.data.data_3D_manipulation import looks_like_hdf5
 from biapy.data.dataset import BiaPyDataset, DataSample
@@ -82,16 +81,6 @@ class test_pair_data_generator(Dataset):
     ignore_index : int, optional
         Value to ignore in the loss/metrics. In this generator is not used but added for compatibility
         with ``PairBaseDataGenerator``.
-
-    cellpose_diameter : float, optional
-        Cellpose cell diameter (pixels) used to rescale each test image in-plane by
-        ``cellpose_diam_mean / cellpose_diameter`` before the network, so it sees ~``cellpose_diam_mean``
-        pixel cells as during training. The prediction is resized back to native resolution downstream.
-        ``None`` (default) or a non-positive value disables the test-time rescale.
-
-    cellpose_diam_mean : float, optional
-        Cellpose reference diameter (pixels), i.e. ``DIAM_MEAN``. Used together with
-        ``cellpose_diameter`` to compute the rescale factor. ``0.0`` (default) disables the rescale.
     """
 
     def __init__(
@@ -114,21 +103,9 @@ class test_pair_data_generator(Dataset):
         reflect_to_complete_shape: bool = True,
         n_classes: int = 1,
         ignore_index: Optional[int]=None,
-        cellpose_diameter: Optional[float] = None,
-        cellpose_diam_mean: float = 0.0,
     ):
         if preprocess_data and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' must be set when 'preprocess_data' is provided")
-
-        # Cellpose test-time input rescale: each image is resized in-plane by DIAM_MEAN / diameter so
-        # the network sees ~DIAM_MEAN cells (as at training); the prediction is resized back to native
-        # afterwards by the workflow. A factor of 1 (or a missing diameter) disables it.
-        self.cellpose_diameter = cellpose_diameter
-        self.cellpose_diam_mean = float(cellpose_diam_mean)
-        self.cellpose_test_factor = 1.0
-        if cellpose_diameter is not None and cellpose_diameter > 0 and self.cellpose_diam_mean > 0:
-            self.cellpose_test_factor = self.cellpose_diam_mean / float(cellpose_diameter)
-        self.do_cellpose_test_rescale = abs(self.cellpose_test_factor - 1.0) > 1e-3
 
         self.X = X
         self.Y = Y
@@ -296,37 +273,6 @@ class test_pair_data_generator(Dataset):
                             is_2d=(self.ndim == 2),
                             is_y_mask=True,
                         )[0]
-
-                # Cellpose test-time input rescale: resize the whole image in-plane (Y, X) so cells
-                # become ~DIAM_MEAN pixels, matching what the network saw during training. The native
-                # (pre-rescale) spatial shape is recorded so the workflow can resize the prediction
-                # back afterwards (leaving the downstream flow tracking unchanged). Done before the
-                # reflect/tiling so those operate on the rescaled image. The GT mask (if available) is
-                # rescaled by the same in-plane factor so X and Y stay shape-consistent through the
-                # reflect/tiling; the mask uses nearest-neighbour to preserve its (integer) values.
-                if self.do_cellpose_test_rescale:
-                    sample_extra_info["cellpose_orig_shape"] = img.shape
-                    sample_extra_info["cellpose_rescale_factor"] = self.cellpose_test_factor
-                    f = self.cellpose_test_factor
-
-                    def _cellpose_resize(arr, order):
-                        if self.ndim == 3:
-                            spatial = (arr.shape[0], max(1, int(round(arr.shape[1] * f))), max(1, int(round(arr.shape[2] * f))))
-                        else:
-                            spatial = (max(1, int(round(arr.shape[0] * f))), max(1, int(round(arr.shape[1] * f))))
-                        return resize(
-                            arr, spatial + (arr.shape[-1],), order=order, mode="reflect", clip=True,
-                            preserve_range=True, anti_aliasing=(order != 0 and f < 1.0),
-                        ).astype(arr.dtype, copy=False)
-
-                    img = _cellpose_resize(img, 1)
-                    if self.provide_Y and mask is not None:
-                        mask = _cellpose_resize(np.asarray(mask), 0)
-
-                    # Record what was done for logging in the workflow.
-                    sample_extra_info["cellpose_resized_shape"] = img.shape
-                    sample_extra_info["cellpose_diameter"] = self.cellpose_diameter
-                    sample_extra_info["cellpose_diam_mean"] = self.cellpose_diam_mean
 
                 # Reflect data to complete the needed shape
                 if self.reflect_to_complete_shape:

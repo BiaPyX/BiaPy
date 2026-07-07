@@ -377,8 +377,11 @@ class Config:
         # / metrics.flow_error, and it is what prunes the fragments left when a large cell is over-
         # segmented (each fragment's flow points to its own centre, not the true cell centre).
         # 0 = perfect match; instances with error > this threshold are removed. Set to 0 to disable
-        # the check. Matches Cellpose default (flow_threshold=0.4). Ignored when TYPE is 'omnipose'.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.0
+        # the check. Default 0.4, matching Cellpose. NOTE: this only discriminates fragments from real
+        # cells when correct cells score a low error, which assumes a well flow-calibrated network; on
+        # models whose flows are weak/noisy for small cells, real small cells can score as high as the
+        # fragments and be wrongly removed. Ignored when TYPE is 'omnipose'.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.4
         # Number of Euler integration steps used to trace each foreground pixel through the flow
         # field until it converges to an attractor. NOTE: for TYPE 'cellpose' this value is
         # overridden internally by Cellpose's formula niter = (DIAMETER / DIAM_MEAN) * 200, which
@@ -430,6 +433,17 @@ class Config:
         # Set DIAMETER == DIAM_MEAN and SCALE_JITTER == 0.0 to disable the training rescale entirely.
         # Must be in [0, 1). Default: 0.0.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER = 0.0
+        # Cellpose only. When DIAMETER == 0, estimate the cell diameter of each test image with a
+        # cheap first inference pass (Cellpose-style double inference) and rescale the input for the
+        # real pass, instead of using the single training-set median. The first pass runs the network
+        # on one central patch of the image (rescaled toward the training scale as a prior), measures
+        # the median object size of the predicted foreground (utils._estimate_cell_radius) and derives
+        # the per-image diameter; the input is then rescaled by DIAM_MEAN / diameter, the network is
+        # run for real, and the prediction is resized back to native. Adds ~one extra patch prediction
+        # per image (not a full second pass). Ignored when DIAMETER > 0 (that value is used directly),
+        # for the by-chunks/Zarr path, and for 'torchvision' models. When False (or on any failure)
+        # BiaPy falls back to the training-set median diameter. Default: True.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.TEST_DOUBLE_INFERENCE = True
         # Omnipose only. DBSCAN eps radius (pixels): convergence positions within this distance
         # are linked into the same cluster (= the same cell's medial-axis skeleton). Must be
         # large enough to stitch adjacent skeleton points of the same cell together, but small

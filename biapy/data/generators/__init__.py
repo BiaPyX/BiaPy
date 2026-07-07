@@ -29,7 +29,6 @@ from biapy.data.generators.test_single_data_generator import test_single_data_ge
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.generators.chunked_workflow_process_generator import chunked_workflow_process_generator
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.pre_processing import load_cellpose_diameter_stats
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
@@ -525,29 +524,6 @@ def create_test_generator(
         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
         data_shape=cfg.DATA.PATCH_SIZE,
     )
-
-    # Cellpose test-time input rescale: rescale each test image to ~DIAM_MEAN pixels so the network
-    # sees the same cell scale it was trained at. The diameter is DIAMETER when > 0; otherwise (test
-    # GT is normally unavailable) it falls back to the TRAINING diameter — the median of the per-image
-    # diameters recorded when the training channels were created. If that cannot be loaded (no JSON,
-    # or the training data changed) the input is left at native resolution: the network runs natively
-    # and the DIAMETER<=0 post-processing path (_estimate_cell_radius in flows_to_instances) still
-    # refines niter and the flow rescale from the predicted foreground. No second inference pass.
-    if (
-        cfg.PROBLEM.TYPE == "INSTANCE_SEG"
-        and any(ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz"))
-    ):
-        diam_cfg = cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
-        test_diameter = float(diam_cfg) if (diam_cfg and diam_cfg > 0) else None
-        if test_diameter is None:
-            stats = load_cellpose_diameter_stats(cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)
-            if stats:
-                test_diameter = float(np.median(list(stats.values())))
-                print("Cellpose test rescale: using training-set median diameter "
-                      f"{test_diameter:.2f} px (DIAMETER=0, no test GT needed).")
-        if test_diameter is not None and test_diameter > 0:
-            dic["cellpose_diameter"] = test_diameter
-            dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
         cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
