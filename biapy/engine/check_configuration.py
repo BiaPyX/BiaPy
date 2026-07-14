@@ -3111,6 +3111,26 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         for prob_key in [k for k in cfg.AUGMENTOR.keys() if k.endswith("_PROB")]:
             if not check_value(cfg.AUGMENTOR[prob_key]):
                 raise ValueError(f"AUGMENTOR.{prob_key} not in [0, 1] range")
+
+        # Cellpose/Omnipose flow representation ('Gv'/'Gh'/'Gz') is incompatible with arbitrary-angle
+        # rotation: 'AUGMENTOR.RANDOM_ROT' resamples the flow field at a free angle, which distorts the
+        # per-cell flow geometry and destabilizes training. Force it off and fall back to 'AUGMENTOR.ROT90'
+        # (90/180/270-degree rotations), which permute the flow axes cleanly and keep the geometry intact.
+        using_flow_representation = cfg.PROBLEM.TYPE == "INSTANCE_SEG" and any(
+            ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")
+        )
+        if using_flow_representation and cfg.AUGMENTOR.RANDOM_ROT:
+            print(
+                "WARNING: 'AUGMENTOR.RANDOM_ROT' is not compatible with the Cellpose/Omnipose flow "
+                "representation ('Gv'/'Gh'/'Gz' channels): arbitrary-angle rotation resamples the flow "
+                "field and breaks its per-cell geometry, which destabilizes training. Disabling "
+                "'AUGMENTOR.RANDOM_ROT' and enabling 'AUGMENTOR.ROT90' (90/180/270-degree rotations, which "
+                "preserve the flow geometry) instead."
+            )
+            opts.extend(["AUGMENTOR.RANDOM_ROT", False])
+            if not cfg.AUGMENTOR.ROT90:
+                opts.extend(["AUGMENTOR.ROT90", True])
+
         if cfg.AUGMENTOR.RANDOM_ROT:
             if not check_value(cfg.AUGMENTOR.RANDOM_ROT_RANGE, (-360, 360)):
                 raise ValueError("AUGMENTOR.RANDOM_ROT_RANGE values needs to be between [-360,360]")
