@@ -183,10 +183,12 @@ class BiaPy:
         self.log_timestamp = now.strftime("%Y_%m_%d_%H_%M_%S")
         self._stdout_log_file = None
 
-        # Store the config with the same timestamp used for the log file so each run
-        # has a one-to-one log/config pairing to cross-check.
+        # Store the config with the same run_id and timestamp used for the log file so
+        # each run has a one-to-one log/config pairing to cross-check.
         cfg_root, cfg_ext = os.path.splitext(self.cfg_filename)
-        self.cfg_file = os.path.join(self.cfg_bck_dir, f"{cfg_root}_{self.log_timestamp}{cfg_ext}")
+        self.cfg_file = os.path.join(
+            self.cfg_bck_dir, f"{cfg_root}_{self.args.run_id}_{self.log_timestamp}{cfg_ext}"
+        )
 
         # Buffer everything from this point into memory so it can be written to the
         # log file later (once we know which process is rank 0).
@@ -253,7 +255,7 @@ class BiaPy:
             os.makedirs(logs_dir, exist_ok=True)
             stdout_log_path = os.path.join(
                 logs_dir,
-                f"{self.job_identifier}_log_{self.log_timestamp}.txt",
+                f"{self.job_identifier}_log_{self.args.run_id}_{self.log_timestamp}.txt",
             )
             self._stdout_log_file = open(stdout_log_path, "w", encoding="utf-8", buffering=1)
             self._stdout_log_file.write(_early_buf.getvalue())
