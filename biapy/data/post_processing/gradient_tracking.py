@@ -474,7 +474,6 @@ def _flow_error(
     labels: NDArray,
     Gz: Optional[NDArray] = None,
     resolution: NDArray = None,
-    exempt_border_cells: bool = True,
 ) -> dict:
     """
     Per-instance flow error, matching Cellpose ``metrics.flow_error``.
@@ -504,11 +503,6 @@ def _flow_error(
         Network z flow component (3D only).
     resolution : (ndim,) float array, optional
         Physical voxel size per axis.  Defaults to isotropic ``1``.
-    exempt_border_cells : bool, optional
-        When ``True`` (default), instances whose mask touches the image border are assigned error
-        ``0`` (never removed): their flow legitimately points off-frame and cannot be reproduced by
-        an in-frame regeneration.  Set ``False`` to score them like any other instance (Cellpose's
-        behaviour).
 
     Returns
     -------
@@ -526,13 +520,6 @@ def _flow_error(
     for i, slc in enumerate(slices):
         lab = i + 1
         if slc is None:
-            continue
-
-        # Border-touching instances are exempt: a cell cut by the field of view has flows pointing to
-        # an off-frame centre that no in-frame regeneration can reproduce, so it would always score a
-        # large error. Diverges from Cellpose's remove_bad_flow_masks, which has no such guard.
-        if exempt_border_cells and any(slc[d].start == 0 or slc[d].stop == labels.shape[d] for d in range(ndim)):
-            errors[lab] = 0.0
             continue
 
         sub = labels[slc] == lab
@@ -700,7 +687,6 @@ def flows_to_instances(
     diameter: float = 30.0,
     diam_mean: float = 30.0,
     already_rescaled: bool = False,
-    exempt_border_cells: bool = True,
 ) -> NDArray:
     """
     Convert predicted Cellpose / Omnipose flow fields into an instance label map.
@@ -745,9 +731,6 @@ def flows_to_instances(
     already_rescaled : bool, optional
         Cellpose only. ``True`` when the input was rescaled before the network and the flows resized
         back, so the flow field is not rescaled again here. Default ``False``.
-    exempt_border_cells : bool, optional
-        Cellpose only. When ``True``, instances touching the image border are never removed by the
-        flow-error check (their flows point to an off-frame centre). Default ``True``.
 
     Returns
     -------
@@ -864,7 +847,7 @@ def flows_to_instances(
     # (over-segmentation fragments). Skipped for Omnipose.
     if flow_type == "cellpose" and flow_threshold > 0.0 and int(labels.max()) > 0:
         print(f"  Flow error check (threshold={flow_threshold}) ...")
-        errors = _flow_error(Gv, Gh, labels, Gz, resolution=res, exempt_border_cells=exempt_border_cells)
+        errors = _flow_error(Gv, Gh, labels, Gz, resolution=res)
         n_before = int(labels.max())
         labels = _remove_bad_flow_masks(labels, errors, flow_threshold)
         n_removed = n_before - int(labels.max())

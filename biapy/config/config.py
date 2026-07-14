@@ -375,10 +375,6 @@ class Config:
         # diffusion and compared (mean squared error) against the network flow, removing the fragments
         # left by over-segmentation. 0 disables the check. Ignored when TYPE is 'omnipose'. Default 0.4.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD = 0.4
-        # When True, instances touching the image border are exempt from the FLOW_THRESHOLD check:
-        # their flows point to an off-frame centre that no in-frame regeneration can reproduce. Ignored
-        # when TYPE is 'omnipose' or FLOW_THRESHOLD <= 0. Default: True.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.EXEMPT_BORDER_CELLS = True
         # Number of Euler integration steps. For TYPE 'cellpose' this is overridden internally by
         # niter = (DIAMETER / DIAM_MEAN) * 200; kept for the 'omnipose' path.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS = 200
