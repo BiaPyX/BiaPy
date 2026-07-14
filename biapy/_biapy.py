@@ -178,11 +178,15 @@ class BiaPy:
         os.makedirs(self.cfg_bck_dir, exist_ok=True)
         head, tail = ntpath.split(self.args.config)
         self.cfg_filename = tail if tail else ntpath.basename(head)
-        self.cfg_file = os.path.join(self.cfg_bck_dir, self.cfg_filename)
 
         now = datetime.datetime.now()
         self.log_timestamp = now.strftime("%Y_%m_%d_%H_%M_%S")
         self._stdout_log_file = None
+
+        # Store the config with the same timestamp used for the log file so each run
+        # has a one-to-one log/config pairing to cross-check.
+        cfg_root, cfg_ext = os.path.splitext(self.cfg_filename)
+        self.cfg_file = os.path.join(self.cfg_bck_dir, f"{cfg_root}_{self.log_timestamp}{cfg_ext}")
 
         # Buffer everything from this point into memory so it can be written to the
         # log file later (once we know which process is rank 0).
