@@ -54,7 +54,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         mask: NDArray,
         e_im: Optional[NDArray] = None,
         e_mask: Optional[NDArray] = None,
-        rescale_factor: float = 1.0,
+        diam_factor: float = 1.0,
     ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a probability.
@@ -73,9 +73,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         e_mask : 4D Numpy array
             Extra mask to help transforming ``mask``. E.g. ``(z, y, x, channels)``.
 
-        rescale_factor : float, optional
-            Per-sample Cellpose in-plane rescale factor (``DIAM_MEAN / diameter``), forwarded to the
-            base :meth:`PairBaseDataGenerator.apply_transform`. ``1.0`` (default) disables it.
+        diam_factor : float, optional
+            Per-sample Cellpose in-plane diameter normalization factor (``DIAM_MEAN / diameter``),
+            forwarded to the base :meth:`PairBaseDataGenerator.apply_transform`. ``1.0`` (default)
+            disables it.
 
         Returns
         -------
@@ -86,7 +87,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             Transformed image mask. E.g.``(z, y, x, channels)``.
         """
         # Apply flips in z
-        if self.zflip and random.uniform(0, 1) < self.da_prob:
+        if self.zflip and random.uniform(0, 1) < self.aug_prob.get("zflip", 0.5):
             image = image[::-1, ...]
             mask  = mask[::-1, ...]
             if e_im is not None:
@@ -101,7 +102,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                 if e_mask is not None and gz_idx < e_mask.shape[-1]:
                     e_mask[..., gz_idx] = -e_mask[..., gz_idx]
 
-        return super().apply_transform(image, mask, e_im, e_mask, rescale_factor=rescale_factor)
+        return super().apply_transform(image, mask, e_im, e_mask, diam_factor=diam_factor)
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
         """

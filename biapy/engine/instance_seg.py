@@ -18,7 +18,6 @@ from skimage.morphology import ball, dilation
 import torch.distributed as dist
 from typing import Dict, Optional, List, Tuple
 from numpy.typing import NDArray
-from scipy.spatial import distance_matrix
 from skimage.filters import threshold_otsu
 
 
@@ -122,6 +121,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
         self.original_train_input_mask_axes_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
+
+        # Map each flow role to its output channel index so flip TTA can sign-correct the flow vectors
+        # (Gv on Y-flip, Gh on X-flip, Gz on Z-flip). Empty for non-flow workflows (keeps D4 TTA).
+        self.cellpose_tta_flow_channels = {}
+        _dc = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        for _role in ("Gv", "Gh", "Gz"):
+            if _role in _dc:
+                self.cellpose_tta_flow_channels[_role] = _dc.index(_role)
 
         # Merging the image
         self.all_matching_stats_merge_patches = []
@@ -724,39 +731,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         """
         assert pred.ndim == 4, f"Expected 4D pred, got shape {pred.shape}"
 
-        # Undo the Cellpose test-time input rescale (if any), following Cellpose's default
-        # ``resample=True`` path exactly. The input image was rescaled by ``rescale = diam_mean/diameter``
-        # before the network, so the predicted flows + foreground are at the rescaled resolution. Here
-        # we resize them BACK to the native resolution (one bilinear resize — flows are unit directions,
-        # so linear interpolation is correct). The dynamics then run at the native resolution with
-        # ``niter = (1/rescale)*200``, driven by ``diameter`` passed to flows_to_instances below with
-        # ``already_rescaled=True`` (so flows_to_instances does NOT rescale the flow field a second
-        # time). When the rescaled image had to be padded up to the patch size, first crop that padding
-        # away (the valid region is at the bottom-right).
+        # If the test input was rescaled, the flows were already resized back to native in
+        # process_test_sample, so pred is native here; we only need the fact of the rescale and the
+        # native per-image diameter to set the niter rule below.
         cellpose_rescaled = False       # were the flows produced from a rescaled input?
         cellpose_diameter = None        # native per-image diameter (px), for the niter rule
-        orig_shape, resized_shape = None, None
         if isinstance(getattr(self, "current_sample", None), dict):
-            orig_shape = self.current_sample.get("cellpose_orig_shape")
-            resized_shape = self.current_sample.get("cellpose_resized_shape")
             cellpose_diameter = self.current_sample.get("cellpose_diameter")
-        if orig_shape is not None:
-            cellpose_rescaled = True
-            # pred is (Z, Y, X, C); Y and X are axes 1 and 2 in both 2D (Z=1) and 3D.
-            if resized_shape is not None:
-                ry = int(resized_shape[0] if self.dims == 2 else resized_shape[1])
-                rx = int(resized_shape[1] if self.dims == 2 else resized_shape[2])
-                if pred.shape[1] > ry or pred.shape[2] > rx:
-                    pred = pred[:, -ry:, -rx:, :]
-            if self.dims == 2:
-                target = (pred.shape[0], int(orig_shape[0]), int(orig_shape[1]), pred.shape[-1])
-            else:
-                target = (int(orig_shape[0]), int(orig_shape[1]), int(orig_shape[2]), pred.shape[-1])
-            if target[:-1] != pred.shape[:-1]:
-                pred = resize(
-                    pred, target, order=1, mode="reflect", clip=True,
-                    preserve_range=True, anti_aliasing=False,
-                ).astype(pred.dtype, copy=False)
+            cellpose_rescaled = self.current_sample.get("cellpose_orig_shape") is not None
 
         if self.separated_class_channel:
             pred = pred[..., :-1]
@@ -784,10 +766,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             channels = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             fg_channel = next((ch for ch in channels if ch in ("F", "M", "B")), "")
             _pred_in = pred if self.dims == 3 else pred[0]
-            # Cellpose resample=True: when the test input was rescaled, the flows have just been resized
-            # back to native above, so we run the dynamics at native resolution. Pass the native
-            # per-image diameter so flows_to_instances sets niter = (1/rescale)*200, and set
-            # already_rescaled=True so it does NOT rescale the flow field again.
+            # Rescaled inputs already have flows resized back to native, so pass the native diameter
+            # (sets niter) with already_rescaled=True to avoid rescaling the flow field again.
             diam_mean = self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN
             diameter = (
                 float(cellpose_diameter) if (cellpose_rescaled and cellpose_diameter)
@@ -800,6 +780,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 fg_channel=fg_channel,
                 fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH,
                 flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD,
+                exempt_border_cells=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.EXEMPT_BORDER_CELLS,
                 n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
                 max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
                 resolution=list(self.resolution[-self.dims:]),
@@ -1684,11 +1665,28 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         """Process a sample in the inference phase."""
         if self.cfg.MODEL.SOURCE != "torchvision":
             self.instances_already_created = False
-            # Cellpose test-time input rescale (resample=True strategy): resolve the per-image diameter
-            # (configured, first-pass estimate, or training median) and rescale the input before
-            # inference. The flows are resized back to native in _create_instance_labels.
+            # Resolve the per-image diameter (configured, first-pass estimate, or training median) and
+            # rescale the input before inference; the flows are resized back to native in
+            # process_test_sample.
             if self._cellpose_test_rescale_active():
                 self._apply_cellpose_test_rescale()
+
+            # Report the Cellpose test-time input rescale (if it was applied to this sample).
+            if "cellpose_orig_shape" in self.current_sample and is_main_process():
+                factor = self.current_sample.get("cellpose_rescale_factor", 1.0)
+                diameter = self.current_sample.get("cellpose_diameter")
+                diam_mean = self.current_sample.get("cellpose_diam_mean")
+                print(
+                    "[Cellpose test rescale] diameter={} px, DIAM_MEAN={} -> factor={:.4f}; "
+                    "shape {} -> {} (prediction will be resized back to the original shape).".format(
+                        "{:.2f}".format(diameter) if diameter is not None else "?",
+                        "{:.1f}".format(diam_mean) if diam_mean is not None else "?",
+                        factor,
+                        self.current_sample["cellpose_orig_shape"],
+                        self.current_sample.get("cellpose_resized_shape", "?"),
+                    )
+                )
+                
             super().process_test_sample()
         else:
             # Skip processing image
@@ -2043,28 +2041,11 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     f"{len(my_boundaries)}/{len(all_boundaries)} boundary faces . . ."
                 )
 
-                # Strip-based IoU boundary matching.
-                #
-                # For each boundary between adjacent chunks A and B we read the last
-                # H voxels of A and the first H voxels of B along the split axis.
-                # Using H > 1 gives a more reliable IoU estimate than a single face,
-                # especially for cells that taper near the boundary.
-                #
-                # We use IoU = cnt / (size_a + size_b - cnt) rather than
-                # cnt / min(size_a, size_b).  The min-based metric gives 1.0 whenever
-                # a small cell's face is entirely inside a large unrelated cell's face,
-                # causing a chain of spurious merges.  IoU is near 1.0 only when BOTH
-                # cells have nearly the same cross-section (true split cell) and drops
-                # to near 0 for a small cell inside a large cell's footprint.
-                # Pass C compares exactly the two voxel-thin face slices that are
-                # physically adjacent across each chunk boundary.  Multi-slice strips
-                # are wrong here: a cell of width W < strip would appear at local
-                # indices [strip-W .. strip-1] in face_a and [0 .. W-1] in face_b;
-                # the AND mask at the same local index would yield zero overlap and
-                # the cell would never be merged.  Using a single face slice from
-                # each side means both patches cover the same cross-sectional
-                # positions (they differ only in the boundary axis by one voxel) so
-                # the comparison is always well-defined.
+                # Strip-based IoU boundary matching. For each boundary between adjacent chunks A and B,
+                # read the last H voxels of A and the first H voxels of B along the split axis (H > 1 is
+                # more reliable than a single face). IoU = cnt / (size_a + size_b - cnt), not
+                # cnt / min(...), which would give 1.0 for a small cell fully inside a large one and
+                # chain spurious merges. Pass C then compares the two voxel-thin adjacent faces.
                 from collections import Counter
                 local_edges: set = set()
 

@@ -22,6 +22,7 @@ from scipy.ndimage import rotate
 from typing import Tuple, Union, Optional, List, Dict
 from numpy.typing import NDArray
 from scipy.ndimage import median_filter, shift as shift_nd
+from scipy.ndimage import affine_transform as affine_transform_scipy
 from skimage.transform import AffineTransform, ProjectiveTransform, warp
 
 
@@ -34,7 +35,8 @@ def cutout(
     cval: int = 0,
     res_relation: Tuple[float, ...] = (1.0, 1.0),
     apply_to_mask: bool = False,
-) -> Tuple[NDArray, NDArray]:
+    heat: Optional[NDArray] = None,
+) -> Tuple[NDArray, NDArray, Optional[NDArray]]:
     """
     Apply augmentation using Cutout technique.
 
@@ -68,6 +70,13 @@ def cutout(
     apply_to_mask : boolean, optional
         To apply cutout to the mask.
 
+    heat : Numpy array, optional
+        Float channels (e.g. Cellpose flow channels, split out of the mask) to cut out alongside the
+        mask. When given, the same regions are blanked (set to 0, the background value) whenever
+        ``apply_to_mask`` blanks the mask, keeping the flow/no-bin targets consistent with the mask.
+        Cutout only blanks values (no pixel movement), so no flow-vector re-orientation is needed.
+        When provided, the transformed ``heat`` is also returned.
+
     Returns
     -------
     out : Numpy array
@@ -75,6 +84,9 @@ def cutout(
 
     mask : Numpy array
         Transformed mask. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
+
+    heat : Numpy array or None
+        Transformed ``heat`` (``None`` when ``heat`` was not provided).
 
     Examples
     --------
@@ -109,6 +121,7 @@ def cutout(
 
     out = img.copy()
     m_out = mask.copy()
+    h_out = heat.copy() if heat is not None else None
 
     # spatial dims
     if img.ndim == 3:            # (y, x, c)
@@ -127,6 +140,7 @@ def cutout(
     # fill values cast to dtype
     fill_img = np.array(cval, dtype=img.dtype)
     fill_mask = np.array(0, dtype=mask.dtype)
+    fill_heat = np.array(0, dtype=heat.dtype) if heat is not None else None
 
     for _ in range(it):
         frac = random.uniform(size[0], size[1])
@@ -150,18 +164,22 @@ def cutout(
             else:
                 z_slice = slice(None)
 
-            # apply to image & (optionally) mask
+            # apply to image & (optionally) mask + heat (flows/no-bin targets kept consistent)
             out[z_slice, cy:cy + y_size, cx:cx + x_size, :] = fill_img
             if apply_to_mask:
                 m_out[z_slice, cy:cy + y_size, cx:cx + x_size, :] = fill_mask
+                if h_out is not None:
+                    h_out[z_slice, cy:cy + y_size, cx:cx + x_size, :] = fill_heat
 
         else:
             # 2D: apply across all channels
             out[cy:cy + y_size, cx:cx + x_size, :] = fill_img
             if apply_to_mask:
                 m_out[cy:cy + y_size, cx:cx + x_size, :] = fill_mask
+                if h_out is not None:
+                    h_out[cy:cy + y_size, cx:cx + x_size, :] = fill_heat
 
-    return out, m_out
+    return out, m_out, h_out
 
 
 def cutblur(
@@ -521,7 +539,7 @@ def cutnoise(
         cy = 0 if H == y_size else np.random.randint(0, H - y_size + 1)
         cx = 0 if W == x_size else np.random.randint(0, W - x_size + 1)
 
-        # amplitude (keep same semantics as your original: scale * img.max())
+        # amplitude: scale * img.max()
         amp = float(random.uniform(scale[0], scale[1])) * float(img.max())
 
         if img.ndim == 3:
@@ -549,7 +567,9 @@ def misalignment(
     mask: NDArray,
     displacement: int = 16,
     rotate_ratio: float = 0.0,
-) -> Tuple[NDArray, NDArray]:
+    heat: Optional[NDArray] = None,
+    flow_heat: Optional[Dict] = None,
+) -> Tuple[NDArray, NDArray, Optional[NDArray]]:
     """
     Apply mis-alignment data augmentation.
 
@@ -572,6 +592,18 @@ def misalignment(
     rotate_ratio : float, optional
         Ratio of rotation-based mis-alignment.
 
+    heat : Numpy array, optional
+        Float channels (e.g. Cellpose flow channels, split out of the mask) to transform alongside the
+        mask, so the flow/no-bin targets stay aligned with the mis-aligned cells. The same geometric
+        operation is applied to ``heat``; for the rotation-based mis-alignment the in-plane flow
+        vectors (given by ``flow_heat``) are additionally re-oriented by the rotation angle. When
+        provided, the transformed ``heat`` is also returned.
+
+    flow_heat : dict, optional
+        Mapping of Cellpose flow components to their channel index inside ``heat`` (``{"vy": i,
+        "vx": j, "vz": k}``), used to re-orient the in-plane flow vectors on the rotation path. Only
+        needed when ``heat`` carries flow channels.
+
     Returns
     -------
     out : Numpy array
@@ -579,6 +611,9 @@ def misalignment(
 
     m_out : Numpy array
         Transformed mask. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
+
+    heat : Numpy array or None
+        Transformed ``heat`` (``None`` when ``heat`` was not provided).
 
     Examples
     --------
@@ -606,31 +641,62 @@ def misalignment(
     )
     out = np.zeros(img.shape, img.dtype)
     m_out = np.zeros(mask.shape, mask.dtype)
+    h_out = np.zeros(heat.shape, heat.dtype) if heat is not None else None
 
     def _randomrotate_matrix(height: int, displacement: int):
-        """ Generate random rotation matrix."""
+        """ Generate random rotation matrix; also returns the (signed) rotation angle in degrees."""
         x = displacement / 2.0
         y = ((height - displacement) / 2.0) * 1.42
         angle = math.asin(x / y) * 2.0 * 57.2958  # convert radians to degrees
         rand_angle = (random.uniform(0, 1) - 0.5) * 2.0 * angle
         M = cv2.getRotationMatrix2D((height / 2, height / 2), rand_angle, 1)
-        return M
+        return M, rand_angle
+
+    def _warp_heat_region(dst_region, src_region, M, W, H):
+        """Spatially warp every heat channel of a region (in place into ``dst_region``)."""
+        for c in range(src_region.shape[-1]):
+            dst_region[..., c] = cv2.warpAffine(
+                src_region[..., c].astype(np.float32), M, (W, H), 1.0,  # type: ignore
+                flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
+            )
+
+    def _reorient_region(region, angle_deg):
+        """Re-orient the in-plane flow vectors of a heat region by ``angle_deg`` (cv2 rotation sense)."""
+        if region is None or not flow_heat:
+            return
+        iy, ix = flow_heat.get("vy"), flow_heat.get("vx")
+        if iy is None or ix is None:
+            return
+        # cv2.getRotationMatrix2D rotates the image content by +angle; the vectors carried by it must
+        # rotate the same way. Sign verified against warpAffine via a round-trip (regenerate flows from
+        # the warped mask) — see the augmentation tests.
+        th = np.deg2rad(float(angle_deg))
+        c, s = np.cos(th), np.sin(th)
+        vy = region[..., iy].copy()
+        vx = region[..., ix].copy()
+        region[..., iy] = c * vy - s * vx
+        region[..., ix] = s * vy + c * vx
 
     # 2D
     if img.ndim == 3:
         oy = np.random.randint(1, img.shape[0] - 1)
         d = np.random.randint(0, displacement)
         if random.uniform(0, 1) < rotate_ratio:
-            # Apply misalignment to all channels
+            # Translation mis-alignment: shift the lower part in x. Pure translation -> flow vectors
+            # keep their direction, so heat is shifted the same way with no re-orientation.
             for i in range(img.shape[-1]):
                 out[:oy, :, i] = img[:oy, :, i]
                 out[oy:, : img.shape[1] - d, i] = img[oy:, d:, i]
             for i in range(mask.shape[-1]):
                 m_out[:oy, :, i] = mask[:oy, :, i]
                 m_out[oy:, : mask.shape[1] - d, i] = mask[oy:, d:, i]
+            if h_out is not None:
+                for i in range(heat.shape[-1]):
+                    h_out[:oy, :, i] = heat[:oy, :, i]
+                    h_out[oy:, : heat.shape[1] - d, i] = heat[oy:, d:, i]
         else:
             H, W = img.shape[:2]
-            M = _randomrotate_matrix(H, displacement)
+            M, rand_angle = _randomrotate_matrix(H, displacement)
             H = H - oy
             # Apply misalignment to all channels
             for i in range(img.shape[-1]):
@@ -653,6 +719,11 @@ def misalignment(
                     flags=cv2.INTER_NEAREST,
                     borderMode=cv2.BORDER_CONSTANT,
                 )
+            if h_out is not None:
+                # Rotation mis-alignment: warp the lower part, then re-orient its flow vectors.
+                h_out[:oy, :, :] = heat[:oy, :, :]
+                _warp_heat_region(h_out[oy:, :, :], heat[oy:, :, :], M, W, H)
+                _reorient_region(h_out[oy:, :, :], rand_angle)
     # 3D
     else:
         # img, mask: (z, y, x, c)
@@ -670,56 +741,31 @@ def misalignment(
             # start from a copy; we’ll overwrite affected slices
             out = img.copy()
             m_out = mask.copy()
+            if h_out is not None:
+                h_out = heat.copy()
 
             # rotate in the (y, x) plane
-            M = _randomrotate_matrix(H, displacement)
+            M, rand_angle = _randomrotate_matrix(H, displacement)
 
-            if mode == "slip":
-                # only transform the selected z-slice, across ALL channels
+            # z-slices affected by the rotation (slip: only z_idx; translation: z_idx onwards)
+            affected_z = [z_idx] if mode == "slip" else list(range(z_idx, Z))
+            for z in affected_z:
                 for c in range(C_img):
-                    out[z_idx, :, :, c] = 0
-                    out[z_idx, :, :, c] = cv2.warpAffine(
-                        img[z_idx, :, :, c],
-                        M,
-                        (W, H),
-                        1.0,  # type: ignore
-                        flags=cv2.INTER_LINEAR,
-                        borderMode=cv2.BORDER_CONSTANT,
+                    out[z, :, :, c] = 0
+                    out[z, :, :, c] = cv2.warpAffine(
+                        img[z, :, :, c], M, (W, H), 1.0,  # type: ignore
+                        flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
                     )
                 for c in range(C_mask):
-                    m_out[z_idx, :, :, c] = 0
-                    m_out[z_idx, :, :, c] = cv2.warpAffine(
-                        mask[z_idx, :, :, c],
-                        M,
-                        (W, H),
-                        1.0,  # type: ignore
-                        flags=cv2.INTER_NEAREST,
-                        borderMode=cv2.BORDER_CONSTANT,
+                    m_out[z, :, :, c] = 0
+                    m_out[z, :, :, c] = cv2.warpAffine(
+                        mask[z, :, :, c], M, (W, H), 1.0,  # type: ignore
+                        flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT,
                     )
-            else:
-                # transform all slices from z_idx onwards, across ALL channels
-                for z in range(z_idx, Z):
-                    for c in range(C_img):
-                        out[z, :, :, c] = 0
-                        out[z, :, :, c] = cv2.warpAffine(
-                            img[z, :, :, c],
-                            M,
-                            (W, H),
-                            1.0,  # type: ignore
-                            flags=cv2.INTER_LINEAR,
-                            borderMode=cv2.BORDER_CONSTANT,
-                        )
-                for z in range(z_idx, Z):
-                    for c in range(C_mask):
-                        m_out[z, :, :, c] = 0
-                        m_out[z, :, :, c] = cv2.warpAffine(
-                            mask[z, :, :, c],
-                            M,
-                            (W, H),
-                            1.0,  # type: ignore
-                            flags=cv2.INTER_NEAREST,
-                            borderMode=cv2.BORDER_CONSTANT,
-                        )
+                if h_out is not None:
+                    h_out[z, :, :, :] = 0
+                    _warp_heat_region(h_out[z, :, :, :], heat[z, :, :, :], M, W, H)
+                    _reorient_region(h_out[z, :, :, :], rand_angle)
         else:
             # xy translations via cropping/paste
             rng = np.random.RandomState()
@@ -728,6 +774,7 @@ def misalignment(
             x1 = rng.randint(displacement)
             y1 = rng.randint(displacement)
 
+            # Pure xy translations -> flow directions unchanged; ``heat`` follows the same crops/paste.
             if mode == "slip":
                 # copy whole volume once
                 out[:, y0:y0 + out_h, x0:x0 + out_w, :] = img[
@@ -736,6 +783,10 @@ def misalignment(
                 m_out[:, y0:y0 + out_h, x0:x0 + out_w, :] = mask[
                     :, y0:y0 + out_h, x0:x0 + out_w, :
                 ]
+                if h_out is not None:
+                    h_out[:, y0:y0 + out_h, x0:x0 + out_w, :] = heat[
+                        :, y0:y0 + out_h, x0:x0 + out_w, :
+                    ]
 
                 # then overwrite only the chosen z-slice (all channels) with a different offset
                 out[z_idx, :, :, :] = 0
@@ -746,6 +797,11 @@ def misalignment(
                 m_out[z_idx, y1:y1 + out_h, x1:x1 + out_w, :] = mask[
                     z_idx, y1:y1 + out_h, x1:x1 + out_w, :
                 ]
+                if h_out is not None:
+                    h_out[z_idx, :, :, :] = 0
+                    h_out[z_idx, y1:y1 + out_h, x1:x1 + out_w, :] = heat[
+                        z_idx, y1:y1 + out_h, x1:x1 + out_w, :
+                    ]
             else:
                 # split volume along z at z_idx (all channels)
                 out[:z_idx, y0:y0 + out_h, x0:x0 + out_w, :] = img[
@@ -760,8 +816,15 @@ def misalignment(
                 m_out[z_idx:, y1:y1 + out_h, x1:x1 + out_w, :] = mask[
                     z_idx:, y1:y1 + out_h, x1:x1 + out_w, :
                 ]
+                if h_out is not None:
+                    h_out[:z_idx, y0:y0 + out_h, x0:x0 + out_w, :] = heat[
+                        :z_idx, y0:y0 + out_h, x0:x0 + out_w, :
+                    ]
+                    h_out[z_idx:, y1:y1 + out_h, x1:x1 + out_w, :] = heat[
+                        z_idx:, y1:y1 + out_h, x1:x1 + out_w, :
+                    ]
 
-    return out, m_out
+    return out, m_out, h_out
 
 
 def brightness(
@@ -1185,7 +1248,7 @@ def GridMask(
     mask = mask[y0:y0 + h, x0:x0 + w]
 
     if not invert:
-        mask = 1.0 - mask  # keep same semantics as your original
+        mask = 1.0 - mask
 
     # Apply
     if img.ndim == 3:
@@ -1820,15 +1883,11 @@ def resize_img(img: NDArray, shape: Tuple[int, ...]) -> NDArray:
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Cellpose-style flow (direction-field) transforms
+# Flow (direction-field) transforms
 #
-# Flow channels (Gv=y, Gh=x, Gz=z) are unit direction vectors, so under a geometric
-# transform their spatial layout must be moved *and* their components re-oriented, exactly
-# as Cellpose does in ``transforms.random_rotate_and_resize``. ``flow_heat`` maps each
-# component to its channel index inside the ``heat`` array: {"vy": i, "vx": j, "vz": k}
-# (any entry may be missing/None). The signs below were verified against
-# ``scipy.ndimage.rotate(axes=(1,0)/(2,1))`` and the array-reversal used by the flip
-# augmentors.
+# Flow channels (Gv=y, Gh=x, Gz=z) are unit direction vectors: under a geometric transform their
+# spatial layout must be moved and their components re-oriented. ``flow_heat`` maps each component to
+# its channel index inside ``heat``: {"vy": i, "vx": j, "vz": k} (any entry may be None).
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 def rotate_flow_vectors(heat: Optional[NDArray], flow_heat: Optional[Dict], angle_deg: float) -> Optional[NDArray]:
     """
@@ -1965,60 +2024,135 @@ def scale_flow_vectors(
     return heat
 
 
-def flow_rescale(
-    image: NDArray,
-    mask: Optional[NDArray],
-    heat: Optional[NDArray],
-    factor: float,
-    flow_heat: Optional[Dict] = None,
-    mode: str = "reflect",
-    mask_type: str = "mask",
-) -> Tuple[NDArray, Optional[NDArray], Optional[NDArray]]:
+def geom_aug_load_shape(
+    patch_spatial: Tuple[int, ...],
+    ndim: int,
+    zoom: bool,
+    zoom_range: Tuple[float, float],
+    rand_rot: bool,
+    zoom_in_z: bool = False,
+    extra_downscale: float = 1.0,
+) -> Tuple[int, ...]:
     """
-    Rescale a patch in-plane (Y, X) by ``factor`` so cells reach a target diameter, then crop/pad
-    back to the original shape. Mimics Cellpose's diameter rescaling during training.
+    Per-axis pixel increment to add when extracting a patch so a later geometric augmentation samples
+    real image content instead of padding.
 
-    Interpolation is per channel-type: image and ``heat`` (flows, distances, …) are linear, the
-    binary ``mask`` uses nearest-neighbour. In 3D ``(z, y, x, c)`` only Y and X are scaled; Z is
-    preserved and the flow vectors are re-oriented for the resulting anisotropy. Flow *values* are
-    otherwise unchanged (they are unit-length directions, scale-invariant under an isotropic resize).
+    The patch is grown to cover the worst-case in-plane downscale (``zoom_range[0]`` combined with
+    ``extra_downscale``) and, when ``rand_rot`` is set, an arbitrary rotation. The Z axis grows only
+    for the zoom and only when ``zoom_in_z`` is set. Depends only on the fixed options, so compute it
+    once at generator build.
 
     Parameters
     ----------
-    image : 3D/4D Numpy array
-        Image to rescale. E.g. ``(y, x, c)`` in 2D or ``(z, y, x, c)`` in 3D.
-    mask : 3D/4D Numpy array, optional
-        Binary mask channels.
-    heat : 3D/4D Numpy array, optional
-        Float channels (including the flow channels indexed by ``flow_heat``).
-    factor : float
-        In-plane resize factor (``diam_mean / diameter``). ``factor > 1`` enlarges cells (then
-        centre-crops), ``factor < 1`` shrinks them (then pads).
-    flow_heat : dict, optional
-        Mapping of flow components to their channel index inside ``heat``.
-    mode : str, optional
-        Padding/extension mode used by the resize and pad.
-    mask_type : str, optional
-        ``"mask"`` (nearest) or ``"image"`` (linear) interpolation for ``mask``.
+    patch_spatial : tuple of int
+        Network input spatial size, ``(y, x)`` in 2D or ``(z, y, x)`` in 3D.
+
+    ndim : int
+        Number of spatial dimensions (2 or 3).
+
+    zoom : bool
+        Whether the zoom augmentation is enabled.
+
+    zoom_range : tuple of two floats
+        ``(min, max)`` zoom factors; only the minimum (strongest zoom-out) drives the increment.
+
+    rand_rot : bool
+        Whether arbitrary-angle rotation is enabled (adds a ``sqrt(2)`` in-plane margin).
+
+    zoom_in_z : bool, optional
+        Whether the zoom also scales the Z axis (3D only).
+
+    extra_downscale : float, optional
+        Extra in-plane downscale applied on top of the zoom (``DIAM_MEAN / max_diameter``). Values
+        ``>= 1`` add nothing. Default ``1.0``.
 
     Returns
     -------
-    image, mask, heat : Numpy arrays
-        Rescaled arrays with the original spatial shape.
+    tuple of int
+        Per-spatial-axis increment (``(dy, dx)`` in 2D or ``(dz, dy, dx)`` in 3D); ``0`` on axes that
+        never grow.
     """
-    assert image.ndim in [3, 4], f"Image must be 3D or 4D, got shape {image.shape}"
-    if factor <= 0 or abs(factor - 1.0) <= 1e-3:
-        return image, mask, heat
+    zoom_out = float(zoom_range[0]) if zoom else 1.0
+    plane_eff = zoom_out * min(float(extra_downscale), 1.0)
+    plane_factor = (1.0 / plane_eff) if plane_eff < 1.0 else 1.0
+    if rand_rot:
+        plane_factor *= math.sqrt(2.0)
+    z_factor = (1.0 / zoom_out) if (zoom_in_z and zoom_out < 1.0) else 1.0
 
-    mask_order = 0 if mask_type == "mask" else 1
-    is_3d = image.ndim == 4
+    def _grow(size: int, factor: float) -> int:
+        return int(math.ceil(size * factor)) - int(size) if factor > 1.0 + 1e-9 else 0
+
+    inc = [0] * ndim
+    if ndim == 2:
+        inc[0] = _grow(patch_spatial[0], plane_factor)
+        inc[1] = _grow(patch_spatial[1], plane_factor)
+    else:
+        inc[0] = _grow(patch_spatial[0], z_factor)      # Z
+        inc[1] = _grow(patch_spatial[1], plane_factor)  # Y
+        inc[2] = _grow(patch_spatial[2], plane_factor)  # X
+    return tuple(inc)
+
+
+def zoom(
+    img: NDArray,
+    zoom_range: Tuple[float, ...],
+    zoom_in_z: bool = False,
+    mode: str = "reflect",
+) -> NDArray:
+    """
+    Zoom a single image in-plane (Y, X) -- and optionally in Z -- then crop/pad back to the original shape.
+
+    A random scale ``s ~ U(zoom_range)`` is drawn and applied to the Y and X axes (and to Z when
+    ``zoom_in_z`` is set). The image is resampled with linear interpolation and then centre-cropped
+    (enlarging) or centre-padded (shrinking) back to its original spatial shape. Image-only; the flow
+    workflow uses :func:`affine_transform` instead.
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to zoom. E.g. ``(y, x, c)`` in 2D or ``(z, y, x, c)`` in 3D.
+
+    zoom_range : tuple of two floats
+        Minimum and maximum scale factors, e.g. ``(0.8, 1.2)``. Use ``(1.0, 1.0)`` to disable it.
+
+    zoom_in_z : bool, optional
+        Whether to also scale the Z axis (3D only).
+
+    mode : str, optional
+        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Zoomed image with the original spatial shape.
+    """
+    assert img.ndim in [3, 4], f"Image must be 3D or 4D, got shape {img.shape}"
+    assert len(zoom_range) == 2, f"Zoom range is supposed to have 2 elements but provided {zoom_range} instead"
+    assert zoom_range[0] <= zoom_range[1], "First element of zoom range must be lower than the second one"
+    assert zoom_range[0] > 0, "Zoom range values must be greater than 0"
+
+    s = random.uniform(zoom_range[0], zoom_range[1])
+    xy_factor = s
+    z_factor = s if zoom_in_z else 1.0
+
+    # Nothing to do for an (effectively) identity transform.
+    if abs(xy_factor - 1.0) <= 1e-3 and abs(z_factor - 1.0) <= 1e-3:
+        return img
+
+    is_3d = img.ndim == 4
 
     if is_3d:
-        z, y, x = image.shape[0], image.shape[1], image.shape[2]
-        target = (z, max(1, int(round(y * factor))), max(1, int(round(x * factor))))
+        z, y, x = img.shape[0], img.shape[1], img.shape[2]
+        target = (
+            max(1, int(round(z * z_factor))),
+            max(1, int(round(y * xy_factor))),
+            max(1, int(round(x * xy_factor))),
+        )
     else:
-        y, x = image.shape[0], image.shape[1]
-        target = (max(1, int(round(y * factor))), max(1, int(round(x * factor))))
+        y, x = img.shape[0], img.shape[1]
+        target = (max(1, int(round(y * xy_factor))), max(1, int(round(x * xy_factor))))
+
+    downsample = xy_factor < 1.0 or z_factor < 1.0
 
     def _rs(arr: NDArray, order: int) -> NDArray:
         return resize(
@@ -2028,44 +2162,23 @@ def flow_rescale(
             mode=mode,
             clip=True,
             preserve_range=True,
-            anti_aliasing=(order != 0 and factor < 1.0),
+            anti_aliasing=(order != 0 and downsample),
         ).astype(arr.dtype, copy=False)
 
-    orig_img_shape = image.shape
-    image = _rs(image, 1)
-    if mask is not None:
-        orig_mask_shape = mask.shape
-        mask = _rs(mask, mask_order)
-    if heat is not None:
-        heat = _rs(heat, 1)
-
-    def _pad_tuple(orig_shape: Tuple[int, ...], cur_shape: Tuple[int, ...]) -> Tuple[Tuple[int, int], ...]:
+    def _restore(arr: NDArray, orig_shape: Tuple[int, ...]) -> NDArray:
+        # Centre-crop any spatial axis that grew and centre-pad any that shrank, back to orig_shape.
+        crop_shape = tuple(min(arr.shape[d], orig_shape[d]) for d in range(arr.ndim - 1))
+        arr = center_crop_single(arr, crop_shape)
         pads = []
-        for d in range(len(orig_shape) - 1):
-            diff = orig_shape[d] - cur_shape[d]
-            pads.append((diff // 2, math.ceil(diff / 2)))
+        for d in range(arr.ndim - 1):
+            diff = orig_shape[d] - arr.shape[d]
+            pads.append((diff // 2, math.ceil(diff / 2)) if diff > 0 else (0, 0))
         pads.append((0, 0))
-        return tuple(pads)
+        if any(p != (0, 0) for p in pads):
+            arr = np.pad(arr, tuple(pads), mode)
+        return arr
 
-    if factor >= 1.0:
-        image = center_crop_single(image, orig_img_shape[:-1])
-        if mask is not None:
-            mask = center_crop_single(mask, orig_mask_shape[:-1])
-        if heat is not None:
-            heat = center_crop_single(heat, orig_img_shape[:-1])
-    else:
-        image = np.pad(image, _pad_tuple(orig_img_shape, image.shape), mode)
-        if mask is not None:
-            mask = np.pad(mask, _pad_tuple(orig_mask_shape, mask.shape), mode)
-        if heat is not None:
-            heat = np.pad(heat, _pad_tuple(orig_img_shape, heat.shape), mode)
-
-    # Correct flow directions for the in-plane-only (anisotropic) resize. Only matters in 3D where
-    # the Z axis was not scaled; in 2D (s_y == s_x) this is a no-op.
-    if heat is not None and flow_heat and flow_heat.get("vz") is not None:
-        heat = scale_flow_vectors(heat, flow_heat, s_y=factor, s_x=factor, s_z=1.0)
-
-    return image, mask, heat
+    return _restore(_rs(img, 1), img.shape)
 
 
 def rotation(
@@ -2182,203 +2295,138 @@ def rotation(
 
     return img_out if mask is None and heat is None else (img_out, mask_out, heat_out)
 
-def zoom(
+
+def affine_transform(
     img: NDArray,
-    zoom_range: Tuple[float, ...],
     mask: Optional[NDArray] = None,
     heat: Optional[NDArray] = None,
-    zoom_in_z: bool = False,
+    scale_xy: float = 1.0,
+    scale_z: float = 1.0,
+    angle: float = 0.0,
     mode: str = "reflect",
     mask_type: str = "mask",
+    flow_heat: Optional[Dict] = None,
 ) -> Union[
     NDArray,
     Tuple[NDArray, Optional[NDArray], Optional[NDArray]],
 ]:
     """
-    Apply zoom to input ``image`` and ``mask`` (if provided).
+    Apply an in-plane rotation and (an)isotropic scale in a single resampling pass, fusing zoom and
+    rotation into one affine warp so image, mask and flow field are interpolated only once.
+
+    The output keeps the original spatial shape: enlarging (``scale > 1``) centre-crops, shrinking
+    (``scale < 1``) fills the border with ``mode``. The Y and X axes are scaled by ``scale_xy`` and
+    rotated by ``angle``; the Z axis (3D only) is scaled by ``scale_z`` and never rotated. ``img`` and
+    ``heat`` use linear interpolation, the binary ``mask`` nearest-neighbour. Flow vectors in ``heat``
+    are rotated and re-scaled for axis anisotropy (see :func:`rotate_flow_vectors` and
+    :func:`scale_flow_vectors`).
 
     Parameters
     ----------
     img : 3D/4D Numpy array
-        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
-
-    zoom_range : tuple of floats
-        Defines minimum and maximum factors to scale the images. E.g. (0.8, 1.2).
+        Image to transform. E.g. ``(y, x, c)`` in 2D or ``(z, y, x, c)`` in 3D.
 
     mask : 3D/4D Numpy array, optional
-        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+        Mask channels. E.g. ``(y, x, c)`` or ``(z, y, x, c)``.
 
     heat : 3D/4D Numpy array, optional
-        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or
-        ``(y, x, z, channels)`` for ``3D``.
+        Float channels (including the flow channels indexed by ``flow_heat``).
 
-    zoom_in_z: bool, optional
-        Whether to apply or not zoom in Z axis.
+    scale_xy : float, optional
+        In-plane (Y, X) scale factor.
+
+    scale_z : float, optional
+        Z scale factor (3D only). ``1.0`` (default) leaves Z unscaled.
+
+    angle : float, optional
+        In-plane rotation angle in degrees.
 
     mode : str, optional
-        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
+        How to fill values pulled from outside the input. Options: ``constant``, ``reflect``,
+        ``wrap``, ``symmetric``.
 
     mask_type : str, optional
         How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
+    flow_heat : dict, optional
+        Mapping of flow components to their channel index inside ``heat`` (``{"vy": i, "vx": j,
+        "vz": k}``). When given, the flow vectors are re-oriented for the transform.
+
     Returns
     -------
     img : 3D/4D Numpy array
-        Zoomed image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+        Transformed image with the original spatial shape.
 
-    mask : 3D/4D Numpy array, optional
-        Zoomed mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
-
-    heat : 3D/4D Numpy array, optional
-        Zoomed heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or
-        ``(y, x, z, channels)`` for ``3D``.
+    mask, heat : Numpy arrays, optional
+        Returned together with ``img`` when ``mask`` is provided.
     """
-    assert img.ndim in [3, 4], f"Image must be 3D or 4D, got shape {img.shape}"
+    assert img.ndim in (3, 4), f"Image must be 3D or 4D, got shape {img.shape}"
     if mask is not None:
-        assert mask.ndim in [3, 4], f"Mask must be 3D or 4D, got shape {mask.shape}"
+        assert mask.ndim in (3, 4), f"Mask must be 3D or 4D, got shape {mask.shape}"
     if heat is not None:
-        assert heat.ndim in [3, 4], f"Heatmap must be 3D or 4D, got shape {heat.shape}"
-    assert len(zoom_range) == 2, f"Zoom range is supposed to have 2 elements but provided {zoom_range} instead"
-    assert zoom_range[0] <= zoom_range[1], "First element of zoom range must be lower than the second one"
-    assert zoom_range[0] > 0, "Zoom range values must be greater than 0"
+        assert heat.ndim in (3, 4), f"Heat must be 3D or 4D, got shape {heat.shape}"
 
-    zoom_selected = random.uniform(zoom_range[0], zoom_range[1])
-    mask_order = 0 if mask_type == "mask" else 1
-    if img.ndim == 4:
-        z_zoom = zoom_selected if zoom_in_z else 1
-        img_shape = [
-            int(img.shape[0] * zoom_selected),
-            int(img.shape[1] * zoom_selected),
-            int(img.shape[2] * z_zoom),
-        ]
-        if mask is not None:
-            mask_shape = [
-                int(mask.shape[0] * zoom_selected),
-                int(mask.shape[1] * zoom_selected),
-                int(mask.shape[2] * z_zoom),
-            ]
+    is_3d = img.ndim == 4
+    ndim = 3 if is_3d else 2
+
+    # Identity short-circuit (nothing to resample).
+    if abs(scale_xy - 1.0) <= 1e-3 and abs(scale_z - 1.0) <= 1e-3 and float(angle) % 360.0 == 0.0:
+        return img if mask is None else (img, mask, heat)
+
+    # Map "symmetric" to SciPy's "mirror" (as the rotation augmentor does).
+    _mode = "mirror" if mode == "symmetric" else mode
+
+    th = np.deg2rad(float(angle))
+    c, s = np.cos(th), np.sin(th)
+
+    # Forward map on spatial coords is ``R_yx @ S`` with the in-plane rotation
+    # ``R_yx = [[c, -s], [s, c]]`` (matching :func:`rotate_flow_vectors`) and per-axis scale ``S``.
+    # ``scipy.ndimage.affine_transform`` samples ``input[matrix @ out + offset]``, i.e. it needs the
+    # inverse map ``(R S)^-1 = S^-1 R^T``.
+    if is_3d:
+        Rinv = np.array([[1.0, 0.0, 0.0], [0.0, c, s], [0.0, -s, c]], dtype=np.float64)
+        Sinv = np.diag([1.0 / scale_z, 1.0 / scale_xy, 1.0 / scale_xy])
     else:
-        img_shape = [
-            int(img.shape[0] * zoom_selected),
-            int(img.shape[1] * zoom_selected),
-        ]
-        if mask is not None:
-            mask_shape = [
-                int(mask.shape[0] * zoom_selected),
-                int(mask.shape[1] * zoom_selected),
-            ]
+        Rinv = np.array([[c, s], [-s, c]], dtype=np.float64)
+        Sinv = np.diag([1.0 / scale_xy, 1.0 / scale_xy])
+    matrix = Sinv @ Rinv
 
-    img_shape += [img.shape[-1],]
+    spatial_shape = img.shape[:ndim]
+    center = (np.asarray(spatial_shape, dtype=np.float64) - 1.0) / 2.0
+    offset = center - matrix @ center
+
+    def _warp(arr: NDArray, order: int) -> NDArray:
+        orig_dtype = arr.dtype
+        arr_mins = np.min(arr, axis=tuple(range(ndim)))
+        arr_maxes = np.max(arr, axis=tuple(range(ndim)))
+        a = arr.astype(np.float32, copy=False)
+        out = np.empty(arr.shape, dtype=np.float32)
+        for ch in range(arr.shape[-1]):
+            out[..., ch] = affine_transform_scipy(
+                a[..., ch],
+                matrix,
+                offset=offset,
+                order=order,
+                mode=_mode,
+                cval=0.0,
+                prefilter=(order > 1),
+            )
+        if np.issubdtype(orig_dtype, np.floating):
+            return out.astype(orig_dtype, copy=False)
+        np.clip(out, arr_mins, arr_maxes, out=out)
+        return out.astype(orig_dtype, copy=False)
+
+    img = _warp(img, 1)
     if mask is not None:
-        mask_shape += [mask.shape[-1],]  # type: ignore
-    
-    if img_shape != img.shape:
-        img_orig_shape = img.shape
-        img = resize(
-            img,
-            img_shape,
-            order=1,
-            mode=mode,
-            clip=True,
-            preserve_range=True,
-            anti_aliasing=True,
-        )
-        if mask is not None:
-            mask_orig_shape = mask.shape
-            mask = resize(
-                mask,
-                mask_shape,
-                order=mask_order,
-                mode=mode,
-                clip=True,
-                preserve_range=True,
-                anti_aliasing=True,
-            )
-        if heat is not None:
-            heat = resize(
-                heat,
-                img_shape[:-1],
-                order=1,
-                mode=mode,
-                clip=True,
-                preserve_range=True,
-                anti_aliasing=True,
-            )
+        mask = _warp(mask, 0 if mask_type == "mask" else 1)
+    if heat is not None:
+        heat = _warp(heat, 1)
+        # Re-orient flows: rotate the in-plane vectors by the angle, then correct for axis anisotropy
+        # (no-op for an isotropic resize; needed in 3D when Y,X and Z are scaled differently).
+        heat = rotate_flow_vectors(heat, flow_heat, angle)
+        heat = scale_flow_vectors(heat, flow_heat, s_y=scale_xy, s_x=scale_xy, s_z=scale_z)
 
-        if zoom_selected >= 1:
-            img = center_crop_single(img, img_orig_shape)
-            if mask is not None:
-                mask = center_crop_single(mask, mask_orig_shape)
-            if heat is not None:
-                heat = center_crop_single(heat, img_orig_shape[:-1])
-        else:
-            if img.ndim == 4:
-                img_pad_tup = (
-                    (
-                        int((img_orig_shape[0] - img_shape[0]) // 2),
-                        math.ceil((img_orig_shape[0] - img_shape[0]) / 2),
-                    ),
-                    (
-                        int((img_orig_shape[1] - img_shape[1]) // 2),
-                        math.ceil((img_orig_shape[1] - img_shape[1]) / 2),
-                    ),
-                    (
-                        int((img_orig_shape[2] - img_shape[2]) // 2),
-                        math.ceil((img_orig_shape[2] - img_shape[2]) / 2),
-                    ),
-                    (0, 0),
-                )
-                if mask is not None:
-                    mask_pad_tup = (
-                        (
-                            int((mask_orig_shape[0] - mask_shape[0]) // 2),
-                            math.ceil((mask_orig_shape[0] - mask_shape[0]) / 2),
-                        ),
-                        (
-                            int((mask_orig_shape[1] - mask_shape[1]) // 2),
-                            math.ceil((mask_orig_shape[1] - mask_shape[1]) / 2),
-                        ),
-                        (
-                            int((mask_orig_shape[2] - mask_shape[2]) // 2),
-                            math.ceil((mask_orig_shape[2] - mask_shape[2]) / 2),
-                        ),
-                        (0, 0),
-                    )
-            else:
-                img_pad_tup = (
-                    (
-                        int((img_orig_shape[0] - img_shape[0]) // 2),
-                        math.ceil((img_orig_shape[0] - img_shape[0]) / 2),
-                    ),
-                    (
-                        int((img_orig_shape[1] - img_shape[1]) // 2),
-                        math.ceil((img_orig_shape[1] - img_shape[1]) / 2),
-                    ),
-                    (0, 0),
-                )
-                if mask is not None:
-                    mask_pad_tup = (
-                        (
-                            int((mask_orig_shape[0] - mask_shape[0]) // 2),
-                            math.ceil((mask_orig_shape[0] - mask_shape[0]) / 2),
-                        ),
-                        (
-                            int((mask_orig_shape[1] - mask_shape[1]) // 2),
-                            math.ceil((mask_orig_shape[1] - mask_shape[1]) / 2),
-                        ),
-                        (0, 0),
-                    )
-
-            img = np.pad(img, img_pad_tup, mode)  # type: ignore
-            if mask is not None:
-                mask = np.pad(mask, mask_pad_tup, mode)  # type: ignore
-            if heat is not None:
-                heat = np.pad(heat, img_pad_tup, mode)  # type: ignore
-
-    if mask is None:
-        return img
-    else:
-        return img, mask, heat
+    return img if mask is None else (img, mask, heat)
 
 
 def gamma_contrast(img: NDArray, gamma: Tuple[float, float] = (0, 1)) -> NDArray:

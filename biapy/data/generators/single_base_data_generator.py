@@ -48,8 +48,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     da : bool, optional
         To activate the data augmentation.
 
-    da_prob : float, optional
-            Probability of doing each transformation.
+    aug_prob : dict of str to float, optional
+            Per-augmentation probability of being applied, keyed by the augmentation's internal name
+            (e.g. ``{"zoom": 0.5, "rand_rot": 0.3, ...}``). Each enabled augmentation is rolled
+            independently against its own probability; missing keys default to ``0.5``.
 
     rotation90 : bool, optional
         To make square (90, 180,270) degree rotations.
@@ -160,7 +162,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         norm_module: Dict,
         seed: int = 0,
         da: bool = True,
-        da_prob: float = 0.5,
+        aug_prob: Dict[str, float] = {},
         rotation90: bool = False,
         rand_rot: bool = False,
         rnd_rot_range=(-180, 180),
@@ -236,7 +238,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.shape = resize_shape if resize_shape else img.shape
         self.o_indexes = np.arange(self.length)
         self.da = da
-        self.da_prob = da_prob
+        self.aug_prob = aug_prob
         self.zoom = zoom
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
@@ -469,7 +471,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Transformed image. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
         """
         # Apply zoom
-        if self.zoom and random.uniform(0, 1) < self.da_prob:
+        if self.zoom and random.uniform(0, 1) < self.aug_prob.get("zoom", 0.5):
             image = zoom(
                 image,
                 zoom_range=self.zoom_range,
@@ -478,18 +480,18 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )  # type: ignore
     
         # Apply random rotations
-        if self.rand_rot and random.uniform(0, 1) < self.da_prob:
+        if self.rand_rot and random.uniform(0, 1) < self.aug_prob.get("rand_rot", 0.5):
             image = rotation(image, angles=self.rnd_rot_range, mode=self.affine_mode)  # type: ignore
 
         # Apply square rotations
-        if self.rotation90 and random.uniform(0, 1) < self.da_prob:
+        if self.rotation90 and random.uniform(0, 1) < self.aug_prob.get("rotation90", 0.5):
             image = rotation(image, angles=[90, 180, 270], mode=self.affine_mode)  # type: ignore
 
         # Apply gamma contrast
-        if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
+        if self.gamma_contrast and random.uniform(0, 1) < self.aug_prob.get("gamma_contrast", 0.5):
             image = gamma_contrast(image, gamma=self.gc_gamma)  # type: ignore
 
-        if self.elastic and random.uniform(0, 1) < self.da_prob:
+        if self.elastic and random.uniform(0, 1) < self.aug_prob.get("elastic", 0.5):
             image, _, _ = elastic(
                 image,
                 alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
@@ -497,49 +499,49 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mode=self.e_mode
             )
 
-        if self.shear and random.uniform(0, 1) < self.da_prob:
+        if self.shear and random.uniform(0, 1) < self.aug_prob.get("shear", 0.5):
             image, _, _ = shear(
                 image,
                 shear=self.shear_range,
                 mode=self.affine_mode
             )
         
-        if self.shift and random.uniform(0, 1) < self.da_prob:
+        if self.shift and random.uniform(0, 1) < self.aug_prob.get("shift", 0.5):
             image, _, _ = shift(
                 image,
                 shift_range=self.shift_range,
                 mode=self.affine_mode
             )
 
-        if self.vflip and random.uniform(0, 1) < self.da_prob:
+        if self.vflip and random.uniform(0, 1) < self.aug_prob.get("vflip", 0.5):
             image, _, _ = flip_vertical(
                 image
             )
         
-        if self.hflip and random.uniform(0, 1) < self.da_prob:
+        if self.hflip and random.uniform(0, 1) < self.aug_prob.get("hflip", 0.5):
             image, _, _ = flip_horizontal(
                 image
             )
         
-        if self.g_blur and random.uniform(0, 1) < self.da_prob:
+        if self.g_blur and random.uniform(0, 1) < self.aug_prob.get("g_blur", 0.5):
             image = gaussian_blur(
                 image,
                 sigma=self.g_sigma
             )
 
-        if self.median_blur and random.uniform(0, 1) < self.da_prob:
+        if self.median_blur and random.uniform(0, 1) < self.aug_prob.get("median_blur", 0.5):
             image = median_blur(
                 image,
                 k_range=self.mb_kernel
             )
 
-        if self.motion_blur and random.uniform(0, 1) < self.da_prob:
+        if self.motion_blur and random.uniform(0, 1) < self.aug_prob.get("motion_blur", 0.5):
             image = motion_blur(
                 image,
                 k_range=self.motb_k_range
             )
 
-        if self.dropout and random.uniform(0, 1) < self.da_prob:
+        if self.dropout and random.uniform(0, 1) < self.aug_prob.get("dropout", 0.5):
             image = dropout(
                 image,
                 drop_range=self.drop_range

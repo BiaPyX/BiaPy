@@ -185,8 +185,7 @@ def _euler_integrate(
         # Bilinear interpolation of each flow component at current positions
         flow_at = _interpolate_flow(flow_components, pos)          # (N, ndim)
 
-        # Flows are already divided by 5 (raw ≈ ±5 → ±1 px/step), matching
-        # Cellpose exactly.  Convert physical step → pixel step via resolution.
+        # Flows are already divided by 5 (≈ ±1 px/step); convert physical step to pixels via resolution.
         pos = pos + (flow_at / res[np.newaxis, :])
 
         # Keep positions inside the volume
@@ -392,8 +391,9 @@ def _mask_to_unit_flow(
     Reproduces the *same* per-cell diffusion used to build the training targets
     in :func:`biapy.data.pre_processing.labels_into_channels` (``gradient_type
     ="cellpose"``): heat is injected at the mask pixel closest to the centroid
-    and diffused with a Moore-neighbourhood average for ``2 * sum(shape)``
-    iterations; the normalised gradient of that field is the flow.  Because the
+    and diffused with a Moore-neighbourhood average for ``2 * (sum(shape) + 4)``
+    (2D) / ``6 * (sum(shape) + 3)`` (3D) iterations; the normalised gradient of
+    that field (no ``log``) is the flow.  Because the
     generation matches the ground-truth exactly, a *correct* predicted mask
     yields a regenerated flow that matches the network flow (error ≈ 0), while a
     spurious fragment of a larger cell produces a flow pointing at the fragment's
@@ -425,7 +425,12 @@ def _mask_to_unit_flow(
     heat = np.zeros(tuple(s + 2 * pad for s in mask.shape), dtype=np.float64)
     p_coords = tuple(c + pad for c in coords)
     p_center = tuple(c + pad for c in centers)
-    n_iter = 2 * int(sum(mask.shape))
+    # Same diffusion-step count as the training-target generator (2D: 2*(sum+4), 3D: 6*(sum+3)) so the
+    # flow-error comparison is not biased.
+    if mask.ndim == 3:
+        n_iter = 6 * (int(sum(mask.shape)) + 3)
+    else:
+        n_iter = 2 * (int(sum(mask.shape)) + 4)
 
     if mask.ndim == 2:
         y_c, x_c = p_coords
@@ -439,10 +444,8 @@ def _mask_to_unit_flow(
                 heat[y_c - 1, x_c - 1] + heat[y_c - 1, x_c + 1] +
                 heat[y_c + 1, x_c - 1] + heat[y_c + 1, x_c + 1]
             )
-        # Cellpose masks_to_flows applies log(1+T) before the gradient
-        # (dynamics.py). Padding/background stay 0 (log(1+0)=0), so applying it
-        # to the whole array is equivalent to Cellpose's mask-pixel-only version.
-        heat = np.log(1.0 + heat)
+        # Gradient of the RAW diffusion field (no log), matching the training-target generation; a
+        # log(1+T) would tilt the flow direction at boundary pixels.
         grads = np.gradient(heat, resolution[0], resolution[1])
     else:
         z_c, y_c, x_c = p_coords
@@ -455,13 +458,12 @@ def _mask_to_unit_flow(
                     for dx in (-1, 0, 1):
                         neigh += heat[z_c + dz, y_c + dy, x_c + dx]
             heat[z_c, y_c, x_c] = neigh / 27.0
-        # Cellpose masks_to_flows applies log(1+T) before the gradient
-        # (dynamics.py). Padding/background stay 0 (log(1+0)=0), so applying it
-        # to the whole array is equivalent to Cellpose's mask-pixel-only version.
-        heat = np.log(1.0 + heat)
+        # Gradient of the RAW diffusion field (no log); see the 2D branch above.
         grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
 
-    mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads) + 1e-6)
+    # Epsilon outside the sqrt and negligible (1e-60), matching the training-target generator: one
+    # inside would floor the magnitude and zero out the small-but-valid gradients at border pixels.
+    mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads)) + 1e-60
     unit_flow = np.stack([g[p_coords] / mag for g in grads], axis=0)  # (ndim, N)
     return unit_flow, coords
 
@@ -472,6 +474,7 @@ def _flow_error(
     labels: NDArray,
     Gz: Optional[NDArray] = None,
     resolution: NDArray = None,
+    exempt_border_cells: bool = True,
 ) -> dict:
     """
     Per-instance flow error, matching Cellpose ``metrics.flow_error``.
@@ -501,6 +504,11 @@ def _flow_error(
         Network z flow component (3D only).
     resolution : (ndim,) float array, optional
         Physical voxel size per axis.  Defaults to isotropic ``1``.
+    exempt_border_cells : bool, optional
+        When ``True`` (default), instances whose mask touches the image border are assigned error
+        ``0`` (never removed): their flow legitimately points off-frame and cannot be reproduced by
+        an in-frame regeneration.  Set ``False`` to score them like any other instance (Cellpose's
+        behaviour).
 
     Returns
     -------
@@ -519,11 +527,17 @@ def _flow_error(
         lab = i + 1
         if slc is None:
             continue
+
+        # Border-touching instances are exempt: a cell cut by the field of view has flows pointing to
+        # an off-frame centre that no in-frame regeneration can reproduce, so it would always score a
+        # large error. Diverges from Cellpose's remove_bad_flow_masks, which has no such guard.
+        if exempt_border_cells and any(slc[d].start == 0 or slc[d].stop == labels.shape[d] for d in range(ndim)):
+            errors[lab] = 0.0
+            continue
+
         sub = labels[slc] == lab
 
-        # Cells too small to diffuse (1-px wide along any axis) get error 0 so
-        # they are never removed by this check — matching Cellpose, which cannot
-        # form a gradient for them either.
+        # Cells too small to diffuse (1-px wide along any axis) get error 0, never removed.
         if sub.sum() < 2 or any(s < 2 for s in sub.shape):
             errors[lab] = 0.0
             continue
@@ -686,41 +700,18 @@ def flows_to_instances(
     diameter: float = 30.0,
     diam_mean: float = 30.0,
     already_rescaled: bool = False,
+    exempt_border_cells: bool = True,
 ) -> NDArray:
     """
     Convert predicted Cellpose / Omnipose flow fields into an instance label map.
 
-    Two modes are supported, selected by ``flow_type``:
+    ``flow_type="cellpose"``: flows are the gradient of a per-instance heat-diffusion potential.
+    Euler-integrate each foreground pixel (≈1 px/step), detect histogram peaks and grow them with a
+    5-iteration 3x3 expansion; an optional flow-error check removes masks whose diffusion-regenerated
+    flow disagrees with the network.
 
-    **Cellpose** (``flow_type="cellpose"``, default):
-      Flows are the gradient of a per-instance heat-diffusion potential.
-      Post-processing uses constant-step Euler integration (≈1 px per step after
-      dividing raw ≈±5 network output by 5, matching Cellpose's ``dP/5``
-      normalisation in dynamics.py), followed by histogram peak detection and
-      5-iteration 3×3 neighbourhood expansion (Cellpose's iterative max-pool
-      strategy).  A flow error check (Cellpose ``remove_bad_flow_masks``) then
-      regenerates each mask's flow by diffusion and discards instances whose
-      regenerated flow disagrees with the network flow.
-
-    **Omnipose** (``flow_type="omnipose"``):
-      Flows are the gradient of the per-cell Euclidean Distance Transform (EDT).
-      Post-processing uses constant-step Euler integration followed by DBSCAN
-      clustering on convergence positions.  The flow consistency check is skipped
-      because Omnipose flows are accurate by construction (they always point toward
-      the EDT maximum / skeleton).
-
-    Common pipeline for both modes:
-
-    1. Extract Gv / Gh / [Gz] from ``pred``.
-    2. Build the foreground mask from a dedicated channel or from the flow magnitude.
-    3. Re-normalise predicted flow vectors to unit length.
-    4. Euler-integrate each foreground pixel along the flow field (anisotropy-aware).
-    5. *Cellpose*: detect attractor peaks (h > 10); expand each peak for 5 iterations
-       of 3×3 neighbourhood growth gated by h > 2 (Cellpose's iterative max-pooling);
-       assign each fg pixel the label of its integer convergence position in the map.
-       *Omnipose*: cluster convergence positions with DBSCAN (``eps = max_cluster_dist``).
-    6. Split disconnected regions that share a cluster label into separate instances.
-    7. *Cellpose only*: optionally remove instances with inconsistent flow.
+    ``flow_type="omnipose"``: flows are the gradient of the per-cell EDT. Euler-integrate, then DBSCAN
+    the convergence positions. The flow-error check is skipped.
 
     Parameters
     ----------
@@ -730,55 +721,33 @@ def flows_to_instances(
         Channel names matching the last axis of ``pred``,
         e.g. ``["F", "Gv", "Gh"]``, ``["B", "Gv", "Gh", "Gz"]``.
     flow_type : {"cellpose", "omnipose"}, optional
-        Post-processing strategy.  "cellpose" uses histogram peak detection and
-        step suppression; "omnipose" uses DBSCAN clustering and constant step
-        size.  Default "cellpose".
+        Post-processing strategy. Default "cellpose".
     fg_channel : str, optional
-        Name of a channel to threshold for the foreground mask.
-        Use ``"B"`` for the background channel (mask is inverted).
-        Leave empty to derive the mask from the flow magnitude (background
-        flow is identically zero by construction).
+        Channel thresholded for the foreground mask (``"B"`` inverts it). Empty derives the mask from
+        the flow magnitude.
     fg_thresh : float, optional
-        Sigmoid-space threshold applied to ``fg_channel``.  Default 0.5.
+        Sigmoid-space threshold applied to ``fg_channel``. Default 0.5.
     flow_threshold : float, optional
-        *Cellpose only.*  Flow error above which an instance is removed.  The
-        error is the mean squared difference between the mask's diffusion-
-        regenerated flow and the network flow (Cellpose ``metrics.flow_error``),
-        so 0 = perfect match.  Set ≤ 0 to skip this check.  Default 0.4 (matches
-        Cellpose default).  Ignored when ``flow_type="omnipose"``.
+        Cellpose only. Mean-squared flow error above which an instance is removed; ``<= 0`` skips the
+        check. Default 0.4.
     n_steps : int, optional
-        Kept for API compatibility; ignored.  The integration step count is
-        derived from the diameter as Cellpose does, ``niter = (1/rescale) * 200
-        = (diameter/diam_mean) * 200``.  Default 200.
+        Ignored; the step count is derived from the diameter. Default 200.
     max_cluster_dist : float, optional
-        *Omnipose only.*  DBSCAN ``eps`` neighbourhood radius in pixels.
-        Convergence positions within this distance are linked into the same
-        cluster (= the same cell's medial-axis skeleton).  Ignored when
-        ``flow_type="cellpose"``, which uses 5-step 3×3 expansion in histogram
-        space with no distance gate.  Default 5.0.
+        Omnipose only. DBSCAN ``eps`` radius in pixels. Default 5.0.
     resolution : list of float, optional
-        Physical voxel size ``[z, y, x]`` used to convert physical flow steps to
-        pixel steps during integration.  For isotropic data use ``[1, 1, 1]``.
-        Default [1.0, 1.0, 1.0].
+        Physical voxel size ``[z, y, x]`` for converting flow steps to pixels. Default [1, 1, 1].
     diameter : float, optional
-        *Cellpose only.*  Expected cell diameter (pixels) in the input.  Flows are
-        resized by ``rescale = diam_mean / diameter`` so cells become ~``diam_mean``
-        before the dynamics run, then labels are resized back — Cellpose's
-        rescaling that prevents large cells from fragmenting into several
-        instances.  Set equal to ``diam_mean`` to disable rescaling.  Set to
-        ``0`` (or any value ≤ 0) to auto-estimate the diameter per image from the
-        median foreground object size (:func:`_estimate_cell_radius`), mirroring
-        Cellpose's ``diameter=0`` behaviour — useful when different images have
-        different cell scales.  Default 30.0.
+        Cellpose only. Expected cell diameter (px); flows are rescaled by ``diam_mean / diameter`` so
+        cells become ~``diam_mean``. ``diam_mean`` disables rescaling; ``<= 0`` auto-estimates it from
+        the median object size. Default 30.0.
     diam_mean : float, optional
-        *Cellpose only.*  Diameter the flow model was trained at (Cellpose's
-        ``diam_mean``: 30 for cyto, 17 for nuclei).  Default 30.0.
+        Cellpose only. Diameter the model was trained at (30 cyto, 17 nuclei). Default 30.0.
     already_rescaled : bool, optional
-        *Cellpose only.*  Set ``True`` when the input was rescaled by ``diam_mean/diameter``
-        before the network and the flows were resized back to native (Cellpose ``resample=True``):
-        the flow field is then NOT rescaled again here, and ``niter`` is set to ``(1/rescale)*200``.
-        When ``False`` (e.g. by-chunks), the flow field is rescaled here (``resample=False``) with
-        ``niter=200`` and the labels resized back.  Default ``False``.
+        Cellpose only. ``True`` when the input was rescaled before the network and the flows resized
+        back, so the flow field is not rescaled again here. Default ``False``.
+    exempt_border_cells : bool, optional
+        Cellpose only. When ``True``, instances touching the image border are never removed by the
+        flow-error check (their flows point to an off-frame centre). Default ``True``.
 
     Returns
     -------
@@ -818,11 +787,8 @@ def flows_to_instances(
         return np.zeros(spatial_shape, dtype=np.int32)
 
     # ── 2b. Diameter: auto-estimate per image when not provided ───────────
-    # Cellpose estimates one diameter per image when diameter<=0 (its trained
-    # SizeModel). BiaPy has no such model, so it measures the median object size
-    # directly from the foreground mask (_estimate_cell_radius). This lets a test
-    # set whose images have different cell scales be handled without a fixed
-    # value. An explicit positive diameter skips estimation.
+    # BiaPy has no SizeModel, so it measures the median object size from the foreground mask. An
+    # explicit positive diameter skips estimation.
     if flow_type == "cellpose" and diameter <= 0:
         radius, stats = _estimate_cell_radius(fg_mask, is_3d)
         if radius is not None and radius > 0:
@@ -835,20 +801,11 @@ def flows_to_instances(
                   f"falling back to diam_mean={diam_mean}")
 
     # ── 2c. Cellpose diameter rescaling ───────────────────────────────────
-    # Cellpose runs the dynamics so that every cell is ~diam_mean (30 px). There are two equivalent
-    # ways to get there, both used by Cellpose:
-    #   * resample=True (Cellpose default): the *input* is rescaled by diam_mean/diameter before the
-    #     network, the flows are resized back to the original resolution, and the dynamics run at that
-    #     original resolution with niter = (1/rescale)*200. BiaPy's test path does this, resizing the
-    #     input in the workflow and the flows back to native in _create_instance_labels; it then calls
-    #     us with ``already_rescaled=True`` so we do NOT rescale again (that would resample the flow
-    #     field twice and over-segment cells).
-    #   * resample=False: rescale the flow field here by rescale = diam_mean/diameter, run the dynamics
-    #     at that (smaller) resolution with niter = 200, and resize the label map back. Used when the
-    #     input was NOT pre-rescaled (e.g. the by-chunks path), i.e. ``already_rescaled=False``.
-    # Applied for Cellpose only (Omnipose clusters convergence positions directly and does not rescale).
-    # Note: the rescale is applied uniformly to every spatial axis; strongly anisotropic 3D data is
-    # only approximately handled.
+    # Run the dynamics with cells at ~diam_mean. When the input was already rescaled before the network
+    # (``already_rescaled``), skip it here to avoid resampling the flows twice; otherwise rescale the
+    # flow field by diam_mean/diameter and resize the labels back afterwards. Cellpose only (Omnipose
+    # clusters convergence positions directly). Rescale is uniform per axis (approximate for anisotropic
+    # 3D).
     rescale = float(diam_mean) / float(diameter) if diameter > 0 else 1.0
     do_rescale = flow_type == "cellpose" and not already_rescaled and abs(rescale - 1.0) > 1e-3
     if do_rescale:
@@ -863,20 +820,16 @@ def flows_to_instances(
     else:
         work_shape = spatial_shape
 
-    # ── 2d. Integration step count (Cellpose: models.py niter rule) ────────
-    # Cellpose: niter0 = 200 if not resample else (1/rescale)*200. i.e. the step count depends on the
-    # DYNAMICS resolution: when we resize the flows to ~diam_mean cells (do_rescale, resample=False) we
-    # need ~200 steps; when we integrate at the native resolution where cells are ~diameter px
-    # (already_rescaled or diameter==diam_mean) we need (diameter/diam_mean)*200 = (1/rescale)*200.
+    # ── 2d. Integration step count ────────────────────────────────────────
+    # Depends on the dynamics resolution: 200 steps when integrating at ~diam_mean (do_rescale),
+    # (1/rescale)*200 when integrating at native resolution (Cellpose's niter rule).
     if flow_type == "cellpose":
         n_steps = 200 if do_rescale else max(1, int(round((1.0 / rescale) * 200)))
     else:
         n_steps = 200
 
-    # ── 3. Scale and mask flows (Cellpose: dP * (cellprob > thresh) / 5) ──────
-    # Raw network output ≈ ±5 (linear activation, 5× targets).  Divide by 5 to
-    # get ≈ ±1 px effective step, then zero background pixels — exactly mirroring
-    # Cellpose dynamics.py line 905.
+    # ── 3. Scale and mask flows ───────────────────────────────────────────
+    # Raw network output ≈ ±5 (5x targets); divide by 5 for ≈ ±1 px/step, then zero background.
     Gv = (Gv * fg_mask / 5.0).astype(np.float32)
     Gh = (Gh * fg_mask / 5.0).astype(np.float32)
     if Gz is not None:
@@ -885,10 +838,7 @@ def flows_to_instances(
     # ── 4. Foreground pixel coordinates ──────────────────────────────────
     fg_coords = np.stack(np.nonzero(fg_mask), axis=1)  # (N, ndim)
 
-    # ── 5. Resolution slice matching ndim ────────────────────────────────
-    #    resolution is always stored as [z, y, x]; for 2D take the last two.
-    #    Ratios are what matter for the integration step, and they are preserved
-    #    by the uniform rescale above, so the native resolution is kept as-is.
+    # ── 5. Resolution slice matching ndim (stored as [z, y, x]) ───────────
     res = np.array(resolution[-ndim:], dtype=np.float32)
 
     # Ordered flow tuple: (Gz, Gv, Gh) for 3D, (Gv, Gh) for 2D
@@ -910,14 +860,11 @@ def flows_to_instances(
         labels = _cluster_to_instances(final_pos, fg_coords, work_shape)
 
     # ── 8. Optional flow error check (Cellpose only) ──────────────────────
-    # Regenerates each mask's flow via diffusion and compares to the network
-    # flow (Cellpose remove_bad_flow_masks). This removes the spurious fragments
-    # produced when a large cell is over-segmented. Runs at the working (rescaled)
-    # resolution, exactly as Cellpose does inside get_masks before resizing back.
-    # Skipped for Omnipose, whose EDT-gradient flows are not reproduced here.
+    # Regenerates each mask's flow by diffusion and removes masks whose flow disagrees with the network
+    # (over-segmentation fragments). Skipped for Omnipose.
     if flow_type == "cellpose" and flow_threshold > 0.0 and int(labels.max()) > 0:
         print(f"  Flow error check (threshold={flow_threshold}) ...")
-        errors = _flow_error(Gv, Gh, labels, Gz, resolution=res)
+        errors = _flow_error(Gv, Gh, labels, Gz, resolution=res, exempt_border_cells=exempt_border_cells)
         n_before = int(labels.max())
         labels = _remove_bad_flow_masks(labels, errors, flow_threshold)
         n_removed = n_before - int(labels.max())

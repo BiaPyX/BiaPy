@@ -16,7 +16,7 @@ from biapy.data.generators.augmentors import center_crop_single, resize_img
 from biapy.data.data_manipulation import (
     load_img_data,
     sample_satisfy_conds,
-    pad_and_reflect,
+    pad_to_shape,
 )
 from biapy.data.data_3D_manipulation import looks_like_hdf5
 from biapy.data.dataset import BiaPyDataset, DataSample
@@ -216,7 +216,7 @@ class test_single_data_generator(Dataset):
             # Reflect data to complete the needed shape
             if not self.crop_center and self.reflect_to_complete_shape:
                 reflected_orig_shape = img.shape
-                img = pad_and_reflect(
+                img = pad_to_shape(
                     img,
                     self.data_shape,
                     verbose=True,

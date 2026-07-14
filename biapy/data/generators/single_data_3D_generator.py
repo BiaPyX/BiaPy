@@ -49,7 +49,7 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         image : 4D Numpy array
             Transformed image. E.g. ``(z, y, x, channels)``.
         """
-        if self.zflip and random.uniform(0, 1) < self.da_prob:
+        if self.zflip and random.uniform(0, 1) < self.aug_prob.get("zflip", 0.5):
             image = image[::-1, ...]
 
         return super().apply_transform(image)

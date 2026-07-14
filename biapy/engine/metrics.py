@@ -232,6 +232,20 @@ class jaccard_index:
         return iou/len(_y_pred)
 
 
+def cellpose_flow_target_scale(channel_extra_opts: Optional[Dict]) -> float:
+    """
+    Scale applied to Cellpose/Omnipose flow *targets* (Gv/Gh/Gz) at loss/metric time.
+
+    Cellpose does not bake this factor into the stored flow field; it multiplies the flow target by
+    5 inside the loss (``veci = 5.*flow`` in ``CellposeModel.loss_fn``). Omnipose flows are trained at
+    unit scale (factor 1). The gradient type is read from the same place the flow-field builder uses
+    (``DATA_CHANNELS_EXTRA_OPTS['Gv']['gradient_type']``), so the loss/metric always agree with how
+    the stored unit-vector GT was produced.
+    """
+    gtype = (channel_extra_opts or {}).get("Gv", {}).get("gradient_type", "cellpose")
+    return 5.0 if gtype == "cellpose" else 1.0
+
+
 class multiple_metrics:
     """
     Compute multiple metrics for instance segmentation workflows.
@@ -291,6 +305,9 @@ class multiple_metrics:
         self.model_source = model_source
         self.ignore_index = ignore_index if ignore_index != -1 else None
         self.ndim = ndim
+        # Flow targets (Gv/Gh/Gz) are stored as unit vectors; scale them to the network's target
+        # range here so the L1 metric compares like-for-like (see cellpose_flow_target_scale).
+        self.flow_target_scale = cellpose_flow_target_scale(channel_extra_opts)
 
         self.metric_func = []
         for i in range(len(metric_names)):
@@ -382,6 +399,8 @@ class multiple_metrics:
                 else:
                     y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
                     y_true_slice = _y_true[:, gt_ch_start:gt_ch_end].float()
+                    if channel in ("Gv", "Gh", "Gz"):
+                        y_true_slice = y_true_slice * self.flow_target_scale
                     if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
                         y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
                         y_true_slice = y_true_slice.float()
@@ -1490,6 +1509,8 @@ class instance_segmentation_loss:
         self.extra_weight_in_borders = out_channels.count("We") > 0
         self.gt_channels_expected = gt_channels_expected if not self.extra_weight_in_borders else gt_channels_expected + 1
         self.channel_extra_opts = channel_extra_opts
+        # Flows are stored as unit vectors and scaled at loss time (5x for Cellpose, 1x for Omnipose).
+        self.flow_target_scale = cellpose_flow_target_scale(channel_extra_opts)
         self.class_rebalance = class_rebalance
         self.class_weights = None
         self.ignore_index = ignore_index
@@ -1601,16 +1622,11 @@ class instance_segmentation_loss:
                 mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
                 mask = None
                 if channel in ("Gv", "Gh", "Gz"):
-                    if any(ch in ("F", "B", "M") for ch in self.out_channels):
-                        mask = self._foreground_mask(y_true)
-                    else:
-                        # Flow targets are unit vectors: magnitude is always 1 in the foreground
-                        # and (0, 0[, 0]) in the background.  A foreground pixel with purely
-                        # horizontal flow has Gv=0, so per-component (!=0) masking would wrongly
-                        # exclude it.  Sum of squared components is the correct foreground proxy.
-                        flow_channels = [j for j, ch in enumerate(self.out_channels) if ch in ("Gv", "Gh", "Gz")]
-                        mag_sq = sum(y_true[:, j : j + 1].float() ** 2 for j in flow_channels)
-                        mask = (mag_sq > 0).float()
+                    # Scale the unit-vector flow target by 5 here (as Cellpose does in the loss) and
+                    # compute the MSE over the whole patch (background targets are 0, driving
+                    # predictions to 0 outside cells), so leave mask=None.
+                    y_true_slice = y_true_slice * self.flow_target_scale
+                    mask = None
                 elif channel in ("H", "V", "Z"):
                     # HoVer-Net channels: values in [-1, 1] (signed), centroid = 0 = background.
                     # Masking by (!=0) would exclude the entire center row/column of every cell.

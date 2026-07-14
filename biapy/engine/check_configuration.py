@@ -687,12 +687,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "Both must match: the GT is generated with 'gradient_type' and post-processing uses 'CELLPOSE.TYPE'."
                     )
 
-                if not (0.0 <= cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER < 1.0):
-                    raise ValueError(
-                        "'PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER' must be in [0, 1), but is "
-                        f"{cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER}."
-                    )
-
         else: # synapses
             chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
@@ -756,7 +750,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
 
-        if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2:
+        if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2 and len(sorted_original_instance_channels) > 1:
             raise ValueError(
                 f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True but "
                 f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has only {len(effective_channels_per_head)} "
@@ -771,7 +765,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for ch in sorted_original_instance_channels:
                     if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post", "F_cleft"]:
                         losses.append("bce")
-                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R", "Gv", "Gh", "Gz"]:
+                    elif ch in ["Gv", "Gh", "Gz"]:
+                        losses.append("mse")
+                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R"]:
                         losses.append("l1")
                     elif ch in ["E_offset", "E_sigma", "E_seediness"]:
                         losses.append("embedseg")
@@ -3112,8 +3108,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
-        if not check_value(cfg.AUGMENTOR.DA_PROB):
-            raise ValueError("AUGMENTOR.DA_PROB not in [0, 1] range")
+        for prob_key in [k for k in cfg.AUGMENTOR.keys() if k.endswith("_PROB")]:
+            if not check_value(cfg.AUGMENTOR[prob_key]):
+                raise ValueError(f"AUGMENTOR.{prob_key} not in [0, 1] range")
         if cfg.AUGMENTOR.RANDOM_ROT:
             if not check_value(cfg.AUGMENTOR.RANDOM_ROT_RANGE, (-360, 360)):
                 raise ValueError("AUGMENTOR.RANDOM_ROT_RANGE values needs to be between [-360,360]")
@@ -3773,6 +3770,22 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     del old_cfg["DATA"]["NORMALIZATION"]["APPLICATION_MODE"]
 
     if "AUGMENTOR" in old_cfg:
+        if "DA_PROB" in old_cfg["AUGMENTOR"]:
+            # The single global AUGMENTOR.DA_PROB was replaced by a per-augmentation probability.
+            # Carry its value over to every individual *_PROB not already set so the augmentation
+            # behaviour of old configs is preserved, then drop the now-removed DA_PROB key.
+            da_prob = old_cfg["AUGMENTOR"]["DA_PROB"]
+            for prob_key in [
+                "ZOOM_PROB", "RANDOM_ROT_PROB", "ROT90_PROB", "SHEAR_PROB", "SHIFT_PROB", "VFLIP_PROB",
+                "HFLIP_PROB", "ZFLIP_PROB", "ELASTIC_PROB", "G_BLUR_PROB", "MEDIAN_BLUR_PROB",
+                "MOTION_BLUR_PROB", "GAMMA_CONTRAST_PROB", "BRIGHTNESS_PROB", "CONTRAST_PROB",
+                "DROPOUT_PROB", "CUTOUT_PROB", "CUTBLUR_PROB", "CUTMIX_PROB", "CUTNOISE_PROB",
+                "MISALIGNMENT_PROB", "MISSING_SECTIONS_PROB", "GRAYSCALE_PROB", "CHANNEL_SHUFFLE_PROB",
+                "GRIDMASK_PROB", "GAUSSIAN_NOISE_PROB", "POISSON_NOISE_PROB", "SALT_PROB", "PEPPER_PROB",
+                "SALT_AND_PEPPER_PROB",
+            ]:
+                old_cfg["AUGMENTOR"].setdefault(prob_key, da_prob)
+            del old_cfg["AUGMENTOR"]["DA_PROB"]
         if "BRIGHTNESS_EM" in old_cfg["AUGMENTOR"]:
             del old_cfg["AUGMENTOR"]["BRIGHTNESS_EM"]
         if "BRIGHTNESS_EM_FACTOR" in old_cfg["AUGMENTOR"]:

@@ -204,9 +204,12 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
 
     For the Cellpose/Omnipose flow workflow this lets the train generator rescale every patch by
     ``DIAM_MEAN / diameter`` so cells become ~``DIAM_MEAN`` pixels (mirroring Cellpose's diameter
-    normalization). When ``PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER > 0`` that value is used for all
-    files; otherwise the per-image diameters written to ``cellpose_diameters*.json`` when the instance
-    channels were created are used. Files without a known diameter are left unscaled.
+    normalization). The per-image diameter is always taken from the ``cellpose_diameters*.json``
+    written when the instance channels were created — ``PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER`` is
+    NOT used here (it only drives the test-time input rescale), matching Cellpose, which measures the
+    diameter of each training image from its labels. When the validation set is split from train
+    (``DATA.VAL.FROM_TRAIN``) no ``val`` JSON exists, so the val files fall back to the train stats
+    (matched by basename). Files without a known diameter are left unscaled.
 
     Parameters
     ----------
@@ -220,28 +223,29 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
     Returns
     -------
     float or None
-        Representative diameter (``DIAMETER`` if set, else the median across training files), or
-        ``None`` when no diameter is available. Useful for logging and the test-time default.
+        Representative diameter (median across training files), or ``None`` when no diameter is
+        available. Useful for logging and as the test-time fallback prior.
     """
     if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         return None
     if not any(ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")):
         return None
 
-    diam_cfg = cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
-    global_diam = float(diam_cfg) if (diam_cfg and diam_cfg > 0) else None
-
-    def _attach(dataset, channels_dir, split):
+    def _attach(dataset, channels_dir, split, diam_map=None, fallback_map=None):
         if dataset is None:
             return []
-        diam_map = {} if global_diam is not None else load_cellpose_diameter_stats(channels_dir, split)
+        if diam_map is None:
+            diam_map = load_cellpose_diameter_stats(channels_dir, split)
+        # When the split has no JSON of its own (e.g. validation split from train, where the val
+        # samples are training files), fall back to the map passed in (keyed by basename too).
+        used_fallback = False
+        if not diam_map and fallback_map:
+            diam_map = fallback_map
+            used_fallback = True
         collected = []
         for dfile in dataset.dataset_info:
-            if global_diam is not None:
-                d = global_diam
-            else:
-                d = diam_map.get(os.path.basename(dfile.path))
-                d = d if (d is not None and d > 0) else None
+            d = diam_map.get(os.path.basename(dfile.path))
+            d = d if (d is not None and d > 0) else None
             dfile.diameter = d
             if d:
                 collected.append(d)
@@ -249,30 +253,27 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
         # Report where the diameters came from for this split.
         if is_main_process():
             n_files = len(dataset.dataset_info)
-            if global_diam is not None:
-                print("Cellpose [{}] diameter: using configured PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER"
-                      " = {:.2f} px for all {} file(s).".format(split, global_diam, n_files))
+            json_dir = os.path.dirname(os.path.normpath(channels_dir))
+            if collected and used_fallback:
+                print("Cellpose [{}] diameter: matched per-image values for {}/{} file(s) from the "
+                      "train diameter stats (no {}-specific JSON; validation split from train).".format(
+                          split, len(collected), n_files, split))
             elif collected:
-                json_dir = os.path.dirname(os.path.normpath(channels_dir))
                 print("Cellpose [{}] diameter: loaded per-image values for {}/{} file(s) from "
                       "'{}' (cellpose_diameters_{}_rank*.json).".format(
                           split, len(collected), n_files, json_dir, split))
             else:
-                json_dir = os.path.dirname(os.path.normpath(channels_dir))
                 print("Cellpose [{}] diameter: no diameter found (looked for "
-                      "cellpose_diameters_{}_rank*.json in '{}' and DIAMETER <= 0); {} file(s) left "
+                      "cellpose_diameters_{}_rank*.json in '{}'); {} file(s) left "
                       "unscaled.".format(split, split, json_dir, n_files))
         return collected
 
-    train_diams = _attach(Y_train, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR, "train")
-    _attach(Y_val, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR, "val")
+    # Load the train map once and reuse it as the fallback for a validation set split from train.
+    train_map = load_cellpose_diameter_stats(cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR, "train")
+    train_diams = _attach(Y_train, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR, "train", diam_map=train_map)
+    _attach(Y_val, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR, "val", fallback_map=train_map)
 
-    if global_diam is not None:
-        representative = global_diam
-    elif train_diams:
-        representative = float(np.median(train_diams))
-    else:
-        representative = None
+    representative = float(np.median(train_diams)) if train_diams else None
 
     if is_main_process():
         if representative:
@@ -285,7 +286,7 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
             )
         else:
             print(
-                "No Cellpose diameter stats found (no cellpose_diameters*.json and DIAMETER <= 0); "
+                "No Cellpose diameter stats found (no cellpose_diameters*.json); "
                 "training patches will NOT be rescaled."
             )
     return representative
@@ -1053,31 +1054,24 @@ def labels_into_channels(
             Gz = np.zeros_like(vol, dtype=np.float32)
 
         if gtype == "omnipose":
-            # 1. Calculate Distance Transform (The "Potential Field")
-            # Must be computed per-cell so each pixel holds its distance to its
-            # own cell boundary. Using the full multi-label vol as foreground
-            # merges touching cells into one region, giving wrong EDT values at
-            # shared interfaces.
+            # 1. Distance transform, per-cell so touching cells are not merged into one region (which
+            # would give wrong EDT values at shared interfaces).
             dist_field = np.zeros_like(vol, dtype=np.float32)
             for lb in instances:
                 cell_mask = (vol == lb)
                 dist_field[cell_mask] = edt.edt(cell_mask, anisotropy=resolution, parallel=-1)[cell_mask]
 
-            # 2. Calculate Gradients of the Distance Field
-            # np.gradient returns [dz, dy, dx] for 3D or [dy, dx] for 2D
-            # Pass voxel spacing so gradients are physically correct for anisotropic data.
+            # 2. Gradient of the distance field (voxel spacing for anisotropic data).
             if vol.ndim == 3:
                 grads = np.gradient(dist_field, resolution[0], resolution[1], resolution[2])
             else:
                 grads = np.gradient(dist_field, resolution[1], resolution[2])
-            
-            # 3. Normalize the flows
-            # Omnipose uses normalized gradients as direction vectors
+
+            # 3. Normalize to unit direction vectors.
             mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
             grads = [g / mag for g in grads]
 
-            # 4. Apply mask and save to global arrays
-            # Only write within foreground to leave background at 0.
+            # 4. Write within foreground only, leaving background at 0.
             fg = fg_mask > 0
             if vol.ndim == 3:
                 Gz[fg] = grads[-3][fg]
@@ -1088,29 +1082,29 @@ def labels_into_channels(
                 slc = slice_from_props(props_tbl, i, vol.ndim)
                 mask = (vol[slc] == lb)
                 
-                # 1. Define the center (source of the heat)
-                # Cellpose uses the mask pixel closest to the continuous centroid,
-                # not the median of sorted coordinates (which can differ for irregular shapes).
+                # 1. Center (heat source): per-axis mean, snapped to the nearest mask pixel.
                 coords = np.nonzero(mask)
-                centroid = np.array([c.mean() for c in coords])            # continuous centroid
+                centroid = np.array([c.mean() for c in coords])            # per-axis mean (centroid)
                 coord_stack = np.stack(coords, axis=1).astype(np.float32)  # (N, ndim)
                 idx = int(np.argmin(np.sum((coord_stack - centroid) ** 2, axis=1)))
                 centers = tuple(int(c[idx]) for c in coords)
 
-                # 2. Iterative Diffusion Process
-                # Matches Cellpose's _extend_centers exactly:
-                #   - Moore (8-connected in 2D / 26-connected in 3D) averaging including self
-                #   - Accumulating center: T[center] += 1 each step (not clamped to 1)
-                #   - niter = 2*sum(shape) per cell when "auto" (Cellpose's CPU formula)
-                # Pad by 1 on each side so all Moore-neighbor accesses stay in-bounds,
-                # equivalent to Cellpose's +2 bounding-box padding with +1 coord shift.
+                # 2. Iterative diffusion (Cellpose's _extend_centers): Moore-neighbour averaging
+                # including self, with an accumulating center (T[center] += 1 each step). Pad by 1 so
+                # neighbour accesses stay in-bounds.
                 pad = 1
                 heat = np.zeros(tuple(s + 2 * pad for s in mask.shape), dtype=np.float64)
                 p_coords = tuple(c + pad for c in coords)    # padded mask-pixel indices
                 p_center = tuple(c + pad for c in centers)   # padded center index
 
-                # niter = 2*(ly+lx) matches Cellpose masks_to_flows_cpu (dynamics.py line 307)
-                n_iter_cell = 2 * int(sum(mask.shape)) if niter == "auto" else niter
+                # Cellpose diffusion-step counts: 2D 2*(h+w+4), 3D 6*(d+h+w+3).
+                if niter == "auto":
+                    if mask.ndim == 3:
+                        n_iter_cell = 6 * (int(sum(mask.shape)) + 3)
+                    else:
+                        n_iter_cell = 2 * (int(sum(mask.shape)) + 4)
+                else:
+                    n_iter_cell = niter
 
                 if mask.ndim == 2:
                     y_c, x_c = p_coords
@@ -1136,20 +1130,17 @@ def labels_into_channels(
                                     neigh += heat[z_c + dz, y_c + dy, x_c + dx]
                         heat[z_c, y_c, x_c] = neigh / 27.0
 
-                # 3. Calculate Gradients on the padded heat so boundary mask pixels get
-                # a proper central difference (padded zeros act as Dirichlet BC).
-                # Skip cells that are only 1 pixel wide (gradient undefined).
-                if any(s < 2 for s in mask.shape):
-                    continue
-                # np.gradient returns [d0, d1, ...] = [dz, dy, dx] in 3D or [dy, dx] in 2D
-                # Pass voxel spacing for correct gradient magnitude on anisotropic data.
+                # 3. Gradient of the padded heat (padded zeros act as Dirichlet BC). Voxel spacing is
+                # passed for correct magnitude on anisotropic data. Returns [dz,dy,dx] (3D) or [dy,dx].
                 if vol.ndim == 3:
                     grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
                 else:
                     grads = np.gradient(heat, resolution[1], resolution[2])
 
-                # 4. Normalize the flows (extract at padded mask-pixel positions)
-                mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads) + 1e-6)
+                # 4. Normalize (at padded mask-pixel positions). The epsilon goes OUTSIDE the sqrt and is
+                # negligible (like Cellpose's 1e-60): a small one inside would floor the magnitude and
+                # crush the tiny-but-valid gradients at border-truncated pixels to zero.
+                mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads)) + 1e-60
 
                 # 5. Apply mask and save to global arrays
                 if vol.ndim == 3:
@@ -1162,11 +1153,8 @@ def labels_into_channels(
                     Gv[slc][mask] = grads[0][p_coords] / mag
                     Gh[slc][mask] = grads[1][p_coords] / mag
 
-            # We multiply by 5 to scale the flow values to a range of [-5, 5] to match Cellpose
-            Gv *= 5.0
-            Gh *= 5.0
-            if vol.ndim == 3:
-                Gz *= 5.0
+            # Flows are left as unit vectors; Cellpose's 5x target scaling is applied in the loss/metric
+            # (cellpose_flow_target_scale), not baked into the GT.
 
         # Map back to the new_mask channels
         if "Gz" in mode and Gz is not None:

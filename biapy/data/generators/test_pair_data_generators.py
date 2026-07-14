@@ -5,7 +5,7 @@ import numpy as np
 from typing import List, Tuple, Dict, Any, Callable, Optional
 from numpy.typing import NDArray
 
-from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_and_reflect
+from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_to_shape
 from biapy.data.data_3D_manipulation import looks_like_hdf5
 from biapy.data.dataset import BiaPyDataset, DataSample
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
@@ -277,14 +277,14 @@ class test_pair_data_generator(Dataset):
                 # Reflect data to complete the needed shape
                 if self.reflect_to_complete_shape:
                     reflected_orig_shape = img.shape
-                    img = pad_and_reflect(
+                    img = pad_to_shape(
                         img,
                         self.data_shape,
                         verbose=True,
                     )
                     if self.provide_Y:
                         assert mask is not None
-                        mask = pad_and_reflect(
+                        mask = pad_to_shape(
                             mask,
                             self.data_shape,
                             verbose=True,

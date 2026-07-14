@@ -31,7 +31,7 @@ from numpy.typing import NDArray
 from skimage.transform import resize
 
 from biapy.utils.misc import is_main_process, to_numpy_format
-from biapy.data.data_manipulation import pad_and_reflect
+from biapy.data.data_manipulation import pad_to_shape
 from biapy.data.post_processing.gradient_tracking import _estimate_cell_radius
 
 
@@ -194,9 +194,9 @@ class CellposeTestPhaseMixin:
                 tgt[ix] = max(1, int(round(a.shape[ix] * factor)))
                 r = resize(a, tuple(tgt), order=order, mode="reflect", clip=True, preserve_range=True,
                            anti_aliasing=(order != 0 and factor < 1.0)).astype(arr_native.dtype)
-                # Re-pad so the rescaled image is at least PATCH_SIZE again (down-scaling can shrink it
-                # below one patch, which breaks the tiler). Content stays at the bottom-right.
-                r = pad_and_reflect(r, self.cfg.DATA.PATCH_SIZE, verbose=False)
+                # Re-pad to at least PATCH_SIZE (down-scaling can shrink it below one patch). Pad with
+                # zeros, not reflection: mirroring would fabricate duplicate border cells.
+                r = pad_to_shape(r, self.cfg.DATA.PATCH_SIZE, verbose=False, mode="constant")
                 return np.expand_dims(r, 0), tuple(r.shape)
 
             X_new, x_padded_shape = _rescale_native(X_native, 1)

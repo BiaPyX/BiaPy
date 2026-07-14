@@ -15,7 +15,7 @@ median_padding = False
 
 sys.path.insert(0, code_dir)
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap
-from biapy.data.data_manipulation import save_tif_pair_discard, pad_and_reflect, imread
+from biapy.data.data_manipulation import save_tif_pair_discard, pad_to_shape, imread
 
 ids = sorted(next(os.walk(input_dir_x))[2])
 for n, id_ in tqdm(enumerate(ids), total=len(ids)):
@@ -33,8 +33,8 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
     if len(mask.shape) == 3:
         mask = np.expand_dims(mask, axis=-1)
 
-    img = pad_and_reflect(img, crop_shape, True)
-    mask = pad_and_reflect(mask, crop_shape, True)
+    img = pad_to_shape(img, crop_shape, True)
+    mask = pad_to_shape(mask, crop_shape, True)
 
     if img.shape != crop_shape[:3]+(img.shape[-1],):
         img, mask, _ = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), data_mask=mask, overlap=overlap,

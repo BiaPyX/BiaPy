@@ -127,6 +127,42 @@ def create_train_val_augmentors(
             f_name = Pair3DImageDataGenerator
 
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+
+    # Per-augmentation probabilities, keyed by the augmentation's internal name. Each enabled
+    # augmentation is rolled independently against its own probability (there is no global DA_PROB).
+    aug_prob = {
+        "zoom": cfg.AUGMENTOR.ZOOM_PROB,
+        "rand_rot": cfg.AUGMENTOR.RANDOM_ROT_PROB,
+        "rotation90": cfg.AUGMENTOR.ROT90_PROB,
+        "shear": cfg.AUGMENTOR.SHEAR_PROB,
+        "shift": cfg.AUGMENTOR.SHIFT_PROB,
+        "vflip": cfg.AUGMENTOR.VFLIP_PROB,
+        "hflip": cfg.AUGMENTOR.HFLIP_PROB,
+        "zflip": cfg.AUGMENTOR.ZFLIP_PROB,
+        "elastic": cfg.AUGMENTOR.ELASTIC_PROB,
+        "g_blur": cfg.AUGMENTOR.G_BLUR_PROB,
+        "median_blur": cfg.AUGMENTOR.MEDIAN_BLUR_PROB,
+        "motion_blur": cfg.AUGMENTOR.MOTION_BLUR_PROB,
+        "gamma_contrast": cfg.AUGMENTOR.GAMMA_CONTRAST_PROB,
+        "brightness": cfg.AUGMENTOR.BRIGHTNESS_PROB,
+        "contrast": cfg.AUGMENTOR.CONTRAST_PROB,
+        "dropout": cfg.AUGMENTOR.DROPOUT_PROB,
+        "cutout": cfg.AUGMENTOR.CUTOUT_PROB,
+        "cutblur": cfg.AUGMENTOR.CUTBLUR_PROB,
+        "cutmix": cfg.AUGMENTOR.CUTMIX_PROB,
+        "cutnoise": cfg.AUGMENTOR.CUTNOISE_PROB,
+        "misalignment": cfg.AUGMENTOR.MISALIGNMENT_PROB,
+        "missing_sections": cfg.AUGMENTOR.MISSING_SECTIONS_PROB,
+        "grayscale": cfg.AUGMENTOR.GRAYSCALE_PROB,
+        "channel_shuffle": cfg.AUGMENTOR.CHANNEL_SHUFFLE_PROB,
+        "gridmask": cfg.AUGMENTOR.GRIDMASK_PROB,
+        "gaussian_noise": cfg.AUGMENTOR.GAUSSIAN_NOISE_PROB,
+        "poisson_noise": cfg.AUGMENTOR.POISSON_NOISE_PROB,
+        "salt": cfg.AUGMENTOR.SALT_PROB,
+        "pepper": cfg.AUGMENTOR.PEPPER_PROB,
+        "salt_and_pepper": cfg.AUGMENTOR.SALT_AND_PEPPER_PROB,
+    }
+
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
         cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
     ):
@@ -142,7 +178,7 @@ def create_train_val_augmentors(
             X=X_train,
             seed=cfg.SYSTEM.SEED,
             da=cfg.AUGMENTOR.ENABLE,
-            da_prob=cfg.AUGMENTOR.DA_PROB,
+            aug_prob=aug_prob,
             rotation90=cfg.AUGMENTOR.ROT90,
             rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
             rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
@@ -183,7 +219,7 @@ def create_train_val_augmentors(
             Y=Y_train,
             seed=cfg.SYSTEM.SEED,
             da=cfg.AUGMENTOR.ENABLE,
-            da_prob=cfg.AUGMENTOR.DA_PROB,
+            aug_prob=aug_prob,
             rotation90=cfg.AUGMENTOR.ROT90,
             rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
             rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
@@ -283,7 +319,6 @@ def create_train_val_augmentors(
                 # The per-file diameter lives on DatasetFile.diameter; the generator computes the
                 # per-sample rescale factor DIAM_MEAN / diameter itself.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
-                dic["cellpose_scale_jitter"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_JITTER)
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX

@@ -1554,13 +1554,135 @@ def ensemble8_2d_predictions(
         return rest_of_outs
 
 
+def ensemble_cellpose_flip_predictions(
+    o_img: NDArray,
+    pred_func: Callable,
+    axes_order_back: Tuple[int, ...],
+    axes_order: Tuple[int, ...],
+    device: torch.device,
+    flow_channels: Dict,
+    ndim: int,
+    batch_size_value: int = 1,
+    mode: str = "mean",
+) -> torch.Tensor | Dict:
+    """
+    Cellpose-style flip test-time augmentation for flow-field (Gv/Gh/Gz) predictions (2D and 3D).
+
+    Faithful port of Cellpose's ``transforms.make_tiles(augment=True)`` + ``unaugment_tiles``,
+    generalized to ``ndim`` spatial dimensions: the image is predicted in **all ``2**ndim`` flip
+    orientations** (every combination of reflecting the spatial axes), each prediction is un-flipped
+    spatially, and the flow-vector component parallel to every reflected axis is negated so the
+    averaged flow field stays consistent (``Gv`` = y-flow, ``Gh`` = x-flow, ``Gz`` = z-flow; a
+    reflection reverses the component along the mirrored axis, exactly as Cellpose negates
+    ``dY``/``dX``). No rotations are used (Cellpose does not rotate in TTA). Scalar channels
+    (foreground, class, ...) are only un-flipped. The orientations are then reduced with ``mode``.
+
+    Parameters
+    ----------
+    o_img : Numpy array
+        Input image. ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
+
+    pred_func : function
+        Function to make predictions.
+
+    axes_order_back : tuple
+        Axis order to convert from tensor to numpy. E.g. ``(0, 3, 1, 2)`` (2D) or ``(0, 4, 1, 2, 3)`` (3D).
+
+    axes_order : tuple
+        Axis order to convert from numpy to tensor.
+
+    device : Torch device
+        Device used.
+
+    flow_channels : dict
+        Output-prediction channel indices of the flow components, e.g. ``{"Gv": i, "Gh": j, "Gz": k}``
+        (any role may be absent). ``Gv`` is negated on a Y flip, ``Gh`` on an X flip, ``Gz`` on a Z flip.
+
+    ndim : int
+        Number of spatial dimensions of ``o_img`` (2 or 3).
+
+    batch_size_value : int, optional
+        Batch size value.
+
+    mode : str, optional
+        Ensemble mode. Possible options: "mean", "min", "max".
+
+    Returns
+    -------
+    out : torch.Tensor or dict
+        Model output with the ``pred`` key assembled (matching :func:`ensemble8_2d_predictions`).
+    """
+    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
+    assert ndim in (2, 3), "ndim must be 2 or 3, got {}".format(ndim)
+
+    # Spatial axis -> flow role that must be sign-flipped when that axis is reflected. The channel
+    # axis is -1 and the leading ``ndim`` axes are spatial: (y, x) in 2D, (z, y, x) in 3D.
+    axis_role = {0: "Gv", 1: "Gh"} if ndim == 2 else {0: "Gz", 1: "Gv", 2: "Gh"}
+
+    def _flip_slice(combo):
+        # Slicing tuple that reflects the spatial axes marked in ``combo`` (channel axis kept intact).
+        return tuple(slice(None, None, -1) if combo[a] else slice(None) for a in range(ndim)) + (slice(None),)
+
+    # All 2**ndim flip combinations (Cellpose make_tiles augment=True, generalized): bit a of the
+    # orientation index selects whether spatial axis a is reflected.
+    combos = [tuple((o >> a) & 1 for a in range(ndim)) for o in range(2 ** ndim)]
+
+    # Build the augmented inputs.
+    aug_img = np.stack([o_img[_flip_slice(c)] for c in combos], axis=0)  # (N, spatial..., ch)
+
+    # Predict (batched, like ensemble8_2d_predictions).
+    preds, class_outs = [], []
+    l = int(math.ceil(aug_img.shape[0] / batch_size_value))
+    for i in range(l):
+        top = min((i + 1) * batch_size_value, aug_img.shape[0])
+        r_aux = pred_func(aug_img[i * batch_size_value : top])
+        cls = None
+        if isinstance(r_aux, dict):
+            cls = r_aux.get("class")
+            r_aux = r_aux["pred"]
+        preds.append(to_numpy_format(r_aux, axes_order_back))
+        if cls is not None:
+            class_outs.append(to_numpy_format(cls, axes_order_back))
+    pred = np.concatenate(preds, axis=0).astype(np.float32)  # (N, spatial..., ch)
+    has_class = len(class_outs) > 0
+    cls = np.concatenate(class_outs, axis=0).astype(np.float32) if has_class else None
+
+    # Undo each flip spatially (a flip is its own inverse) and sign-correct the flow components along
+    # every reflected axis. ``.copy()`` avoids in-place reversed-stride aliasing on self-assignment.
+    for n, combo in enumerate(combos):
+        sl = _flip_slice(combo)
+        pred[n] = pred[n][sl].copy()
+        for a in range(ndim):
+            if combo[a]:
+                idx = flow_channels.get(axis_role[a])
+                if idx is not None:
+                    pred[n][..., idx] *= -1.0
+        if has_class:
+            assert cls is not None
+            cls[n] = cls[n][sl].copy()
+
+    funct = np.mean
+    if mode == "min":
+        funct = np.min
+    elif mode == "max":
+        funct = np.max
+
+    out = np.expand_dims(funct(pred, axis=0), 0)
+    out = to_pytorch_format(out, axes_order, device)
+    if has_class:
+        cls_out = np.expand_dims(funct(cls, axis=0), 0)
+        cls_out = to_pytorch_format(cls_out, axes_order, device)
+        return {"pred": out, "class": cls_out}
+    return out
+
+
 def ensemble16_3d_predictions(
-    vol: NDArray, 
-    pred_func: Callable, 
-    axes_order_back: Tuple[int,...], 
+    vol: NDArray,
+    pred_func: Callable,
+    axes_order_back: Tuple[int,...],
     axes_order: Tuple[int,...],
     device: torch.device,
-    batch_size_value: int=1, 
+    batch_size_value: int=1,
     mode: str="mean"
 ) -> torch.Tensor | Dict:
     """

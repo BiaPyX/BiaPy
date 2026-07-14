@@ -39,7 +39,6 @@ def main():
     if data.ndim != 4:
         raise ValueError(f"Data should be 4 dimensional (Z,X,Y,C), got shape {data.shape}")
 
-    # Keep same call signature as your original script
     save_tif(np.expand_dims(data, 0), out_dir, [os.path.basename(zarrfile)], verbose=True)
 
 if __name__ == "__main__":

@@ -91,13 +91,14 @@ from biapy.data.data_manipulation import (
 from biapy.data.pre_processing import resize_images
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
+    ensemble_cellpose_flip_predictions,
     ensemble16_3d_predictions,
     apply_binary_mask,
 )
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import set_cellpose_diameters
-from biapy.data.norm import normalize_image, normalize_mask
+from biapy.data.norm import normalize_image
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.dataset import PatchCoords
 from biapy.models.memory_bank import MemoryBank
@@ -219,8 +220,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.mask_path = ""
         self.is_y_mask = False
-        # Cellpose training-time cell diameter (pixels) used to rescale patches to PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN.
-        # None disables the rescaling. Set in load_train_data() for the Cellpose workflow.
+        # Median of the training-set per-image Cellpose diameters (pixels). Used at test time as the
+        # fallback diameter prior when PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER == 0. None if unavailable.
+        # The per-patch training rescale uses each file's own DatasetFile.diameter, not this value.
         self.cellpose_diameter = None
         self.model_output_channels = []
         self.model_output_channel_info = []
@@ -1513,8 +1515,23 @@ class Base_Workflow(metaclass=ABCMeta):
             Predicted batch.
         """
         if self.cfg.TEST.AUGMENTATION:
+            _tta_flow_ch = getattr(self, "cellpose_tta_flow_channels", None)
+            _tta_ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
             for k in tqdm(range(x_batch.shape[0]), leave=False, disable=disable_tqdm):
-                if self.cfg.PROBLEM.NDIM == "2D":
+                if _tta_flow_ch:
+                    # Cellpose-style flip TTA with flow-vector sign correction (2D & 3D flow workflow).
+                    p = ensemble_cellpose_flip_predictions(
+                        x_batch[k],
+                        axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
+                        device=self.test_device,
+                        pred_func=self.model_call_func,
+                        flow_channels=_tta_flow_ch,
+                        ndim=_tta_ndim,
+                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        mode=self.cfg.TEST.AUGMENTATION_MODE,
+                    )
+                elif self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
                         x_batch[k],
                         axes_order_back=self.axes_order_back,
@@ -1699,22 +1716,6 @@ class Base_Workflow(metaclass=ABCMeta):
         # Skip processing image
         if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
-
-        # Report the Cellpose test-time input rescale (if it was applied to this sample).
-        if "cellpose_orig_shape" in self.current_sample and is_main_process():
-            factor = self.current_sample.get("cellpose_rescale_factor", 1.0)
-            diameter = self.current_sample.get("cellpose_diameter")
-            diam_mean = self.current_sample.get("cellpose_diam_mean")
-            print(
-                "[Cellpose test rescale] diameter={} px, DIAM_MEAN={} -> factor={:.4f}; "
-                "shape {} -> {} (prediction will be resized back to the original shape).".format(
-                    "{:.2f}".format(diameter) if diameter is not None else "?",
-                    "{:.1f}".format(diam_mean) if diam_mean is not None else "?",
-                    factor,
-                    self.current_sample["cellpose_orig_shape"],
-                    self.current_sample.get("cellpose_resized_shape", "?"),
-                )
-            )
             
         #################
         ### PER PATCH ###
@@ -1847,7 +1848,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         if self.current_sample["Y"] is not None:
                             self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
 
-                # Resize to original shape     
+                # Resize prediction (and X/Y) back to the native image shape before saving/metrics.
+                _cp_native = self.current_sample.get("cellpose_orig_shape")
                 if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
                     rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1]+(pred.shape[-1],)
                     if self.cfg.TEST.VERBOSE:
@@ -1876,7 +1878,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
                         anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
                     )[0]
-                    
+
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = resize_images(
                             [self.current_sample["Y"]],
@@ -1888,8 +1890,40 @@ class Base_Workflow(metaclass=ABCMeta):
                             preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
                             anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
                         )[0]
-                    
-                if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+                elif _cp_native is not None:
+                    # Cellpose test rescale: crop the zero-padding (valid region at the bottom-right)
+                    # and resize the flows/foreground back to native, so the saved raw output is native.
+                    _resized = self.current_sample.get("cellpose_resized_shape")
+                    if _resized is not None:
+                        ry = int(_resized[0] if self.dims == 2 else _resized[1])
+                        rx = int(_resized[1] if self.dims == 2 else _resized[2])
+                        if pred.shape[-3] > ry or pred.shape[-2] > rx:
+                            pred = pred[..., -ry:, -rx:, :]
+                            self.current_sample["X"] = self.current_sample["X"][..., -ry:, -rx:, :]
+                            if self.current_sample["Y"] is not None:
+                                self.current_sample["Y"] = self.current_sample["Y"][..., -ry:, -rx:, :]
+                    native_spatial = tuple(int(s) for s in _cp_native[:-1])
+                    if self.cfg.TEST.VERBOSE:
+                        print("Resizing Cellpose prediction from {} to native {}".format(pred.shape, native_spatial))
+                    # Linear resize of the flows/foreground back to native (Cellpose resample=True).
+                    _rk = dict(mode="reflect", cval=0, clip=True, preserve_range=True, anti_aliasing=False)
+                    pred = resize_images(
+                        [pred], output_shape=(1,) + native_spatial + (pred.shape[-1],), order=1, **_rk
+                    )[0]
+                    self.current_sample["X"] = resize_images(
+                        [self.current_sample["X"]],
+                        output_shape=(1,) + native_spatial + (self.current_sample["X"].shape[-1],),
+                        order=1, **_rk,
+                    )[0]
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = resize_images(
+                            [self.current_sample["Y"]],
+                            output_shape=(1,) + native_spatial + (self.current_sample["Y"].shape[-1],),
+                            order=0, **_rk,
+                        )[0]
+
+                if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and _cp_native is None:
+                    # Skipped for the Cellpose rescale path (the elif above already resized to native).
                     reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
                     if reflected_orig_shape != pred.shape:
                         if self.cfg.TEST.VERBOSE:
@@ -2030,14 +2064,29 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Make the prediction
                 if self.cfg.TEST.AUGMENTATION:
-                    pred = ensemble8_2d_predictions(
-                        self.current_sample["X"][0],
-                        axes_order_back=self.axes_order_back,
-                        pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.test_device,
-                        mode=self.cfg.TEST.AUGMENTATION_MODE,
-                    )
+                    _tta_flow_ch = getattr(self, "cellpose_tta_flow_channels", None)
+                    if _tta_flow_ch:
+                        # Cellpose-style flip TTA with flow-vector sign correction (2D & 3D flow workflow).
+                        pred = ensemble_cellpose_flip_predictions(
+                            self.current_sample["X"][0],
+                            axes_order_back=self.axes_order_back,
+                            pred_func=self.model_call_func,
+                            axes_order=self.axes_order,
+                            device=self.test_device,
+                            flow_channels=_tta_flow_ch,
+                            ndim=2 if self.cfg.PROBLEM.NDIM == "2D" else 3,
+                            batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                            mode=self.cfg.TEST.AUGMENTATION_MODE,
+                        )
+                    else:
+                        pred = ensemble8_2d_predictions(
+                            self.current_sample["X"][0],
+                            axes_order_back=self.axes_order_back,
+                            pred_func=self.model_call_func,
+                            axes_order=self.axes_order,
+                            device=self.test_device,
+                            mode=self.cfg.TEST.AUGMENTATION_MODE,
+                        )
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
 

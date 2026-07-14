@@ -21,7 +21,7 @@ from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 
 
 
-# --- Tunables (kept in-code per your request to only have two CLI args) ---
+# --- Tunables (in-code; only two CLI args) ---
 MIN_DISTANCE = 15  # minimum separation (in pixels) between peaks
 PEAK_THRESH_ABS = 0.5  # set to a float (e.g., 0.2) to require peaks >= that prob; None disables
 USE_OTSU_FOR_MASK = True  # True: mask = probs > otsu; False: mask = probs > 0

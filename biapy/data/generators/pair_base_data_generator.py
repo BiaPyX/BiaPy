@@ -26,7 +26,7 @@ from numpy.typing import NDArray
 
 from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process, os_walk_clean
-from biapy.data.data_manipulation import pad_and_reflect, load_img_data, extract_patch_within_image
+from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_patch_within_image, enlarge_coords
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
@@ -56,8 +56,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     da : bool, optional
         To activate the data augmentation.
 
-    da_prob : float, optional
-            Probability of doing each transformation.
+    aug_prob : dict of str to float, optional
+            Per-augmentation probability of being applied, keyed by the augmentation's internal name
+            (e.g. ``{"zoom": 0.5, "rand_rot": 0.3, ...}``). Each enabled augmentation is rolled
+            independently against its own probability; missing keys default to ``0.5``.
 
     rotation90 : bool, optional
         To make square (90, 180,270) degree rotations.
@@ -344,11 +346,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Cellpose reference diameter (pixels) the model is trained at (``DIAM_MEAN``). When > 0 and
         ``flow_channels`` is non-empty, each training patch is rescaled in-plane by
         ``DIAM_MEAN / diameter`` (the per-file diameter, read from ``DatasetFile.diameter``) so cells
-        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale.
-
-    cellpose_scale_jitter : float, optional
-        Random scale jitter applied on top of the diameter rescale (Cellpose's ``scale_range``): the
-        factor is multiplied by ``s ~ U[1 - jitter, 1 + jitter]``. ``0.0`` (default) disables jitter.
+        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale. The random scale
+        augmentation on top of this normalization is provided by the ``zoom`` augmentation
+        (``AUGMENTOR.ZOOM`` / ``zoom_range``).
 
     random_crop_scale : tuple of ints, optional
         Scale factor the mask used in super-resolution workflow. E.g. ``(2,2)``.
@@ -373,7 +373,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         norm_module: Dict,
         seed: int = 0,
         da: bool = True,
-        da_prob: float = 0.5,
+        aug_prob: Dict[str, float] = {},
         rotation90: bool = False,
         rand_rot: bool = False,
         rnd_rot_range: Tuple[int, int] = (-180, 180),
@@ -464,7 +464,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         instance_problem: bool = False,
         flow_channels: Dict = {},
         cellpose_diam_mean: float = 0.0,
-        cellpose_scale_jitter: float = 0.0,
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
         preprocess_f=None,
@@ -536,11 +535,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # mask normalization info is known ({"vy": i, "vx": j, "vz": k}). Used for the vector-aware
         # rotation/flip/rescale transforms.
         self.flow_heat = {}
-        # Per-sample Cellpose diameter rescale: each patch is rescaled by DIAM_MEAN / diameter (the
-        # diameter is read per source file from DatasetFile.diameter in __getitem__), with optional
-        # random jitter. DIAM_MEAN <= 0 disables it.
+        # Per-sample Cellpose diameter rescale: each patch is rescaled in-plane by DIAM_MEAN / diameter
+        # (the diameter is read per source file from DatasetFile.diameter in __getitem__) as part of the
+        # zoom augmentation. Any random scale jitter on top comes from ``zoom_range``. DIAM_MEAN <= 0
+        # disables it.
         self.cellpose_diam_mean = float(cellpose_diam_mean)
-        self.cellpose_scale_jitter = float(cellpose_scale_jitter)
         self.do_cellpose_rescale = da and len(self.flow_channels) > 0 and self.cellpose_diam_mean > 0
         self.shape = shape
 
@@ -634,7 +633,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.o_indexes = np.arange(self.length)
         self.n_classes = n_classes
         self.da = da
-        self.da_prob = da_prob
+        self.aug_prob = aug_prob
         self.cutout = cutout
         self.cout_nb_iterations = cout_nb_iterations
         self.cout_size = cout_size
@@ -688,6 +687,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.zoom = zoom
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
+
+        # Extra size to extract so a later zoom-out / rotation samples real image content instead of
+        # padding (see geom_aug_load_shape). Computed once from the fixed options; folds in the
+        # largest-cell diameter downscale (DIAM_MEAN / max_diameter).
+        self.aug_load_inc = tuple([0] * self.ndim)
+        if da:
+            extra_downscale = 1.0
+            if self.do_cellpose_rescale:
+                diams = [
+                    getattr(f, "diameter", None) for f in getattr(self.Y, "dataset_info", [])
+                ]
+                diams = [float(d) for d in diams if d and float(d) > 0]
+                if diams:
+                    extra_downscale = self.cellpose_diam_mean / max(diams)
+            self.aug_load_inc = geom_aug_load_shape(
+                tuple(self.shape[: self.ndim]),
+                self.ndim,
+                self.zoom,
+                self.zoom_range,
+                self.rand_rot,
+                zoom_in_z=self.zoom_in_z,
+                extra_downscale=extra_downscale,
+            )
+        # Enlarged extraction size; bounded by the real image, so small images keep the network size.
+        self.aug_load_spatial = tuple(
+            int(self.shape[i]) + int(self.aug_load_inc[i]) for i in range(self.ndim)
+        )
+
         self.gamma_contrast = gamma_contrast
         self.gc_gamma = gc_gamma
 
@@ -708,6 +735,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.shear_range = shear_range
         self.shift_range = shift_range
         self.affine_mode = affine_mode
+        # Flow channels must pad with zeros (background = no flow), never mirrored: reflecting a flow
+        # field fabricates border cells with vectors pointing the wrong way.
+        if self.flow_channels:
+            self.affine_mode = "constant"
         self.g_sigma = g_sigma
         self.mb_kernel = mb_kernel
         self.motb_k_range = motb_k_range 
@@ -875,7 +906,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Define the number of samples per epoch."""
         return self.length
 
-    def load_sample(self, _idx: int, first_load: bool = False) -> Tuple[NDArray, NDArray]:
+    def load_sample(
+        self, _idx: int, first_load: bool = False, geom_enlarge: bool = False
+    ) -> Tuple[NDArray, NDArray]:
         """
         Load one data sample given its corresponding index.
 
@@ -887,6 +920,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         first_load : bool, optional
             Whether its the first time a sample is loaded to prevent normalizing it.
 
+        geom_enlarge : bool, optional
+            Whether to extract a patch larger than the network input so a later zoom-out / rotation
+            keeps real image content (see ``aug_load_inc``). Off by default; enable it only where
+            ``apply_transform`` warps the patch and crops it back to the network size. Extraction stays
+            bounded by the real image.
+
         Returns
         -------
         img : 3D/4D Numpy array
@@ -897,6 +936,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         idx = _idx % self.real_length
         sample = self.X.sample_list[idx]
+
+        # Extract a bigger patch when a later geometric augmentation could otherwise pull in padding.
+        enlarge = geom_enlarge and self.da and (not first_load) and any(self.aug_load_inc)
 
         # X data
         if sample.img_is_loaded():
@@ -913,15 +955,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if self.preprocess_f:
                     img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
 
-                img = pad_and_reflect(img, self.shape, verbose=False)
+                img = pad_to_shape(img, self.shape, verbose=False, mode=self.affine_mode)
 
                 # Extract the sample within the image
                 if sample.coords:
-                    img = extract_patch_within_image(img, sample.coords, is_3d=(self.ndim == 3))
+                    coords = (
+                        enlarge_coords(sample.coords, self.aug_load_inc, img.shape, is_3d=(self.ndim == 3))
+                        if enlarge
+                        else sample.coords
+                    )
+                    img = extract_patch_within_image(img, coords, is_3d=(self.ndim == 3))
             else:
                 coords = sample.coords
                 data_axes_order = self.X.dataset_info[sample.fid].get_input_axes()
                 assert coords is not None and data_axes_order is not None
+                if enlarge:
+                    # Lazy Zarr/H5 reads clamp over-range stops, so a large sentinel extent is safe.
+                    coords = enlarge_coords(coords, self.aug_load_inc, (1 << 62,) * 3, is_3d=(self.ndim == 3))
                 img = extract_patch_from_efficient_file(img, coords, data_axes_order=data_axes_order)
 
                 # Apply preprocessing after extract sample
@@ -942,7 +992,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
             # Extract the sample within the image
             if msample.coords:
-                mask = extract_patch_within_image(mask, msample.coords, is_3d=(self.ndim == 3))
+                coords = (
+                    enlarge_coords(msample.coords, self.aug_load_inc, mask.shape, is_3d=(self.ndim == 3))
+                    if enlarge
+                    else msample.coords
+                )
+                mask = extract_patch_within_image(mask, coords, is_3d=(self.ndim == 3))
         else:
             msample = self.Y.sample_list[idx]
             if msample.img_is_loaded():
@@ -962,17 +1017,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                             self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=True
                         )[0]
 
-                    mask = pad_and_reflect(mask, self.shape, verbose=False)
+                    mask = pad_to_shape(mask, self.shape, verbose=False, mode=self.affine_mode)
 
                     # Extract the sample within the image
                     if msample.coords:
                         coords = msample.coords
                         assert coords is not None
+                        if enlarge:
+                            coords = enlarge_coords(coords, self.aug_load_inc, mask.shape, is_3d=(self.ndim == 3))
                         mask = extract_patch_within_image(mask, coords, is_3d=(self.ndim == 3))
                 else:
                     coords = msample.coords
                     data_axes_order = self.Y.dataset_info[msample.fid].get_input_axes()
                     assert coords is not None and data_axes_order is not None
+                    if enlarge:
+                        # Lazy Zarr/H5 reads clamp over-range stops, so a large sentinel extent is safe.
+                        coords = enlarge_coords(coords, self.aug_load_inc, (1 << 62,) * 3, is_3d=(self.ndim == 3))
                     mask = extract_patch_from_efficient_file(
                         mask,
                         coords,
@@ -1000,10 +1060,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             else:
                 img_prob = None
 
+            # Crop a bigger window when enlarging; bounded by the image, apply_transform crops it back.
+            crop_spatial = self.aug_load_spatial if enlarge else self.shape[: self.ndim]
             img, mask = self.random_crop_func(  # type: ignore
                 img,
                 mask,
-                self.shape[: self.ndim],
+                crop_spatial,
                 self.val,
                 img_prob=img_prob,
                 scale=self.random_crop_scale,
@@ -1043,14 +1105,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         return self.__getitem__(index)
 
-    def cellpose_rescale_factor(self, index: int) -> float:
+    def cellpose_diam_factor(self, index: int) -> float:
         """
-        Compute the per-sample Cellpose diameter rescale factor for the sample at ``index``.
+        Compute the per-sample diameter normalization factor for the sample at ``index``.
 
-        The factor is ``DIAM_MEAN / diameter`` where ``diameter`` is read from the source GT file
-        (``DatasetFile.diameter``, set from the per-image stats JSON produced when the instance
-        channels were created), with the optional random ``SCALE_JITTER`` applied on top. Returns
-        ``1.0`` (no rescale) when rescaling is disabled or the diameter is unknown.
+        The factor is ``DIAM_MEAN / diameter``, with ``diameter`` read from ``DatasetFile.diameter``.
+        Returns ``1.0`` when rescaling is disabled or the diameter is unknown.
 
         Parameters
         ----------
@@ -1060,7 +1120,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Returns
         -------
         float
-            In-plane rescale factor to feed to :func:`apply_transform`.
+            In-plane diameter normalization factor to feed to :func:`apply_transform`.
         """
         if not self.do_cellpose_rescale:
             return 1.0
@@ -1069,11 +1129,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         diameter = getattr(self.Y.dataset_info[msample.fid], "diameter", None)
         if diameter is None or diameter <= 0:
             return 1.0
-        factor = self.cellpose_diam_mean / float(diameter)
-        if self.cellpose_scale_jitter > 0.0:
-            jit = self.cellpose_scale_jitter
-            factor *= random.uniform(1.0 - jit, 1.0 + jit)
-        return factor
+        return self.cellpose_diam_mean / float(diameter)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -1092,18 +1148,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Torch tensor
             Y element, for instance, a mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        img, mask = self.load_sample(index)
+        # Enlarge the extraction here; apply_transform warps and crops it back to the network size.
+        img, mask = self.load_sample(index, geom_enlarge=True)
 
         # Apply transformations
         if self.da:
             e_img, e_mask = None, None
             if self.cutmix:
                 extra_img = np.random.randint(0, self.length - 1) if self.length > 2 else 0
+                # The cutmix donor is not warped, so it stays at the network size (geom_enlarge off).
                 e_img, e_mask = self.load_sample(extra_img)
 
             img, mask = self.apply_transform(
                 img, mask, e_im=e_img, e_mask=e_mask,
-                rescale_factor=self.cellpose_rescale_factor(index),
+                diam_factor=self.cellpose_diam_factor(index),
             )
 
         # Prepare mask when denoising with Noise2Void
@@ -1126,7 +1184,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask: NDArray,
         e_im: Optional[NDArray],
         e_mask: Optional[NDArray],
-        rescale_factor: float = 1.0,
+        diam_factor: float = 1.0,
     ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a probability.
@@ -1147,11 +1205,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or
             ``(y, x, z, channels)`` in ``3D``.
 
-        rescale_factor : float, optional
-            Per-sample Cellpose in-plane rescale factor (``DIAM_MEAN / diameter``, jitter already
-            applied) used to resize the patch so cells become ~``DIAM_MEAN`` pixels before any other
-            geometric augmentation. ``1.0`` (default) disables it. Only used when flow channels are
-            present (see :meth:`cellpose_rescale_factor` and :func:`flow_rescale`).
+        diam_factor : float, optional
+            Per-sample in-plane diameter normalization factor (``DIAM_MEAN / diameter``) folded into
+            the zoom so cells reach ~``DIAM_MEAN`` pixels. ``1.0`` (default) disables it.
 
         Returns
         -------
@@ -1194,99 +1250,93 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.cutmix:
                 del e_new_mask
 
-        # Cellpose-style diameter rescale (applied first, before any other geometric augmentation):
-        # resize the patch in-plane so cells become ~DIAM_MEAN pixels. ``rescale_factor`` is the
-        # per-sample DIAM_MEAN / diameter, already jittered in __getitem__. Binary channels use
-        # nearest-neighbour, flow/float channels use linear interpolation; the flow directions are
-        # re-oriented for the (in-plane-only) resize. See flow_rescale.
-        if self.do_cellpose_rescale and rescale_factor > 0 and abs(rescale_factor - 1.0) > 1e-3:
-            image, mask, heat = flow_rescale(
+        # Scale and rotation are rolled independently, then composed into a single warp so the image,
+        # mask and flow field are interpolated only once (see affine_transform). The diameter
+        # normalization (diam_factor = DIAM_MEAN / diameter, in-plane) is applied whenever needed, even
+        # when no augmentation roll fires.
+        do_diam_rescale = self.do_cellpose_rescale and diam_factor > 0 and abs(diam_factor - 1.0) > 1e-3
+        apply_zoom = self.zoom and random.uniform(0, 1) < self.aug_prob.get("zoom", 0.5)
+        apply_rand_rot = self.rand_rot and random.uniform(0, 1) < self.aug_prob.get("rand_rot", 0.5)
+        apply_rot90 = self.rotation90 and random.uniform(0, 1) < self.aug_prob.get("rotation90", 0.5)
+        if apply_zoom or apply_rand_rot or apply_rot90 or do_diam_rescale:
+            scale = random.uniform(self.zoom_range[0], self.zoom_range[1]) if apply_zoom else 1.0
+            angle = 0.0
+            if apply_rand_rot:
+                angle += random.uniform(float(self.rnd_rot_range[0]), float(self.rnd_rot_range[1]))
+            if apply_rot90:
+                angle += random.choice([90.0, 180.0, 270.0])
+            image, mask, heat = affine_transform(
                 image,
                 mask=mask,
                 heat=heat,
-                factor=rescale_factor,
-                flow_heat=self.flow_heat,
+                scale_xy=scale * diam_factor,
+                scale_z=scale if self.zoom_in_z else 1.0,
+                angle=angle,
                 mode=self.affine_mode,
                 mask_type=self.norm_module["target_type"],
-            )
+                flow_heat=self.flow_heat,
+            )  # type: ignore
+
+        # Crop the (possibly enlarged) patch back to the network size right after the warp, so later
+        # augmentations run at self.shape. Random crop, padding with self.affine_mode if a border fell
+        # short.
+        target = tuple(self.shape[: self.ndim])
+        if tuple(image.shape[: self.ndim]) != target:
+            image = pad_to_shape(image, target + (image.shape[-1],), mode=self.affine_mode)
+            if heat is not None:
+                nmask = mask.shape[-1]
+                merged = np.concatenate([mask, heat], axis=-1)
+                merged = pad_to_shape(merged, target + (merged.shape[-1],), mode=self.affine_mode)
+                image, merged = self.random_crop_func(image, merged, target, self.val)  # type: ignore
+                mask, heat = merged[..., :nmask], merged[..., nmask:]
+            else:
+                mask = pad_to_shape(mask, target + (mask.shape[-1],), mode=self.affine_mode)
+                image, mask = self.random_crop_func(image, mask, target, self.val)  # type: ignore
 
         # Convert to grayscale
-        if self.grayscale and random.uniform(0, 1) < self.da_prob:
+        if self.grayscale and random.uniform(0, 1) < self.aug_prob.get("grayscale", 0.5):
             image = grayscale(image)
 
         # Apply channel shuffle
-        if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
+        if self.channel_shuffle and random.uniform(0, 1) < self.aug_prob.get("channel_shuffle", 0.5):
             image = shuffle_channels(image)
 
-        # Apply zoom
-        if self.zoom and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = zoom(
-                image,
-                mask=mask,
-                heat=heat,
-                zoom_range=self.zoom_range,
-                zoom_in_z=self.zoom_in_z,
-                mode=self.affine_mode,
-                mask_type=self.norm_module["target_type"],
-            )  # type: ignore
-
-        # Apply random rotations
-        if self.rand_rot and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = rotation(
-                image,
-                mask,
-                heat=heat,
-                angles=self.rnd_rot_range,
-                mode=self.affine_mode,
-                mask_type=self.norm_module["target_type"],
-                flow_heat=self.flow_heat,
-            )  # type: ignore
-
-        # Apply square rotations
-        if self.rotation90 and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = rotation(
-                image,
-                mask,
-                heat=heat,
-                angles=[90, 180, 270],
-                mode=self.affine_mode,
-                mask_type=self.norm_module["target_type"],
-                flow_heat=self.flow_heat,
-            )  # type: ignore
-
         # Apply cblur
-        if self.cutblur and random.uniform(0, 1) < self.da_prob:
+        if self.cutblur and random.uniform(0, 1) < self.aug_prob.get("cutblur", 0.5):
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
 
         # Apply cutmix
-        if self.cutmix and random.uniform(0, 1) < self.da_prob:
+        if self.cutmix and random.uniform(0, 1) < self.aug_prob.get("cutmix", 0.5):
             image, mask, heat = cutmix(image, e_im, mask, e_mask, heat, e_heat, self.cmix_size) # type: ignore
 
         # Apply cutnoise
-        if self.cutnoise and random.uniform(0, 1) < self.da_prob:
+        if self.cutnoise and random.uniform(0, 1) < self.aug_prob.get("cutnoise", 0.5):
             image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size)
 
-        # Apply misalignment
-        if self.misalignment and random.uniform(0, 1) < self.da_prob:
-            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio)
+        # Misalignment: threads the flow channels through the same ops and re-orients their vectors.
+        if self.misalignment and random.uniform(0, 1) < self.aug_prob.get("misalignment", 0.5):
+            image, mask, heat = misalignment(
+                image, mask, self.ms_displacement, self.ms_rotate_ratio,
+                heat=heat, flow_heat=self.flow_heat,
+            )
 
         # Apply brightness
-        if self.brightness and random.uniform(0, 1) < self.da_prob:
+        if self.brightness and random.uniform(0, 1) < self.aug_prob.get("brightness", 0.5):
             image = brightness(
                 image,
                 brightness_factor=self.brightness_factor,
             )
 
         # Apply contrast
-        if self.contrast and random.uniform(0, 1) < self.da_prob:
+        if self.contrast and random.uniform(0, 1) < self.aug_prob.get("contrast", 0.5):
             image = contrast(image, contrast_factor=self.contrast_factor)
 
         # Apply gamma contrast
-        if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
+        if self.gamma_contrast and random.uniform(0, 1) < self.aug_prob.get("gamma_contrast", 0.5):
             image = gamma_contrast(image, gamma=self.gc_gamma)
 
         # Apply gaussian noise
-        if self.gaussian_noise and random.uniform(0, 1) < self.da_prob:
+        if self.gaussian_noise and random.uniform(0, 1) < self.aug_prob.get("gaussian_noise", 0.5):
             mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
             var = (
                 np.var(image) * random.uniform(0.9, 1.1)
@@ -1296,19 +1346,19 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             image = random_noise(image, mode="gaussian", mean=mean, var=var)
 
         # Apply poisson noise
-        if self.poisson_noise and random.uniform(0, 1) < self.da_prob:
+        if self.poisson_noise and random.uniform(0, 1) < self.aug_prob.get("poisson_noise", 0.5):
             image = random_noise(image, mode="poisson")
 
         # Apply salt noise
-        if self.salt and random.uniform(0, 1) < self.da_prob:
+        if self.salt and random.uniform(0, 1) < self.aug_prob.get("salt", 0.5):
             image = random_noise(image, mode="salt", amount=self.salt_amount)
 
         # Apply pepper noise
-        if self.pepper and random.uniform(0, 1) < self.da_prob:
+        if self.pepper and random.uniform(0, 1) < self.aug_prob.get("pepper", 0.5):
             image = random_noise(image, mode="pepper", amount=self.pepper_amount)
 
         # Apply salt & pepper noise
-        if self.salt_and_pepper and random.uniform(0, 1) < self.da_prob:
+        if self.salt_and_pepper and random.uniform(0, 1) < self.aug_prob.get("salt_and_pepper", 0.5):
             image = random_noise(
                 image,
                 mode="s&p",
@@ -1317,11 +1367,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         # Apply missing parts
-        if self.missing_sections and random.uniform(0, 1) < self.da_prob:
+        if self.missing_sections and random.uniform(0, 1) < self.aug_prob.get("missing_sections", 0.5):
             image = missing_sections(image, self.missp_iterations, self.missp_channel_pb)
 
         # Apply GridMask
-        if self.gridmask and random.uniform(0, 1) < self.da_prob:
+        if self.gridmask and random.uniform(0, 1) < self.aug_prob.get("gridmask", 0.5):
             image = GridMask(
                 image,
                 self.z_size,
@@ -1331,9 +1381,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.grid_invert,
             )
 
-        # Apply cutout
-        if self.cutout and random.uniform(0, 1) < self.da_prob:
-            image, mask = cutout(
+        # Cutout only blanks regions (no pixel movement), so it is flow-safe: passing ``heat`` blanks
+        # the flow targets wherever the mask is blanked.
+        if self.cutout and random.uniform(0, 1) < self.aug_prob.get("cutout", 0.5):
+            image, mask, heat = cutout(
                 image,
                 mask,
                 self.z_size,
@@ -1342,13 +1393,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.cout_cval,
                 self.res_relation,
                 self.cout_apply_to_mask,
+                heat=heat,
             )
 
-        # Apply elastic deformation
-        if self.elastic and random.uniform(0, 1) < self.da_prob:
+        # Elastic is skipped for flow channels: this non-rigid warp would need the flow vectors
+        # re-oriented by its local Jacobian, which is not done here, corrupting the targets.
+        if self.elastic and not self.flow_channels and random.uniform(0, 1) < self.aug_prob.get("elastic", 0.5):
             image, mask, heat = elastic(
-                image, 
-                mask=mask, 
+                image,
+                mask=mask,
                 heat=heat,
                 alpha=self.e_alpha,
                 sigma=self.e_sigma,
@@ -1356,7 +1409,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mode=self.e_mode
             ) # type: ignore
 
-        if self.shear and random.uniform(0, 1) < self.da_prob:
+        # Shear is skipped for flow channels: it skews directions and the vectors are not re-oriented.
+        if self.shear and not self.flow_channels and random.uniform(0, 1) < self.aug_prob.get("shear", 0.5):
             image, mask, heat = shear(
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
@@ -1364,7 +1418,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask_type=self.norm_module["target_type"],
             ) # type: ignore
         
-        if self.shift and random.uniform(0, 1) < self.da_prob:
+        if self.shift and random.uniform(0, 1) < self.aug_prob.get("shift", 0.5):
             image, mask, heat = shift(
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
@@ -1372,35 +1426,35 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask_type=self.norm_module["target_type"],
             ) # type: ignore
 
-        if self.vflip and random.uniform(0, 1) < self.da_prob:
+        if self.vflip and random.uniform(0, 1) < self.aug_prob.get("vflip", 0.5):
             image, mask, heat = flip_vertical(
                 image, mask=mask, heat=heat, flow_heat=self.flow_heat
             ) # type: ignore
 
-        if self.hflip and random.uniform(0, 1) < self.da_prob:
+        if self.hflip and random.uniform(0, 1) < self.aug_prob.get("hflip", 0.5):
             image, mask, heat = flip_horizontal(
                 image, mask=mask, heat=heat, flow_heat=self.flow_heat
             ) # type: ignore
             
-        if self.g_blur and random.uniform(0, 1) < self.da_prob:
+        if self.g_blur and random.uniform(0, 1) < self.aug_prob.get("g_blur", 0.5):
             image = gaussian_blur(
                 image,
                 sigma=self.g_sigma
             )
 
-        if self.median_blur and random.uniform(0, 1) < self.da_prob:
+        if self.median_blur and random.uniform(0, 1) < self.aug_prob.get("median_blur", 0.5):
             image = median_blur(
                 image,
                 k_range=self.mb_kernel
             )
 
-        if self.motion_blur and random.uniform(0, 1) < self.da_prob:
+        if self.motion_blur and random.uniform(0, 1) < self.aug_prob.get("motion_blur", 0.5):
             image = motion_blur(
                 image,
                 k_range=self.motb_k_range
             )
 
-        if self.dropout and random.uniform(0, 1) < self.da_prob:
+        if self.dropout and random.uniform(0, 1) < self.aug_prob.get("dropout", 0.5):
             image = dropout(
                 image,
                 drop_range=self.drop_range
@@ -1521,25 +1575,28 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             else:
                 pos = i
 
-            img, mask = self.load_sample(pos)
+            # Mirror the training __getitem__ (enlarge, then apply_transform crops back). The prob-map
+            # path instead keeps its own crop so it can draw the extracted-patch location.
+            use_probmap_points = self.random_crops_in_DA and self.prob_map is not None
+
+            img, mask = self.load_sample(pos, geom_enlarge=not use_probmap_points)
+
             if save_to_dir:
                 orig_images = {}
-                orig_images["o_x"] = np.copy(img)
-                orig_images["o_y"] = np.copy(mask)
+                # Network-size "before augmentation" reference (centre of the possibly enlarged patch).
+                orig_images["o_x"] = center_crop_single(np.copy(img), tuple(self.shape[: self.ndim]))
+                orig_images["o_y"] = center_crop_single(np.copy(mask), tuple(self.shape[: self.ndim]))
                 if draw_grid:
                     self.draw_grid(orig_images["o_x"])
                     self.draw_grid(orig_images["o_y"])
 
-            # Apply random crops if it is selected
-            if self.random_crops_in_DA:
-                # Capture probability map
-                if self.prob_map is not None:
-                    if isinstance(self.prob_map, list):
-                        img_prob = np.load(self.prob_map[pos])
-                    else:
-                        img_prob = self.prob_map[pos]
+            # Prob-map path: crop to the network size here and record the crop location for
+            # save_aug_samples.
+            if use_probmap_points:
+                if isinstance(self.prob_map, list):
+                    img_prob = np.load(self.prob_map[pos])
                 else:
-                    img_prob = None
+                    img_prob = self.prob_map[pos]
 
                 if self.ndim == 2:
                     img, mask, oy, ox, s_y, s_x = random_crop_pair(  # type: ignore
@@ -1570,11 +1627,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if self.ndim == 3:
                     point_dict["oz"], point_dict["s_z"] = oz, s_z
 
-                sample_x.append(img)
-                sample_y.append(mask)
-            else:
-                sample_x.append(img)
-                sample_y.append(mask)
+            sample_x.append(img)
+            sample_y.append(mask)
 
             # Apply transformations
             if self.da:
@@ -1587,7 +1641,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     extra_img = np.random.randint(0, self.length - 1) if self.length > 2 else 0
                     e_img, e_mask = self.load_sample(extra_img)
 
-                sample_x[i], sample_y[i] = self.apply_transform(sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
+                sample_x[i], sample_y[i] = self.apply_transform(
+                    sample_x[i],
+                    sample_y[i],
+                    e_im=e_img,
+                    e_mask=e_mask,
+                    diam_factor=self.cellpose_diam_factor(pos),
+                )
 
             if self.n2v and not self.val:
                 img, mask = self.prepare_n2v(img, mask)

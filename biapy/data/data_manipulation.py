@@ -1707,7 +1707,7 @@ def samples_from_image_list(
             else:
                 img = preprocess_f(preprocess_cfg, x_data=[img], is_2d=not is_3d)[0]
         if reflect_to_complete_shape:
-            img = pad_and_reflect(img, crop_shape, verbose=False)
+            img = pad_to_shape(img, crop_shape, verbose=False)
 
         if crop_shape[-1] == 3 and convert_to_rgb and img.shape[-1] != 3:
             img = np.repeat(img, 3, axis=-1)
@@ -2044,7 +2044,7 @@ def samples_from_image_list_multiple_raw_one_gt(
             gt_sample = preprocess_f(preprocess_cfg, x_data=[gt_sample], is_2d=not is_3d)[0]
 
         if reflect_to_complete_shape:
-            gt_sample = pad_and_reflect(gt_sample, crop_shape, verbose=False)
+            gt_sample = pad_to_shape(gt_sample, crop_shape, verbose=False)
 
         if crop_shape[-1] == 3 and convert_to_rgb and gt_sample.shape[-1] != 3:
             gt_sample = np.repeat(gt_sample, 3, axis=-1)
@@ -2136,7 +2136,7 @@ def samples_from_image_list_multiple_raw_one_gt(
                 raw_sample = preprocess_f(preprocess_cfg, x_data=[raw_sample], is_2d=not is_3d)[0]
 
             if reflect_to_complete_shape:
-                raw_sample = pad_and_reflect(raw_sample, crop_shape, verbose=False)
+                raw_sample = pad_to_shape(raw_sample, crop_shape, verbose=False)
 
             if crop_shape[-1] == 3 and convert_to_rgb and raw_sample.shape[-1] != 3:
                 raw_sample = np.repeat(raw_sample, 3, axis=-1)
@@ -2292,7 +2292,7 @@ def samples_from_class_list(
             img, _ = load_img_data(img_path, is_3d=is_3d)
 
             if reflect_to_complete_shape and crop_shape:
-                img = pad_and_reflect(img, crop_shape, verbose=False)
+                img = pad_to_shape(img, crop_shape, verbose=False)
 
             if crop_shape and crop_shape[-1] == 3 and convert_to_rgb and img.shape[-1] != 3:
                 img = np.repeat(img, 3, axis=-1)
@@ -2580,7 +2580,7 @@ def filter_samples_by_properties(
                 xdata, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
                 if reflect_to_complete_shape and crop_shape:
-                    xdata = pad_and_reflect(xdata, crop_shape, verbose=False)
+                    xdata = pad_to_shape(xdata, crop_shape, verbose=False)
 
                 # Load Y data
                 if use_Y_data:
@@ -2597,7 +2597,7 @@ def filter_samples_by_properties(
                     ydata, mfile = load_img_data(mask_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
                     if reflect_to_complete_shape and crop_shape:
-                        ydata = pad_and_reflect(ydata, crop_shape, verbose=False)
+                        ydata = pad_to_shape(ydata, crop_shape, verbose=False)
 
                 else:
                     ydata, mfile = None, None
@@ -3039,7 +3039,7 @@ def load_images_to_dataset(
             img = data
 
         if crop_shape and reflect_to_complete_shape:
-            img = pad_and_reflect(img, crop_shape, verbose=False)
+            img = pad_to_shape(img, crop_shape, verbose=False)
 
         if crop_shape and crop_shape[-1] == 3 and convert_to_rgb and not is_mask and img.shape[-1] != 3:
             img = np.repeat(img, 3, axis=-1)
@@ -3058,9 +3058,13 @@ def load_images_to_dataset(
             )
         )
 
-def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = False) -> NDArray:
+def pad_to_shape(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = False, mode: str = "reflect") -> NDArray:
     """
-    Load data from a directory.
+    Pad an image up to ``crop_shape`` on any spatial axis smaller than it.
+
+    Padding is prepended on each too-small axis, so the original content stays at the bottom-right
+    corner. Axes already ``>= crop_shape`` are left untouched. The fill is controlled by ``mode``
+    (mirror by default, or zeros with ``mode="constant"``).
 
     Parameters
     ----------
@@ -3072,6 +3076,11 @@ def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = F
 
     verbose : bool, optional
         Whether to output information.
+
+    mode : str, optional
+        ``numpy.pad`` mode used to fill the padded region. Default ``"reflect"`` (mirror). Use
+        ``"constant"`` for zero-padding (e.g. the Cellpose flow path, which must not fabricate mirror
+        copies of border cells).
 
     Returns
     -------
@@ -3091,38 +3100,88 @@ def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = F
         if img.shape[0] < crop_shape[0]:
             diff = crop_shape[0] - img.shape[0]
             o_shape = img.shape
-            img = np.pad(img, ((diff, 0), (0, 0), (0, 0), (0, 0)), "reflect")
+            img = np.pad(img, ((diff, 0), (0, 0), (0, 0), (0, 0)), mode)
             if verbose:
                 print("Reflected from {} to {}".format(o_shape, img.shape))
 
         if img.shape[1] < crop_shape[1]:
             diff = crop_shape[1] - img.shape[1]
             o_shape = img.shape
-            img = np.pad(img, ((0, 0), (diff, 0), (0, 0), (0, 0)), "reflect")
+            img = np.pad(img, ((0, 0), (diff, 0), (0, 0), (0, 0)), mode)
             if verbose:
                 print("Reflected from {} to {}".format(o_shape, img.shape))
 
         if img.shape[2] < crop_shape[2]:
             diff = crop_shape[2] - img.shape[2]
             o_shape = img.shape
-            img = np.pad(img, ((0, 0), (0, 0), (diff, 0), (0, 0)), "reflect")
+            img = np.pad(img, ((0, 0), (0, 0), (diff, 0), (0, 0)), mode)
             if verbose:
                 print("Reflected from {} to {}".format(o_shape, img.shape))
     else:
         if img.shape[0] < crop_shape[0]:
             diff = crop_shape[0] - img.shape[0]
             o_shape = img.shape
-            img = np.pad(img, ((diff, 0), (0, 0), (0, 0)), "reflect")
+            img = np.pad(img, ((diff, 0), (0, 0), (0, 0)), mode)
             if verbose:
                 print("Reflected from {} to {}".format(o_shape, img.shape))
 
         if img.shape[1] < crop_shape[1]:
             diff = crop_shape[1] - img.shape[1]
             o_shape = img.shape
-            img = np.pad(img, ((0, 0), (diff, 0), (0, 0)), "reflect")
+            img = np.pad(img, ((0, 0), (diff, 0), (0, 0)), mode)
             if verbose:
                 print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
+
+
+def enlarge_coords(
+    coords: PatchCoords,
+    increment: Tuple[int, ...],
+    image_shape: Tuple[int, ...],
+    is_3d: bool = False,
+) -> PatchCoords:
+    """
+    Grow a patch's coordinates by ``increment`` pixels per axis (split half on each side), clamped to
+    the image bounds, returning new :class:`PatchCoords`.
+
+    Used to extract a larger region than the network input so a later geometric augmentation
+    (zoom-out / rotation) sees real image content instead of padding (see
+    :func:`biapy.data.generators.augmentors.geom_aug_load_shape`). Near borders the result can be
+    smaller than requested; the caller pads it up afterwards.
+
+    Parameters
+    ----------
+    coords : PatchCoords
+        Original patch coordinates.
+
+    increment : tuple of int
+        Per-axis pixels to add: ``(dy, dx)`` in 2D or ``(dz, dy, dx)`` in 3D.
+
+    image_shape : tuple of int
+        Spatial shape of the source image: ``(y, x, ...)`` in 2D or ``(z, y, x, ...)`` in 3D. Pass a
+        large sentinel per axis when the extent is unknown (lazy Zarr/H5 reads clamp over-range stops).
+
+    is_3d : bool, optional
+        Whether the coordinates include a Z axis.
+
+    Returns
+    -------
+    PatchCoords
+        Enlarged, in-bounds coordinates.
+    """
+    def _grow(start: int, end: int, d: int, limit: int) -> Tuple[int, int]:
+        h = int(d) // 2
+        return max(0, start - h), min(int(limit), end + (int(d) - h))
+
+    if is_3d:
+        zs, ze = _grow(coords.z_start, coords.z_end, increment[0], image_shape[0])
+        ys, ye = _grow(coords.y_start, coords.y_end, increment[1], image_shape[1])
+        xs, xe = _grow(coords.x_start, coords.x_end, increment[2], image_shape[2])
+        return PatchCoords(y_start=ys, y_end=ye, x_start=xs, x_end=xe, z_start=zs, z_end=ze)
+
+    ys, ye = _grow(coords.y_start, coords.y_end, increment[0], image_shape[0])
+    xs, xe = _grow(coords.x_start, coords.x_end, increment[1], image_shape[1])
+    return PatchCoords(y_start=ys, y_end=ye, x_start=xs, x_end=xe)
 
 
 def extract_patch_within_image(img: NDArray, coords: PatchCoords, is_3d=False) -> NDArray:
