@@ -199,14 +199,13 @@ class Config:
         #       - 'mask_values': bool, kept for compatibility but superseded: the loss mask prefers a binary foreground channel
         #         (F/M/B) to include isolated cells (Dn=0). Falls back to (Dn > 0) if no binary channel is present. Default: True
         #       - 'decline_power': int, specifies the power applied to distances to control the rate of decline. Default: 3
-        #   - 'D' channel. Possible options:
+        #   - 'D' channel. Per-instance distance in [-1, 1]: each instance's distance to its own boundary,
+        #     normalized per instance (boundary -> 0, innermost voxel -> 1), with the background set to -1.
+        #     Measuring the distance per instance, instead of on the binary foreground, is what keeps
+        #     touching instances apart, so each one keeps its own peak and they can be used as seeds.
+        #     Possible options:
         #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
         #         Options are 'tanh' and 'linear'. Default: 'tanh'
-        #       - 'alpha': int, specifies the scaling factor applied to foreground distances (distance to background).
-        #         Default: 8
-        #       - 'beta': int, specifies the scaling factor applied to background distances (distance to foreground).
-        #         Default: 50
-        #       - 'norm': bool, specifies whether distances are normalized between -1 and 1. Default: True
         #   - 'R' channel. Possible options:
         #       - 'nrays': int, specifies the number of rays used to represent radial distances.
         #         Default: 32 for 2D data and 96 for 3D data

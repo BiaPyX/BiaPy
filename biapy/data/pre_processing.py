@@ -15,12 +15,13 @@ from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries, watershed
 from scipy.ndimage import (
-    generic_filter, 
-    generate_binary_structure, 
-    grey_closing, 
-    center_of_mass, 
-    map_coordinates, 
+    generic_filter,
+    generate_binary_structure,
+    grey_closing,
+    center_of_mass,
+    map_coordinates,
     uniform_filter,
+    binary_fill_holes,
     binary_dilation as binary_dilation_scipy
 )
 from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
@@ -646,7 +647,8 @@ def labels_into_channels(
         Operation mode. Possible values: ``C``, ``BC``, ``BCM``, ``BCD``, ``BD``, ``BCDv2``, ``Dv2``, ``BDv2`` and ``BP``.
          - 'B' stands for 'Binary segmentation', containing each instance region without the contour.
          - 'C' stands for 'Contour', containing each instance contour.
-         - 'D' stands for 'Distance', each pixel containing the distance of it to the center of the object.
+         - 'D' stands for 'Distance', each instance containing its distance to its own boundary, normalized
+           per instance to ``[0, 1]``, and the background set to ``-1``.
          - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask.
            Is simply achieved by binarizing input instance masks.
          - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
@@ -714,6 +716,7 @@ def labels_into_channels(
         any(x in mode for x in ("Z", "V", "H", "Gv", "Gh", "Gz"))
         or ("P" in mode and channel_extra_opts.get("P", {}).get("type", "") == "skeleton")
         or ("Dc" in mode)
+        or ("D" in mode)
     ):
         needs_props = True
     if needs_props:
@@ -1018,21 +1021,35 @@ def labels_into_channels(
 
         new_mask[..., mode.index("Dn")] = dn_channel.astype(np.float32)
         
-    # ---------- D (signed distance, global) ----------
+    # ---------- D (per-instance distance, [-1, 1]) ----------
     if "D" in mode:
-        alpha = channel_extra_opts.get("D", {}).get("alpha", 8.0)
-        beta = channel_extra_opts.get("D", {}).get("beta", 50.0)
+        eps = 1e-6
+        d_res = tuple(resolution) if vol.ndim == 3 else tuple(resolution[-2:])
 
-        # 1) Signed distance
-        sdist = edt.edt(fg_mask, anisotropy=resolution, parallel=-1)/alpha - edt.edt(bg_mask, anisotropy=resolution, parallel=-1)/beta
-        assert isinstance(sdist, np.ndarray), "Expected sdist to be a numpy array"
+        d_channel = np.zeros(vol.shape, dtype=np.float32)
+        for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
+            slc = slice_from_props(props_tbl, i, vol.ndim)
+            # Relax the bbox by 1 so the instance keeps a background margin inside the crop;
+            # without it the EDT has no zero to measure against at the crop border.
+            slc = tuple(slice(max(0, s.start - 1), min(d, s.stop + 1)) for s, d in zip(slc, vol.shape))
 
-        # 2) Map GT to [-1, 1] with tanh (COSEM-style: "Whole-cell organelle segmentation in volume electron microscopy")
-        tanh_on = channel_extra_opts.get("D", {}).get("norm", True)
-        if tanh_on:
-            sdist = np.tanh(sdist)
-            
-        new_mask[..., mode.index("D")] = sdist
+            mask = binary_fill_holes(vol[slc] == lb)
+            assert isinstance(mask, np.ndarray), "Expected mask to be a numpy array"
+            if not mask.any():
+                continue
+
+            inst_edt = edt.edt(mask.astype(np.uint8), anisotropy=d_res, parallel=-1)
+            edt_max = float(inst_edt.max())
+            if edt_max < eps:
+                continue
+
+            energy = (inst_edt / (edt_max + eps)) * mask
+            d_channel[slc] = np.maximum(d_channel[slc], energy)
+
+        # Every foreground voxel has an EDT of at least 1, so the leftover zeros are background.
+        d_channel[d_channel == 0] = -1.0
+
+        new_mask[..., mode.index("D")] = d_channel
         
     # ---------- H / V / Z (horizontal/vertical/depth channels) ----------
     if "Z" in mode:

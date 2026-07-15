@@ -561,14 +561,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # D — signed distance (global)
             if "D" in chs:
                 if "D" in dst:
-                    assert [x for x in dst["D"].keys() if x not in ["alpha", "beta", "act", "norm"]] == [], (
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'D' can only have 'alpha', 'beta', 'act' and 'norm' keys"
+                    assert [x for x in dst["D"].keys() if x not in ["act"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'D' can only have 'act' key"
                     )
                 dst["D"] = {
-                    "alpha": dst.get("D", {}).get("alpha", 8),
-                    "beta": dst.get("D", {}).get("beta", 50),
                     "act": dst.get("D", {}).get("act", "tanh"),
-                    "norm": dst.get("D", {}).get("norm", True),
                 }
 
             # R — star-convex/radial distances
@@ -1623,11 +1620,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     _assert_bool(val, "mask_values", ctx)
                     _assert_int(val, "decline_power", ctx, min_val=0)
 
-                elif key == "D":  # signed distance (global)
+                elif key == "D":  # per-instance distance
                     _assert_str_in(val, "act", {"tanh", "linear"}, ctx)
-                    _assert_int(val, "alpha", ctx, min_val=0)
-                    _assert_int(val, "beta", ctx, min_val=0)
-                    _assert_bool(val, "norm", ctx)
 
                 elif key == "R":  # star-convex/radial
                     _assert_int(val, "nrays", ctx, min_val=1)
