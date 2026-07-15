@@ -1020,8 +1020,8 @@ def labels_into_channels(
         
     # ---------- D (signed distance, global) ----------
     if "D" in mode:
-        alpha = channel_extra_opts.get("D", {}).get("alpha", 1.0)
-        beta = channel_extra_opts.get("D", {}).get("beta", 1.0)
+        alpha = channel_extra_opts.get("D", {}).get("alpha", 8.0)
+        beta = channel_extra_opts.get("D", {}).get("beta", 50.0)
 
         # 1) Signed distance
         sdist = edt.edt(fg_mask, anisotropy=resolution, parallel=-1)/alpha - edt.edt(bg_mask, anisotropy=resolution, parallel=-1)/beta

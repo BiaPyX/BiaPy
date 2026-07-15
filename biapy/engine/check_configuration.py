@@ -765,9 +765,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for ch in sorted_original_instance_channels:
                     if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post", "F_cleft"]:
                         losses.append("bce")
-                    elif ch in ["Gv", "Gh", "Gz"]:
+                    elif ch in ["Gv", "Gh", "Gz", "D"]:
                         losses.append("mse")
-                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R"]:
+                    elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "R"]:
                         losses.append("l1")
                     elif ch in ["E_offset", "E_sigma", "E_seediness"]:
                         losses.append("embedseg")

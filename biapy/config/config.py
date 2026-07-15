@@ -202,10 +202,10 @@ class Config:
         #   - 'D' channel. Possible options:
         #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
         #         Options are 'tanh' and 'linear'. Default: 'tanh'
-        #       - 'alpha': int, specifies the scaling factor applied to background distances when 'act' is 'tanh'.
-        #         Default: 1
-        #       - 'beta': int, specifies the scaling factor applied to foreground distances when 'act' is 'tanh'.
-        #         Default: 1
+        #       - 'alpha': int, specifies the scaling factor applied to foreground distances (distance to background).
+        #         Default: 8
+        #       - 'beta': int, specifies the scaling factor applied to background distances (distance to foreground).
+        #         Default: 50
         #       - 'norm': bool, specifies whether distances are normalized between -1 and 1. Default: True
         #   - 'R' channel. Possible options:
         #       - 'nrays': int, specifies the number of rays used to represent radial distances.
