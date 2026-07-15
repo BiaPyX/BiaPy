@@ -1276,13 +1276,14 @@ def labels_into_channels(
 
             aux = new_mask[..., j]
             aux = np.expand_dims(np.expand_dims(aux, -1), 0)
-            save_tif(aux, save_dir, filenames=["vol" + suffix[j]], verbose=False)
-            save_tif(
-                np.expand_dims(instance_labels, 0),
-                save_dir,
-                filenames=["vol_y.tif"],
-                verbose=False,
-            )
+            save_tif(aux, save_dir, filenames=["vol_" + mod + suffix], verbose=False)
+
+        save_tif(
+            np.expand_dims(instance_labels, 0),
+            save_dir,
+            filenames=["vol_original_labels.tif"],
+            verbose=False,
+        )
     return new_mask
 
 
