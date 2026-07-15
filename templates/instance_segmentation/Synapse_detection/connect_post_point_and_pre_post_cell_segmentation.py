@@ -7,7 +7,7 @@ import h5py
 import ast
 from pathlib import Path
 import pandas as pd
-from scipy.ndimage import uniform_filter, label
+from scipy.ndimage import uniform_filter, label, zoom
 
 sys.path.insert(0, '/net/fibserver1/data/raw/scratch/dfranco/BiaPy')  # Adjust this path as needed
 from biapy.data.data_manipulation import save_tif, read_img_as_ndarray
@@ -227,13 +227,63 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
     # Find the corresponding label file
     cell_seg_filename = os.path.join(pre_post_cell_seg_folder, name+".tif")
     if not os.path.exists(cell_seg_filename):
-        raise ValueError(f"Predicted cell (pre/post) segmentation file {cell_seg_filename} does not exist. Please check your input folders and naming conventions. ")
+        # Fuzzy match: find a .tif whose stem is a substring of name or vice versa
+        candidates = [
+            f for f in os.listdir(pre_post_cell_seg_folder)
+            if f.endswith('.tif') and (
+                os.path.splitext(f)[0] in name or name in os.path.splitext(f)[0]
+            )
+        ]
+        if len(candidates) == 1:
+            cell_seg_filename = os.path.join(pre_post_cell_seg_folder, candidates[0])
+            print(f"Fuzzy-matched cell seg file: {candidates[0]} (raw name: {name})")
+        elif len(candidates) > 1:
+            # Pick the candidate whose stem is the longest match
+            candidates.sort(key=lambda f: len(os.path.splitext(f)[0]), reverse=True)
+            cell_seg_filename = os.path.join(pre_post_cell_seg_folder, candidates[0])
+            print(f"Multiple fuzzy matches; using longest: {candidates[0]} (raw name: {name})")
+        else:
+            raise ValueError(
+                f"Predicted cell (pre/post) segmentation file for '{name}' not found in "
+                f"{pre_post_cell_seg_folder}. Please check your input folders and naming conventions."
+            )
     cell_seg = read_img_as_ndarray(cell_seg_filename, is_3d=True)
 
-    # Find the corresponding label file
+    # Drop trailing channel dim if present (e.g. (Z, Y, X, 1) -> (Z, Y, X))
+    if cell_seg.ndim == 4:
+        cell_seg = cell_seg[..., 0]
+
+    # Resize cell_seg to match raw_data if they differ in spatial resolution
+    if cell_seg.shape != raw_data.shape:
+        print(f"Cell seg shape {cell_seg.shape} differs from raw data shape {raw_data.shape}; "
+              f"resizing with nearest-neighbour interpolation")
+        zoom_factors = tuple(r / s for r, s in zip(raw_data.shape, cell_seg.shape))
+        cell_seg = zoom(cell_seg, zoom_factors, order=0).astype(cell_seg.dtype)
+        print(f"Rescaling done. New cell seg shape: {cell_seg.shape}")
+
+    # Find the corresponding post locations file
     post_locations_filename = os.path.join(F_post_pred_post_folder, name+"_pred_post_locations.csv")
     if not os.path.exists(post_locations_filename):
-        raise ValueError(f"F_post predicted post point file {post_locations_filename} does not exist. Please check your input folders and naming conventions.")
+        # Fuzzy match: find a CSV whose stem (minus the suffix) is a substring of name or vice versa
+        suffix = "_pred_post_locations.csv"
+        candidates = [
+            f for f in os.listdir(F_post_pred_post_folder)
+            if f.endswith(suffix) and (
+                f[:-len(suffix)] in name or name in f[:-len(suffix)]
+            )
+        ]
+        if len(candidates) == 1:
+            post_locations_filename = os.path.join(F_post_pred_post_folder, candidates[0])
+            print(f"Fuzzy-matched post locations file: {candidates[0]} (raw name: {name})")
+        elif len(candidates) > 1:
+            candidates.sort(key=lambda f: len(f[:-len(suffix)]), reverse=True)
+            post_locations_filename = os.path.join(F_post_pred_post_folder, candidates[0])
+            print(f"Multiple fuzzy matches; using longest: {candidates[0]} (raw name: {name})")
+        else:
+            raise ValueError(
+                f"F_post predicted post point file for '{name}' not found in "
+                f"{F_post_pred_post_folder}. Please check your input folders and naming conventions."
+            )
 
     print(f"Raw file: {filename} ; post locations file: {post_locations_filename}")
 
