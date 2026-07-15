@@ -1209,7 +1209,9 @@ def labels_into_channels(
             mask_to_use = new_mask[..., mode.index("F")]
         elif "B" in mode:
             mask_to_use = new_mask[..., mode.index("B")]
-        new_mask[..., mode.index("We")] =  unet_border_weight_map(mask_to_use, w0=10.0, sigma=5.0, resolution=resolution)
+        # 'resolution' is always (z,y,x) here, so drop the z spacing for 2D data to match the mask axes
+        spacing = list(resolution[-mask_to_use.ndim:])
+        new_mask[..., mode.index("We")] =  unet_border_weight_map(mask_to_use, w0=10.0, sigma=5.0, resolution=spacing)
 
     # Binarize foreground channel at this point and not before because
     # they need to be used in We channel creation
