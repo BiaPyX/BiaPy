@@ -50,6 +50,33 @@ from datetime import timedelta
 original_print = builtins.print
 
 
+# Whether this process may print. Module-level state rather than a closure variable so that the
+# replacement for ``builtins.print`` below can live at module level too (see _biapy_print).
+_print_is_master = True
+
+
+def _biapy_print(*args, **kwargs):
+    """
+    Timestamped ``print`` that only emits on the master process (or when ``force=True``).
+
+    Installed as ``builtins.print`` by :func:`setup_for_distributed`.
+
+    This must stay a module-level function named exactly as it is bound here, and must NOT be a
+    closure defined inside ``setup_for_distributed``: libraries that introspect ``builtins.print``
+    resolve its defining module and then look the function up by ``__name__`` inside it. Numba does
+    exactly this (``numba.core.typing.templates.register_global`` -> ``getattr(mod, val.__name__)``
+    when it registers ``@infer_global(print)``), so a closure that is unreachable as a module
+    attribute makes ``import numba`` fail with an AttributeError whenever numba happens to be
+    imported after this override has run.
+    """
+    force = kwargs.pop("force", False)
+    force = force or (get_world_size() > 8)
+    if _print_is_master or force:
+        now = datetime.datetime.now().time()
+        original_print("[{}] ".format(now), end="")  # print with time stamp
+        original_print(*args, **kwargs)
+
+
 def setup_for_distributed(is_master):
     """
     Disable printing for non-master processes in a distributed training setup.
@@ -64,17 +91,9 @@ def setup_for_distributed(is_master):
     is_master : bool
         True if the current process is the master process (rank 0), False otherwise.
     """
-    builtin_print = original_print
-
-    def print(*args, **kwargs):
-        force = kwargs.pop("force", False)
-        force = force or (get_world_size() > 8)
-        if is_master or force:
-            now = datetime.datetime.now().time()
-            builtin_print("[{}] ".format(now), end="")  # print with time stamp
-            builtin_print(*args, **kwargs)
-
-    builtins.print = print
+    global _print_is_master
+    _print_is_master = is_master
+    builtins.print = _biapy_print
 
 
 def is_dist_avail_and_initialized():

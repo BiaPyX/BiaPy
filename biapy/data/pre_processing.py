@@ -11,6 +11,7 @@ import edt
 import h5py
 import zarr
 import numpy as np
+from numba import njit
 from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries, watershed
@@ -22,6 +23,7 @@ from scipy.ndimage import (
     map_coordinates,
     uniform_filter,
     binary_fill_holes,
+    find_objects,
     binary_dilation as binary_dilation_scipy
 )
 from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
@@ -606,6 +608,236 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
         if compute_diam:
             save_cellpose_diameter_stats(diam_stats, getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, data_type)
 
+@njit(cache=True, nogil=True)
+def _extend_centers_2d(heat, y_c, x_c, ymed, xmed, n_iter):
+    """
+    Run Cellpose's heat diffusion on the pixels of a single 2D cell (JIT-compiled).
+
+    Mirrors ``cellpose.dynamics._extend_centers``: ``n_iter`` steps of Moore (8-connected) neighbour
+    averaging including self (1/9), with an accumulating source at the centre (``+= 1`` each step).
+    Out-of-mask neighbours read as 0 (Dirichlet BC from the 1-px padding).
+
+    The update is Jacobi (all neighbours read from the previous state before any write): values are
+    gathered into ``tmp`` and only then scattered back. ``heat`` is modified in place.
+
+    Parameters
+    ----------
+    heat : 2D float64 array
+        Padded diffusion field (bbox + 1 px on each side). Modified in place.
+    y_c, x_c : 1D int arrays
+        Padded coordinates of the cell's pixels.
+    ymed, xmed : int
+        Padded coordinate of the cell centre (the diffusion source).
+    n_iter : int
+        Number of diffusion steps.
+
+    Returns
+    -------
+    heat : 2D float64 array
+        The diffused field (same object as the input).
+    """
+    n = y_c.shape[0]
+    tmp = np.empty(n, dtype=np.float64)
+    for _ in range(n_iter):
+        heat[ymed, xmed] += 1.0
+        for i in range(n):
+            yy = y_c[i]
+            xx = x_c[i]
+            tmp[i] = (
+                heat[yy, xx]
+                + heat[yy - 1, xx] + heat[yy + 1, xx]
+                + heat[yy, xx - 1] + heat[yy, xx + 1]
+                + heat[yy - 1, xx - 1] + heat[yy - 1, xx + 1]
+                + heat[yy + 1, xx - 1] + heat[yy + 1, xx + 1]
+            ) / 9.0
+        for i in range(n):
+            heat[y_c[i], x_c[i]] = tmp[i]
+    return heat
+
+
+@njit(cache=True, nogil=True)
+def _extend_centers_3d(heat, z_c, y_c, x_c, zmed, ymed, xmed, n_iter):
+    """
+    Run Cellpose's heat diffusion on the voxels of a single 3D cell (JIT-compiled).
+
+    3D counterpart of :func:`_extend_centers_2d`: 26-connected Moore neighbourhood averaging including
+    self (1/27), accumulating source at the centre, Jacobi update, ``heat`` modified in place.
+
+    Parameters
+    ----------
+    heat : 3D float64 array
+        Padded diffusion field (bbox + 1 px on each side). Modified in place.
+    z_c, y_c, x_c : 1D int arrays
+        Padded coordinates of the cell's voxels.
+    zmed, ymed, xmed : int
+        Padded coordinate of the cell centre (the diffusion source).
+    n_iter : int
+        Number of diffusion steps.
+
+    Returns
+    -------
+    heat : 3D float64 array
+        The diffused field (same object as the input).
+    """
+    n = z_c.shape[0]
+    tmp = np.empty(n, dtype=np.float64)
+    for _ in range(n_iter):
+        heat[zmed, ymed, xmed] += 1.0
+        for i in range(n):
+            zz = z_c[i]
+            yy = y_c[i]
+            xx = x_c[i]
+            acc = 0.0
+            for dz in range(-1, 2):
+                for dy in range(-1, 2):
+                    for dx in range(-1, 2):
+                        acc += heat[zz + dz, yy + dy, xx + dx]
+            tmp[i] = acc / 27.0
+        for i in range(n):
+            heat[z_c[i], y_c[i], x_c[i]] = tmp[i]
+    return heat
+
+
+def instances_to_flows(
+    vol: NDArray,
+    resolution: List[int | float] = [1, 1, 1],
+    niter: int | str = "auto",
+    gradient_type: str = "cellpose",
+) -> Tuple[NDArray, NDArray, Optional[NDArray]]:
+    """
+    Compute the Cellpose/Omnipose flow components from an instance label map.
+
+    ``gradient_type="cellpose"``: per-cell heat diffusion from the cell centre (the pixel closest to the
+    per-axis mean), then the normalized gradient of that potential -- matching Cellpose's
+    ``dynamics.masks_to_flows_cpu``.
+
+    ``gradient_type="omnipose"``: normalized gradient of the per-cell Euclidean distance transform.
+
+    Shared by the training-target generator (:func:`labels_into_channels`) and the data generator, which
+    regenerates the flows from the *augmented* labels so the image and the flow target stay consistent
+    under augmentations that resample geometry (see
+    ``pair_base_data_generator.PairBaseDataGenerator.apply_transform``).
+
+    Parameters
+    ----------
+    vol : 2D/3D Numpy array
+        Instance label map (0 = background), e.g. ``(y, x)`` or ``(z, y, x)``.
+
+    resolution : list of int/float, optional
+        Voxel spacing ``(z, y, x)``. Only the last ``vol.ndim`` entries are used.
+
+    niter : int or "auto", optional
+        Diffusion steps per cell (Cellpose only). ``"auto"`` uses Cellpose's counts: ``2*(h+w+4)`` in 2D
+        and ``6*(d+h+w+3)`` in 3D.
+
+    gradient_type : str, optional
+        Either ``"cellpose"`` or ``"omnipose"``.
+
+    Returns
+    -------
+    Gv, Gh : Numpy arrays
+        Y and X flow components (unit vectors inside cells, 0 in background).
+
+    Gz : Numpy array or None
+        Z flow component in 3D, ``None`` in 2D.
+    """
+    Gv = np.zeros(vol.shape, dtype=np.float32)
+    Gh = np.zeros(vol.shape, dtype=np.float32)
+    Gz = np.zeros(vol.shape, dtype=np.float32) if vol.ndim == 3 else None
+
+    if not np.issubdtype(vol.dtype, np.integer):
+        vol = vol.astype(np.int32)
+
+    if gradient_type == "omnipose":
+        # Distance transform computed per cell so touching cells are not merged into one region (which
+        # would give wrong EDT values at shared interfaces).
+        dist_field = np.zeros(vol.shape, dtype=np.float32)
+        for lb in np.unique(vol):
+            if lb == 0:
+                continue
+            cell_mask = vol == lb
+            dist_field[cell_mask] = edt.edt(cell_mask, anisotropy=resolution, parallel=-1)[cell_mask]
+
+        if vol.ndim == 3:
+            grads = np.gradient(dist_field, resolution[0], resolution[1], resolution[2])
+        else:
+            grads = np.gradient(dist_field, resolution[1], resolution[2])
+
+        mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
+        grads = [g / mag for g in grads]
+
+        fg = vol > 0
+        if vol.ndim == 3 and Gz is not None:
+            Gz[fg] = grads[-3][fg]
+        Gv[fg] = grads[-2][fg]
+        Gh[fg] = grads[-1][fg]
+        return Gv, Gh, Gz
+
+    # Cellpose strategy: per-cell heat diffusion. find_objects gives each label's bounding box directly
+    # (labels absent from the map -- e.g. cropped out by augmentation -- yield None and are skipped).
+    slices = find_objects(vol)
+    for i, slc in enumerate(slices):
+        if slc is None:
+            continue
+        lb = i + 1
+        mask = vol[slc] == lb
+        if not mask.any():
+            continue
+
+        # 1. Center (heat source): per-axis mean, snapped to the nearest mask pixel.
+        coords = np.nonzero(mask)
+        centroid = np.array([c.mean() for c in coords])
+        coord_stack = np.stack(coords, axis=1).astype(np.float32)
+        idx = int(np.argmin(np.sum((coord_stack - centroid) ** 2, axis=1)))
+        centers = tuple(int(c[idx]) for c in coords)
+
+        # 2. Iterative diffusion (Cellpose's _extend_centers). Pad by 1 so neighbour accesses stay
+        # in-bounds; the padded zeros act as a Dirichlet boundary condition.
+        pad = 1
+        heat = np.zeros(tuple(s + 2 * pad for s in mask.shape), dtype=np.float64)
+        p_coords = tuple(c + pad for c in coords)
+        p_center = tuple(c + pad for c in centers)
+
+        if niter == "auto":
+            if mask.ndim == 3:
+                n_iter_cell = 6 * (int(sum(mask.shape)) + 3)
+            else:
+                n_iter_cell = 2 * (int(sum(mask.shape)) + 4)
+        else:
+            n_iter_cell = int(niter)
+
+        if mask.ndim == 2:
+            y_c, x_c = (c.astype(np.int64) for c in p_coords)
+            ymed, xmed = (int(c) for c in p_center)
+            _extend_centers_2d(heat, y_c, x_c, ymed, xmed, int(n_iter_cell))
+        else:
+            z_c, y_c, x_c = (c.astype(np.int64) for c in p_coords)
+            zmed, ymed, xmed = (int(c) for c in p_center)
+            _extend_centers_3d(heat, z_c, y_c, x_c, zmed, ymed, xmed, int(n_iter_cell))
+
+        # 3. Gradient of the padded heat (voxel spacing for anisotropic data).
+        if vol.ndim == 3:
+            grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
+        else:
+            grads = np.gradient(heat, resolution[1], resolution[2])
+
+        # 4. Normalize. Epsilon goes outside the sqrt and stays negligible (1e-60): inside it would
+        # floor the magnitude and crush the tiny-but-valid gradients far from the centre.
+        mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads)) + 1e-60
+
+        if vol.ndim == 3 and Gz is not None:
+            Gz[slc][mask] = grads[0][p_coords] / mag
+            Gv[slc][mask] = grads[1][p_coords] / mag
+            Gh[slc][mask] = grads[2][p_coords] / mag
+        else:
+            Gv[slc][mask] = grads[0][p_coords] / mag
+            Gh[slc][mask] = grads[1][p_coords] / mag
+
+    # Flows are left as unit vectors; Cellpose's 5x target scaling is applied in the loss/metric
+    # (cellpose_flow_target_scale), not baked into the GT.
+    return Gv, Gh, Gz
+
+
 def unique_labels_fast(a: np.ndarray):
     """
     Find the unique labels in an integer array a in [0, K] in O(n) time and O(K) space.
@@ -689,7 +921,7 @@ def labels_into_channels(
         else:
             c_number += 1
 
-    if any(x for x in ["Dc", "Dn", "D", "Z", "V", "H", "R", "We", "Gv", "Gh", "Gz"] if x in mode):
+    if any(x for x in ["Dc", "Dn", "D", "Z", "V", "H", "R", "We", "Gv", "Gh", "Gz", "I"] if x in mode):
         dtype = np.float32
     elif "Db" in mode:
         dtype = np.uint8 if channel_extra_opts.get("Db", {}).get("val_type", "norm") == "discretize" else np.float32
@@ -1063,115 +1295,10 @@ def labels_into_channels(
 
     # ---------- Gv / Gh / Gz (flow-like channels) ----------
     if 'Gv' in mode:
-        niter = channel_extra_opts.get("Gv", {}).get("niter", "auto")
         gtype = channel_extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
-        Gv = np.zeros_like(vol, dtype=np.float32)
-        Gh = np.zeros_like(vol, dtype=np.float32)
-        if vol.ndim == 3:
-            Gz = np.zeros_like(vol, dtype=np.float32)
-
-        if gtype == "omnipose":
-            # 1. Distance transform, per-cell so touching cells are not merged into one region (which
-            # would give wrong EDT values at shared interfaces).
-            dist_field = np.zeros_like(vol, dtype=np.float32)
-            for lb in instances:
-                cell_mask = (vol == lb)
-                dist_field[cell_mask] = edt.edt(cell_mask, anisotropy=resolution, parallel=-1)[cell_mask]
-
-            # 2. Gradient of the distance field (voxel spacing for anisotropic data).
-            if vol.ndim == 3:
-                grads = np.gradient(dist_field, resolution[0], resolution[1], resolution[2])
-            else:
-                grads = np.gradient(dist_field, resolution[1], resolution[2])
-
-            # 3. Normalize to unit direction vectors.
-            mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
-            grads = [g / mag for g in grads]
-
-            # 4. Write within foreground only, leaving background at 0.
-            fg = fg_mask > 0
-            if vol.ndim == 3:
-                Gz[fg] = grads[-3][fg]
-            Gv[fg] = grads[-2][fg]
-            Gh[fg] = grads[-1][fg]
-        else:
-            for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
-                slc = slice_from_props(props_tbl, i, vol.ndim)
-                mask = (vol[slc] == lb)
-                
-                # 1. Center (heat source): per-axis mean, snapped to the nearest mask pixel.
-                coords = np.nonzero(mask)
-                centroid = np.array([c.mean() for c in coords])            # per-axis mean (centroid)
-                coord_stack = np.stack(coords, axis=1).astype(np.float32)  # (N, ndim)
-                idx = int(np.argmin(np.sum((coord_stack - centroid) ** 2, axis=1)))
-                centers = tuple(int(c[idx]) for c in coords)
-
-                # 2. Iterative diffusion (Cellpose's _extend_centers): Moore-neighbour averaging
-                # including self, with an accumulating center (T[center] += 1 each step). Pad by 1 so
-                # neighbour accesses stay in-bounds.
-                pad = 1
-                heat = np.zeros(tuple(s + 2 * pad for s in mask.shape), dtype=np.float64)
-                p_coords = tuple(c + pad for c in coords)    # padded mask-pixel indices
-                p_center = tuple(c + pad for c in centers)   # padded center index
-
-                # Cellpose diffusion-step counts: 2D 2*(h+w+4), 3D 6*(d+h+w+3).
-                if niter == "auto":
-                    if mask.ndim == 3:
-                        n_iter_cell = 6 * (int(sum(mask.shape)) + 3)
-                    else:
-                        n_iter_cell = 2 * (int(sum(mask.shape)) + 4)
-                else:
-                    n_iter_cell = niter
-
-                if mask.ndim == 2:
-                    y_c, x_c = p_coords
-                    ymed, xmed = p_center
-                    for _ in range(n_iter_cell):
-                        heat[ymed, xmed] += 1.0
-                        heat[y_c, x_c] = (1.0 / 9.0) * (
-                            heat[y_c,     x_c    ] +
-                            heat[y_c - 1, x_c    ] + heat[y_c + 1, x_c    ] +
-                            heat[y_c,     x_c - 1] + heat[y_c,     x_c + 1] +
-                            heat[y_c - 1, x_c - 1] + heat[y_c - 1, x_c + 1] +
-                            heat[y_c + 1, x_c - 1] + heat[y_c + 1, x_c + 1]
-                        )
-                else:  # 3D: 26-connected Moore neighborhood (1/27)
-                    z_c, y_c, x_c = p_coords
-                    zmed, ymed, xmed = p_center
-                    for _ in range(n_iter_cell):
-                        heat[zmed, ymed, xmed] += 1.0
-                        neigh = np.zeros(len(z_c), dtype=np.float64)
-                        for dz in (-1, 0, 1):
-                            for dy in (-1, 0, 1):
-                                for dx in (-1, 0, 1):
-                                    neigh += heat[z_c + dz, y_c + dy, x_c + dx]
-                        heat[z_c, y_c, x_c] = neigh / 27.0
-
-                # 3. Gradient of the padded heat (padded zeros act as Dirichlet BC). Voxel spacing is
-                # passed for correct magnitude on anisotropic data. Returns [dz,dy,dx] (3D) or [dy,dx].
-                if vol.ndim == 3:
-                    grads = np.gradient(heat, resolution[0], resolution[1], resolution[2])
-                else:
-                    grads = np.gradient(heat, resolution[1], resolution[2])
-
-                # 4. Normalize (at padded mask-pixel positions). The epsilon goes OUTSIDE the sqrt and is
-                # negligible (like Cellpose's 1e-60): a small one inside would floor the magnitude and
-                # crush the tiny-but-valid gradients at border-truncated pixels to zero.
-                mag = np.sqrt(sum(g[p_coords] ** 2 for g in grads)) + 1e-60
-
-                # 5. Apply mask and save to global arrays
-                if vol.ndim == 3:
-                    # grads[0]=dz, grads[1]=dy, grads[2]=dx
-                    Gz[slc][mask] = grads[0][p_coords] / mag
-                    Gv[slc][mask] = grads[1][p_coords] / mag
-                    Gh[slc][mask] = grads[2][p_coords] / mag
-                else:
-                    # grads[0]=dy, grads[1]=dx
-                    Gv[slc][mask] = grads[0][p_coords] / mag
-                    Gh[slc][mask] = grads[1][p_coords] / mag
-
-            # Flows are left as unit vectors; Cellpose's 5x target scaling is applied in the loss/metric
-            # (cellpose_flow_target_scale), not baked into the GT.
+        # Shared with the data generator, which regenerates the flows from the augmented labels. The
+        # diffusion iteration count is always "auto" (Cellpose's per-cell formula), never user-configured.
+        Gv, Gh, Gz = instances_to_flows(vol, resolution=resolution, niter="auto", gradient_type=gtype)
 
         # Map back to the new_mask channels
         if "Gz" in mode and Gz is not None:
@@ -1217,8 +1344,19 @@ def labels_into_channels(
 
     # ---------- E (Embeddings) ----------
     # Here we only use E_offset as extra target for the embeddings branch
-    if "E_offset" in mode: 
+    if "E_offset" in mode:
         new_mask[..., mode.index("E_offset")] = vol.copy()
+
+    # ---------- I (raw instance labels) ----------
+    # Virtual channel: carries the instance labels through the pipeline so the generator can regenerate
+    # the Cellpose/Omnipose flows from the *augmented* labels (see pair_base_data_generator.apply_transform).
+    # That keeps the image and the flow target consistent under augmentations which resample geometry
+    # (elastic, free rotation), instead of warping a precomputed flow field. It is auto-added when flow
+    # channels are requested (see check_configuration) and dropped by the generator before the batch
+    # reaches the model, so it is never predicted and never part of the loss. Labels are exactly
+    # representable in the float32 channel array (integers below 2**24).
+    if "I" in mode:
+        new_mask[..., mode.index("I")] = vol.copy()
 
     if "We" in mode:
         mask_to_use = vol
@@ -1282,6 +1420,8 @@ def labels_into_channels(
                 suffix = "_affinity.tif"
             elif mod == "E_offset":
                 suffix = "_embedding_instances.tif"
+            elif mod == "I":
+                suffix = "_instances.tif"
             elif mod in ["E_sigma", "E_seediness"]:
                 continue  
             elif mod == "We":
@@ -1932,7 +2072,6 @@ def synapse_channel_creation(
         presite_dilation = channel_extra_opts.get("F_pre", {}).get("dilation", [1, 3, 3])
     postsite_dilation = channel_extra_opts.get("F_post", {}).get("dilation", [1, 3, 3])    
 
-    # footprints (keep both since you had them)
     pre_footprint = generate_ellipse_footprint(presite_dilation)
     post_footprint = generate_ellipse_footprint(postsite_dilation)
 

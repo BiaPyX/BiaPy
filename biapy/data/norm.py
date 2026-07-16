@@ -300,7 +300,13 @@ def normalize_mask(
 
                 if instance_problem:
                     is_float = np.issubdtype(mask.dtype, np.floating) if isinstance(mask, np.ndarray) else torch.is_floating_point(mask)
-                    if len(np.unique(mask[..., j])) > 2 and is_float:
+                    # A "label" channel holds raw instance IDs: never re-tag it as "no_bin", which would
+                    # route it through linear interpolation and invent instance IDs that do not exist.
+                    if (
+                        norm_info["per_channel_info"][j]["type"] != "label"
+                        and len(np.unique(mask[..., j])) > 2
+                        and is_float
+                    ):
                         norm_info["per_channel_info"][j]["type"] = "no_bin"
                 else:  # In semantic seg, maybe the mask are in 255
                     if np.max(mask[..., j]) > max(n_classes,_ignore_index):

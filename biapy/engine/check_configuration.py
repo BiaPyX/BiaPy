@@ -111,7 +111,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         original_instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
         sorted_original_instance_channels = sorted(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, key=custom_sort_key)
 
-        channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        # Drop any pre-existing 'I' channel: it is re-derived and re-appended last below. This function is
+        # idempotent (it may re-run on a cfg that already contains 'I', e.g. after loading a checkpoint),
+        # and 'I' must stay the last channel so the generator can drop it without shifting another index.
+        sorted_original_instance_channels = [x for x in sorted_original_instance_channels if x != "I"]
+
+        # 'I' never becomes an output channel, so it must not count towards the per-channel weights/losses.
+        channels_provided = len([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x != "I"])
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
             channels_provided += 1
         
@@ -504,16 +510,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         )
                 if gflow_with_opts:
                     source_ch = gflow_with_opts[0]
-                    assert [k for k in dst[source_ch] if k not in ["niter", "gradient_type"]] == [], (
-                        f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}' can only have 'niter' and 'gradient_type' keys"
-                        " ('mask_values' is no longer accepted: foreground masking is derived automatically from the flow vector magnitude)"
+                    assert [k for k in dst[source_ch] if k not in ["gradient_type"]] == [], (
+                        f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}' can only have the 'gradient_type' key"
+                        " ('niter' is not configurable -- the heat-diffusion iteration count is always derived from each cell's"
+                        " size, as in Cellpose; 'mask_values' is not accepted -- foreground masking is derived from the flow magnitude)"
                     )
-                    niter = dst[source_ch].get("niter", "auto")
                     gradient_type = dst[source_ch].get("gradient_type", "cellpose")
                 else:
-                    niter = "auto"
                     gradient_type = "cellpose"
-                resolved_gflow = {"niter": niter, "gradient_type": gradient_type}
+                resolved_gflow = {"gradient_type": gradient_type}
                 for ch in gflow_chs_present:
                     dst[ch] = resolved_gflow.copy()
 
@@ -635,6 +640,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS in ["unet-like", ""], "'PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS' not in ['unet-like', '']"
             if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("We")
+
+            # Carry the raw instance labels as an 'I' channel when the Cellpose/Omnipose flows are used.
+            # The generator regenerates the flows from the augmented labels and drops 'I' before the model,
+            # keeping image and flow target consistent under geometry-resampling augmentations (elastic,
+            # free rotation). Appended last so dropping it shifts no other index; carries no loss.
+            if any(ch in sorted_original_instance_channels for ch in ("Gv", "Gh", "Gz")) and "I" not in sorted_original_instance_channels:
+                sorted_original_instance_channels.append("I")
 
             # Create unique folder names for instance segmentation channel masks
             # depending on the channels and their options
@@ -770,13 +782,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         losses.append("embedseg")
                     elif ch in ["We"]:
                         continue  # no loss for extra weight map
+                    elif ch in ["I"]:
+                        continue  # no loss: dropped by the generator before the model
                     else:
                         raise ValueError(f"Unknown instance segmentation data channel '{ch}'")
 
                 if len(losses) > 0:
                     opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", losses])
         else:
-            assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x != "We"]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+            assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x not in ("We", "I")]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
             for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
                 assert loss in ["bce", "ce", "mse", "l1", "mae", "embedseg"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'embedseg']"
 
@@ -1481,7 +1495,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "Gv",
                     "Gh",
                     "Gz",
-                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We', 'Gv', 'Gh', 'Gz']"
+                    "I",
+                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We', 'Gv', 'Gh', 'Gz', 'I']"
             
             # Legacy mask used in CartoCell
             if "M" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
@@ -1500,10 +1515,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 3, "'E_offset', 'E_sigma' and 'E_seediness' channels must be the only ones used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "gradient-flow":
                 assert "Gv" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "Gh" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'Gv', 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow'"
+                # 'I' is auto-added and dropped before the model, so exclude it from this check.
+                _gflow_chs = set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) - {"I"}
                 if cfg.PROBLEM.NDIM == "2D":
-                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh"}, "'Gv' and 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '2D'"
+                    assert _gflow_chs == {"F", "Gv", "Gh"}, "'Gv' and 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '2D'"
                 else:
-                    assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"F", "Gv", "Gh", "Gz"}, "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
+                    assert _gflow_chs == {"F", "Gv", "Gh", "Gz"}, "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":  
                 for ch in ["R", "Gv", "Gh", "E_offset", "E_sigma", "E_seediness"]:
                     if ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
@@ -1551,7 +1568,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             else: # agglomeration
                 raise NotImplementedError("'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' == 'agglomeration' is not implemented yet")
               
-            chs = [x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x != "We"]
+            # 'We' and 'I' are added automatically, so the user provides no extra options for them.
+            chs = [x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x not in ("We", "I")]
             extra_opts_list = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS
 
             assert len(extra_opts_list) == 1, (
@@ -1597,10 +1615,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     assert isinstance(val["norm"], bool)
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
                 elif key in ("Gv", "Gh", "Gz"):  # gradient flow channels
-                   # niter may be "auto" (use Cellpose's 2*(ly+lx) per-cell formula) or a fixed integer
-                   assert "niter" in val, f"'{ctx}' must have 'niter' key"
-                   if val["niter"] != "auto":
-                       _assert_int(val, "niter", ctx, min_val=1)
+                   # The diffusion iteration count is not user-configurable (always Cellpose's per-cell
+                   # 2*(ly+lx) / 6*(...) formula); only the gradient strategy is exposed.
                    _assert_str_in(val, "gradient_type", {"omnipose", "cellpose"}, ctx)
                 elif key  == "Db":  # distance channels group
                     _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
@@ -3105,25 +3121,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         for prob_key in [k for k in cfg.AUGMENTOR.keys() if k.endswith("_PROB")]:
             if not check_value(cfg.AUGMENTOR[prob_key]):
                 raise ValueError(f"AUGMENTOR.{prob_key} not in [0, 1] range")
-
-        # Cellpose/Omnipose flow representation ('Gv'/'Gh'/'Gz') is incompatible with arbitrary-angle
-        # rotation: 'AUGMENTOR.RANDOM_ROT' resamples the flow field at a free angle, which distorts the
-        # per-cell flow geometry and destabilizes training. Force it off and fall back to 'AUGMENTOR.ROT90'
-        # (90/180/270-degree rotations), which permute the flow axes cleanly and keep the geometry intact.
-        using_flow_representation = cfg.PROBLEM.TYPE == "INSTANCE_SEG" and any(
-            ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")
-        )
-        if using_flow_representation and cfg.AUGMENTOR.RANDOM_ROT:
-            print(
-                "WARNING: 'AUGMENTOR.RANDOM_ROT' is not compatible with the Cellpose/Omnipose flow "
-                "representation ('Gv'/'Gh'/'Gz' channels): arbitrary-angle rotation resamples the flow "
-                "field and breaks its per-cell geometry, which destabilizes training. Disabling "
-                "'AUGMENTOR.RANDOM_ROT' and enabling 'AUGMENTOR.ROT90' (90/180/270-degree rotations, which "
-                "preserve the flow geometry) instead."
-            )
-            opts.extend(["AUGMENTOR.RANDOM_ROT", False])
-            if not cfg.AUGMENTOR.ROT90:
-                opts.extend(["AUGMENTOR.ROT90", True])
 
         if cfg.AUGMENTOR.RANDOM_ROT:
             if not check_value(cfg.AUGMENTOR.RANDOM_ROT_RANGE, (-360, 360)):

@@ -30,6 +30,7 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
+from biapy.data.pre_processing import instances_to_flows
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -463,6 +464,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         n2v_load_gt: bool = False,
         instance_problem: bool = False,
         flow_channels: Dict = {},
+        instance_channel: Optional[int] = None,
+        flow_gradient_type: str = "cellpose",
         cellpose_diam_mean: float = 0.0,
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
@@ -535,6 +538,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # mask normalization info is known ({"vy": i, "vx": j, "vz": k}). Used for the vector-aware
         # rotation/flip/rescale transforms.
         self.flow_heat = {}
+        # Channel holding the raw instance labels (index within the mask), auto-added by
+        # check_configuration when the flow representation is used. Nearest-interpolated through the
+        # augmentation, used to regenerate the flows from the augmented labels (keeping image and target
+        # consistent under elastic/free rotation), then dropped in __getitem__. ``None`` otherwise.
+        self.instance_channel = instance_channel
+        # Gradient strategy for the regenerated flows, mirrored from the channel options so they match
+        # the ones the preprocessing baked into the GT. Iteration count is always "auto".
+        self.flow_gradient_type = flow_gradient_type
         # Per-sample Cellpose diameter rescale: each patch is rescaled in-plane by DIAM_MEAN / diameter
         # (the diameter is read per source file from DatasetFile.diameter in __getitem__) as part of the
         # zoom augmentation. Any random scale jitter on top comes from ``zoom_range``. DIAM_MEAN <= 0
@@ -591,6 +602,19 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     self.mask_norm["per_channel_info"][j]["type"] = "flow"
                     self.mask_norm["per_channel_info"][j]["div"] = False
 
+            # Tag the instance channel as "label": raw IDs must never be normalized nor interpolated
+            # linearly. The tag is sticky in normalize_mask and keeps the channel in the nearest-
+            # interpolated ``mask`` group instead of the float ``heat`` group.
+            if self.instance_channel is not None and self.instance_channel in self.mask_norm["per_channel_info"]:
+                self.mask_norm["per_channel_info"][self.instance_channel]["type"] = "label"
+                self.mask_norm["per_channel_info"][self.instance_channel]["div"] = False
+                # The ``mask`` group's interpolation order comes from ``target_type`` ("mask" -> order 0).
+                assert self.norm_module["target_type"] == "mask", (
+                    "The virtual 'I' (instance labels) channel requires norm_module['target_type'] == 'mask' "
+                    "so it is nearest-interpolated; got "
+                    f"'{self.norm_module['target_type']}'."
+                )
+
             # Check if any channel is not binary to set no_bin_channel_found to True
             self.no_bin_channel_found = any(
                 self.mask_norm["per_channel_info"][j]["type"] in ("no_bin", "flow")
@@ -608,6 +632,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         continue
                     hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
                     self.flow_heat[role_to_comp[role]] = hpos
+
+            # Position of the instance channel inside the split-off ``mask`` array (the number of
+            # non-heat channels before it), the counterpart of ``flow_heat`` for the label group.
+            self.instance_mask_pos = None
+            if self.instance_channel is not None:
+                per = self.mask_norm["per_channel_info"]
+                self.instance_mask_pos = sum(
+                    1 for k in range(self.instance_channel) if per[k]["type"] not in ("no_bin", "flow")
+                )
         else:
             self.mask_norm = self.norm_module
 
@@ -618,6 +651,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         print("Normalization config used for X (first sample): {}".format(xnorm_info))
         print("Normalization config used for Y: {}".format(self.mask_norm))
+
+        # Voxel spacing in (z, y, x) order (the layout instances_to_flows and labels_into_channels use),
+        # kept before the (x, y[, z]) reorder below.
+        if self.ndim == 2:
+            self.flow_resolution = [1.0, float(resolution[0]), float(resolution[1])]
+        else:
+            self.flow_resolution = [float(resolution[0]), float(resolution[1]), float(resolution[2])]
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
@@ -1164,6 +1204,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 diam_factor=self.cellpose_diam_factor(index),
             )
 
+        # Drop the instance channel: it only feeds the flow regeneration above and must not reach the
+        # model or the loss. Done here (not in apply_transform) so it is also dropped when augmentation
+        # is off, e.g. validation.
+        if self.instance_channel is not None:
+            mask = np.delete(mask, self.instance_channel, axis=-1)
+
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
             img, mask = self.prepare_n2v(img, mask)
@@ -1459,6 +1505,32 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image,
                 drop_range=self.drop_range
             )
+
+        # Regenerate the Cellpose/Omnipose flows from the augmented instance labels, replacing the ones
+        # warped along with the other heat channels. Warping a precomputed flow field only stays valid for
+        # transforms that map the grid onto itself (flips, 90-degree rotations); anything that resamples
+        # geometry (free rotation, elastic, shear, misalignment) leaves image and target disagreeing,
+        # especially at cells cut by the introduced padding. Recomputing from the labels the network
+        # actually sees keeps the pair consistent.
+        if (
+            self.instance_channel is not None
+            and self.instance_mask_pos is not None
+            and heat is not None
+            and self.flow_heat
+        ):
+            labels_aug = mask[..., self.instance_mask_pos].astype(np.int32)
+            Gv, Gh, Gz = instances_to_flows(
+                labels_aug,
+                resolution=self.flow_resolution,
+                niter="auto",
+                gradient_type=self.flow_gradient_type,
+            )
+            if "vy" in self.flow_heat:
+                heat[..., self.flow_heat["vy"]] = Gv
+            if "vx" in self.flow_heat:
+                heat[..., self.flow_heat["vx"]] = Gh
+            if "vz" in self.flow_heat and Gz is not None:
+                heat[..., self.flow_heat["vz"]] = Gz
 
         # Merge heatmaps and masks again
         if self.no_bin_channel_found:

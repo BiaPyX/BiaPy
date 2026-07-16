@@ -93,6 +93,7 @@ class test_pair_data_generator(Dataset):
         provide_Y: bool = False,
         seed: int = 42,
         instance_problem: bool = False,
+        instance_channel: Optional[int] = None,
         convert_to_rgb: bool = False,
         filter_props: List[List[str]] = [],
         filter_vals: Optional[List[List[float | int]]] = None,
@@ -124,6 +125,10 @@ class test_pair_data_generator(Dataset):
         self.seed = seed
         self.ndim = ndim
         self.instance_problem = instance_problem
+        # Index of the virtual 'I' channel (raw instance labels) inside the GT, or None. It only exists to
+        # let the train generator regenerate the flows from the augmented labels, so it is dropped here
+        # before the GT is used for the model/metrics.
+        self.instance_channel = instance_channel
         self.n_classes = n_classes
         self.ignore_index = ignore_index
 
@@ -303,6 +308,11 @@ class test_pair_data_generator(Dataset):
                     mask = np.array(mask)
                     mask, _ = normalize_mask(mask, norm_module=self.mask_norm, is_training=False)
                     assert isinstance(mask, np.ndarray)
+
+            # Drop the virtual instance-label channel before the GT is used: it carries raw instance IDs
+            # (which the uint8 cast below would truncate anyway) and is not something the model predicts.
+            if self.provide_Y and self.instance_channel is not None and mask is not None:
+                mask = np.delete(np.array(mask), self.instance_channel, axis=-1)
 
             img = np.expand_dims(img, 0)
             if self.provide_Y:

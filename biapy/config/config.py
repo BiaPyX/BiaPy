@@ -172,9 +172,7 @@ class Config:
         #       Note: the loss mask for H/V/Z is derived automatically from a binary foreground channel (F, M, or B) in the GT
         #       when one is present; otherwise all pixels are included (background = 0 is a valid training target).
         #   - 'Gh', 'Gv' and 'Gz' channels. Possible options:
-        #       - 'niter': int, number of iterations for the diffusion process (Cellpose strategy only). Default: 200
         #       - 'gradient_type': str, method to compute the gradients. Options are "cellpose" and "omnipose". Default: "cellpose"
-        #       Note: the loss mask is derived automatically from the vector magnitude (foreground = unit-vector, background = zero).
         #   - 'Db' channel. Possible options:
         #       - 'val_type': str, to determine how to modify the distance values. Default: 'norm'. Options are:
         #           - 'raw': to leave the distances as they are calculated.

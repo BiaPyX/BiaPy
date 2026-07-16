@@ -315,6 +315,13 @@ def create_train_val_augmentors(
             data_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             flow_channels = {ch: i for i, ch in enumerate(data_channels) if ch in ("Gv", "Gh", "Gz")}
             dic["flow_channels"] = flow_channels
+            # Virtual 'I' channel (raw instance labels), auto-added by check_configuration whenever the
+            # flow representation is used. The generator regenerates the flows from it after augmentation
+            # and drops it before the batch reaches the model.
+            dic["instance_channel"] = data_channels.index("I") if "I" in data_channels else None
+            # The diffusion iteration count is always "auto" (not user-configurable); only the gradient
+            # strategy is carried through so the regenerated flows match the ones baked into the GT.
+            dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
             if len(flow_channels) > 0:
                 # The per-file diameter lives on DatasetFile.diameter; the generator computes the
                 # per-sample rescale factor DIAM_MEAN / diameter itself.
@@ -367,9 +374,11 @@ def create_train_val_augmentors(
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
             # Tag flow channels for consistency; no rescale is applied on validation (da=False).
-            dic["flow_channels"] = {
-                ch: i for i, ch in enumerate(list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)) if ch in ("Gv", "Gh", "Gz")
-            }
+            _val_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            dic["flow_channels"] = {ch: i for i, ch in enumerate(_val_channels) if ch in ("Gv", "Gh", "Gz")}
+            # Validation runs with da=False so flows are not regenerated, but 'I' is still in the GT and
+            # must be dropped before the model.
+            dic["instance_channel"] = _val_channels.index("I") if "I" in _val_channels else None
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -579,6 +588,10 @@ def create_test_generator(
         dic["Y"] = Y_test
         dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
         dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG"
+        # 'I' is in the test GT too and must be dropped before the GT is used for the metrics.
+        if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+            _test_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            dic["instance_channel"] = _test_channels.index("I") if "I" in _test_channels else None
         dic["ignore_index"] = cfg.LOSS.IGNORE_INDEX
         dic["n_classes"] = cfg.DATA.N_CLASSES
     

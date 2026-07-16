@@ -300,7 +300,9 @@ class multiple_metrics:
         self.out_channels = out_channels.copy() if out_channels is not None else [".",]*len(metric_names)
         if self.num_classes > 2:
             self.out_channels += ["class"]
-        self.out_channels = [x for x in self.out_channels if x != "We"]  # Ignore weight extra channel
+        # Ignore the weight extra channel and the virtual instance channel ('I' is dropped by the
+        # generator before the model, so it is never predicted nor scored).
+        self.out_channels = [x for x in self.out_channels if x not in ("We", "I")]
         self.channel_extra_opts = channel_extra_opts
         self.model_source = model_source
         self.ignore_index = ignore_index if ignore_index != -1 else None
@@ -1505,7 +1507,9 @@ class instance_segmentation_loss:
         self.class_rebalance_within_channels = class_rebalance_within_channels 
         self.separated_class_channel = separated_class_channel
         self.ndim = ndim
-        self.out_channels = [x for x in out_channels if x != "We"]
+        # 'I' is the virtual instance channel: the generator drops it before the model, so unlike 'We' it
+        # never reaches the loss and must not be counted in the expected GT channels either.
+        self.out_channels = [x for x in out_channels if x not in ("We", "I")]
         self.extra_weight_in_borders = out_channels.count("We") > 0
         self.gt_channels_expected = gt_channels_expected if not self.extra_weight_in_borders else gt_channels_expected + 1
         self.channel_extra_opts = channel_extra_opts

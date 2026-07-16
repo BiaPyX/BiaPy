@@ -270,6 +270,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
             out_ch = 0  # current output channel index
             for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                if channel == "I":
+                    # Virtual channel: the generator regenerates the flows from it and drops it before the
+                    # batch reaches the model, so it consumes no output channel and maps to no head.
+                    continue
                 if channel in ["Db", "A", "R", "E_offset", "E_sigma"]:
                     if channel == "A":
                         z_affinities = dst.get("A", {}).get("z_affinities", [1])
@@ -402,6 +406,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         self.model_output_channel_info[0] += "+" + channel
                 elif channel == "We":
                     continue
+                elif channel == "I":
+                    # Virtual channel: the generator uses it to regenerate the flows from the augmented
+                    # labels and drops it before the batch reaches the model, so it is never predicted.
+                    continue
                 else:
                     raise ValueError("Unknown channel: {}".format(channel))
 
@@ -467,6 +475,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                continue  # No metrics for these channels
             elif channel == "We":
                 continue
+            elif channel == "I":
+                continue  # dropped by the generator before the model
 
             # Extra channels for the synapse detection branch
             elif channel == "F_pre":
