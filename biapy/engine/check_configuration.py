@@ -2661,6 +2661,34 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if all(x == True for x in cfg.MODEL.ISOTROPY):
         opts.extend(["MODEL.ISOTROPY", (True,) * (len(cfg.MODEL.FEATURE_MAPS))])
 
+    # Adjust CONV_LAYERS to feature maps (one value per level, i.e. per feature map)
+    if model_arch in [
+        "unet",
+        "resunet",
+        "resunet++",
+        "seunet",
+        "resunet_se",
+        "attention_unet",
+        "unext_v1",
+        "unext_v2",
+    ]:
+        conv_layers = cfg.MODEL.CONV_LAYERS
+        n_levels = len(cfg.MODEL.FEATURE_MAPS)
+        if len(conv_layers) == 0:
+            # Not set: use two convolutions per level (classic double-convolution behaviour)
+            opts.extend(["MODEL.CONV_LAYERS", (2,) * n_levels])
+        elif len(conv_layers) == 1:
+            # A single value is broadcast to all levels
+            opts.extend(["MODEL.CONV_LAYERS", (conv_layers[0],) * n_levels])
+        elif len(conv_layers) != n_levels:
+            if len(set(conv_layers)) == 1:
+                # Uniform value but wrong length: broadcast to match the number of levels
+                opts.extend(["MODEL.CONV_LAYERS", (conv_layers[0],) * n_levels])
+            else:
+                raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.CONV_LAYERS' lengths must be equal")
+        if any(x < 1 for x in conv_layers):
+            raise ValueError("'MODEL.CONV_LAYERS' values must be greater than or equal to 1")
+
     # Correct UPSCALING for other workflows than SR
     if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
         opts.extend(["PROBLEM.SUPER_RESOLUTION.UPSCALING", (1,) * dim_count])
@@ -3852,6 +3880,10 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "UNETR_DEC_KERNEL_SIZE" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["KERNEL_SIZE"] = old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
             del old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
+        if "CONVNEXT_LAYERS" in old_cfg["MODEL"]:
+            # MODEL.CONVNEXT_LAYERS was renamed to the more general MODEL.CONV_LAYERS
+            old_cfg["MODEL"]["CONV_LAYERS"] = old_cfg["MODEL"]["CONVNEXT_LAYERS"]
+            del old_cfg["MODEL"]["CONVNEXT_LAYERS"]
         if "N_CLASSES" in old_cfg["MODEL"]:
             if "DATA" not in old_cfg:
                 old_cfg["DATA"] = {}

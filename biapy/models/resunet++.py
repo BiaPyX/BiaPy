@@ -64,6 +64,7 @@ class ResUNetPlusPlus(nn.Module):
         upsampling_position="pre",
         isotropy=False,
         larger_io=True,
+        conv_layers: List[int] = [2, 2, 2, 2, 2],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
@@ -133,6 +134,13 @@ class ResUNetPlusPlus(nn.Module):
 
         larger_io : bool, optional
             Whether to use extra and larger kernels in the input and output layers.
+
+        conv_layers : list of int, optional
+            Number of convolutional layers in the residual main path of each level, given as
+            one value per level/feature map. Level ``i`` is used for encoder/decoder blocks
+            producing ``feature_maps[i]`` (the last feature map is the ASPP bridge level and
+            is not affected). Defaults to ``[2, 2, 2, 2, 2]``, which reproduces the classic
+            two-convolution residual block.
 
         contrast : bool, optional
             Whether to add contrastive learning head to the model. Default is ``False``.
@@ -247,6 +255,7 @@ class ResUNetPlusPlus(nn.Module):
                 skip_k_size=kernel_size,
                 skip_norm=normalization,
                 first_block=True,
+                nconvs=conv_layers[0],
             )
         )
         self.sqex_blocks.append(SqExBlock(feature_maps[0], ndim=self.ndim))
@@ -269,6 +278,7 @@ class ResUNetPlusPlus(nn.Module):
                     skip_k_size=kernel_size,
                     skip_norm=normalization,
                     first_block=False,
+                    nconvs=conv_layers[i + 1],
                 )
             )
             mpool = (z_down[i + 1], self.yx_down[i + 1], self.yx_down[i + 1]) if self.ndim == 3 else (self.yx_down[i + 1], self.yx_down[i + 1])
@@ -326,6 +336,7 @@ class ResUNetPlusPlus(nn.Module):
                         dropout=drop_values[i + 2],
                         skip_k_size=kernel_size,
                         skip_norm=normalization,
+                        nconvs=conv_layers[i + 1],
                     ) # type: ignore
                 )
         self.aspp_out = nn.ModuleList()

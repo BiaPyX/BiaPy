@@ -132,6 +132,7 @@ def build_model(
             separated_decoders=separated_decoders,
             isotropy=cfg.MODEL.ISOTROPY,
             larger_io=cfg.MODEL.LARGER_IO,
+            conv_layers=cfg.MODEL.CONV_LAYERS,
             return_one_tensor=False,
         )
         if modelname == "unet":
@@ -147,7 +148,7 @@ def build_model(
         elif modelname == "resunet_se":
             callable_model = ResUNet_SE  # type: ignore
         elif modelname in ["unext_v1", "unext_v2"]:
-            args["cn_layers"] = cfg.MODEL.CONVNEXT_LAYERS
+            args["cn_layers"] = args.pop("conv_layers") # ConvNeXt calls its per-level layer count 'cn_layers' (sourced from MODEL.CONV_LAYERS)
             args["stochastic_depth_prob"] = cfg.MODEL.CONVNEXT_SD_PROB
             args["stem_k_size"] = cfg.MODEL.CONVNEXT_STEM_K_SIZE
             del args["activation"] # ConvNeXt uses GELU activation by default

@@ -70,6 +70,7 @@ class ResUNet_SE(nn.Module):
         upsampling_position="pre",
         isotropy=False,
         larger_io=True,
+        conv_layers: List[int] = [2, 2, 2, 2, 2],
         extra_conv=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
@@ -143,6 +144,13 @@ class ResUNet_SE(nn.Module):
 
         larger_io : bool, optional
             Whether to use extra and larger kernels in the input and output layers.
+
+        conv_layers : list of int, optional
+            Number of convolutional layers in the residual main path of each level, given as
+            one value per level/feature map. Level ``i`` is used for the encoder block ``i``
+            and its mirrored decoder block, and the last value is used for the bottleneck.
+            Defaults to ``[2, 2, 2, 2, 2]``, which reproduces the classic two-convolution
+            residual block.
 
         extra_conv : bool, optional
             Whether to add an extra conv layer before residual blocks. Defaults to True.
@@ -260,6 +268,7 @@ class ResUNet_SE(nn.Module):
                     se_block=True,
                     first_block=True if i == 0 else False,
                     extra_conv=extra_conv,
+                    nconvs=conv_layers[i],
                 )
             )
             mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
@@ -279,6 +288,7 @@ class ResUNet_SE(nn.Module):
             dropout=drop_values[-1],
             se_block=True,
             extra_conv=extra_conv,
+            nconvs=conv_layers[-1],
         )
 
         # DECODER
@@ -307,6 +317,7 @@ class ResUNet_SE(nn.Module):
                         dropout=drop_values[i],
                         se_block=True,
                         extra_conv=extra_conv,
+                        nconvs=conv_layers[i],
                     ) # type: ignore
                 )
                 in_channels = feature_maps[i]

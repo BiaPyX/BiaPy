@@ -50,6 +50,7 @@ class ResUNet(nn.Module):
         upsampling_position="pre",
         isotropy=False,
         larger_io=True,
+        conv_layers: List[int] = [2, 2, 2, 2, 2],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
@@ -119,6 +120,13 @@ class ResUNet(nn.Module):
 
         larger_io : bool, optional
             Whether to use extra and larger kernels in the input and output layers.
+
+        conv_layers : list of int, optional
+            Number of convolutional layers in the residual main path of each level, given as
+            one value per level/feature map. Level ``i`` is used for the encoder block ``i``
+            and its mirrored decoder block, and the last value is used for the bottleneck.
+            Defaults to ``[2, 2, 2, 2, 2]``, which reproduces the classic two-convolution
+            residual block.
 
         contrast : bool, optional
             Whether to add contrastive learning head to the model. Default is ``False``.
@@ -231,6 +239,7 @@ class ResUNet(nn.Module):
                     norm=normalization,
                     dropout=drop_values[i],
                     first_block=True if i == 0 else False,
+                    nconvs=conv_layers[i],
                 )
             )
             mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
@@ -248,6 +257,7 @@ class ResUNet(nn.Module):
             act=activation,
             norm=normalization,
             dropout=drop_values[-1],
+            nconvs=conv_layers[-1],
         )
 
         # DECODER
@@ -274,6 +284,7 @@ class ResUNet(nn.Module):
                         act=activation,
                         norm=normalization,
                         dropout=drop_values[i],
+                        nconvs=conv_layers[i],
                     ) # type: ignore
                 )
                 in_channels = feature_maps[i]

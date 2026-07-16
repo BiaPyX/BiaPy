@@ -79,6 +79,7 @@ class SE_U_Net(nn.Module):
         upsampling_position="pre",
         isotropy=False,
         larger_io=True,
+        conv_layers: List[int] = [2, 2, 2, 2, 2],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
@@ -151,6 +152,12 @@ class SE_U_Net(nn.Module):
 
         larger_io : bool, optional
             Whether to use extra and larger kernels in the input and output layers.
+
+        conv_layers : list of int, optional
+            Number of convolutional layers to stack at each U-Net level, given as one value
+            per level/feature map. Level ``i`` is used for the encoder block ``i`` and its
+            mirrored decoder block, and the last value is used for the bottleneck. Defaults
+            to ``[2, 2, 2, 2, 2]``, which reproduces the classic double-convolution U-Net.
 
         contrast : bool, optional
             Whether to add contrastive learning head to the model. Default is ``False``.
@@ -254,7 +261,7 @@ class SE_U_Net(nn.Module):
             if not isotropy[i] and self.ndim == 3:
                 kernel_size = (1, k_size, k_size)
             self.down_path.append(
-                DoubleConvBlock(
+                ConvBlock(
                     conv=conv,
                     in_size=in_channels,
                     out_size=feature_maps[i],
@@ -263,6 +270,7 @@ class SE_U_Net(nn.Module):
                     norm=normalization,
                     dropout=drop_values[i],
                     se_block=True,
+                    nconvs=conv_layers[i],
                 )
             )
             mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
@@ -272,7 +280,7 @@ class SE_U_Net(nn.Module):
         kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
         if not isotropy[-1] and self.ndim == 3:
             kernel_size = (1, k_size, k_size)
-        self.bottleneck = DoubleConvBlock(
+        self.bottleneck = ConvBlock(
             conv=conv,
             in_size=in_channels,
             out_size=feature_maps[-1],
@@ -281,6 +289,7 @@ class SE_U_Net(nn.Module):
             norm=normalization,
             dropout=drop_values[-1],
             se_block=True,
+            nconvs=conv_layers[-1],
         )
 
         # DECODER
@@ -307,6 +316,7 @@ class SE_U_Net(nn.Module):
                         norm=normalization,
                         dropout=drop_values[i],
                         se_block=True,
+                        nconvs=conv_layers[i],
                     )
                 ) # type: ignore
                 in_channels = feature_maps[i]

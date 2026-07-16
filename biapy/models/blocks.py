@@ -45,6 +45,7 @@ class ConvBlock(nn.Module):
         norm="none",
         dropout=0,
         se_block=False,
+        nconvs=1,
     ):
         """
         Initialize the Convolutional Block.
@@ -84,10 +85,44 @@ class ConvBlock(nn.Module):
         se_block : bool, optional
             Whether to add a Squeeze-and-Excitation (`SqExBlock`) after all other
             operations in the block. Defaults to `False`.
+        nconvs : int, optional
+            Number of stacked convolutional layers to create. With ``nconvs=1`` (default)
+            the block behaves as a single convolution (plus its optional norm/act/dropout/SE).
+            With ``nconvs=2`` it reproduces a ``DoubleConvBlock``, and larger values stack
+            more convolutions. The first convolution maps ``in_size -> out_size`` (and is the
+            only one to use ``padding``/``stride``); the remaining ones map
+            ``out_size -> out_size`` with ``padding="same"`` and ``stride=1`` so the spatial
+            size is preserved. Defaults to 1.
         """
         super(ConvBlock, self).__init__()
-        block = []
+        if nconvs < 1:
+            raise ValueError(f"'nconvs' must be >= 1, but {nconvs} was given")
 
+        # For nconvs > 1 build a sequence of single-conv ConvBlocks. This keeps the module
+        # layout (and therefore the state_dict keys) identical to the former DoubleConvBlock,
+        # preserving backward compatibility with existing checkpoints.
+        if nconvs > 1:
+            inner = []
+            for i in range(nconvs):
+                inner.append(
+                    ConvBlock(
+                        conv=conv,
+                        in_size=in_size if i == 0 else out_size,
+                        out_size=out_size,
+                        k_size=k_size,
+                        padding=padding if i == 0 else "same",
+                        stride=stride if i == 0 else 1,
+                        bias=bias,
+                        act=act,
+                        norm=norm,
+                        dropout=dropout,
+                        se_block=se_block,
+                    )
+                )
+            self.block = nn.Sequential(*inner)
+            return
+
+        block = []
         block.append(conv(in_size, out_size, kernel_size=k_size, padding=padding, stride=stride, bias=bias))
         if norm != "none":
             if conv == nn.Conv2d:
@@ -129,13 +164,20 @@ class ConvBlock(nn.Module):
         return out
 
 
-class DoubleConvBlock(nn.Module):
+class DoubleConvBlock(ConvBlock):
     """
     Implements a Double Convolutional Block.
 
     This block consists of two sequential ``ConvBlock`` layers. It is a common
     building component in many convolutional neural network architectures,
     especially in U-Net-like models, to extract features.
+
+    .. note::
+        This is now a thin wrapper around :class:`ConvBlock` with ``nconvs=2``.
+        It is kept for backward compatibility; new code can use
+        ``ConvBlock(..., nconvs=2)`` directly. The produced module layout (and
+        therefore the ``state_dict`` keys) is identical to the previous
+        implementation, so existing checkpoints keep loading.
     """
 
     def __init__(
@@ -180,56 +222,17 @@ class DoubleConvBlock(nn.Module):
             Whether to add a Squeeze-and-Excitation (SE) block at the end of
             each ConvBlock. Defaults to False.
         """
-        super(DoubleConvBlock, self).__init__()
-        block = []
-        block.append(
-            ConvBlock(
-                conv=conv,
-                in_size=in_size,
-                out_size=out_size,
-                k_size=k_size,
-                act=act,
-                norm=norm,
-                dropout=dropout,
-                se_block=se_block,
-            )
+        super(DoubleConvBlock, self).__init__(
+            conv=conv,
+            in_size=in_size,
+            out_size=out_size,
+            k_size=k_size,
+            act=act,
+            norm=norm,
+            dropout=dropout,
+            se_block=se_block,
+            nconvs=2,
         )
-        block.append(
-            ConvBlock(
-                conv=conv,
-                in_size=out_size,
-                out_size=out_size,
-                k_size=k_size,
-                act=act,
-                norm=norm,
-                dropout=dropout,
-                se_block=se_block,
-            )
-        )
-        self.block = nn.Sequential(*block)
-
-    def forward(self, x):
-        """
-        Perform the forward pass of the Double Convolutional Block.
-
-        Processes the input tensor sequentially through the two `ConvBlock` layers.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            The input feature tensor.
-            Expected shape for 2D: (batch_size, in_size, height, width).
-            Expected shape for 3D: (batch_size, in_size, depth, height, width).
-
-        Returns
-        -------
-        torch.Tensor
-            The output tensor after passing through both `ConvBlock` layers.
-            Its shape will be (batch_size, out_size, H', W') or (batch_size, out_size, D', H', W'),
-            where H', W' (and D') match the input spatial dimensions if padding is 'same'.
-        """
-        out = self.block(x)
-        return out
 
 
 class ConvNeXtBlock_V1(nn.Module):
@@ -500,6 +503,7 @@ class UpBlock(nn.Module):
         dropout=0,
         attention_gate=False,
         se_block=False,
+        nconvs=2,
     ):
         """
         Initialize the Upsampling block.
@@ -549,6 +553,9 @@ class UpBlock(nn.Module):
         se_block : bool, optional
             Whether to add a Squeeze-and-Excitation (SE) block within the `DoubleConvBlock`.
             Defaults to `False`.
+        nconvs : int, optional
+            Number of convolutional layers used to refine the concatenated features after
+            upsampling. Defaults to 2 (equivalent to the former `DoubleConvBlock`).
         """
         super(UpBlock, self).__init__()
         self.ndim = ndim
@@ -572,7 +579,7 @@ class UpBlock(nn.Module):
             self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size // 2, norm=norm)
         else:
             self.attention_gate = None
-        self.conv_block = DoubleConvBlock(
+        self.conv_block = ConvBlock(
             conv=conv,
             in_size=out_size * 2,
             out_size=out_size,
@@ -581,6 +588,7 @@ class UpBlock(nn.Module):
             norm=norm,
             dropout=dropout,
             se_block=se_block,
+            nconvs=nconvs,
         )
 
     def forward(self, x, bridge):
@@ -1139,6 +1147,7 @@ class ResConvBlock(nn.Module):
         first_block=False,
         se_block=False,
         extra_conv=False,
+        nconvs=2,
     ):
         """
         Initialize a Residual Convolutional Block.
@@ -1191,8 +1200,16 @@ class ResConvBlock(nn.Module):
             If `True`, adds an additional convolutional layer with pre-activation
             before the main residual path, as described in Kisuk et al, 2017.
             Reference: `https://arxiv.org/pdf/1706.00120`. Defaults to `False`.
+        nconvs : int, optional
+            Number of convolutional layers in the residual main path. With ``nconvs=2``
+            (default) the block keeps its classic two-convolution structure. Larger values
+            insert additional ``out_size -> out_size`` convolutions (with norm/activation/
+            dropout) before the final convolution. ``nconvs=1`` keeps only the first
+            ``in_size -> out_size`` convolution. Defaults to 2.
         """
         super(ResConvBlock, self).__init__()
+        if nconvs < 1:
+            raise ValueError(f"'nconvs' must be >= 1, but {nconvs} was given")
         block = []
         pre_conv = []
         if not first_block:
@@ -1240,7 +1257,22 @@ class ResConvBlock(nn.Module):
                 dropout=dropout,
             )
         )
-        block.append(ConvBlock(conv=conv, in_size=out_size, out_size=out_size, k_size=k_size))
+        # Extra intermediate convolutions (only created when nconvs > 2)
+        for _ in range(max(0, nconvs - 2)):
+            block.append(
+                ConvBlock(
+                    conv=conv,
+                    in_size=out_size,
+                    out_size=out_size,
+                    k_size=k_size,
+                    act=act,
+                    norm=norm,
+                    dropout=dropout,
+                )
+            )
+        # Final convolution of the main path (kept bare, as in the original block)
+        if nconvs >= 2:
+            block.append(ConvBlock(conv=conv, in_size=out_size, out_size=out_size, k_size=k_size))
 
         self.block = nn.Sequential(*block)
 
@@ -1369,6 +1401,7 @@ class ResUpBlock(nn.Module):
         dropout=0,
         se_block=False,
         extra_conv=False,
+        nconvs=2,
     ):
         """
         Initialize a Residual Upsampling block, typically used in the decoder path of U-Net-like architectures.
@@ -1426,6 +1459,9 @@ class ResUpBlock(nn.Module):
         extra_conv : bool, optional
             Whether to add an extra convolutional layer before the residual block
             within the `ResConvBlock` (as in Kisuk et al, 2017). Defaults to `False`.
+        nconvs : int, optional
+            Number of convolutional layers in the internal `ResConvBlock` main path.
+            Defaults to 2.
         """
         super(ResUpBlock, self).__init__()
         self.ndim = ndim
@@ -1447,6 +1483,7 @@ class ResUpBlock(nn.Module):
             skip_norm=skip_norm,
             se_block=se_block,
             extra_conv=extra_conv,
+            nconvs=nconvs,
         )
 
     def forward(self, x, bridge):

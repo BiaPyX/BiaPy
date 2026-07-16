@@ -1287,14 +1287,16 @@ class Config:
         # Include extra convolutional layers with larger kernel at the beginning and end of the U-Net-like model. Works with 'unet', 'resunet', 'resunet++', 'attention_unet',
         # 'multiresunet', 'seunet' and 'resunet_se' architectures.
         _C.MODEL.LARGER_IO = False
+        # Number of convolutional layers to stack at each level of the U-Net-like model, given as one value per level (i.e. per feature map). For 'unet', 'resunet', 'resunet++',
+        # 'attention_unet', 'seunet' and 'resunet_se' architectures these are plain/residual convolutions ([2, 2, ...] reproduces the classic double-convolution U-Net); for
+        # 'unext_v1' and 'unext_v2' these are the number of ConvNeXtBlocks in each level. If a single value is provided it is broadcast to all levels.
+        _C.MODEL.CONV_LAYERS = [2, 2, 2, 2, 2]  # CONV_LAYERS
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.1.1 U-NeXT (v1 and v2) architectures options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # "unext_v1" and "unext_v2" architectures variables. These architectures are based on the ConvNeXt architecture (https://arxiv.org/abs/2201.03545) and they 
+        # "unext_v1" and "unext_v2" architectures variables. These architectures are based on the ConvNeXt architecture (https://arxiv.org/abs/2201.03545) and they
         # are adapted to the U-Net structure.
-        # Number of ConvNeXtBlocks in each level.
-        _C.MODEL.CONVNEXT_LAYERS = [2, 2, 2, 2, 2]  # CONVNEXT_LAYERS
         # Maximum Stochastic Depth probability for the U-NeXt model.
         _C.MODEL.CONVNEXT_SD_PROB = 0.1
         # Layer Scale parameter for the U-NeXt model. Only valid for the "unext_v1" architecture.
