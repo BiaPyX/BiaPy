@@ -195,14 +195,61 @@ pre_post_cell_seg_folder = args['pre_post_cell_seg']
 F_post_pred_post_folder = args['F_post_pred_post_location']
 output_data_folder = args['output_data']
 
-print(f"Processing {input_data_folder} folder . . .")
+post_loc_suffix = "_pred_post_locations.csv"
+
+
+def find_file_by_name(folder, candidates, name, kind_desc):
+    """Find the file in 'candidates' (filenames present in 'folder') matching 'name'.
+
+    Tries an exact stem match first, then falls back to a fuzzy substring match
+    in either direction. Returns the full path, or None if nothing matches.
+    """
+    exact = [f for f in candidates if os.path.splitext(f)[0] == name]
+    if len(exact) >= 1:
+        return os.path.join(folder, exact[0])
+
+    fuzzy = [
+        f for f in candidates
+        if os.path.splitext(f)[0] in name or name in os.path.splitext(f)[0]
+    ]
+    if len(fuzzy) == 1:
+        print(f"Fuzzy-matched {kind_desc} file: {fuzzy[0]} (name: {name})")
+        return os.path.join(folder, fuzzy[0])
+    elif len(fuzzy) > 1:
+        fuzzy.sort(key=lambda f: len(os.path.splitext(f)[0]), reverse=True)
+        print(f"Multiple fuzzy matches for {kind_desc}; using longest: {fuzzy[0]} (name: {name})")
+        return os.path.join(folder, fuzzy[0])
+
+    return None
+
+
+print(f"Processing {F_post_pred_post_folder} folder . . .")
+post_loc_ids = sorted(next(os.walk(F_post_pred_post_folder))[2])
+post_loc_ids = [f for f in post_loc_ids if f.endswith(post_loc_suffix)]
+
 raw_file_ids = sorted(next(os.walk(input_data_folder))[2])
 raw_file_ids = [f for f in raw_file_ids if f.endswith('.h5') or f.endswith('.hdf5') or f.endswith('.hdf')]
 
+cell_seg_ids = sorted(next(os.walk(pre_post_cell_seg_folder))[2])
+cell_seg_ids = [f for f in cell_seg_ids if f.endswith('.tif')]
+
 # Read images
-for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
-    name = os.path.splitext(id_)[0]
-    filename = os.path.join(input_data_folder, id_)
+for n, post_loc_id in tqdm(enumerate(post_loc_ids), total=len(post_loc_ids)):
+    name = post_loc_id[:-len(post_loc_suffix)]
+    post_locations_filename = os.path.join(F_post_pred_post_folder, post_loc_id)
+
+    # Find the corresponding raw file
+    filename = find_file_by_name(input_data_folder, raw_file_ids, name, "raw")
+    if filename is None:
+        print(f"WARNING: no raw file found for '{name}' in {input_data_folder}. Skipping.")
+        continue
+
+    # Find the corresponding cell (pre/post) segmentation file
+    cell_seg_filename = find_file_by_name(pre_post_cell_seg_folder, cell_seg_ids, name, "cell seg")
+    if cell_seg_filename is None:
+        print(f"WARNING: no predicted cell (pre/post) segmentation file found for '{name}' in "
+              f"{pre_post_cell_seg_folder}. Skipping.")
+        continue
 
     # Load raw volume (chunked read via BiaPy helper)
     file, raw_data = read_chunked_nested_data(filename, args['raw_data_in_data'])
@@ -224,29 +271,6 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
     if isinstance(file, h5py.File):
         file.close()
 
-    # Find the corresponding label file
-    cell_seg_filename = os.path.join(pre_post_cell_seg_folder, name+".tif")
-    if not os.path.exists(cell_seg_filename):
-        # Fuzzy match: find a .tif whose stem is a substring of name or vice versa
-        candidates = [
-            f for f in os.listdir(pre_post_cell_seg_folder)
-            if f.endswith('.tif') and (
-                os.path.splitext(f)[0] in name or name in os.path.splitext(f)[0]
-            )
-        ]
-        if len(candidates) == 1:
-            cell_seg_filename = os.path.join(pre_post_cell_seg_folder, candidates[0])
-            print(f"Fuzzy-matched cell seg file: {candidates[0]} (raw name: {name})")
-        elif len(candidates) > 1:
-            # Pick the candidate whose stem is the longest match
-            candidates.sort(key=lambda f: len(os.path.splitext(f)[0]), reverse=True)
-            cell_seg_filename = os.path.join(pre_post_cell_seg_folder, candidates[0])
-            print(f"Multiple fuzzy matches; using longest: {candidates[0]} (raw name: {name})")
-        else:
-            raise ValueError(
-                f"Predicted cell (pre/post) segmentation file for '{name}' not found in "
-                f"{pre_post_cell_seg_folder}. Please check your input folders and naming conventions."
-            )
     cell_seg = read_img_as_ndarray(cell_seg_filename, is_3d=True)
 
     # Drop trailing channel dim if present (e.g. (Z, Y, X, 1) -> (Z, Y, X))
@@ -261,31 +285,7 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
         cell_seg = zoom(cell_seg, zoom_factors, order=0).astype(cell_seg.dtype)
         print(f"Rescaling done. New cell seg shape: {cell_seg.shape}")
 
-    # Find the corresponding post locations file
-    post_locations_filename = os.path.join(F_post_pred_post_folder, name+"_pred_post_locations.csv")
-    if not os.path.exists(post_locations_filename):
-        # Fuzzy match: find a CSV whose stem (minus the suffix) is a substring of name or vice versa
-        suffix = "_pred_post_locations.csv"
-        candidates = [
-            f for f in os.listdir(F_post_pred_post_folder)
-            if f.endswith(suffix) and (
-                f[:-len(suffix)] in name or name in f[:-len(suffix)]
-            )
-        ]
-        if len(candidates) == 1:
-            post_locations_filename = os.path.join(F_post_pred_post_folder, candidates[0])
-            print(f"Fuzzy-matched post locations file: {candidates[0]} (raw name: {name})")
-        elif len(candidates) > 1:
-            candidates.sort(key=lambda f: len(f[:-len(suffix)]), reverse=True)
-            post_locations_filename = os.path.join(F_post_pred_post_folder, candidates[0])
-            print(f"Multiple fuzzy matches; using longest: {candidates[0]} (raw name: {name})")
-        else:
-            raise ValueError(
-                f"F_post predicted post point file for '{name}' not found in "
-                f"{F_post_pred_post_folder}. Please check your input folders and naming conventions."
-            )
-
-    print(f"Raw file: {filename} ; post locations file: {post_locations_filename}")
+    print(f"Raw file: {filename} ; cell seg file: {cell_seg_filename} ; post locations file: {post_locations_filename}")
 
     post_point_df = pd.read_csv(post_locations_filename, index_col=False)
     shape_zyx = tuple(int(x) for x in data_shape)
