@@ -133,6 +133,7 @@ def build_model(
             isotropy=cfg.MODEL.ISOTROPY,
             larger_io=cfg.MODEL.LARGER_IO,
             conv_layers=cfg.MODEL.CONV_LAYERS,
+            conv_block_order=cfg.MODEL.CONV_BLOCK_ORDER,
             return_one_tensor=False,
         )
         if modelname == "unet":
@@ -156,6 +157,7 @@ def build_model(
             del args["normalization"] # ConvNeXt uses LayerNorm, not BatchNorm or GroupNorm
             del args["k_size"] # ConvNeXt uses 7x7 kernels in the early layers, but this is fixed in the model definition
             del args["larger_io"] # ConvNeXt does not use larger input/output layers, but this is fixed in the model definition
+            del args["conv_block_order"] # ConvNeXt blocks have a fixed layer ordering, not the conv/norm/act blocks
             if modelname == "unext_v1":
                 callable_model = U_NeXt_V1  # type: ignore
                 args["layer_scale"] = cfg.MODEL.CONVNEXT_LAYER_SCALE

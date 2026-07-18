@@ -65,6 +65,7 @@ class ResUNetPlusPlus(nn.Module):
         isotropy=False,
         larger_io=True,
         conv_layers: List[int] = [2, 2, 2, 2, 2],
+        conv_block_order: str = "conv_norm_act",
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
@@ -235,6 +236,7 @@ class ResUNetPlusPlus(nn.Module):
                 k_size=kernel_size,
                 act=activation,
                 norm=normalization,
+                order=conv_block_order,
             )
             in_channels = feature_maps[0]
         else:
@@ -256,6 +258,7 @@ class ResUNetPlusPlus(nn.Module):
                 skip_norm=normalization,
                 first_block=True,
                 nconvs=conv_layers[0],
+                order=conv_block_order,
             )
         )
         self.sqex_blocks.append(SqExBlock(feature_maps[0], ndim=self.ndim))
@@ -279,6 +282,7 @@ class ResUNetPlusPlus(nn.Module):
                     skip_norm=normalization,
                     first_block=False,
                     nconvs=conv_layers[i + 1],
+                    order=conv_block_order,
                 )
             )
             mpool = (z_down[i + 1], self.yx_down[i + 1], self.yx_down[i + 1]) if self.ndim == 3 else (self.yx_down[i + 1], self.yx_down[i + 1])
@@ -337,6 +341,7 @@ class ResUNetPlusPlus(nn.Module):
                         skip_k_size=kernel_size,
                         skip_norm=normalization,
                         nconvs=conv_layers[i + 1],
+                        order=conv_block_order,
                     ) # type: ignore
                 )
         self.aspp_out = nn.ModuleList()
@@ -361,6 +366,7 @@ class ResUNetPlusPlus(nn.Module):
                     k_size=kernel_size,
                     act=activation,
                     norm=normalization,
+                    order=conv_block_order,
                 ) for _ in range(self.num_decoders)
             ])
         else:

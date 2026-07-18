@@ -1291,6 +1291,14 @@ class Config:
         # 'attention_unet', 'seunet' and 'resunet_se' architectures these are plain/residual convolutions ([2, 2, ...] reproduces the classic double-convolution U-Net); for
         # 'unext_v1' and 'unext_v2' these are the number of ConvNeXtBlocks in each level. If a single value is provided it is broadcast to all levels.
         _C.MODEL.CONV_LAYERS = [2, 2, 2, 2, 2]  # CONV_LAYERS
+        # Ordering of the convolution, normalization and activation layers inside each conv block.
+        # Options: "conv_norm_act" (default, post-activation: Conv -> Norm -> Act, the historical
+        # BiaPy block, keeps existing checkpoints loadable) and "norm_act_conv" (pre-activation:
+        # Norm -> Act -> Conv, normalizes every convolution's input including the first; 
+        # more stable when training from scratch at large learning rates).
+        # Works with 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet' and 'resunet_se'
+        # architectures ('multiresunet' only supports "conv_norm_act").
+        _C.MODEL.CONV_BLOCK_ORDER = "conv_norm_act"
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.1.1 U-NeXT (v1 and v2) architectures options
@@ -1693,7 +1701,7 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
-        _C.TRAIN.LR_SCHEDULER.NAME = ""  # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
+        _C.TRAIN.LR_SCHEDULER.NAME = ""  # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle', 'warmupreduceonplateau'
         # Lower bound on the learning rate used in 'warmupcosine' and 'reduceonplateau'
         _C.TRAIN.LR_SCHEDULER.MIN_LR = [-1.0]
 

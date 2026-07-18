@@ -46,6 +46,7 @@ class ConvBlock(nn.Module):
         dropout=0,
         se_block=False,
         nconvs=1,
+        order="conv_norm_act",
     ):
         """
         Initialize the Convolutional Block.
@@ -93,10 +94,29 @@ class ConvBlock(nn.Module):
             only one to use ``padding``/``stride``); the remaining ones map
             ``out_size -> out_size`` with ``padding="same"`` and ``stride=1`` so the spatial
             size is preserved. Defaults to 1.
+        order : str, optional
+            Ordering of the convolution, normalization and activation layers. Two designs are
+            supported:
+
+            - ``"conv_norm_act"`` (default, *post-activation*): ``Conv -> Norm -> Act``. The
+              normalization acts on ``out_size`` channels. This is the historical BiaPy block
+              and keeps the ``state_dict`` layout unchanged, so existing checkpoints load.
+            - ``"norm_act_conv"`` (*pre-activation*): ``Norm -> Act -> Conv``. The normalization
+              acts on the block *input* (``in_size`` channels). This is the design used e.g. by
+              Cellpose's res-U-Net; applying normalization to every convolution's input (the
+              first one included) makes training more stable at large learning rates.
+
+            Dropout and the optional Squeeze-and-Excitation block are always applied last.
+            Defaults to ``"conv_norm_act"``.
         """
         super(ConvBlock, self).__init__()
         if nconvs < 1:
             raise ValueError(f"'nconvs' must be >= 1, but {nconvs} was given")
+        if order not in ("conv_norm_act", "norm_act_conv"):
+            raise ValueError(
+                f"'order' must be 'conv_norm_act' or 'norm_act_conv', but {order!r} was given"
+            )
+        self.order = order
 
         # For nconvs > 1 build a sequence of single-conv ConvBlocks. This keeps the module
         # layout (and therefore the state_dict keys) identical to the former DoubleConvBlock,
@@ -117,20 +137,28 @@ class ConvBlock(nn.Module):
                         norm=norm,
                         dropout=dropout,
                         se_block=se_block,
+                        order=order,
                     )
                 )
             self.block = nn.Sequential(*inner)
             return
 
+        get_norm = get_norm_2d if conv == nn.Conv2d else get_norm_3d
         block = []
-        block.append(conv(in_size, out_size, kernel_size=k_size, padding=padding, stride=stride, bias=bias))
-        if norm != "none":
-            if conv == nn.Conv2d:
-                block.append(get_norm_2d(norm, out_size))
-            else:
-                block.append(get_norm_3d(norm, out_size))
-        if act:
-            block.append(get_activation(act))
+        if order == "norm_act_conv":
+            # Pre-activation: normalize/activate the block input, then convolve.
+            if norm != "none":
+                block.append(get_norm(norm, in_size))
+            if act:
+                block.append(get_activation(act))
+            block.append(conv(in_size, out_size, kernel_size=k_size, padding=padding, stride=stride, bias=bias))
+        else:
+            # Post-activation (default): convolve, then normalize/activate the output.
+            block.append(conv(in_size, out_size, kernel_size=k_size, padding=padding, stride=stride, bias=bias))
+            if norm != "none":
+                block.append(get_norm(norm, out_size))
+            if act:
+                block.append(get_activation(act))
         if dropout > 0:
             block.append(nn.Dropout(dropout))
         if se_block:
@@ -190,6 +218,7 @@ class DoubleConvBlock(ConvBlock):
         norm="none",
         dropout=0,
         se_block=False,
+        order="conv_norm_act",
     ):
         """
         Initialize the Double Convolutional Block.
@@ -232,6 +261,7 @@ class DoubleConvBlock(ConvBlock):
             dropout=dropout,
             se_block=se_block,
             nconvs=2,
+            order=order,
         )
 
 
@@ -504,6 +534,7 @@ class UpBlock(nn.Module):
         attention_gate=False,
         se_block=False,
         nconvs=2,
+        order="conv_norm_act",
     ):
         """
         Initialize the Upsampling block.
@@ -589,6 +620,7 @@ class UpBlock(nn.Module):
             dropout=dropout,
             se_block=se_block,
             nconvs=nconvs,
+            order=order,
         )
 
     def forward(self, x, bridge):
@@ -1148,6 +1180,7 @@ class ResConvBlock(nn.Module):
         se_block=False,
         extra_conv=False,
         nconvs=2,
+        order="conv_norm_act",
     ):
         """
         Initialize a Residual Convolutional Block.
@@ -1206,10 +1239,31 @@ class ResConvBlock(nn.Module):
             insert additional ``out_size -> out_size`` convolutions (with norm/activation/
             dropout) before the final convolution. ``nconvs=1`` keeps only the first
             ``in_size -> out_size`` convolution. Defaults to 2.
+        order : str, optional
+            Ordering of the convolution, normalization and activation layers in the residual
+            main path (see :class:`ConvBlock`). ``"conv_norm_act"`` (default) keeps the
+            historical post-activation block and its ``state_dict`` layout. ``"norm_act_conv"``
+            builds a *full pre-activation* residual block (``Norm -> Act -> Conv`` repeated
+            ``nconvs`` times), as in `Identity Mappings in Deep Residual Networks
+            <https://arxiv.org/pdf/1603.05027.pdf>`_ and Cellpose's res-U-Net. In
+            pre-activation mode the input is normalized before the first convolution, so
+            ``first_block`` has no special effect. Defaults to ``"conv_norm_act"``.
         """
         super(ResConvBlock, self).__init__()
         if nconvs < 1:
             raise ValueError(f"'nconvs' must be >= 1, but {nconvs} was given")
+        if order not in ("conv_norm_act", "norm_act_conv"):
+            raise ValueError(
+                f"'order' must be 'conv_norm_act' or 'norm_act_conv', but {order!r} was given"
+            )
+        self.order = order
+        if order == "norm_act_conv":
+            self._build_pre_activation(
+                conv=conv, in_size=in_size, out_size=out_size, k_size=k_size, act=act,
+                norm=norm, dropout=dropout, skip_k_size=skip_k_size, skip_norm=skip_norm,
+                se_block=se_block, extra_conv=extra_conv, nconvs=nconvs,
+            )
+            return
         block = []
         pre_conv = []
         if not first_block:
@@ -1291,6 +1345,51 @@ class ResConvBlock(nn.Module):
         if se_block:
             # add the Squeeze-and-Excitation block at the end of the full block (as in PyTC)
             # (https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/model/block/residual.py#L147-L155)
+            self.se_block = SqExBlock(out_size, ndim=2 if conv == nn.Conv2d else 3)
+        else:
+            self.se_block = nn.Identity()
+
+    def _build_pre_activation(
+        self, conv, in_size, out_size, k_size, act, norm, dropout,
+        skip_k_size, skip_norm, se_block, extra_conv, nconvs,
+    ):
+        """
+        Build a full pre-activation residual block (``order="norm_act_conv"``).
+
+        The main path is a stack of ``nconvs`` ``Norm -> Act -> Conv`` :class:`ConvBlock`
+        sub-blocks, so the block input (and every intermediate feature map) is normalized
+        before its convolution. The identity/projection shortcut and the optional
+        Squeeze-and-Excitation block mirror the post-activation variant, so the shared
+        :meth:`forward` works unchanged. Sets ``self.pre_conv``, ``self.block``,
+        ``self.shortcut`` and ``self.se_block``.
+        """
+        def make_conv(i, o):
+            return ConvBlock(
+                conv=conv, in_size=i, out_size=o, k_size=k_size, act=act, norm=norm,
+                dropout=dropout, order="norm_act_conv",
+            )
+
+        if extra_conv:
+            # An extra input convolution projects to out_size; the residual is then taken
+            # around the main path with an identity shortcut (as in the post-activation variant).
+            self.pre_conv = nn.Sequential(make_conv(in_size, out_size))
+            main_in = out_size
+            self.shortcut = nn.Identity()
+        else:
+            self.pre_conv = None
+            main_in = in_size
+            shortcut = [conv(in_size, out_size, kernel_size=skip_k_size, padding="same")]
+            if skip_norm != "none":
+                get_norm = get_norm_2d if conv == nn.Conv2d else get_norm_3d
+                shortcut.append(get_norm(skip_norm, out_size))
+            self.shortcut = nn.Sequential(*shortcut)
+
+        main = [make_conv(main_in, out_size)]
+        for _ in range(max(0, nconvs - 1)):
+            main.append(make_conv(out_size, out_size))
+        self.block = nn.Sequential(*main)
+
+        if se_block:
             self.se_block = SqExBlock(out_size, ndim=2 if conv == nn.Conv2d else 3)
         else:
             self.se_block = nn.Identity()
@@ -1402,6 +1501,7 @@ class ResUpBlock(nn.Module):
         se_block=False,
         extra_conv=False,
         nconvs=2,
+        order="conv_norm_act",
     ):
         """
         Initialize a Residual Upsampling block, typically used in the decoder path of U-Net-like architectures.
@@ -1484,6 +1584,7 @@ class ResUpBlock(nn.Module):
             se_block=se_block,
             extra_conv=extra_conv,
             nconvs=nconvs,
+            order=order,
         )
 
     def forward(self, x, bridge):

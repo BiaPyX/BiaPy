@@ -83,6 +83,7 @@ class SE_U_Net(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
+        conv_block_order: str = "conv_norm_act",
     ):
         """
         Initialize the SE_U_Net model.
@@ -251,6 +252,7 @@ class SE_U_Net(nn.Module):
                 k_size=kernel_size,
                 act=activation,
                 norm=normalization,
+                order=conv_block_order,
             )
             in_channels = feature_maps[0]
         else:
@@ -271,6 +273,7 @@ class SE_U_Net(nn.Module):
                     dropout=drop_values[i],
                     se_block=True,
                     nconvs=conv_layers[i],
+                    order=conv_block_order,
                 )
             )
             mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
@@ -290,6 +293,7 @@ class SE_U_Net(nn.Module):
             dropout=drop_values[-1],
             se_block=True,
             nconvs=conv_layers[-1],
+            order=conv_block_order,
         )
 
         # DECODER
@@ -317,6 +321,7 @@ class SE_U_Net(nn.Module):
                         dropout=drop_values[i],
                         se_block=True,
                         nconvs=conv_layers[i],
+                        order=conv_block_order,
                     )
                 ) # type: ignore
                 in_channels = feature_maps[i]
@@ -334,6 +339,7 @@ class SE_U_Net(nn.Module):
                     k_size=kernel_size,
                     act=activation,
                     norm=normalization,
+                    order=conv_block_order,
                 ) for _ in range(self.num_decoders)
             ])
         else:

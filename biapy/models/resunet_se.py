@@ -75,6 +75,7 @@ class ResUNet_SE(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
+        conv_block_order: str = "conv_norm_act",
     ):
         """
         Initialize the ResUNet_SE model.
@@ -247,6 +248,7 @@ class ResUNet_SE(nn.Module):
                 k_size=kernel_size,
                 act=activation,
                 norm=normalization,
+                order=conv_block_order,
             )
             in_channels = feature_maps[0]
         else:
@@ -269,6 +271,7 @@ class ResUNet_SE(nn.Module):
                     first_block=True if i == 0 else False,
                     extra_conv=extra_conv,
                     nconvs=conv_layers[i],
+                    order=conv_block_order,
                 )
             )
             mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
@@ -289,6 +292,7 @@ class ResUNet_SE(nn.Module):
             se_block=True,
             extra_conv=extra_conv,
             nconvs=conv_layers[-1],
+            order=conv_block_order,
         )
 
         # DECODER
@@ -318,6 +322,7 @@ class ResUNet_SE(nn.Module):
                         se_block=True,
                         extra_conv=extra_conv,
                         nconvs=conv_layers[i],
+                        order=conv_block_order,
                     ) # type: ignore
                 )
                 in_channels = feature_maps[i]
@@ -335,6 +340,7 @@ class ResUNet_SE(nn.Module):
                     k_size=kernel_size,
                     act=activation,
                     norm=normalization,
+                    order=conv_block_order,
                 ) for _ in range(self.num_decoders)
             ])
         else:

@@ -54,6 +54,7 @@ class ResUNet(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         return_one_tensor: bool = False,
+        conv_block_order: str = "conv_norm_act",
     ):
         """
         Create 2D/3D Residual U-Net.
@@ -220,6 +221,7 @@ class ResUNet(nn.Module):
                 k_size=kernel_size,
                 act=activation,
                 norm=normalization,
+                order=conv_block_order,
             )
             in_channels = feature_maps[0]
         else:
@@ -240,6 +242,7 @@ class ResUNet(nn.Module):
                     dropout=drop_values[i],
                     first_block=True if i == 0 else False,
                     nconvs=conv_layers[i],
+                    order=conv_block_order,
                 )
             )
             mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
@@ -258,6 +261,7 @@ class ResUNet(nn.Module):
             norm=normalization,
             dropout=drop_values[-1],
             nconvs=conv_layers[-1],
+            order=conv_block_order,
         )
 
         # DECODER
@@ -285,6 +289,7 @@ class ResUNet(nn.Module):
                         norm=normalization,
                         dropout=drop_values[i],
                         nconvs=conv_layers[i],
+                        order=conv_block_order,
                     ) # type: ignore
                 )
                 in_channels = feature_maps[i]
@@ -302,6 +307,7 @@ class ResUNet(nn.Module):
                     k_size=kernel_size,
                     act=activation,
                     norm=normalization,
+                    order=conv_block_order,
                 ) for _ in range(self.num_decoders)
             ])
         else:
