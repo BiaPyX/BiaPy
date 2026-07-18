@@ -18,6 +18,7 @@ from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all
 from biapy.engine import Scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
 from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
+from biapy.engine.schedulers.warmup_reduce_on_plateau import WarmUpReduceOnPlateauScheduler
 from biapy.models.memory_bank import MemoryBank
 
 
@@ -104,11 +105,11 @@ def train_one_epoch(
 
     for step, (batch, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
-        # Apply warmup cosine decay scheduler if selected
+        # Apply warmup cosine decay or warmup reduce on plateau scheduler if selected
         # (notice we use a per iteration (instead of per epoch) lr scheduler)
-        if cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
+        if cfg.TRAIN.LR_SCHEDULER.NAME in ["warmupcosine", "warmupreduceonplateau"]:
             for sched, opt in zip(lr_scheduler, optimizer):
-                if sched and isinstance(sched, WarmUpCosineDecayScheduler):
+                if sched and isinstance(sched, (WarmUpCosineDecayScheduler, WarmUpReduceOnPlateauScheduler)):
                     sched.adjust_learning_rate(opt, step / len(data_loader) + epoch)
 
         # Gather inputs
