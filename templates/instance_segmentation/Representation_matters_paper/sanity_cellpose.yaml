@@ -1,0 +1,88 @@
+SYSTEM:
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: ['F', 'Gh', 'Gv']
+        CHANNELS_PER_HEAD_INFO: [1, 1, 1] 
+        DATA_CHANNEL_WEIGHTS: [1, 0.25, 0.25]
+        CLASS_REBALANCE_WITHIN_CHANNELS: False
+        CELLPOSE:
+            TYPE: "cellpose"
+            DIAMETER: 30.0
+            DIAM_MEAN: 30.0
+            FLOW_THRESHOLD: 0.4
+
+DATA: 
+    PATCH_SIZE: (224, 224, 1)  
+    REFLECT_TO_COMPLETE_SHAPE: FALSE
+    NORMALIZATION:
+      TYPE: 'scale_range'
+      PERC_CLIP:
+          ENABLE: True
+          LOWER_PERC: 1.
+          UPPER_PERC: 99.
+
+    TRAIN:                                                                                                              
+        PATH: /data/dfranco/datasets/dsb2018/train/images
+        GT_PATH: /data/dfranco/datasets/dsb2018/train/masks
+        IN_MEMORY: True
+        CHECK_DATA: True
+        EXTRACT_RANDOM_PATCH: True
+    VAL:
+        FROM_TRAIN: True
+        IN_MEMORY: True
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        PATH: /data/dfranco/datasets/dsb2018/test/images
+        GT_PATH: /data/dfranco/datasets/dsb2018/test/masks
+        IN_MEMORY: False
+        LOAD_GT: True
+        PADDING: (32, 32)
+
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT_PROB: 1.0
+    ZOOM_PROB: 1.0
+    RANDOM_ROT: True                                                                                                    
+    VFLIP: True                                                                                                         
+    HFLIP: True                                                                                                         
+    BRIGHTNESS: True                                                                                                    
+    BRIGHTNESS_FACTOR: (-0.1, 0.1)
+    CONTRAST: True                                                                                                      
+    CONTRAST_FACTOR: (-0.1, 0.1)
+    ZOOM: True
+    ZOOM_RANGE: (0.75, 1.25)   
+    ELASTIC: True                                                                                                                                                                              
+    AFFINE_MODE: 'constant'                                                                                               
+
+MODEL:
+  ARCHITECTURE: resunet
+  NORMALIZATION: bn
+  FEATURE_MAPS: [32, 64, 128, 256]
+  LOAD_CHECKPOINT: False
+  CONV_LAYERS: [4, 4, 4, 4]
+  CONV_BLOCK_ORDER: "norm_act_conv"
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    LR: 0.0002
+    BATCH_SIZE: 8
+    EPOCHS: 500 
+    PATIENCE: -1
+    LR_SCHEDULER:
+        NAME: 'warmupcosine'
+        MIN_LR: 1.E-5
+        WARMUP_COSINE_DECAY_EPOCHS: 10
+
+  
+TEST:
+    ENABLE: True
+    POST_PROCESSING:
+      INSTANCE_REFINEMENT:
+        ENABLE: True
+        OPERATIONS: ["fill_holes", "remove_small_objects"]
+        VALUES: [none, 15]

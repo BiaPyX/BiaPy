@@ -59,6 +59,7 @@ def crop_data_with_overlap(
     padding: Tuple[int, ...] = (0, 0),
     verbose: bool = True,
     load_data: bool = True,
+    pad_type: str = "reflect",
 ) -> Union[Tuple[NDArray, NDArray, List[PatchCoords]], Tuple[NDArray, List[PatchCoords]], List[PatchCoords]]:
     """
     Crop data into small square pieces with overlap.
@@ -91,6 +92,11 @@ def crop_data_with_overlap(
 
     load_data : bool, optional
         Whether to create the patches or not. It saves memory in case you only need the coordiantes of the cropped patches.
+
+    pad_type : str, optional
+        How to fill the ``padding`` added around each image before cropping. ``"reflect"`` (default) mirrors
+        the border pixels; ``"zeros"`` pads with zeros. Use ``"zeros"`` for Cellpose flow representations,
+        where reflect padding mirrors border cells and corrupts their predicted flow field.
 
     Returns
     -------
@@ -204,16 +210,17 @@ def crop_data_with_overlap(
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
+    np_pad_mode = "constant" if pad_type == "zeros" else pad_type
     padded_data = np.pad(
         data,
         ((0, 0), (padding[0], padding[0]), (padding[1], padding[1]), (0, 0)),
-        "reflect",
+        np_pad_mode,
     )
     if data_mask is not None:
         padded_data_mask = np.pad(
             data_mask,
             ((0, 0), (padding[0], padding[0]), (padding[1], padding[1]), (0, 0)),
-            "reflect",
+            np_pad_mode,
         )
 
     # Calculate overlapping variables

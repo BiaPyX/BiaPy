@@ -496,6 +496,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.preprocess_cfg = preprocess_cfg
 
         self.random_crop_func = random_3D_crop_pair if ndim == 3 else random_crop_pair
+        # Whether a patch is cropped at the origin (0,0) vs a random position. Kept False so validation
+        # crops randomly (like Cellpose) instead of pinning every patch to the top-left corner;
+        # __getitem__ seeds them per sample so they stay fixed across epochs.
+        self.crop_from_origin = False
         if random_crops_in_DA and prob_map is not None:
             if isinstance(prob_map, str):
                 f = next(os_walk_clean(prob_map))[2]
@@ -530,28 +534,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.real_length = self.length
         self.no_bin_channel_found = False
 
-        # Cellpose flow channels are direction fields, not plain heatmaps. ``flow_channels`` maps each
-        # role ("Gv"/"Gh"/"Gz") to its channel index within the mask, so they can be tagged in the
-        # per-channel normalization info and re-oriented (not just moved) by the augmentation pipeline.
+        # Maps each flow role ("Gv"/"Gh"/"Gz") to its channel index in the mask, so they can be
+        # re-oriented (not just moved) by the augmentation pipeline.
         self.flow_channels = dict(flow_channels)
-        # Positions of the flow components inside the split-off ``heat`` array, filled in once the
-        # mask normalization info is known ({"vy": i, "vx": j, "vz": k}). Used for the vector-aware
-        # rotation/flip/rescale transforms.
+        # Positions of the flow components inside the split-off ``heat`` array ({"vy": i, "vx": j, "vz": k}),
+        # filled in once the mask normalization info is known.
         self.flow_heat = {}
-        # Channel holding the raw instance labels (index within the mask), auto-added by
-        # check_configuration when the flow representation is used. Nearest-interpolated through the
-        # augmentation, used to regenerate the flows from the augmented labels (keeping image and target
-        # consistent under elastic/free rotation), then dropped in __getitem__. ``None`` otherwise.
+        # Raw instance-label channel index, used to regenerate flows from the augmented labels and then
+        # dropped in __getitem__. ``None`` otherwise.
         self.instance_channel = instance_channel
-        # Gradient strategy for the regenerated flows, mirrored from the channel options so they match
-        # the ones the preprocessing baked into the GT. Iteration count is always "auto".
+        # Gradient strategy for the regenerated flows, mirrored from the channel options to match the GT.
         self.flow_gradient_type = flow_gradient_type
-        # Per-sample Cellpose diameter rescale: each patch is rescaled in-plane by DIAM_MEAN / diameter
-        # (the diameter is read per source file from DatasetFile.diameter in __getitem__) as part of the
-        # zoom augmentation. Any random scale jitter on top comes from ``zoom_range``. DIAM_MEAN <= 0
-        # disables it.
+        # Per-sample Cellpose diameter rescale (in-plane by DIAM_MEAN / DatasetFile.diameter, read in
+        # __getitem__). A domain normalization, not augmentation, so it runs on validation too (not gated
+        # on ``da``); DIAM_MEAN <= 0 disables it.
         self.cellpose_diam_mean = float(cellpose_diam_mean)
-        self.do_cellpose_rescale = da and len(self.flow_channels) > 0 and self.cellpose_diam_mean > 0
+        self.do_cellpose_rescale = len(self.flow_channels) > 0 and self.cellpose_diam_mean > 0
         self.shape = shape
 
         # X data analysis
@@ -593,18 +591,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 else:
                     self.mask_norm = update_mask_norm_info(self.mask_norm, new_mask_norm)
 
-            # Tag the flow channels (Gv/Gh/Gz) with a dedicated "flow" type so the augmentation
-            # pipeline can distinguish direction fields from ordinary non-binary heatmaps: they are
-            # interpolated as floats (like "no_bin") but cannot simply be rotated/flipped as scalar
-            # maps. They are auto-detected as "no_bin" above; here we override that tag.
+            # Tag flow channels (Gv/Gh/Gz) as "flow" (overriding the auto "no_bin"): interpolated as floats
+            # but re-oriented, not just moved, by the augmentation pipeline.
             for j in self.flow_channels.values():
                 if j in self.mask_norm["per_channel_info"]:
                     self.mask_norm["per_channel_info"][j]["type"] = "flow"
                     self.mask_norm["per_channel_info"][j]["div"] = False
 
-            # Tag the instance channel as "label": raw IDs must never be normalized nor interpolated
-            # linearly. The tag is sticky in normalize_mask and keeps the channel in the nearest-
-            # interpolated ``mask`` group instead of the float ``heat`` group.
+            # Tag the instance channel as "label" so raw IDs stay in the nearest-interpolated ``mask``
+            # group and are never normalized.
             if self.instance_channel is not None and self.instance_channel in self.mask_norm["per_channel_info"]:
                 self.mask_norm["per_channel_info"][self.instance_channel]["type"] = "label"
                 self.mask_norm["per_channel_info"][self.instance_channel]["div"] = False
@@ -621,9 +616,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 for j in range(len(self.mask_norm["per_channel_info"]))
             )
 
-            # Map each flow role to its position within the split-off ``heat`` array (the number of
-            # non-binary channels appearing before it, since ``heat`` keeps only those). Used by the
-            # vector-aware rotation/flip/rescale augmentors.
+            # Map each flow role to its position within the split-off ``heat`` array (non-binary channels
+            # before it). Used by the vector-aware augmentors.
             if self.no_bin_channel_found and self.flow_channels:
                 per = self.mask_norm["per_channel_info"]
                 role_to_comp = {"Gv": "vy", "Gh": "vx", "Gz": "vz"}
@@ -633,8 +627,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
                     self.flow_heat[role_to_comp[role]] = hpos
 
-            # Position of the instance channel inside the split-off ``mask`` array (the number of
-            # non-heat channels before it), the counterpart of ``flow_heat`` for the label group.
+            # Position of the instance channel inside the split-off ``mask`` array (non-heat channels
+            # before it), the counterpart of ``flow_heat`` for the label group.
             self.instance_mask_pos = None
             if self.instance_channel is not None:
                 per = self.mask_norm["per_channel_info"]
@@ -728,11 +722,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
 
-        # Extra size to extract so a later zoom-out / rotation samples real image content instead of
-        # padding (see geom_aug_load_shape). Computed once from the fixed options; folds in the
-        # largest-cell diameter downscale (DIAM_MEAN / max_diameter).
+        # Extra size to extract so a later zoom-out / rotation samples real content instead of padding
+        # (see geom_aug_load_shape). Folds in the largest-cell diameter downscale (DIAM_MEAN /
+        # max_diameter), so it also applies when only the Cellpose rescale is active (validation, ``da`` off).
         self.aug_load_inc = tuple([0] * self.ndim)
-        if da:
+        if da or self.do_cellpose_rescale:
             extra_downscale = 1.0
             if self.do_cellpose_rescale:
                 diams = [
@@ -977,8 +971,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         idx = _idx % self.real_length
         sample = self.X.sample_list[idx]
 
-        # Extract a bigger patch when a later geometric augmentation could otherwise pull in padding.
-        enlarge = geom_enlarge and self.da and (not first_load) and any(self.aug_load_inc)
+        # Extract a bigger patch when a later geometric augmentation, or the Cellpose diameter rescale on
+        # its own (validation), could otherwise pull in padding.
+        enlarge = geom_enlarge and (self.da or self.do_cellpose_rescale) and (not first_load) and any(self.aug_load_inc)
 
         # X data
         if sample.img_is_loaded():
@@ -1106,7 +1101,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 img,
                 mask,
                 crop_spatial,
-                self.val,
+                self.crop_from_origin,
                 img_prob=img_prob,
                 scale=self.random_crop_scale,
             )
@@ -1188,13 +1183,26 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Torch tensor
             Y element, for instance, a mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
+        # Validation crops randomly but seeded per sample index, so the val set is fixed across epochs
+        # (like Cellpose reseeding to 42) and the val loss doesn't jitter with crop luck. Training keeps
+        # fresh randomness. The global RNG state is restored before returning so fixed seeds don't leak
+        # into training when SYSTEM.NUM_WORKERS=0 (shared process).
+        _rng_state = None
+        if self.val:
+            _seed = (int(self.seed) + index) % (2**31 - 1)
+            _rng_state = (np.random.get_state(), random.getstate())
+            random.seed(_seed)
+            np.random.seed(_seed)
+
         # Enlarge the extraction here; apply_transform warps and crops it back to the network size.
         img, mask = self.load_sample(index, geom_enlarge=True)
 
-        # Apply transformations
-        if self.da:
+        # Apply transformations. Validation enters here too for the Cellpose rescale: with ``da`` off
+        # every augmentation roll returns False (see ``_roll``), so only the rescale, crop-back and flow
+        # regeneration run.
+        if self.da or self.do_cellpose_rescale:
             e_img, e_mask = None, None
-            if self.cutmix:
+            if self.da and self.cutmix:
                 extra_img = np.random.randint(0, self.length - 1) if self.length > 2 else 0
                 # The cutmix donor is not warped, so it stays at the network size (geom_enlarge off).
                 e_img, e_mask = self.load_sample(extra_img)
@@ -1204,9 +1212,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 diam_factor=self.cellpose_diam_factor(index),
             )
 
-        # Drop the instance channel: it only feeds the flow regeneration above and must not reach the
-        # model or the loss. Done here (not in apply_transform) so it is also dropped when augmentation
-        # is off, e.g. validation.
+        # Drop the instance channel: it only feeds the flow regeneration and must not reach the model.
+        # Done here (not in apply_transform) so it is also dropped when augmentation is off (validation).
         if self.instance_channel is not None:
             mask = np.delete(mask, self.instance_channel, axis=-1)
 
@@ -1222,7 +1229,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = torch.from_numpy(img.copy())
         mask = torch.from_numpy(mask.copy())
 
+        # Hand the global RNG back as we found it (see the seeding note at the top).
+        if _rng_state is not None:
+            np.random.set_state(_rng_state[0])
+            random.setstate(_rng_state[1])
+
         return img, mask
+
+    def _roll(self, name: str) -> bool:
+        """
+        Roll the probability of the ``name`` augmentation.
+
+        Always returns ``False`` while ``da`` is off, so that every augmentation in
+        :meth:`apply_transform` is inert on validation. Validation still calls ``apply_transform``, but
+        only to apply the Cellpose diameter rescale (a domain normalization that must match training);
+        gating here rather than trusting each call site to leave every augmentation flag unset keeps
+        that guarantee in one place, and any augmentation added later inherits it for free.
+
+        Parameters
+        ----------
+        name : str
+            Augmentation key in ``aug_prob``.
+
+        Returns
+        -------
+        bool
+            Whether the augmentation should be applied to this sample.
+        """
+        return self.da and random.uniform(0, 1) < self.aug_prob.get(name, 0.5)
 
     def apply_transform(
         self,
@@ -1301,9 +1335,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # normalization (diam_factor = DIAM_MEAN / diameter, in-plane) is applied whenever needed, even
         # when no augmentation roll fires.
         do_diam_rescale = self.do_cellpose_rescale and diam_factor > 0 and abs(diam_factor - 1.0) > 1e-3
-        apply_zoom = self.zoom and random.uniform(0, 1) < self.aug_prob.get("zoom", 0.5)
-        apply_rand_rot = self.rand_rot and random.uniform(0, 1) < self.aug_prob.get("rand_rot", 0.5)
-        apply_rot90 = self.rotation90 and random.uniform(0, 1) < self.aug_prob.get("rotation90", 0.5)
+        apply_zoom = self.zoom and self._roll("zoom")
+        apply_rand_rot = self.rand_rot and self._roll("rand_rot")
+        apply_rot90 = self.rotation90 and self._roll("rotation90")
         if apply_zoom or apply_rand_rot or apply_rot90 or do_diam_rescale:
             scale = random.uniform(self.zoom_range[0], self.zoom_range[1]) if apply_zoom else 1.0
             angle = 0.0
@@ -1333,56 +1367,56 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 nmask = mask.shape[-1]
                 merged = np.concatenate([mask, heat], axis=-1)
                 merged = pad_to_shape(merged, target + (merged.shape[-1],), mode=self.affine_mode)
-                image, merged = self.random_crop_func(image, merged, target, self.val)  # type: ignore
+                image, merged = self.random_crop_func(image, merged, target, self.crop_from_origin)  # type: ignore
                 mask, heat = merged[..., :nmask], merged[..., nmask:]
             else:
                 mask = pad_to_shape(mask, target + (mask.shape[-1],), mode=self.affine_mode)
-                image, mask = self.random_crop_func(image, mask, target, self.val)  # type: ignore
+                image, mask = self.random_crop_func(image, mask, target, self.crop_from_origin)  # type: ignore
 
         # Convert to grayscale
-        if self.grayscale and random.uniform(0, 1) < self.aug_prob.get("grayscale", 0.5):
+        if self.grayscale and self._roll("grayscale"):
             image = grayscale(image)
 
         # Apply channel shuffle
-        if self.channel_shuffle and random.uniform(0, 1) < self.aug_prob.get("channel_shuffle", 0.5):
+        if self.channel_shuffle and self._roll("channel_shuffle"):
             image = shuffle_channels(image)
 
         # Apply cblur
-        if self.cutblur and random.uniform(0, 1) < self.aug_prob.get("cutblur", 0.5):
+        if self.cutblur and self._roll("cutblur"):
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
 
         # Apply cutmix
-        if self.cutmix and random.uniform(0, 1) < self.aug_prob.get("cutmix", 0.5):
+        if self.cutmix and self._roll("cutmix"):
             image, mask, heat = cutmix(image, e_im, mask, e_mask, heat, e_heat, self.cmix_size) # type: ignore
 
         # Apply cutnoise
-        if self.cutnoise and random.uniform(0, 1) < self.aug_prob.get("cutnoise", 0.5):
+        if self.cutnoise and self._roll("cutnoise"):
             image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size)
 
         # Misalignment: threads the flow channels through the same ops and re-orients their vectors.
-        if self.misalignment and random.uniform(0, 1) < self.aug_prob.get("misalignment", 0.5):
+        if self.misalignment and self._roll("misalignment"):
             image, mask, heat = misalignment(
                 image, mask, self.ms_displacement, self.ms_rotate_ratio,
                 heat=heat, flow_heat=self.flow_heat,
             )
 
         # Apply brightness
-        if self.brightness and random.uniform(0, 1) < self.aug_prob.get("brightness", 0.5):
+        if self.brightness and self._roll("brightness"):
             image = brightness(
                 image,
                 brightness_factor=self.brightness_factor,
             )
 
         # Apply contrast
-        if self.contrast and random.uniform(0, 1) < self.aug_prob.get("contrast", 0.5):
+        if self.contrast and self._roll("contrast"):
             image = contrast(image, contrast_factor=self.contrast_factor)
 
         # Apply gamma contrast
-        if self.gamma_contrast and random.uniform(0, 1) < self.aug_prob.get("gamma_contrast", 0.5):
+        if self.gamma_contrast and self._roll("gamma_contrast"):
             image = gamma_contrast(image, gamma=self.gc_gamma)
 
         # Apply gaussian noise
-        if self.gaussian_noise and random.uniform(0, 1) < self.aug_prob.get("gaussian_noise", 0.5):
+        if self.gaussian_noise and self._roll("gaussian_noise"):
             mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
             var = (
                 np.var(image) * random.uniform(0.9, 1.1)
@@ -1392,19 +1426,19 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             image = random_noise(image, mode="gaussian", mean=mean, var=var)
 
         # Apply poisson noise
-        if self.poisson_noise and random.uniform(0, 1) < self.aug_prob.get("poisson_noise", 0.5):
+        if self.poisson_noise and self._roll("poisson_noise"):
             image = random_noise(image, mode="poisson")
 
         # Apply salt noise
-        if self.salt and random.uniform(0, 1) < self.aug_prob.get("salt", 0.5):
+        if self.salt and self._roll("salt"):
             image = random_noise(image, mode="salt", amount=self.salt_amount)
 
         # Apply pepper noise
-        if self.pepper and random.uniform(0, 1) < self.aug_prob.get("pepper", 0.5):
+        if self.pepper and self._roll("pepper"):
             image = random_noise(image, mode="pepper", amount=self.pepper_amount)
 
         # Apply salt & pepper noise
-        if self.salt_and_pepper and random.uniform(0, 1) < self.aug_prob.get("salt_and_pepper", 0.5):
+        if self.salt_and_pepper and self._roll("salt_and_pepper"):
             image = random_noise(
                 image,
                 mode="s&p",
@@ -1413,11 +1447,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         # Apply missing parts
-        if self.missing_sections and random.uniform(0, 1) < self.aug_prob.get("missing_sections", 0.5):
+        if self.missing_sections and self._roll("missing_sections"):
             image = missing_sections(image, self.missp_iterations, self.missp_channel_pb)
 
         # Apply GridMask
-        if self.gridmask and random.uniform(0, 1) < self.aug_prob.get("gridmask", 0.5):
+        if self.gridmask and self._roll("gridmask"):
             image = GridMask(
                 image,
                 self.z_size,
@@ -1429,7 +1463,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Cutout only blanks regions (no pixel movement), so it is flow-safe: passing ``heat`` blanks
         # the flow targets wherever the mask is blanked.
-        if self.cutout and random.uniform(0, 1) < self.aug_prob.get("cutout", 0.5):
+        if self.cutout and self._roll("cutout"):
             image, mask, heat = cutout(
                 image,
                 mask,
@@ -1444,7 +1478,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Elastic is skipped for flow channels: this non-rigid warp would need the flow vectors
         # re-oriented by its local Jacobian, which is not done here, corrupting the targets.
-        if self.elastic and not self.flow_channels and random.uniform(0, 1) < self.aug_prob.get("elastic", 0.5):
+        if self.elastic and not self.flow_channels and self._roll("elastic"):
             image, mask, heat = elastic(
                 image,
                 mask=mask,
@@ -1456,7 +1490,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             ) # type: ignore
 
         # Shear is skipped for flow channels: it skews directions and the vectors are not re-oriented.
-        if self.shear and not self.flow_channels and random.uniform(0, 1) < self.aug_prob.get("shear", 0.5):
+        if self.shear and not self.flow_channels and self._roll("shear"):
             image, mask, heat = shear(
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
@@ -1464,7 +1498,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask_type=self.norm_module["target_type"],
             ) # type: ignore
         
-        if self.shift and random.uniform(0, 1) < self.aug_prob.get("shift", 0.5):
+        if self.shift and self._roll("shift"):
             image, mask, heat = shift(
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
@@ -1472,46 +1506,43 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask_type=self.norm_module["target_type"],
             ) # type: ignore
 
-        if self.vflip and random.uniform(0, 1) < self.aug_prob.get("vflip", 0.5):
+        if self.vflip and self._roll("vflip"):
             image, mask, heat = flip_vertical(
                 image, mask=mask, heat=heat, flow_heat=self.flow_heat
             ) # type: ignore
 
-        if self.hflip and random.uniform(0, 1) < self.aug_prob.get("hflip", 0.5):
+        if self.hflip and self._roll("hflip"):
             image, mask, heat = flip_horizontal(
                 image, mask=mask, heat=heat, flow_heat=self.flow_heat
             ) # type: ignore
             
-        if self.g_blur and random.uniform(0, 1) < self.aug_prob.get("g_blur", 0.5):
+        if self.g_blur and self._roll("g_blur"):
             image = gaussian_blur(
                 image,
                 sigma=self.g_sigma
             )
 
-        if self.median_blur and random.uniform(0, 1) < self.aug_prob.get("median_blur", 0.5):
+        if self.median_blur and self._roll("median_blur"):
             image = median_blur(
                 image,
                 k_range=self.mb_kernel
             )
 
-        if self.motion_blur and random.uniform(0, 1) < self.aug_prob.get("motion_blur", 0.5):
+        if self.motion_blur and self._roll("motion_blur"):
             image = motion_blur(
                 image,
                 k_range=self.motb_k_range
             )
 
-        if self.dropout and random.uniform(0, 1) < self.aug_prob.get("dropout", 0.5):
+        if self.dropout and self._roll("dropout"):
             image = dropout(
                 image,
                 drop_range=self.drop_range
             )
 
-        # Regenerate the Cellpose/Omnipose flows from the augmented instance labels, replacing the ones
-        # warped along with the other heat channels. Warping a precomputed flow field only stays valid for
-        # transforms that map the grid onto itself (flips, 90-degree rotations); anything that resamples
-        # geometry (free rotation, elastic, shear, misalignment) leaves image and target disagreeing,
-        # especially at cells cut by the introduced padding. Recomputing from the labels the network
-        # actually sees keeps the pair consistent.
+        # Regenerate the flows from the augmented labels, replacing the warped ones. Warping a precomputed
+        # flow field only stays valid for grid-preserving transforms (flips, 90-degree rotations);
+        # anything that resamples geometry leaves image and target disagreeing, so recompute from labels.
         if (
             self.instance_channel is not None
             and self.instance_mask_pos is not None

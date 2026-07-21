@@ -87,7 +87,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             Transformed image mask. E.g.``(z, y, x, channels)``.
         """
         # Apply flips in z
-        if self.zflip and random.uniform(0, 1) < self.aug_prob.get("zflip", 0.5):
+        if self.zflip and self._roll("zflip"):
             image = image[::-1, ...]
             mask  = mask[::-1, ...]
             if e_im is not None:

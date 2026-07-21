@@ -309,18 +309,13 @@ def create_train_val_augmentors(
             dic["zflip"] = cfg.AUGMENTOR.ZFLIP
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-            # Flow (Gv/Gh/Gz) channel indices are always tagged so the augmentation pipeline can
-            # treat them as direction fields rather than plain heatmaps. The diameter rescale is
-            # only wired in when explicitly enabled for the Cellpose flow workflow.
+            # Tag flow (Gv/Gh/Gz) channels so augmentation treats them as direction fields, not heatmaps.
             data_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             flow_channels = {ch: i for i, ch in enumerate(data_channels) if ch in ("Gv", "Gh", "Gz")}
             dic["flow_channels"] = flow_channels
-            # Virtual 'I' channel (raw instance labels), auto-added by check_configuration whenever the
-            # flow representation is used. The generator regenerates the flows from it after augmentation
-            # and drops it before the batch reaches the model.
+            # Virtual 'I' channel (raw labels) used to regenerate flows after augmentation, then dropped.
             dic["instance_channel"] = data_channels.index("I") if "I" in data_channels else None
-            # The diffusion iteration count is always "auto" (not user-configurable); only the gradient
-            # strategy is carried through so the regenerated flows match the ones baked into the GT.
+            # Gradient strategy for the regenerated flows (diffusion iters are always "auto").
             dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
             if len(flow_channels) > 0:
                 # The per-file diameter lives on DatasetFile.diameter; the generator computes the
@@ -373,12 +368,16 @@ def create_train_val_augmentors(
         )
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-            # Tag flow channels for consistency; no rescale is applied on validation (da=False).
             _val_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             dic["flow_channels"] = {ch: i for i, ch in enumerate(_val_channels) if ch in ("Gv", "Gh", "Gz")}
-            # Validation runs with da=False so flows are not regenerated, but 'I' is still in the GT and
-            # must be dropped before the model.
+            # Virtual 'I' channel: feeds the flow regeneration that follows the rescale below, and is
+            # dropped before the batch reaches the model.
             dic["instance_channel"] = _val_channels.index("I") if "I" in _val_channels else None
+            dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
+            if len(dic["flow_channels"]) > 0:
+                # Rescale cells to DIAM_MEAN px as Cellpose does on train and test, so val is scored at the
+                # scale the net trains at. Augmentation stays off (da=False); only this rescale is applied.
+                dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX

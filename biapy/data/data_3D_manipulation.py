@@ -352,6 +352,7 @@ def crop_3D_data_with_overlap(
     verbose: bool = True,
     median_padding: bool = False,
     load_data: bool = True,
+    pad_type: str = "reflect",
 ) -> Union[Tuple[NDArray, NDArray, List['PatchCoords']], Tuple[NDArray, List['PatchCoords']], List['PatchCoords']]:
     """
     Crop 3D data into smaller volumes with a defined overlap. The opposite function is :func:`~merge_3D_data_with_overlap`.
@@ -382,6 +383,12 @@ def crop_3D_data_with_overlap(
 
     load_data : bool, optional
         Whether to create the patches or not. It saves memory in case you only need the coordiantes of the cropped patches.
+
+    pad_type : str, optional
+        How to fill the ``padding`` added around each volume before cropping (ignored where ``median_padding``
+        overrides it). ``"reflect"`` (default) mirrors the border voxels; ``"zeros"`` pads with zeros. Use
+        ``"zeros"`` for Cellpose flow representations, where reflect padding mirrors border cells and corrupts
+        their predicted flow field.
 
     Returns
     -------
@@ -488,6 +495,7 @@ def crop_3D_data_with_overlap(
     ):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
+    np_pad_mode = "constant" if pad_type == "zeros" else pad_type
     padded_data = np.pad(
         data,
         (
@@ -496,7 +504,7 @@ def crop_3D_data_with_overlap(
             (padding[2], padding[2]),
             (0, 0),
         ),
-        "reflect",
+        np_pad_mode,
     )
     if data_mask is not None:
         padded_data_mask = np.pad(
@@ -507,7 +515,7 @@ def crop_3D_data_with_overlap(
                 (padding[2], padding[2]),
                 (0, 0),
             ),
-            "reflect",
+            np_pad_mode,
         )
     if median_padding:
         padded_data[0 : padding[0], :, :, :] = np.median(data[0, :, :, :])
