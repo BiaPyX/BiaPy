@@ -306,13 +306,14 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         # Save masks
         if not is_train:
             masks = np.expand_dims(np.argmax(pred[key].cpu().numpy().transpose(0, 2, 3, 1), axis=-1), -1)
-            save_tif(
-                masks,
-                self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                [self.current_sample["X_filename"]],
-                verbose=self.cfg.TEST.VERBOSE,
-                meta=self.current_sample.get("img_meta"),
-            )
+            if self.save_to_disk:
+                save_tif(
+                    masks,
+                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
+                )
 
         return pred[key]
 
@@ -425,13 +426,14 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
             pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
-        save_tif(
-            pred,
-            self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
-            [self.current_sample["X_filename"]],
-            verbose=self.cfg.TEST.VERBOSE,
-            meta=self.current_sample.get("img_meta"),
-        )
+        if self.save_to_disk:
+            save_tif(
+                pred,
+                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
+                [self.current_sample["X_filename"]],
+                verbose=self.cfg.TEST.VERBOSE,
+                meta=self.current_sample.get("img_meta"),
+            )
 
     def after_full_image(self, pred: NDArray):
         """
@@ -451,13 +453,14 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
         # Save simple binarization of predictions
-        save_tif(
-            pred,
-            self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
-            [self.current_sample["X_filename"]],
-            verbose=self.cfg.TEST.VERBOSE,
-            meta=self.current_sample.get("img_meta"),
-        )
+        if self.save_to_disk:
+            save_tif(
+                pred,
+                self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
+                [self.current_sample["X_filename"]],
+                verbose=self.cfg.TEST.VERBOSE,
+                meta=self.current_sample.get("img_meta"),
+            )
 
     def after_all_images(self):
         """Execute steps needed after predicting all images."""

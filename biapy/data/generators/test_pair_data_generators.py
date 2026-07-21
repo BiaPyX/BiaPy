@@ -209,12 +209,15 @@ class test_pair_data_generator(Dataset):
         sample = self.X.sample_list[idx]
         sample_extra_info = {}
 
-        img, img_file, img_meta = load_img_data(
-            self.X.dataset_info[sample.fid].path,
-            is_3d=(self.ndim == 3),
-            data_within_zarr_path=sample.get_path_in_zarr(),
-            load_meta=True,
-        )
+        if sample.img_is_loaded():
+            img, img_file, img_meta = sample.img.copy(), None, None
+        else:
+            img, img_file, img_meta = load_img_data(
+                self.X.dataset_info[sample.fid].path,
+                is_3d=(self.ndim == 3),
+                data_within_zarr_path=sample.get_path_in_zarr(),
+                load_meta=True,
+            )
 
         if looks_like_hdf5(self.X.dataset_info[sample.fid].path) or any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5"]):
             if not self.test_by_chunks:
@@ -239,13 +242,16 @@ class test_pair_data_generator(Dataset):
                 sample_extra_info["gt_associated_id"] = associated_id
             else:
                 msample = self.Y.sample_list[idx]
-                mask, mask_file = load_img_data(
-                    self.Y.dataset_info[msample.fid].path,
-                    is_3d=(self.ndim == 3),
-                    data_within_zarr_path=msample.get_path_in_zarr() if not self.instance_problem else None,
-                )
-                if mask_file and isinstance(mask_file, h5py.File):
-                    sample_extra_info["mask_file_to_close"] = mask_file
+                if msample.img_is_loaded():
+                    mask, mask_file = msample.img.copy(), None
+                else:
+                    mask, mask_file = load_img_data(
+                        self.Y.dataset_info[msample.fid].path,
+                        is_3d=(self.ndim == 3),
+                        data_within_zarr_path=msample.get_path_in_zarr() if not self.instance_problem else None,
+                    )
+                    if mask_file and isinstance(mask_file, h5py.File):
+                        sample_extra_info["mask_file_to_close"] = mask_file
 
         if not self.test_by_chunks:
             # Skip processing image

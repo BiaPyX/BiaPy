@@ -1083,6 +1083,71 @@ def load_and_prepare_test_data(
     return X_test, Y_test, test_filenames
 
 
+def prepare_in_memory_test_data(
+    image: NDArray,
+    gt: Optional[NDArray] = None,
+    is_3d: bool = False,
+    filename: str = "in_memory_image.tif",
+) -> Tuple[BiaPyDataset, Optional[BiaPyDataset], List]:
+    """
+    Build the test :class:`BiaPyDataset` objects directly from in-memory arrays.
+
+    In-memory counterpart of :func:`load_and_prepare_test_data`: instead of listing files
+    on disk, it wraps the array(s) into a ``BiaPyDataset`` whose single ``DataSample``
+    carries the image in memory (``DataSample.img``). The test generators detect this via
+    ``DataSample.img_is_loaded()`` and skip the disk read, so a NumPy array can be predicted
+    without writing it to disk first.
+
+    Parameters
+    ----------
+    image : NDArray
+        Raw input image, reshaped to BiaPy's layout (``(Y, X, C)`` in 2D, ``(Z, Y, X, C)``
+        in 3D), exactly as disk-loaded images are.
+
+    gt : NDArray, optional
+        Ground truth associated to ``image``. Only needed when metrics are requested.
+
+    is_3d : bool, optional
+        Whether the data is 3D (default ``False``).
+
+    filename : str, optional
+        Synthetic file name for the virtual dataset entry (drives output naming and the
+        generators' image-format checks; no file is read from it).
+
+    Returns
+    -------
+    X_test : BiaPyDataset
+        In-memory test dataset for the raw image.
+    Y_test : BiaPyDataset or None
+        In-memory test dataset for the ground truth, or ``None`` if ``gt`` was not given.
+    test_filenames : list of str
+        List with the (synthetic) test filename.
+    """
+    if is_3d:
+        image = ensure_3d_shape(image.squeeze(), path=filename)
+    else:
+        image = ensure_2d_shape(image.squeeze(), path=filename)
+
+    X_test = BiaPyDataset(
+        dataset_info=[DatasetFile(path=filename)],
+        sample_list=[DataSample(fid=0, coords=None, img=image)],
+    )
+
+    Y_test = None
+    if gt is not None:
+        if is_3d:
+            gt = ensure_3d_shape(gt.squeeze(), path=filename)
+        else:
+            gt = ensure_2d_shape(gt.squeeze(), path=filename)
+        Y_test = BiaPyDataset(
+            dataset_info=[DatasetFile(path=filename)],
+            sample_list=[DataSample(fid=0, coords=None, img=gt)],
+        )
+
+    test_filenames = [filename]
+    return X_test, Y_test, test_filenames
+
+
 def load_and_prepare_cls_test_data(
     test_path: str,
     norm_module: Dict,

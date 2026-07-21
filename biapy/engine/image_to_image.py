@@ -520,15 +520,19 @@ class Image_to_Image_Workflow(Base_Workflow):
         pred = undo_image_norm(pred, adjusted_norm)
         assert isinstance(pred, np.ndarray)
 
+        if self.return_prediction:
+            self._predictions.append({"role": "raw", "data": np.array(pred)})
+
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
-            save_tif(
-                pred,
-                self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                [self.current_sample["X_filename"]],
-                verbose=self.cfg.TEST.VERBOSE,
-                meta=self.current_sample.get("img_meta"),
-            )
+            if self.save_to_disk:
+                save_tif(
+                    pred,
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
+                )
 
         # Calculate metrics
         if pred.dtype == np.dtype("uint16"):

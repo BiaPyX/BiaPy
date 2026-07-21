@@ -960,23 +960,32 @@ def find_bmz_models(
 
 def check_bmz_args(
     model_ID: str,
-    cfg: CN,
-) -> Tuple[List, Dict]:
+    cfg: Optional[CN] = None,
+) -> Tuple[List, Dict, Dict]:
     """
-    Check user's provided BMZ arguments.
+    Check a BMZ model's compatibility and extract its configuration.
 
     Parameters
     ----------
     model_ID : str
         Model identifier. It can be either its ``DOI`` or ``nickname``.
 
-    cfg : YACS configuration
-        Running configuration.
+    cfg : YACS configuration, optional
+        Running configuration. When provided, the model is checked against its workflow
+        specs (``PROBLEM.TYPE``, ``PROBLEM.NDIM``, ``DATA.N_CLASSES``). When ``None``, the
+        workflow is inferred from the model RDF instead (used to build a workflow directly
+        from a BMZ id).
 
     Returns
     -------
-    preproc_info: dict
+    preproc_info : dict
         Preprocessing names that the model is using.
+
+    opts : dict
+        Configuration overrides extracted from the model RDF.
+
+    workflow_info : dict
+        Inferred workflow information (``workflow_type``, ``ndim``, ``nclasses``).
     """
     # Checking BMZ model compatibility using the available model list provided by BMZ
     matches = find_bmz_models(model_ID)
@@ -987,31 +996,35 @@ def check_bmz_args(
         raise ValueError(f"More than one model found with the provided DOI/name ({model_ID}). Contact BiaPy team.")
     model_dict = matches[0]
 
-    workflow_specs = {}
-    workflow_specs["workflow_type"] = cfg.PROBLEM.TYPE
-    workflow_specs["ndim"] = cfg.PROBLEM.NDIM
-    workflow_specs["nclasses"] = cfg.DATA.N_CLASSES
+    workflow_specs = None
+    if cfg is not None:
+        workflow_specs = {
+            "workflow_type": cfg.PROBLEM.TYPE,
+            "ndim": cfg.PROBLEM.NDIM,
+            "nclasses": cfg.DATA.N_CLASSES,
+        }
 
     (
-        preproc_info, 
-        error, 
-        error_message, 
-        opts
+        preproc_info,
+        error,
+        error_message,
+        opts,
+        workflow_info,
     ) = check_bmz_model_compatibility(
-        model_dict, 
-        workflow_specs=workflow_specs, 
+        model_dict,
+        workflow_specs=workflow_specs,
     )
 
     if error:
         raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
 
-    return preproc_info, opts
+    return preproc_info, opts, workflow_info
 
 
 def check_bmz_model_compatibility(
     model_rdf: Dict,
     workflow_specs: Optional[Dict] = None,
-) -> Tuple[List, bool, str, Dict]:
+) -> Tuple[List, bool, str, Dict, Dict]:
     """
     Check one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one used in BMZ's continuous integration with BiaPy.
 
@@ -1033,6 +1046,13 @@ def check_bmz_model_compatibility(
 
     reason_message: str
         Reason why the model can not be consumed if there is any.
+
+    opts : dict
+        Configuration overrides extracted from the model RDF.
+
+    workflow_info : dict
+        Inferred workflow information: ``workflow_type`` (PROBLEM.TYPE), ``ndim``
+        (PROBLEM.NDIM) and ``nclasses`` (DATA.N_CLASSES) when available.
     """
 
     # --------- helpers ---------
@@ -1053,6 +1073,7 @@ def check_bmz_model_compatibility(
 
     preproc_info: List = []
     opts = {}
+    workflow_info: Dict = {}
 
     # --------- Accept only PyTorch state dict models with a single input ---------
     weights = g(m, "weights", "pytorch_state_dict")
@@ -1060,10 +1081,10 @@ def check_bmz_model_compatibility(
 
     if not (isinstance(weights, dict) and weights):
         reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
-        return preproc_info, True, reason_message, opts
+        return preproc_info, True, reason_message, opts, workflow_info
     if not (isinstance(inputs, list) and len(inputs) == 1):
         reason_message = f"[{specific_workflow}] Model needs to have a single input.\n"
-        return preproc_info, True, reason_message, opts
+        return preproc_info, True, reason_message, opts, workflow_info
 
     # Model format version (defaults to 0.5 for your legacy logic)
     model_version = Version("0.5")
@@ -1081,7 +1102,7 @@ def check_bmz_model_compatibility(
     elif "architecture" in weights and isinstance(weights["architecture"], dict):
         model_kwargs = weights["architecture"].get("kwargs", None)
     if model_kwargs is None:
-        return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n", opts
+        return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n", opts, workflow_info
 
     # --------- Problem type via tags ---------
     tags = g(m, "tags", default=[]) or []
@@ -1089,6 +1110,7 @@ def check_bmz_model_compatibility(
     if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
         "semantic-segmentation" in tags or ("segmentation" in tags and "instance-segmentation" not in tags)
     ):
+        workflow_info["workflow_type"] = "SEMANTIC_SEG"
         # classes
         classes = -1
         for k in ("n_classes", "out_channels", "output_channels", "classes"):
@@ -1102,7 +1124,7 @@ def check_bmz_model_compatibility(
             reason_message = (
                 f"[{specific_workflow}] 'DATA.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
             )
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
         
         if (
             classes == -1
@@ -1136,14 +1158,15 @@ def check_bmz_model_compatibility(
             if ref_classes != "all":
                 if classes > 2 and ref_classes != classes:
                     reason_message = f"[{specific_workflow}] 'DATA.N_CLASSES' does not match network's output classes. Please check it!\n"
-                    return preproc_info, True, reason_message, opts
+                    return preproc_info, True, reason_message, opts, workflow_info
         else:
             reason_message = f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
 
         opts["DATA.N_CLASSES"] = max(2, classes)
 
     elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in tags:
+        workflow_info["workflow_type"] = "INSTANCE_SEG"
         # Assumed it's F + C. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
 
@@ -1205,22 +1228,22 @@ def check_bmz_model_compatibility(
             opts["DATA.N_CLASSES"] = max(2, classes)
 
     elif specific_workflow in ["all", "DETECTION"] and "detection" in tags:
-        pass
+        workflow_info["workflow_type"] = "DETECTION"
     elif specific_workflow in ["all", "DENOISING"] and "denoising" in tags:
-        pass
+        workflow_info["workflow_type"] = "DENOISING"
     elif specific_workflow in ["all", "SUPER_RESOLUTION"] and ("super-resolution" in tags or "superresolution" in tags):
-        pass
+        workflow_info["workflow_type"] = "SUPER_RESOLUTION"
     elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in tags:
-        pass
+        workflow_info["workflow_type"] = "SELF_SUPERVISED"
     elif specific_workflow in ["all", "CLASSIFICATION"] and "classification" in tags:
-        pass
+        workflow_info["workflow_type"] = "CLASSIFICATION"
     elif specific_workflow in ["all", "IMAGE_TO_IMAGE"] and any(
         t in tags for t in ("pix2pix", "image-reconstruction", "image-to-image", "image-restoration")
     ):
-        pass
+        workflow_info["workflow_type"] = "IMAGE_TO_IMAGE"
     else:
         reason_message = f"[{specific_workflow}] no workflow tag recognized in {tags}.\n"
-        return preproc_info, True, reason_message, opts
+        return preproc_info, True, reason_message, opts, workflow_info
 
     # --------- Axes checks ---------
     axes_order = g(inputs[0], "axes")
@@ -1260,34 +1283,41 @@ def check_bmz_model_compatibility(
     for x in input_image_shape:
         if not isinstance(x, int):
             reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
 
     try:
         opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
     except Exception:
         reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
-        return preproc_info, True, reason_message, opts
+        return preproc_info, True, reason_message, opts, workflow_info
+
+    if axes_order == "bcyx":
+        workflow_info["ndim"] = "2D"
+    elif axes_order == "bczyx":
+        workflow_info["ndim"] = "3D"
+    if "DATA.N_CLASSES" in opts:
+        workflow_info["nclasses"] = opts["DATA.N_CLASSES"]
 
     if specific_dims == "2D":
         if axes_order != "bcyx":
             reason_message = f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
         elif "2d" not in tags and "3d" in tags:
             reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
     elif specific_dims == "3D":
         if axes_order != "bczyx":
             reason_message = f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
         elif "3d" not in tags and "2d" in tags:
             reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
     else:  # "all"
         if axes_order not in ["bcyx", "bczyx"]:
             reason_message = (
                 f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
             )
-            return preproc_info, True, reason_message, opts
+            return preproc_info, True, reason_message, opts, workflow_info
 
     # --------- Preprocessing ---------
     if "preprocessing" in (inputs[0] or {}):
@@ -1311,7 +1341,7 @@ def check_bmz_model_compatibility(
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
                     )
-                    return preproc_info, True, reason_message, opts
+                    return preproc_info, True, reason_message, opts, workflow_info
                 
                 proc_id = preproc_info[key_to_find]
                 if proc_id not in [
@@ -1324,7 +1354,7 @@ def check_bmz_model_compatibility(
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
                     )
-                    return preproc_info, True, reason_message, opts
+                    return preproc_info, True, reason_message, opts, workflow_info
 
                 # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
                 if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
@@ -1378,18 +1408,18 @@ def check_bmz_model_compatibility(
         reason_message = (
             f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
         )
-        return preproc_info, True, reason_message, opts
+        return preproc_info, True, reason_message, opts, workflow_info
 
     # --------- Dependency checks ---------
     if "dependencies" in weights and weights["dependencies"] is not None:
         try:
             nickname = model_rdf.get("nickname") or model_rdf.get("alias")
         except Exception:
-            return preproc_info, True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n", opts
+            return preproc_info, True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n", opts, workflow_info
         try:
             current_model = load_description(nickname)
         except Exception:
-            return preproc_info, True, f"[{specific_workflow}] Couldn't load model for dependency check.\n", opts
+            return preproc_info, True, f"[{specific_workflow}] Couldn't load model for dependency check.\n", opts, workflow_info
         
         ok, msg = True, ""
         try:
@@ -1407,12 +1437,12 @@ def check_bmz_model_compatibility(
                 yaml_reader = download(deps.file)  # returns a file-like BytesReader
                 ok, msg = can_import_env_deps(yaml_reader) 
         except Exception:            
-            return preproc_info, True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n", opts
+            return preproc_info, True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n", opts, workflow_info
         if not ok:
-            return preproc_info, True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n", opts
+            return preproc_info, True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n", opts, workflow_info
 
     # All checks passed
-    return preproc_info, False, "", opts
+    return preproc_info, False, "", opts, workflow_info
 
 
 def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, Callable]:

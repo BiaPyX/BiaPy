@@ -130,6 +130,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             if _role in _dc:
                 self.cellpose_tta_flow_channels[_role] = _dc.index(_role)
 
+        # Reflect padding mirrors border cells and corrupts their flow field; pad with zeros as Cellpose does.
+        if self.cellpose_tta_flow_channels:
+            self.padding_type = "zeros"
+
         # Merging the image
         self.all_matching_stats_merge_patches = []
         self.all_matching_stats_merge_patches_post = []
@@ -913,8 +917,15 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 class_channel = np.expand_dims(pred[..., -1], -1)
 
             w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
-            check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_CHECK_MW else None
+            check_wa = (
+                w_dir
+                if (self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_CHECK_MW and self.save_to_disk)
+                else None
+            )
             pred_labels = self._create_instance_labels(pred, save_dir=check_wa, verbose=self.cfg.TEST.VERBOSE)
+
+            if self.return_prediction:
+                self._predictions.append({"role": "raw", "data": np.array(pred_labels)})
 
             # Multi-head: instances + classification
             if self.separated_class_channel:
@@ -939,30 +950,32 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 class_channel = new_class_channel
                 class_channel = class_channel.squeeze()
                 del new_class_channel
-                save_tif(
-                    np.expand_dims(
-                        np.concatenate(
-                            [
-                                np.expand_dims(pred_labels.squeeze(), -1),
-                                np.expand_dims(class_channel, -1),
-                            ],
-                            axis=-1,
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(
+                            np.concatenate(
+                                [
+                                    np.expand_dims(pred_labels.squeeze(), -1),
+                                    np.expand_dims(class_channel, -1),
+                                ],
+                                axis=-1,
+                            ),
+                            0,
                         ),
-                        0,
-                    ),
-                    out_dir,
-                    filenames,
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                        out_dir,
+                        filenames,
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
             else:
-                save_tif(
-                    np.expand_dims(np.expand_dims(pred_labels, -1), 0),
-                    out_dir,
-                    filenames,
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(np.expand_dims(pred_labels, -1), 0),
+                        out_dir,
+                        filenames,
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
             # Add extra dimension if working in 2D
             if pred_labels.ndim == 2:
@@ -1088,20 +1101,22 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 df_fp = pd.DataFrame(zip(fp_instances), columns=["pred_id"])
 
                 os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
-                df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        os.path.splitext(filenames[0])[0] + "_th_{}_gt_assoc.csv".format(thr),
-                    ),
-                    index=False,
-                )
-                df_fp.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        os.path.splitext(filenames[0])[0] + "_th_{}_fp.csv".format(thr),
-                    ),
-                    index=False,
-                )
+                if self.save_to_disk:
+                    df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                            os.path.splitext(filenames[0])[0] + "_th_{}_gt_assoc.csv".format(thr),
+                        ),
+                        index=False,
+                    )
+                if self.save_to_disk:
+                    df_fp.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                            os.path.splitext(filenames[0])[0] + "_th_{}_fp.csv".format(thr),
+                        ),
+                        index=False,
+                    )
                 del r_stats["matched_scores"]
                 del r_stats["matched_tps"]
                 del r_stats["matched_pairs"]
@@ -1132,13 +1147,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             255,
                         )  # Blue
 
-                    save_tif(
-                        np.expand_dims(colored_result, 0),
-                        self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        [os.path.splitext(filenames[0])[0] + "_th_{}.tif".format(thr)],
-                        verbose=self.cfg.TEST.VERBOSE,
-                        meta=self.current_sample.get("img_meta"),
-                    )
+                    if self.save_to_disk:
+                        save_tif(
+                            np.expand_dims(colored_result, 0),
+                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                            [os.path.splitext(filenames[0])[0] + "_th_{}.tif".format(thr)],
+                            verbose=self.cfg.TEST.VERBOSE,
+                            meta=self.current_sample.get("img_meta"),
+                        )
                     del colored_result
 
         ###################
@@ -1272,20 +1288,22 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 columns=all_columns,
             )
             df = df.sort_values(by=["label"])
-            df.to_csv(
-                os.path.join(out_dir, os.path.splitext(filenames[0])[0] + "_full_stats.csv"),
-                index=False,
-            )
+            if self.save_to_disk:
+                df.to_csv(
+                    os.path.join(out_dir, os.path.splitext(filenames[0])[0] + "_full_stats.csv"),
+                    index=False,
+                )
             # Save only remain instances stats
             df = df[df["comment"].str.contains("Strange") == False]
             os.makedirs(out_dir_post_proc, exist_ok=True)
-            df.to_csv(
-                os.path.join(
-                    out_dir_post_proc,
-                    os.path.splitext(filenames[0])[0] + "_filtered_stats.csv",
-                ),
-                index=False,
-            )
+            if self.save_to_disk:
+                df.to_csv(
+                    os.path.join(
+                        out_dir_post_proc,
+                        os.path.splitext(filenames[0])[0] + "_filtered_stats.csv",
+                    ),
+                    index=False,
+                )
             del df
 
         results_post_proc = None
@@ -1297,30 +1315,32 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             # Multi-head: instances + classification
             if self.separated_class_channel:
                 class_channel = np.where(pred_labels > 0, class_channel, 0)  # Adapt changes to post-processed pred_labels
-                save_tif(
-                    np.expand_dims(
-                        np.concatenate(
-                            [
-                                np.expand_dims(pred_labels, -1),
-                                np.expand_dims(class_channel, -1),
-                            ],
-                            axis=-1,
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(
+                            np.concatenate(
+                                [
+                                    np.expand_dims(pred_labels, -1),
+                                    np.expand_dims(class_channel, -1),
+                                ],
+                                axis=-1,
+                            ),
+                            0,
                         ),
-                        0,
-                    ),
-                    out_dir_post_proc,
-                    filenames,
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                        out_dir_post_proc,
+                        filenames,
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
             else:
-                save_tif(
-                    np.expand_dims(np.expand_dims(pred_labels, -1), 0),
-                    out_dir_post_proc,
-                    filenames,
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(np.expand_dims(pred_labels, -1), 0),
+                        out_dir_post_proc,
+                        filenames,
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
             if (
                 calculate_metrics
@@ -1377,20 +1397,22 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     df_fp = pd.DataFrame(zip(fp_instances), columns=["pred_id"])
 
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
-                    df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0] + "_post-proc_th_{}_gt_assoc.csv".format(thr),
-                        ),
-                        index=False,
-                    )
-                    df_fp.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0] + "_post-proc_th_{}_fp.csv".format(thr),
-                        ),
-                        index=False,
-                    )
+                    if self.save_to_disk:
+                        df.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                                os.path.splitext(filenames[0])[0] + "_post-proc_th_{}_gt_assoc.csv".format(thr),
+                            ),
+                            index=False,
+                        )
+                    if self.save_to_disk:
+                        df_fp.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                                os.path.splitext(filenames[0])[0] + "_post-proc_th_{}_fp.csv".format(thr),
+                            ),
+                            index=False,
+                        )
                     del r_stats["matched_scores"]
                     del r_stats["matched_tps"]
                     del r_stats["matched_pairs"]
@@ -1423,13 +1445,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                                 255,
                             )  # Blue
 
-                        save_tif(
-                            np.expand_dims(colored_result, 0),
-                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            [os.path.splitext(filenames[0])[0] + "_post-proc_th_{}.tif".format(thr)],
-                            verbose=self.cfg.TEST.VERBOSE,
-                            meta=self.current_sample.get("img_meta"),
-                        )
+                        if self.save_to_disk:
+                            save_tif(
+                                np.expand_dims(colored_result, 0),
+                                self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                                [os.path.splitext(filenames[0])[0] + "_post-proc_th_{}.tif".format(thr)],
+                                verbose=self.cfg.TEST.VERBOSE,
+                                meta=self.current_sample.get("img_meta"),
+                            )
                         del colored_result
 
         return results, results_post_proc, results_class, results_class_post_proc
@@ -1654,20 +1677,22 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             self.current_sample_metrics[str(metric).lower() + f" ({point_type} points{(', post-processing' if post_processing else '')})"] = item[1]
 
         # Save csv files with the associations between GT points and predicted ones
-        gt_assoc.to_csv(
-            os.path.join(
-                out_dir,
-                filename+f"_pred_{point_type}_locations_gt_assoc.csv",
-            ),
-            index=False,
-        )
-        fps.to_csv(
-            os.path.join(
-                out_dir,
-                filename+f"_pred_{point_type}_locations_fp.csv",
-            ),
-            index=False,
-        )
+        if self.save_to_disk:
+            gt_assoc.to_csv(
+                os.path.join(
+                    out_dir,
+                    filename+f"_pred_{point_type}_locations_gt_assoc.csv",
+                ),
+                index=False,
+            )
+        if self.save_to_disk:
+            fps.to_csv(
+                os.path.join(
+                    out_dir,
+                    filename+f"_pred_{point_type}_locations_fp.csv",
+                ),
+                index=False,
+            )
         return gt_assoc, fps
 
     def process_test_sample(self):
@@ -1840,13 +1865,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
                 # Save the csv file
                 os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                point_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        _filename + "_patch" + str(chunk_id).zfill(npatches) + "_" + key + "_points.csv",
-                    ),
-                    index=False,
-                )
+                if self.save_to_disk:
+                    point_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            _filename + "_patch" + str(chunk_id).zfill(npatches) + "_" + key + "_points.csv",
+                        ),
+                        index=False,
+                    )
 
     def after_all_chunk_prediction_workflow_process(self):
         """
@@ -2204,12 +2230,13 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             data = np.array(zarr.open(zarr_path, mode="r", zarr_format=3))
                             data = ensure_3d_shape(data)
                             out_filename = os.path.splitext(os.path.basename(zarr_path))[0] + ".tif"
-                            save_tif(
-                                np.expand_dims(data, 0),
-                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                                [out_filename],
-                                verbose=True,
-                            )
+                            if self.save_to_disk:
+                                save_tif(
+                                    np.expand_dims(data, 0),
+                                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                                    [out_filename],
+                                    verbose=True,
+                                )
                         else:
                             tgen.save_parallel_data_as_tif()
                     if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
@@ -2425,13 +2452,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             )
                         points_available[key]["df"].drop(points_available[key]["df"].index[pre_dropped_pos], inplace=True)  # type: ignore
                         os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
-                        points_available[key]["df"].to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                str(filename)+"_pred_"+key+"_locations.csv",
-                            ),
-                            index=False,
-                        )
+                        if self.save_to_disk:
+                            points_available[key]["df"].to_csv(
+                                os.path.join(
+                                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                    str(filename)+"_pred_"+key+"_locations.csv",
+                                ),
+                                index=False,
+                            )
 
                     # After removing close points, calculate again the detection metrics to see the effect of this post-processing step on the metrics.
                     if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
@@ -2488,13 +2516,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     if self.post_processing["per_image"]
                     else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
                 )
-                save_tif(
-                    np.expand_dims(aux_tif, 0),
-                    out_dir,
-                    [str(filename) + "_points.tif"],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(aux_tif, 0),
+                        out_dir,
+                        [str(filename) + "_points.tif"],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
                 # Create another tif with the GT points, coloring them based on their ID in the dataframe (if available) and dilating them to make them more visible.
                 aux_tif = np.zeros(sshape, dtype=np.uint16)
@@ -2506,13 +2535,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             aux_tif[z, y, x, i] = j+1
                     aux_tif[..., i] = dilation(aux_tif[..., i], ball(3))
                     
-                save_tif(
-                    np.expand_dims(aux_tif, 0),
-                    out_dir,
-                    [str(filename) + "_gt_ids.tif"],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(aux_tif, 0),
+                        out_dir,
+                        [str(filename) + "_gt_ids.tif"],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
                 # Create another tif with the predicted points colored in green if they are TP and in red if they are FP, and with the GT points colored in blue. 
                 # This is useful to visually check the quality of the predictions and the errors. We do this only if GT is available, otherwise we don't know which 
@@ -2549,13 +2579,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         for c in range(aux_tif.shape[-1]):
                             aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
 
-                        save_tif(
-                            np.expand_dims(aux_tif, 0),
-                            out_dir,
-                            [str(filename) + f"_{key}_point_assoc.tif"],
-                            verbose=self.cfg.TEST.VERBOSE,
-                            meta=self.current_sample.get("img_meta"),
-                        )
+                        if self.save_to_disk:
+                            save_tif(
+                                np.expand_dims(aux_tif, 0),
+                                out_dir,
+                                [str(filename) + f"_{key}_point_assoc.tif"],
+                                verbose=self.cfg.TEST.VERBOSE,
+                                meta=self.current_sample.get("img_meta"),
+                            )
 
     def after_full_image(self, pred: NDArray):
         """
@@ -2981,18 +3012,20 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 columns=["label", "scores", "x1", "y1", "x2", "y2"],
             )
             df = df.sort_values(by=["label"])
-            df.to_csv(
-                os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filename + ".csv"),
-                index=False,
-            )
+            if self.save_to_disk:
+                df.to_csv(
+                    os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filename + ".csv"),
+                    index=False,
+                )
 
             # Save masks
-            save_tif(
-                np.expand_dims(masks, 0),
-                self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                [self.current_sample["X_filename"]],
-                verbose=self.cfg.TEST.VERBOSE,
-                meta=self.current_sample.get("img_meta"),
-            )
+            if self.save_to_disk:
+                save_tif(
+                    np.expand_dims(masks, 0),
+                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                    meta=self.current_sample.get("img_meta"),
+                )
 
         return None

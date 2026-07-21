@@ -177,12 +177,15 @@ class test_single_data_generator(Dataset):
         sample = self.X.sample_list[idx].copy()
         sample_extra_info = {}
 
-        img, img_file, img_meta = load_img_data(
-            self.X.dataset_info[sample.fid].path,
-            is_3d=(self.ndim == 3),
-            data_within_zarr_path=sample.get_path_in_zarr(),
-            load_meta=True,
-        )
+        if sample.img_is_loaded():
+            img, img_file, img_meta = sample.img.copy(), None, None
+        else:
+            img, img_file, img_meta = load_img_data(
+                self.X.dataset_info[sample.fid].path,
+                is_3d=(self.ndim == 3),
+                data_within_zarr_path=sample.get_path_in_zarr(),
+                load_meta=True,
+            )
 
         if looks_like_hdf5(self.X.dataset_info[sample.fid].path) or any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5"]):
             if img_file and isinstance(img_file, h5py.File):

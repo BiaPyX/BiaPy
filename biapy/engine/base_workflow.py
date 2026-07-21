@@ -84,6 +84,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
     load_and_prepare_test_data,
+    prepare_in_memory_test_data,
     read_img_as_ndarray,
     save_tif,
     resize,
@@ -197,6 +198,12 @@ class Base_Workflow(metaclass=ABCMeta):
         self.all_pred = []
         self.all_gt = []
 
+        # In-memory prediction controls (see BiaPy.predict): gate disk writes and collect
+        # the produced arrays in self._predictions (tagged with a "raw"/"post" role).
+        self.save_to_disk = True
+        self.return_prediction = False
+        self._predictions = []
+
         self.stats = {}
 
         # Per crop
@@ -224,6 +231,8 @@ class Base_Workflow(metaclass=ABCMeta):
         # fallback diameter prior when PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER == 0. None if unavailable.
         # The per-patch training rescale uses each file's own DatasetFile.diameter, not this value.
         self.cellpose_diameter = None
+        # Padding mode used when tiling the test image. Cellpose flow workflows override to "zeros" (see instance_seg).
+        self.padding_type = "reflect"
         self.model_output_channels = []
         self.model_output_channel_info = []
         self.head_activations = []
@@ -319,7 +328,7 @@ class Base_Workflow(metaclass=ABCMeta):
         
         # Load BioImage Model Zoo pretrained model information
         elif self.cfg.MODEL.SOURCE == "bmz":
-            self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
+            self.bmz_config["preprocessing"], opts, _ = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
             print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
 
             # Adapt configuration to match the one defined in the RDF
@@ -1185,13 +1194,31 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.destroy_train_data()
 
-    def load_test_data(self):
-        """Load test data."""
+    def load_test_data(self, image=None, gt=None):
+        """
+        Load test data. If ``image`` (NDArray) is given, build the test dataset from it
+        in memory (via :func:`prepare_in_memory_test_data`) instead of ``DATA.TEST.PATH``;
+        ``gt`` is the optional in-memory ground truth.
+        """
         print("######################")
         print("#   LOAD TEST DATA   #")
         print("######################")
 
         self.X_test, self.Y_test = None, None
+
+        if image is not None:
+            print("Building test data from an in-memory image (skipping disk read)")
+            (
+                self.X_test,
+                self.Y_test,
+                self.test_filenames,
+            ) = prepare_in_memory_test_data(
+                image=image,
+                gt=gt if self.use_gt else None,
+                is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
+            )
+            return
+
         if self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Loading train data information to extract the validation to be used as test")
             self.cfg.merge_from_list(["DATA.TRAIN.IN_MEMORY", False, "DATA.VAL.IN_MEMORY", False])
@@ -1354,9 +1381,12 @@ class Base_Workflow(metaclass=ABCMeta):
         return pred
 
     @torch.no_grad()
-    def test(self):
-        """Test/Inference step."""
-        self.load_test_data()
+    def test(self, image=None, gt=None):
+        """
+        Test/Inference step. If ``image`` (NDArray) is given, run inference on it in memory
+        instead of the images under ``DATA.TEST.PATH`` (see :meth:`load_test_data`).
+        """
+        self.load_test_data(image=image, gt=gt)
         if not self.model_prepared:
             self.prepare_model()
         self.prepare_test_generators()
@@ -1750,6 +1780,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             overlap=self.cfg.DATA.TEST.OVERLAP,
                             padding=self.cfg.DATA.TEST.PADDING,
                             verbose=self.cfg.TEST.VERBOSE,
+                            pad_type=self.padding_type,
                         )
                         if self.current_sample["Y"] is not None:
                             self.current_sample["X"], self.current_sample["Y"], _ = obj  # type: ignore
@@ -1765,6 +1796,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 padding=self.cfg.DATA.TEST.PADDING,
                                 verbose=self.cfg.TEST.VERBOSE,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
+                                pad_type=self.padding_type,
                             )
                             if self.current_sample["Y"] is not None:
                                 self.current_sample["Y"], _ = crop_3D_data_with_overlap(  # type: ignore
@@ -1774,6 +1806,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                     padding=self.cfg.DATA.TEST.PADDING,
                                     verbose=self.cfg.TEST.VERBOSE,
                                     median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
+                                    pad_type=self.padding_type,
                                 )
                         else:
                             if self.current_sample["Y"] is not None:
@@ -1786,6 +1819,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 padding=self.cfg.DATA.TEST.PADDING,
                                 verbose=self.cfg.TEST.VERBOSE,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
+                                pad_type=self.padding_type,
                             )
                             if self.current_sample["Y"] is not None:
                                 self.current_sample["X"], self.current_sample["Y"], _ = obj  # type: ignore
@@ -1978,15 +2012,19 @@ class Base_Workflow(metaclass=ABCMeta):
                             np.expand_dims(np.argmax(pred[..., -self.model_output_channels[class_idx]:], axis=-1), axis=-1)
                         ), axis=-1)                            
 
+                if self.return_prediction:
+                    self._predictions.append({"role": "raw", "data": np.array(pred)})
+
                 # Save image
                 if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
-                    save_tif(
-                        pred,
-                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                        meta=self.current_sample.get("img_meta"),
-                    )
+                    if self.save_to_disk:
+                        save_tif(
+                            pred,
+                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+                            [self.current_sample["X_filename"]],
+                            verbose=self.cfg.TEST.VERBOSE,
+                            meta=self.current_sample.get("img_meta"),
+                        )
 
                 # Calculate the metrics
                 if self.current_sample["Y"] is not None:
@@ -2013,13 +2051,16 @@ class Base_Workflow(metaclass=ABCMeta):
                                 self.stats["merge_patches_post"][str(metric).lower()] = 0
                             self.stats["merge_patches_post"][str(metric).lower()] += metric_values[metric]
                             self.current_sample_metrics[str(metric).lower() + " (post-processing)"] = metric_values[metric]
-                    save_tif(
-                        pred,
-                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                        meta=self.current_sample.get("img_meta"),
-                    )
+                    if self.return_prediction:
+                        self._predictions.append({"role": "post", "data": np.array(pred)})
+                    if self.save_to_disk:
+                        save_tif(
+                            pred,
+                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                            [self.current_sample["X_filename"]],
+                            verbose=self.cfg.TEST.VERBOSE,
+                            meta=self.current_sample.get("img_meta"),
+                        )
             else:
                 # Load prediction from file
                 folder = (
@@ -2105,14 +2146,18 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.current_sample["Y"] is not None:
                     self.current_sample["Y"] = self.current_sample["Y"][:, : o_test_shape[1], : o_test_shape[2]]
 
+                if self.return_prediction:
+                    self._predictions.append({"role": "raw", "data": np.array(pred)})
+
                 # Save image
-                save_tif(
-                    pred,
-                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                    [self.current_sample["X_filename"]],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        pred,
+                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
+                        [self.current_sample["X_filename"]],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
@@ -2246,15 +2291,16 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.test_metrics_message != "":
                 for line in self.test_metrics_message.split("\n"):
                     print(line)
-            df_metrics = pd.DataFrame(self.metrics_per_test_file) 
+            df_metrics = pd.DataFrame(self.metrics_per_test_file)
             os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
-            df_metrics.to_csv(
-                os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PATH,
-                    "test_results_metrics.csv",
-                ),
-                index=False,
-            )
+            if self.save_to_disk:
+                df_metrics.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.PATH,
+                        "test_results_metrics.csv",
+                    ),
+                    index=False,
+                )
 
     @abstractmethod
     def after_merge_patches(self, pred):
@@ -2293,16 +2339,18 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
                 self.all_gt = np.expand_dims(np.concatenate(self.all_gt), 0)
 
-            save_tif(
-                self.all_pred,
-                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
-                verbose=self.cfg.TEST.VERBOSE,
-            )
-            save_tif(
-                (self.all_pred > 0.5).astype(np.uint8),
-                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_BIN,
-                verbose=self.cfg.TEST.VERBOSE,
-            )
+            if self.save_to_disk:
+                save_tif(
+                    self.all_pred,
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
+            if self.save_to_disk:
+                save_tif(
+                    (self.all_pred > 0.5).astype(np.uint8),
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_BIN,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
             self.all_pred = apply_post_processing(self.cfg, self.all_pred)
 
@@ -2313,11 +2361,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.stats["as_3D_stack_post"][str(metric).lower()] = metric_values[metric]
                     self.current_sample_metrics[str(metric).lower() + " as 3D stack (post-processing)"] = metric_values[metric]
 
-            save_tif(
-                self.all_pred,
-                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
-                verbose=self.cfg.TEST.VERBOSE,
-            )
+            if self.save_to_disk:
+                save_tif(
+                    self.all_pred,
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
 
     #########################

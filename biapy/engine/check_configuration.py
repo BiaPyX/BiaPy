@@ -2560,6 +2560,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
             )
 
+        # Conv block ordering (post- vs pre-activation)
+        if cfg.MODEL.CONV_BLOCK_ORDER not in ["conv_norm_act", "norm_act_conv"]:
+            raise ValueError("'MODEL.CONV_BLOCK_ORDER' not in ['conv_norm_act', 'norm_act_conv']")
+        if cfg.MODEL.CONV_BLOCK_ORDER == "norm_act_conv" and model_arch not in [
+            "unet",
+            "resunet",
+            "resunet++",
+            "seunet",
+            "resunet_se",
+            "attention_unet",
+        ]:
+            raise ValueError(
+                "'MODEL.CONV_BLOCK_ORDER' set to 'norm_act_conv' (pre-activation) is only supported by "
+                "['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet']. "
+                "'{}' only supports the default 'conv_norm_act'.".format(model_arch)
+            )
+
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
 
     # Adjust dropout to feature maps
@@ -3099,9 +3116,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "reduceonplateau",
             "warmupcosine",
             "onecycle",
+            "warmupreduceonplateau",
         ]:
-            raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle']")
-        if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
+            raise ValueError(
+                "'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle', 'warmupreduceonplateau']"
+            )
+        if cfg.TRAIN.LR_SCHEDULER.NAME not in ["onecycle", "warmupreduceonplateau"]:
             if not isinstance(cfg.TRAIN.LR_SCHEDULER.MIN_LR, list):
                 raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must be a list")
             if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
@@ -3115,7 +3135,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         elif len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) > 1 and len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) != len(cfg.TRAIN.OPTIMIZER):
             raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must have length 1 or match 'TRAIN.OPTIMIZER' length")
 
-        if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle" and all(x == -1.0 for x in cfg.TRAIN.LR_SCHEDULER.MIN_LR):
+        if cfg.TRAIN.LR_SCHEDULER.NAME not in ["onecycle", "warmupreduceonplateau"] and all(
+            x == -1.0 for x in cfg.TRAIN.LR_SCHEDULER.MIN_LR
+        ):
             raise ValueError(
                 "'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']"
             )
@@ -3880,10 +3902,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "UNETR_DEC_KERNEL_SIZE" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["KERNEL_SIZE"] = old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
             del old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
-        if "CONVNEXT_LAYERS" in old_cfg["MODEL"]:
-            # MODEL.CONVNEXT_LAYERS was renamed to the more general MODEL.CONV_LAYERS
-            old_cfg["MODEL"]["CONV_LAYERS"] = old_cfg["MODEL"]["CONVNEXT_LAYERS"]
-            del old_cfg["MODEL"]["CONVNEXT_LAYERS"]
         if "N_CLASSES" in old_cfg["MODEL"]:
             if "DATA" not in old_cfg:
                 old_cfg["DATA"] = {}

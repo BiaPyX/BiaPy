@@ -19,7 +19,7 @@ __version__ = "3.6.8"
 import argparse
 import os
 import sys
-from ._biapy import BiaPy
+from ._biapy import BiaPy, build_config
 
 
 def main():
@@ -106,8 +106,8 @@ def main():
     parser.add_argument("--config", required=True, help="Path to the configuration file")
     parser.add_argument(
         "--result_dir",
+        required=True,
         help="Path to where the resulting output of the job will be stored",
-        default=os.getenv("HOME"),
     )
     parser.add_argument("--name", help="Job name", default="unknown_job")
     parser.add_argument("--run_id", help="Run number of the same job", type=int, default=1)
@@ -137,6 +137,6 @@ def main():
     )
     args = parser.parse_args()
 
-    _biapy = BiaPy(**vars(args))
+    _biapy = BiaPy(**vars(args), verbose=True)
     _biapy.run_job()
     sys.exit(0)

@@ -40,7 +40,7 @@ print(f"Out folder: {data_folder}")
 print(f"Running in folder: {BIAPY_FOLDER}")
 
 BMZ_FOLDER = os.path.join(data_folder, "bmz_files")
-bmz_script = os.path.join(BIAPY_FOLDER, "biapy", "utils", "scripts", "export_bmz_test.py")
+bmz_script = os.path.join(BIAPY_FOLDER, "tests", "export_bmz_test.py")
 RESULTS_FOLDER = os.path.join(data_folder, "output")
 
 if not os.path.exists(BIAPY_FOLDER):

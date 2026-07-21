@@ -1,5 +1,8 @@
+import copy
 import io
 import os
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 import re
 import sys
@@ -17,6 +20,7 @@ from yacs.config import CfgNode as CN
 from typing import (
     Optional,
     Dict,
+    Union,
 )
 from bioimageio.spec.model.v0_5 import (
     Author,
@@ -101,8 +105,8 @@ class _Tee:
 class BiaPy:
     def __init__(
         self,
-        config: str,
-        result_dir: Optional[str] = "",
+        config: Union[str, dict, CN],
+        result_dir: Optional[str] = None,
         name: Optional[str] = "unknown_job",
         run_id: Optional[int] = 1,
         gpu: Optional[str] = "",
@@ -111,17 +115,25 @@ class BiaPy:
         dist_on_itp: Optional[bool] = False,
         dist_url: Optional[str] = "env://",
         dist_backend: Optional[str] = "nccl",
+        verbose: Optional[bool] = False,
+        save_files: Optional[bool] = True,
     ):
         """
         Run the main functionality of the job.
 
         Parameters
         ----------
-        config: str
-            Path to the configuration file.
+        config: str or dict or CfgNode
+            Configuration source. It can be a path to a YAML file, a dict of overrides (e.g.
+            from :func:`biapy.build_config`), a YACS ``CfgNode``, or a path to a BiaPy ``.pth``
+            checkpoint (the configuration is embedded in it, so the workflow is rebuilt for
+            inference). The in-memory forms allow running BiaPy without a YAML file on disk.
 
         result_dir: str, optional
-            Path to where the resulting output of the job will be stored. Defaults to the home directory.
+            Path where the job outputs (results, checkpoints, logs, config backup) are stored.
+            Required whenever files are written to disk (``save_files=True``). It may be omitted
+            only in the ephemeral API mode (``save_files=False``), where nothing is written and
+            in-memory prediction is the only supported output.
 
         name: str, optional
             Job name. Defaults to "unknown_job".
@@ -146,11 +158,46 @@ class BiaPy:
 
         dist_backend: str, optional
             Backend to use in distributed mode. Should be either 'nccl' or 'gloo'. Defaults to 'nccl'.
+
+        verbose: bool, optional
+            Whether to mirror BiaPy's regular output to the console while building the
+            workflow. Defaults to ``False`` so that constructing a :class:`BiaPy` through the
+            Python API is quiet (everything is still written to the run log file). The CLI
+            entry point sets it to ``True``. Regardless of this flag, running the workflow
+            (:meth:`train`, :meth:`test`, :meth:`predict`, :meth:`run_job`) mirrors its output
+            to the console. Use :meth:`print_config` / ``print(biapy)`` to inspect the
+            configuration on demand.
+
+        save_files: bool, optional
+            Whether BiaPy is allowed to write files to disk. When ``True`` (default) the
+            configuration backup and the run log file are written as usual. When ``False``
+            nothing is written (a debugging/ephemeral mode useful to just load a model and
+            predict on new samples). Defaults to ``True``.
         """
-        result_dir = result_dir if result_dir != "" else str(os.getenv("HOME"))
+        self.verbose = bool(verbose)
+        self.save_files = bool(save_files)
+
+        # Third instantiation option: a model checkpoint as the configuration source. A BiaPy
+        # '.pth' embeds the whole configuration, so the workflow is rebuilt from it (see
+        # BiaPy.load_workflow_from_model for BMZ ids). '.safetensors' has no embedded config.
+        if isinstance(config, str) and (config.endswith(".pth") or config.endswith(".safetensors")):
+            config = self._config_from_checkpoint(config)
 
         if dist_backend not in ["nccl", "gloo"]:
             raise ValueError("Invalid value for 'dist_backend'. Should be either 'nccl' or 'gloo'.")
+
+        # result_dir is mandatory whenever files are written; it may be omitted only in the
+        # ephemeral API mode (save_files=False), where a throwaway temp base is used for the
+        # internal path strings and nothing is ever written there.
+        self._result_dir_provided = result_dir is not None and result_dir != ""
+        if not self._result_dir_provided:
+            if self.save_files:
+                raise ValueError(
+                    "'result_dir' must be provided: BiaPy writes results, checkpoints and logs "
+                    "there. Pass result_dir=... or, for an ephemeral run that writes nothing to "
+                    "disk, set save_files=False."
+                )
+            result_dir = os.path.join(tempfile.gettempdir(), "biapy_ephemeral")
 
         self.args = argparse.Namespace(
             config=config,
@@ -175,26 +222,36 @@ class BiaPy:
         # Prepare working dir
         self.job_dir = os.path.join(self.args.result_dir, self.args.name)
         self.cfg_bck_dir = os.path.join(self.job_dir, "config_files")
-        os.makedirs(self.cfg_bck_dir, exist_ok=True)
-        head, tail = ntpath.split(self.args.config)
-        self.cfg_filename = tail if tail else ntpath.basename(head)
+        if self.save_files:
+            os.makedirs(self.cfg_bck_dir, exist_ok=True)
+        if isinstance(self.args.config, str):
+            head, tail = ntpath.split(self.args.config)
+            self.cfg_filename = tail if tail else ntpath.basename(head)
+        else:
+            # In-memory config (dict/CfgNode): synthesize a filename for logs and backups.
+            self.cfg_filename = str(self.args.name) + ".yaml"
 
         now = datetime.datetime.now()
         self.log_timestamp = now.strftime("%Y_%m_%d_%H_%M_%S")
         self._stdout_log_file = None
+        self._stdout_log_path = None
+        self._null_stream = None
 
-        # Store the config with the same run_id and timestamp used for the log file so
-        # each run has a one-to-one log/config pairing to cross-check.
+        # Config and log share run_id + timestamp so each run has a matching pair.
         cfg_root, cfg_ext = os.path.splitext(self.cfg_filename)
         self.cfg_file = os.path.join(
             self.cfg_bck_dir, f"{cfg_root}_{self.args.run_id}_{self.log_timestamp}{cfg_ext}"
         )
 
-        # Buffer everything from this point into memory so it can be written to the
-        # log file later (once we know which process is rank 0).
+        # Buffer output until we know the rank 0 log file. In quiet mode it is not mirrored to
+        # the console, so building the workflow is silent.
         _early_buf = io.StringIO()
-        sys.stdout = _Tee(sys.__stdout__, _early_buf)
-        sys.stderr = _Tee(sys.__stderr__, _early_buf)
+        if self.verbose:
+            sys.stdout = _Tee(sys.__stdout__, _early_buf)
+            sys.stderr = _Tee(sys.__stderr__, _early_buf)
+        else:
+            sys.stdout = _Tee(_early_buf)
+            sys.stderr = _Tee(_early_buf)
 
         print("Date     : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
         print("Arguments: {}".format(self.args))
@@ -203,23 +260,17 @@ class BiaPy:
         print("Python   : {}".format(sys.version.split("\n")[0]))
         print("PyTorch  : {}".format(torch.__version__))
 
-        if not os.path.exists(self.args.config):
-            raise FileNotFoundError("Provided {} config file does not exist".format(self.args.config))
-        if is_main_process():
+        # Load the raw config from the source (YAML path, dict or CfgNode)
+        original_cfg = self._load_raw_config(self.args.config)
+
+        # Back up the config file when a path was given (in-memory configs are backed up later)
+        if self.save_files and is_main_process() and isinstance(self.args.config, str):
             copyfile(self.args.config, self.cfg_file)
 
         # Merge configuration file with the default settings
         cfg_manager = Config(self.job_dir, self.job_identifier)
 
         # Translates the input config it to current version
-        with open(self.args.config, "r", encoding="utf8") as stream:
-            try:
-                cfg_content = stream.read()
-                if "\t" in cfg_content:
-                    cfg_content = cfg_content.replace("\t", "  ")
-                original_cfg = yaml.safe_load(cfg_content)
-            except yaml.YAMLError as exc:
-                raise ValueError("Error reading the configuration file. Please check the file format: {}".format(exc))
         temp_cfg = CN(convert_old_model_cfg_to_current_version(original_cfg))
         if cfg_manager._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
             print("The following changes were made in order to adapt the input configuration:")
@@ -246,23 +297,28 @@ class BiaPy:
         cfg_manager._C.merge_from_list(opts)
         self.cfg: CN = cfg_manager.get_cfg_defaults()
 
-        # Rank is now settled: open the real log file on rank 0, flush the early buffer
-        # into it, then keep mirroring stdout/stderr for the rest of the run.
+        # Back up in-memory configs once fully resolved (mirrors the copyfile done for paths)
+        if self.save_files and is_main_process() and not isinstance(self.args.config, str):
+            with open(self.cfg_file, "w", encoding="utf8") as stream:
+                stream.write(self.cfg.dump())
+
+        # Rank is settled: on rank 0 open the log file (unless disabled) and flush the buffer
+        # into it. In verbose mode the buffer was already shown live on the console.
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
-        if is_main_process():
+        if self.save_files and is_main_process():
             logs_dir = self.cfg.LOG.LOG_DIR
             os.makedirs(logs_dir, exist_ok=True)
-            stdout_log_path = os.path.join(
+            self._stdout_log_path = os.path.join(
                 logs_dir,
                 f"{self.job_identifier}_log_{self.args.run_id}_{self.log_timestamp}.txt",
             )
-            self._stdout_log_file = open(stdout_log_path, "w", encoding="utf-8", buffering=1)
+            self._stdout_log_file = open(self._stdout_log_path, "w", encoding="utf-8", buffering=1)
             self._stdout_log_file.write(_early_buf.getvalue())
             self._stdout_log_file.flush()
-            sys.stdout = _Tee(sys.__stdout__, self._stdout_log_file)
-            sys.stderr = _Tee(sys.__stderr__, self._stdout_log_file)
         _early_buf.close()
+        # Route the rest of construction: silent unless verbose (see _route).
+        self._route(mirror_console=self.verbose)
 
         # Reproducibility
         set_seed(self.cfg.SYSTEM.SEED)
@@ -276,7 +332,12 @@ class BiaPy:
         )
         # Set threads for the main (rank) process
         torch.set_num_threads(main_threads)
-        torch.set_num_interop_threads(1)
+        # 'set_num_interop_threads' can only be set once per process; guard it so several
+        # BiaPy instances can be created in the same process (e.g. multi-workflow predict).
+        try:
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            pass
         self.cfg.merge_from_list(["SYSTEM.NUM_CPUS", cpu_budget])
 
         print(
@@ -289,16 +350,40 @@ class BiaPy:
         print("Configuration details:")
         print(self.cfg)
 
+        # System resources resolved above; kept so the workflow can be rebuilt after a config
+        # change (see update_config / _build_workflow) without recomputing them.
+        self._system_dict = {
+            "cpu_budget": cpu_budget,
+            "cpu_per_rank": cpu_per_rank,
+            "main_threads": main_threads,
+            "num_workers_hint": num_workers,
+        }
+
         ##########################
         #       TRAIN/TEST       #
         ##########################
+        self._build_workflow()
+
+        # Quiet (API) mode: give the console back so the interactive session stays clean;
+        # each run re-attaches output via _run_output. Verbose (CLI) keeps the tee until run_job.
+        if not self.verbose:
+            self._restore_std_streams()
+
+    def _build_workflow(self):
+        """
+        Instantiate the workflow object from the current :attr:`cfg`.
+
+        Resolves the workflow class from ``PROBLEM.TYPE`` and constructs it. This is where much
+        config-derived state is decided (dimensionality, resolution, axes order, post-processing
+        flags, checkpoint consistency, metrics, ...) and where ``cfg`` gets frozen, so
+        :meth:`update_config` calls it again to refresh that state. Expects a defrosted ``cfg``.
+        """
         workflowname = str(self.cfg.PROBLEM.TYPE).lower()
         mdl = importlib.import_module("biapy.engine." + workflowname)
         names = [x for x in mdl.__dict__ if not x.startswith("_")]
         globals().update({k: getattr(mdl, k) for k in names})
         name = [x for x in names if "Base" not in x and "Workflow" in x][0]
 
-        # Initialize workflow
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*")
         print(f"Initializing {name}")
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*\n")
@@ -306,25 +391,511 @@ class BiaPy:
             self.cfg,
             self.job_identifier,
             self.device,
-            system_dict={
-                "cpu_budget": cpu_budget,
-                "cpu_per_rank": cpu_per_rank,
-                "main_threads": main_threads,
-                "num_workers_hint": num_workers,
-            },
-            args=self.args
+            system_dict=self._system_dict,
+            args=self.args,
         )
         self.workflow.log_timestamp = self.log_timestamp
 
+    def _null_sink(self):
+        """Lazily-opened /dev/null writer used to discard output (keeps a valid fileno)."""
+        if self._null_stream is None:
+            self._null_stream = open(os.devnull, "w")
+        return self._null_stream
+
+    def _route(self, mirror_console: bool):
+        """
+        Point stdout/stderr where output should go: to the console (plus the log file when
+        one exists) if ``mirror_console``, otherwise silently (log file only, or /dev/null
+        when no file is written).
+        """
+        log = self._stdout_log_file
+        if mirror_console:
+            extra = [log] if log is not None else []
+            sys.stdout = _Tee(sys.__stdout__, *extra)
+            sys.stderr = _Tee(sys.__stderr__, *extra)
+        else:
+            target = log if log is not None else self._null_sink()
+            sys.stdout = _Tee(target)
+            sys.stderr = _Tee(target)
+
+    @staticmethod
+    def _restore_std_streams():
+        """Give stdout/stderr back to the real console."""
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
+
+    @contextmanager
+    def _run_output(self, mirror_console: bool = True):
+        """
+        Route BiaPy's output for the duration of a run, restoring the previous streams after.
+
+        ``mirror_console`` shows the output on the console (and log file); when ``False`` the
+        run is silent (log file only, or discarded when no file is written).
+        """
+        prev_out, prev_err = sys.stdout, sys.stderr
+        self._route(mirror_console=mirror_console)
+        try:
+            yield
+        finally:
+            if self._stdout_log_file is not None:
+                self._stdout_log_file.flush()
+            sys.stdout, sys.stderr = prev_out, prev_err
+
+    def print_config(self):
+        """
+        Print the full resolved configuration of the workflow to the console.
+
+        This is the configuration dump that BiaPy prints automatically when run from the CLI;
+        through the Python API construction is quiet, so call this to inspect it on demand.
+        Use ``print(biapy)`` (or :meth:`__repr__`) for a short summary instead.
+        """
+        print("Configuration details:")
+        print(self.cfg)
+
+    @staticmethod
+    def _render_table(header: str, rows) -> str:
+        """Render a ``header`` plus aligned ``(label, value)`` rows as a boxed text block."""
+        rows = [(str(label), str(value)) for label, value in rows]
+        label_w = max((len(label) for label, _ in rows), default=0)
+        value_w = max((len(value) for _, value in rows), default=0)
+        width = max(len(header), label_w + 2 + value_w)
+        lines = [header, "=" * width]
+        lines += ["{}: {}".format(label.ljust(label_w), value) for label, value in rows]
+        return "\n".join(lines)
+
+    def _model_desc(self) -> str:
+        """Short model description: BMZ id, torchvision or BiaPy architecture (no details)."""
+        cfg = self.cfg
+        source = str(cfg.MODEL.SOURCE).lower()
+        if source == "bmz":
+            return "BMZ: {}".format(cfg.MODEL.BMZ.SOURCE_MODEL_ID)
+        if source == "torchvision":
+            return "torchvision: {}".format(cfg.MODEL.ARCHITECTURE)
+        return str(cfg.MODEL.ARCHITECTURE)
+
+    def _enabled_augmentations(self):
+        """List the augmentation toggles that are switched on (each has a sibling ``*_PROB``)."""
+        aug = self.cfg.AUGMENTOR
+        enabled = []
+        for key in aug.keys():
+            if isinstance(aug[key], bool) and aug[key] and (key + "_PROB") in aug:
+                enabled.append(key)
+        return enabled
+
+    def _enabled_postprocessing(self):
+        """List enabled TEST.POST_PROCESSING methods (top-level bools and nested ``.ENABLE`` groups)."""
+        pp = self.cfg.TEST.POST_PROCESSING
+        enabled = []
+        for key in pp.keys():
+            value = pp[key]
+            if isinstance(value, bool) and value:
+                enabled.append(key)
+            elif isinstance(value, CN) and bool(getattr(value, "ENABLE", False)):
+                enabled.append(key)
+        return enabled
+
+    def _device_desc(self) -> str:
+        """Human-readable compute target: GPU count and device, or CPU."""
+        num_gpus = int(getattr(self, "num_gpus", 0) or 0)
+        device = str(getattr(self, "device", "?"))
+        if num_gpus > 0:
+            return "{} GPU(s) [{}]".format(num_gpus, device)
+        return "CPU [{}]".format(device)
+
+    def _file_rows(self):
+        """Rows describing the files being written (empty when file writing is disabled)."""
+        if not self.save_files:
+            return [("Files", "disabled (save_files=False)")]
+        rows = []
+        if self._stdout_log_path:
+            rows.append(("Log file", str(self._stdout_log_path)))
+        if getattr(self, "cfg_file", None):
+            rows.append(("Config file", str(self.cfg_file)))
+        return rows
+
+    def _require_writable_output(self, action: str):
+        """Raise a clear error if ``action`` needs to write to disk but no output dir is available."""
+        if self._result_dir_provided and self.save_files:
+            return
+        reasons = []
+        if not self._result_dir_provided:
+            reasons.append("no 'result_dir' was provided")
+        if not self.save_files:
+            reasons.append("file writing is disabled (save_files=False)")
+        raise ValueError(
+            "{} needs to write files to disk, but {}. Rebuild the BiaPy object with "
+            "result_dir=... and save_files=True.".format(action, " and ".join(reasons))
+        )
+
+    def _task_requires_disk(self) -> bool:
+        """Workflows that must write intermediate files to complete (synapse detection, by-chunks)."""
+        cfg = self.cfg
+        if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and str(cfg.PROBLEM.INSTANCE_SEG.TYPE) == "synapses":
+            return True
+        if cfg.TEST.BY_CHUNKS.ENABLE:
+            return True
+        return False
+
+    def _summary(self) -> str:
+        """Build a human-readable, multi-line summary of the configured workflow."""
+        cfg = self.cfg
+
+        # Workflow class name (e.g. "Instance_Segmentation_Workflow"), falling back to PROBLEM.TYPE.
+        workflow_cls = type(getattr(self, "workflow", None)).__name__
+        if not getattr(self, "workflow", None):
+            workflow_cls = str(cfg.PROBLEM.TYPE)
+
+        # Enabled phases.
+        phases = []
+        if cfg.TRAIN.ENABLE:
+            phases.append("train")
+        if cfg.TEST.ENABLE:
+            phases.append("test")
+        phases = ", ".join(phases) if phases else "none"
+
+        rows = [
+            ("Job", "{} (run {})".format(self.args.name, self.args.run_id)),
+            ("Workflow", "{}  [{}]".format(cfg.PROBLEM.TYPE, workflow_cls)),
+            ("Dimensions", str(cfg.PROBLEM.NDIM)),
+            ("Patch size", str(tuple(cfg.DATA.PATCH_SIZE))),
+            ("Classes", str(cfg.DATA.N_CLASSES)),
+            ("Model", self._model_desc()),
+            ("Phases enabled", phases),
+        ]
+
+        # Checkpoint that will be / was loaded (useful after load_workflow_from_model).
+        if cfg.MODEL.LOAD_CHECKPOINT and cfg.PATHS.CHECKPOINT_FILE:
+            rows.append(("Checkpoint", str(cfg.PATHS.CHECKPOINT_FILE)))
+
+        rows.append(("Device", self._device_desc()))
+        rows.append(("BiaPy version", str(biapy.__version__)))
+        return self._render_table("BiaPy workflow", rows)
+
+    def print_train_info(self):
+        """
+        Print a concise overview of the training configuration.
+
+        Shows the model (without architecture details) and its source, the patch size, the
+        compute device(s), number of epochs, learning rate, optimizer, batch size and the
+        enabled augmentations. Use :meth:`print_config` for the full configuration dump.
+        """
+        cfg = self.cfg
+        augs = self._enabled_augmentations()
+        if not cfg.AUGMENTOR.ENABLE:
+            augs_desc = "disabled"
+        elif augs:
+            augs_desc = "{} ({})".format(len(augs), ", ".join(augs))
+        else:
+            augs_desc = "enabled (none selected)"
+
+        # LR / optimizer are stored as single-element lists in the config.
+        lr = cfg.TRAIN.LR[0] if isinstance(cfg.TRAIN.LR, (list, tuple)) and cfg.TRAIN.LR else cfg.TRAIN.LR
+        optimizer = (
+            cfg.TRAIN.OPTIMIZER[0]
+            if isinstance(cfg.TRAIN.OPTIMIZER, (list, tuple)) and cfg.TRAIN.OPTIMIZER
+            else cfg.TRAIN.OPTIMIZER
+        )
+        scheduler = cfg.TRAIN.LR_SCHEDULER.NAME if cfg.TRAIN.LR_SCHEDULER.NAME else "none"
+
+        rows = [
+            ("Enabled", str(cfg.TRAIN.ENABLE)),
+            ("Model", self._model_desc()),
+            ("Model source", str(cfg.MODEL.SOURCE)),
+            ("Patch size", str(tuple(cfg.DATA.PATCH_SIZE))),
+            ("Device", self._device_desc()),
+            ("Epochs", str(cfg.TRAIN.EPOCHS)),
+            ("Batch size", str(cfg.TRAIN.BATCH_SIZE)),
+            ("Learning rate", str(lr)),
+            ("Optimizer", str(optimizer)),
+            ("LR scheduler", str(scheduler)),
+            ("Patience", str(cfg.TRAIN.PATIENCE)),
+            ("Train data", str(cfg.DATA.TRAIN.PATH)),
+            ("Augmentations", augs_desc),
+        ]
+        rows += self._file_rows()
+        print(self._render_table("BiaPy training configuration", rows))
+
+    def print_test_info(self):
+        """
+        Print a concise overview of the inference/test configuration.
+
+        Shows the test data path, whether ground truth is provided, the patch overlap and
+        padding used to stitch predictions, and the enabled post-processing methods. Use
+        :meth:`print_config` for the full configuration dump.
+        """
+        cfg = self.cfg
+        load_gt = bool(cfg.DATA.TEST.LOAD_GT)
+        gt_desc = "yes ({})".format(cfg.DATA.TEST.GT_PATH) if load_gt else "no"
+
+        pp = self._enabled_postprocessing()
+        pp_desc = ", ".join(pp) if pp else "none"
+
+        rows = [
+            ("Enabled", str(cfg.TEST.ENABLE)),
+            ("Test data", str(cfg.DATA.TEST.PATH)),
+            ("Ground truth", gt_desc),
+            ("Patch size", str(tuple(cfg.DATA.PATCH_SIZE))),
+            ("Overlap", str(tuple(cfg.DATA.TEST.OVERLAP))),
+            ("Padding", str(tuple(cfg.DATA.TEST.PADDING))),
+            ("Device", self._device_desc()),
+            ("Post-processing", pp_desc),
+        ]
+        rows += self._file_rows()
+        print(self._render_table("BiaPy test configuration", rows))
+
+    def update_config(
+        self,
+        updates: Optional[dict] = None,
+        check: bool = False,
+        rebuild: bool = True,
+        **kwargs,
+    ):
+        """
+        Update configuration values on an already-built :class:`BiaPy` instance.
+
+        Values are applied in place to :attr:`cfg` (the workflow shares the same object), so
+        this is the way to tweak the configuration after construction, e.g. to enable a phase
+        or change training hyper-parameters before calling :meth:`train` / :meth:`test`.
+
+        By default the workflow is **rebuilt** afterwards (see ``rebuild``). This matters
+        because the workflow object decides a lot of state from the configuration at
+        construction time and then freezes ``cfg`` (dimensionality, resolution, axes order,
+        post-processing flags, checkpoint consistency, metrics, ...). Editing ``cfg`` alone
+        would leave that cached state stale, so a structural change (``PROBLEM.*``, ``MODEL.*``,
+        ``DATA.PATCH_SIZE``, ``DATA.N_CLASSES``, ``TEST.POST_PROCESSING.*``, ...) could crash
+        later. Rebuilding re-derives it from the new configuration.
+
+        Parameters
+        ----------
+        updates : dict, optional
+            Mapping of dotted config keys to values, e.g.
+            ``{"TRAIN.ENABLE": True, "TRAIN.EPOCHS": 100}``.
+
+        check : bool, optional
+            When ``True``, re-run :func:`check_configuration` after applying the changes so
+            inconsistencies are reported immediately. Defaults to ``False``. Note that
+            rebuilding the workflow (the default) already re-validates a good part of the
+            configuration.
+
+        rebuild : bool, optional
+            When ``True`` (default), rebuild the workflow object so its construction-time
+            cached state reflects the new configuration. Set to ``False`` only for changes you
+            know are read fresh at run time (e.g. ``TRAIN.EPOCHS``, ``TRAIN.LR``, data paths)
+            to avoid the cost of reconstruction (which also drops any already-prepared model).
+
+        kwargs : optional
+            Convenience form where ``__`` in a keyword is turned into ``.`` (e.g.
+            ``TRAIN__EPOCHS=100`` is ``"TRAIN.EPOCHS"``).
+
+        Returns
+        -------
+        CfgNode
+            The updated configuration (also available as :attr:`cfg`).
+
+        Notes
+        -----
+        ``SYSTEM.*`` options (GPUs, CPUs, seed, distributed backend) and the compute device
+        are resolved once when the :class:`BiaPy` object is created, before the workflow
+        exists, so they cannot be changed here — build a new ``BiaPy(config, gpu=...)`` for
+        that. The training/test data pipelines themselves are built lazily inside
+        :meth:`train` / :meth:`test`, so enabling a phase and pointing it at the data is
+        enough to run it.
+        """
+        merged = dict(updates) if updates else {}
+        for key, value in kwargs.items():
+            merged[key.replace("__", ".")] = value
+        if not merged:
+            return self.cfg
+
+        # SYSTEM.* / device are fixed at object creation and can't be reflected by rebuilding
+        # only the workflow, so reject them instead of silently ignoring the change.
+        process_keys = [k for k in merged if str(k).split(".")[0] == "SYSTEM"]
+        if process_keys:
+            raise ValueError(
+                "SYSTEM.* options (GPUs, CPUs, seed, distributed backend) are decided when the "
+                "BiaPy object is created and cannot be changed with update_config (offending "
+                "keys: {}). Build a new BiaPy(config, gpu=..., ...) instead.".format(
+                    ", ".join(sorted(process_keys))
+                )
+            )
+
+        opts = []
+        for key, value in merged.items():
+            opts.extend([key, value])
+
+        was_frozen = self.cfg.is_frozen()
+        self.cfg.defrost()
+        try:
+            # merge_from_list validates key names/types and raises a clear error on typos.
+            self.cfg.merge_from_list(opts)
+            update_dependencies(self.cfg)
+            if check:
+                check_configuration(self.cfg, self.job_identifier)
+            if rebuild:
+                # Rebuild the workflow so its cached construction-time state matches the new
+                # config (quiet unless verbose, like the initial build).
+                with self._run_output(mirror_console=self.verbose):
+                    self._build_workflow()
+        finally:
+            # The workflow build usually freezes cfg, but not every workflow does.
+            if was_frozen and not self.cfg.is_frozen():
+                self.cfg.freeze()
+        return self.cfg
+
+    def __repr__(self) -> str:
+        """Return a readable summary of the workflow instead of the default object id."""
+        return self._summary()
+
+    def __str__(self) -> str:
+        """Return the same readable summary as :meth:`__repr__`."""
+        return self._summary()
+
+    @staticmethod
+    def _load_raw_config(config: Union[str, dict, CN]) -> dict:
+        """Return the raw config as a plain dict from a YAML path, a dict or a CfgNode."""
+        if isinstance(config, CN):
+            return yaml.safe_load(config.dump())
+        if isinstance(config, dict):
+            return copy.deepcopy(config)
+        if isinstance(config, str):
+            if not os.path.exists(config):
+                raise FileNotFoundError("Provided {} config file does not exist".format(config))
+            with open(config, "r", encoding="utf8") as stream:
+                try:
+                    cfg_content = stream.read()
+                    if "\t" in cfg_content:
+                        cfg_content = cfg_content.replace("\t", "  ")
+                    return yaml.safe_load(cfg_content)
+                except yaml.YAMLError as exc:
+                    raise ValueError(
+                        "Error reading the configuration file. Please check the file format: {}".format(exc)
+                    )
+        raise TypeError(
+            "'config' must be a path to a YAML file (str), a dict or a YACS CfgNode. Provided: {}".format(type(config))
+        )
+
+    @classmethod
+    def _config_from_checkpoint(cls, source: str) -> dict:
+        """
+        Rebuild an inference configuration dict from a BiaPy model checkpoint path.
+
+        A ``.pth`` embeds the configuration (``checkpoint["cfg"]``); it is filtered to the
+        current schema (dropping runtime-derived keys and stale ``PATHS``) and switched to
+        inference (test enabled, training disabled, checkpoint loaded). ``.safetensors`` has
+        no embedded config and is rejected.
+        """
+        if source.endswith(".safetensors"):
+            raise ValueError(
+                "'.safetensors' checkpoints do not embed the BiaPy configuration, so the "
+                "workflow cannot be inferred from them. Build the configuration explicitly with "
+                "build_config(...) and pass it to BiaPy(...) (with the checkpoint in "
+                "'PATHS.CHECKPOINT_FILE' and 'MODEL.LOAD_CHECKPOINT' enabled)."
+            )
+        if not os.path.isfile(source):
+            raise FileNotFoundError("Checkpoint file not found: {}".format(source))
+
+        from functools import partial as _partial
+        from biapy.config.config import Config as _Config
+
+        torch.serialization.add_safe_globals([CN, set, _partial, torch.nn.modules.normalization.LayerNorm])
+        checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+        if "cfg" not in checkpoint:
+            raise ValueError(
+                "Checkpoint '{}' does not embed a BiaPy configuration; the workflow cannot be "
+                "rebuilt from it. Build the configuration explicitly with build_config(...) and "
+                "pass it to BiaPy(...) instead.".format(source)
+            )
+
+        defaults = _Config("load_workflow", "load_workflow").get_cfg_defaults()
+        cfg_dict = _filter_cfg_to_schema(cls._load_raw_config(checkpoint["cfg"]), defaults)
+        # Drop the embedded PATHS (they point to the original training job) so they are
+        # re-derived from the new result_dir/name at construction time.
+        cfg_dict.pop("PATHS", None)
+        _deep_merge(
+            cfg_dict,
+            {
+                "TRAIN": {"ENABLE": False},
+                "TEST": {"ENABLE": True},
+                "DATA": {"TEST": {"LOAD_GT": False, "USE_VAL_AS_TEST": False}},
+                "MODEL": {"SOURCE": "biapy", "LOAD_CHECKPOINT": True},
+                "PATHS": {"CHECKPOINT_FILE": source},
+            },
+        )
+        return cfg_dict
+
+    @classmethod
+    def load_workflow_from_model(cls, source: str, **run_kwargs):
+        """
+        Build a ready-to-infer :class:`BiaPy` from a trained model, inferring the workflow.
+
+        The workflow (and the rest of the configuration) is recovered automatically from the
+        ``source``:
+
+        - A BiaPy ``.pth`` checkpoint: the configuration is embedded inside it, so the whole
+          workflow is rebuilt from it (handled by the constructor).
+        - A BioImage Model Zoo id/nickname: the workflow and dimensionality are inferred from
+          the model's RDF via :func:`biapy.models.check_bmz_args`.
+
+        A ``.safetensors`` checkpoint does not embed the configuration; build it explicitly with
+        :func:`build_config` and pass it to :class:`BiaPy` instead.
+
+        Parameters
+        ----------
+        source : str
+            Path to a ``.pth`` BiaPy checkpoint, or a BMZ model id/nickname.
+
+        run_kwargs : dict, optional
+            Extra run arguments forwarded to the constructor (``result_dir``, ``name``,
+            ``gpu``, ...).
+
+        Returns
+        -------
+        BiaPy
+            A test-enabled BiaPy instance ready to run :meth:`predict`.
+        """
+        # File checkpoints ('.pth' / '.safetensors') are handled by the constructor directly.
+        if isinstance(source, str) and (source.endswith(".pth") or source.endswith(".safetensors")):
+            return cls(source, **run_kwargs)
+
+        # Otherwise treat 'source' as a BMZ id/nickname and infer the workflow from its RDF.
+        from biapy.models import check_bmz_args
+
+        _, _, workflow_info = check_bmz_args(source)
+        workflow = workflow_info.get("workflow_type")
+        if not workflow:
+            raise ValueError(
+                "Could not infer the workflow from the BMZ model '{}'. Build the configuration "
+                "explicitly with build_config(...) and pass it to BiaPy(...).".format(source)
+            )
+        cfg_dict = {
+            "PROBLEM": {"TYPE": workflow, "NDIM": workflow_info.get("ndim", "2D")},
+            "MODEL": {"SOURCE": "bmz", "BMZ": {"SOURCE_MODEL_ID": source}},
+            "TRAIN": {"ENABLE": False},
+            "TEST": {"ENABLE": True},
+            "DATA": {"TEST": {"LOAD_GT": False, "USE_VAL_AS_TEST": False}},
+        }
+        return cls(cfg_dict, **run_kwargs)
+
     def train(self):
         """Call training phase."""
+        # Training always writes checkpoints and logs, so a writable output dir is mandatory.
+        self._require_writable_output("Training")
         if is_dist_avail_and_initialized():
             setup_for_distributed(is_main_process())
 
         if self.cfg.TRAIN.ENABLE:
-            self.workflow.train()
+            with self._run_output():
+                self.workflow.train()
         else:
-            raise ValueError("Train was not enabled ('TRAIN.ENABLE')")
+            raise ValueError(
+                "Training is not enabled ('TRAIN.ENABLE' is False), so train() cannot run. "
+                "This usually means the instance was built for inference (e.g. via "
+                "BiaPy.load_workflow_from_model). Enable training and point it at your data, e.g.:\n"
+                "    biapy.update_config({'TRAIN.ENABLE': True, "
+                "'DATA.TRAIN.PATH': '/path/to/x', 'DATA.TRAIN.GT_PATH': '/path/to/y'})\n"
+                "Then call biapy.train(). See biapy.print_train_info() for the current training "
+                "settings."
+            )
 
         if is_dist_avail_and_initialized():
             setup_for_distributed(True)
@@ -333,22 +904,106 @@ class BiaPy:
 
     def test(self):
         """Call test phase."""
+        # test() writes its results (metrics, output images) to disk, so it needs an output dir.
+        self._require_writable_output("Testing")
         if is_dist_avail_and_initialized():
             setup_for_distributed(is_main_process())
 
         if self.cfg.TEST.ENABLE:
-            self.workflow.test()
+            with self._run_output():
+                self.workflow.test()
         else:
-            raise ValueError("Test was not enabled ('TEST.ENABLE')")
+            raise ValueError(
+                "Testing is not enabled ('TEST.ENABLE' is False), so test() cannot run. "
+                "Enable it and point it at your data, e.g.:\n"
+                "    biapy.update_config({'TEST.ENABLE': True, 'DATA.TEST.PATH': '/path/to/x'})\n"
+                "Then call biapy.test(). See biapy.print_test_info() for the current test settings."
+            )
 
         # if is_dist_avail_and_initialized():
         #     setup_for_distributed(True)
         #     print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
         #     self.wait_and_stop_ddp()
 
-    def prepare_model(self):
-        """Build up the model based on the selected configuration."""
-        self.workflow.prepare_model()
+    def predict(self, image, gt=None, return_prediction=True, verbose=False):
+        """
+        Run inference over an in-memory image (NumPy array) without writing it to disk.
+
+        The model is prepared automatically if it has not been loaded yet.
+
+        Parameters
+        ----------
+        image : NDArray
+            Input image to predict over. Reshaped internally to BiaPy's expected layout
+            (``(Y, X, C)`` in 2D, ``(Z, Y, X, C)`` in 3D).
+
+        gt : NDArray, optional
+            Ground truth associated to ``image``. Only used when metrics are requested
+            (``DATA.TEST.LOAD_GT`` enabled).
+
+        return_prediction : bool, optional
+            When ``True`` (default), the produced prediction is returned as a NumPy array
+            and nothing is written to disk. When ``False``, the normal on-disk outputs are
+            produced and ``None`` is returned.
+
+        verbose : bool, optional
+            When ``True``, show BiaPy's inference output on the console. Defaults to ``False``
+            so repeated predictions stay quiet (output still goes to the log file if enabled).
+
+        Returns
+        -------
+        NDArray or None
+            The predicted output array (batch axis dropped for the single image) when
+            ``return_prediction`` is ``True``, otherwise ``None``.
+        """
+        # Output-dir requirements: writing results to disk (return_prediction=False) or a
+        # workflow that must write intermediate files (synapse detection / by-chunks).
+        if not return_prediction:
+            self._require_writable_output("predict(return_prediction=False)")
+        elif self._task_requires_disk():
+            self._require_writable_output("This workflow (synapse detection / by-chunks)")
+
+        was_frozen = self.cfg.is_frozen()
+        self.cfg.defrost()
+        self.cfg.merge_from_list(["TEST.ENABLE", True, "TEST.BY_CHUNKS.ENABLE", False])
+        if was_frozen:
+            self.cfg.freeze()
+
+        prev_return = self.workflow.return_prediction
+        prev_save = self.workflow.save_to_disk
+        self.workflow.return_prediction = bool(return_prediction)
+        self.workflow.save_to_disk = not bool(return_prediction)
+        self.workflow._predictions = []
+
+        try:
+            with self._run_output(mirror_console=verbose):
+                if not self.workflow.model_prepared:
+                    self.workflow.prepare_model()
+                self.workflow.test(image=image, gt=gt)
+        finally:
+            self.workflow.return_prediction = prev_return
+            self.workflow.save_to_disk = prev_save
+
+        if not return_prediction:
+            return None
+
+        preds = self.workflow._predictions
+        if not preds:
+            print("WARNING: 'predict' did not capture any prediction to return.")
+            return None
+
+        chosen = None
+        for role in ("post", "raw"):
+            match = [e["data"] for e in preds if e.get("role") == role]
+            if match:
+                chosen = match[-1]
+                break
+        if chosen is None:
+            chosen = preds[-1]["data"]
+
+        if isinstance(chosen, np.ndarray) and chosen.ndim >= 1 and chosen.shape[0] == 1:
+            chosen = chosen[0]
+        return chosen
 
     def export_model_to_bmz(
         self,
@@ -435,6 +1090,8 @@ class BiaPy:
             was previously loaded from BMZ.
 
         """
+        # Exporting builds a package on disk, so writing must be enabled and an output dir set.
+        self._require_writable_output("Exporting a model to BMZ")
         if not is_main_process():
             return
 
@@ -465,7 +1122,7 @@ class BiaPy:
         # Check if BiaPy has been run so some of the variables have been created
         if not self.workflow.model_prepared:
             raise ValueError(
-                "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
+                "You need first to call train(), test() or run_job() functions so the model can be built"
             )
         
         if not reuse_original_bmz_config:
@@ -474,7 +1131,7 @@ class BiaPy:
             if "original_bmz_config" not in self.workflow.bmz_config:
                 if "collected_sources" not in self.workflow.bmz_config:
                     raise ValueError(
-                        "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
+                        "You need first to call train(), test() or run_job() functions so the model can be built"
                     )
 
                 if self.workflow.checkpoint_path is None:
@@ -1279,3 +1936,140 @@ class BiaPy:
             self._stdout_log_file.flush()
             self._stdout_log_file.close()
             self._stdout_log_file = None
+        if self._null_stream is not None:
+            self._null_stream.close()
+            self._null_stream = None
+
+
+# Workflows accepted by ``build_config`` (must match the values validated in
+# ``biapy.engine.check_configuration``).
+VALID_WORKFLOWS = [
+    "SEMANTIC_SEG",
+    "INSTANCE_SEG",
+    "CLASSIFICATION",
+    "DETECTION",
+    "DENOISING",
+    "SUPER_RESOLUTION",
+    "SELF_SUPERVISED",
+    "IMAGE_TO_IMAGE",
+]
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge ``override`` into ``base`` in-place (nested dicts merged) and return ``base``."""
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
+def _filter_cfg_to_schema(cfg_dict: dict, schema: CN) -> dict:
+    """
+    Keep only the keys of ``cfg_dict`` that exist in the ``schema`` CfgNode (recursively).
+
+    Used to drop runtime-derived keys (e.g. ``PATHS.TEST_FULL_GT_H5``) that a saved config
+    embeds but that are not part of the default configuration schema, so it can be merged
+    back cleanly.
+    """
+    out = {}
+    for k, v in cfg_dict.items():
+        if k not in schema:
+            continue
+        sv = schema[k]
+        if isinstance(v, dict) and isinstance(sv, CN):
+            out[k] = _filter_cfg_to_schema(v, sv)
+        else:
+            out[k] = v
+    return out
+
+
+def build_config(
+    workflow: str,
+    dims: str,
+    phase: str = "both",
+    patch_size: Optional[tuple] = None,
+    model: Optional[dict] = None,
+    train_data: Optional[dict] = None,
+    val_data: Optional[dict] = None,
+    test_data: Optional[dict] = None,
+    extra_config: Optional[dict] = None,
+) -> dict:
+    """
+    Build a BiaPy config-overrides dict from high-level arguments, ready to pass to :class:`BiaPy`.
+
+    The returned dict only contains the keys derived from the arguments and is merged on top
+    of the BiaPy defaults by :class:`BiaPy`. Only the minimal inputs are validated here; the
+    full validation still happens at construction time via ``check_configuration``.
+
+    Parameters
+    ----------
+    workflow : str
+        Workflow/problem type (maps to ``PROBLEM.TYPE``). One of ``SEMANTIC_SEG``,
+        ``INSTANCE_SEG``, ``CLASSIFICATION``, ``DETECTION``, ``DENOISING``,
+        ``SUPER_RESOLUTION``, ``SELF_SUPERVISED``, ``IMAGE_TO_IMAGE`` (case-insensitive).
+
+    dims : str
+        Data dimensionality, ``2D`` or ``3D`` (maps to ``PROBLEM.NDIM``).
+
+    phase : str, optional
+        Phases to enable: ``train``, ``test`` or ``both`` (default). Maps to
+        ``TRAIN.ENABLE`` / ``TEST.ENABLE``.
+
+    patch_size : tuple, optional
+        Patch size, e.g. ``(256, 256, 1)`` in 2D. Maps to ``DATA.PATCH_SIZE``.
+
+    model, train_data, val_data, test_data : dict, optional
+        Settings whose keys are upper-cased onto ``MODEL``, ``DATA.TRAIN``, ``DATA.VAL`` and
+        ``DATA.TEST`` respectively, e.g. ``model={"architecture": "unet"}``.
+
+    extra_config : dict, optional
+        Escape hatch of raw (upper-case) config keys, deep-merged last, able to override
+        anything set above (e.g. ``{"TRAIN": {"EPOCHS": 100}}``).
+
+    Returns
+    -------
+    dict
+        Configuration overrides ready to be passed to :class:`BiaPy`.
+    """
+    workflow = str(workflow).upper()
+    if workflow not in VALID_WORKFLOWS:
+        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
+
+    dims = str(dims).upper()
+    if dims not in ["2D", "3D"]:
+        raise ValueError("'dims' must be either '2D' or '3D'. Provided: {}".format(dims))
+
+    phase = str(phase).lower()
+    if phase not in ["train", "test", "both"]:
+        raise ValueError("'phase' must be one of ['train', 'test', 'both']. Provided: {}".format(phase))
+
+    def _upper_keys(d: dict) -> dict:
+        return {str(k).upper(): v for k, v in d.items()}
+
+    cfg: dict = {
+        "PROBLEM": {"TYPE": workflow, "NDIM": dims},
+        "TRAIN": {"ENABLE": phase in ("train", "both")},
+        "TEST": {"ENABLE": phase in ("test", "both")},
+    }
+
+    if patch_size is not None:
+        cfg.setdefault("DATA", {})["PATCH_SIZE"] = tuple(patch_size)
+
+    if model:
+        cfg["MODEL"] = _upper_keys(model)
+
+    if train_data or val_data or test_data:
+        data_node = cfg.setdefault("DATA", {})
+        if train_data:
+            data_node["TRAIN"] = _upper_keys(train_data)
+        if val_data:
+            data_node["VAL"] = _upper_keys(val_data)
+        if test_data:
+            data_node["TEST"] = _upper_keys(test_data)
+
+    if extra_config:
+        _deep_merge(cfg, copy.deepcopy(extra_config))
+
+    return cfg

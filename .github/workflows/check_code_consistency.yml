@@ -23,7 +23,12 @@ jobs:
       run: pip install --editable .
     - name: Installing dependencies for the run_checks.py script
       run: pip install gdown
-    - name: Checking BiaPy code consistency 
+    - name: Checking BiaPy code consistency
       run: |
           mkdir biapy_checks
-          python -u biapy/utils/scripts/run_checks.py --out_folder biapy_checks --gpus "0,1"
+          python -u tests/run_checks.py --out_folder biapy_checks --gpus "0,1"
+    - name: Checking BiaPy Python API (build_config / predict)
+      if: always()
+      run: |
+          mkdir -p biapy_checks
+          python -u tests/check_api.py --out_folder biapy_checks --gpu "0"
