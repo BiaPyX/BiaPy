@@ -178,7 +178,6 @@ class Config:
         #           - 'raw': to leave the distances as they are calculated.
         #           - 'norm': to normalize the distances per cell to [0, 1] (boundary → 0, innermost pixel → 1).
         #           - 'discretize': to discretize the distances into bins.
-        #       - 'bin_size': float, size of each bin when 'val_type' is 'discretize'. Default: 0.1
         #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected.
         #          Options are: '', 'linear' and 'sigmoid'. Default: ''.
         #       - 'mask_values': bool, kept for compatibility but superseded: the loss mask prefers a binary foreground channel

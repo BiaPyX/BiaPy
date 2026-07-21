@@ -250,75 +250,76 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
         if self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO != []:
             set_model_output_channels = False
-            self.model_output_channels = list(self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
-            self.model_output_channel_info = [""] * len(self.model_output_channels)
+            # CHANNELS_PER_HEAD_INFO groups the DATA_CHANNELS (logical channels) into output heads: each entry
+            # is the number of DATA_CHANNELS assigned to a head, so it sums to the number of DATA_CHANNELS (see
+            # check_configuration). A single DATA_CHANNEL may expand into several physical output channels
+            # (e.g. "Db" discretized into 11 bins, "A" into its affinities, "R" into its rays, "E_*" into its
+            # dimensions), so the physical output-channel count per head (model_output_channels) is computed
+            # here by expanding each DATA_CHANNEL into its sub-channels and accumulating them onto its head.
+            channels_per_head = list(self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
+            self.model_output_channels = [0] * len(channels_per_head)
+            self.model_output_channel_info = [""] * len(channels_per_head)
 
-            # Cumulative output-channel boundaries to map output channel index → head index
+            # Cumulative DATA_CHANNEL (logical) boundaries to map a DATA_CHANNEL index → head index
             head_boundaries = []
             cumulative = 0
-            for h in self.model_output_channels:
+            for h in channels_per_head:
                 cumulative += h
                 head_boundaries.append(cumulative)
 
-            def _head_for(out_ch, channel_label):
-                h = next((k for k, b in enumerate(head_boundaries) if out_ch < b), None)
+            def _head_for(logical_ch, channel_label):
+                h = next((k for k, b in enumerate(head_boundaries) if logical_ch < b), None)
                 if h is None:
                     total = head_boundaries[-1] if head_boundaries else 0
                     raise ValueError(
-                        f"Output channel index {out_ch} (while mapping '{channel_label}') exceeds the "
-                        f"total channels declared in CHANNELS_PER_HEAD_INFO ({total}). "
-                        f"Make sure CHANNELS_PER_HEAD_INFO sums to the actual number of output channels "
-                        f"produced by DATA_CHANNELS."
+                        f"DATA_CHANNEL index {logical_ch} (while mapping '{channel_label}') exceeds the "
+                        f"total DATA_CHANNELS declared in CHANNELS_PER_HEAD_INFO ({total}). "
+                        f"Make sure CHANNELS_PER_HEAD_INFO sums to the number of DATA_CHANNELS."
                     )
                 return h
 
-            out_ch = 0  # current output channel index
+            logical_ch = 0  # current DATA_CHANNEL index
             for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                if channel == "I":
-                    # Virtual channel: the generator regenerates the flows from it and drops it before the
-                    # batch reaches the model, so it consumes no output channel and maps to no head.
+                if channel in ["I", "We"]:
+                    # Virtual channels: "I" is used by the generator to regenerate the flows and dropped before
+                    # the batch reaches the model; "We" is an extra weight map. Neither is predicted, so they
+                    # consume no output channel and map to no head (consistent with the activations loop below).
                     continue
-                if channel in ["Db", "A", "R", "E_offset", "E_sigma"]:
-                    if channel == "A":
-                        z_affinities = dst.get("A", {}).get("z_affinities", [1])
-                        for j in range(len(z_affinities)):
-                            h = _head_for(out_ch, channel + "z_{}".format(z_affinities[j]))
-                            self.model_output_channel_info[h] += "+" + channel + "z_{}".format(z_affinities[j])
-                            out_ch += 1
-                        y_affinities = dst.get("A", {}).get("y_affinities", [1])
-                        for j in range(len(y_affinities)):
-                            h = _head_for(out_ch, channel + "y_{}".format(y_affinities[j]))
-                            self.model_output_channel_info[h] += "+" + channel + "y_{}".format(y_affinities[j])
-                            out_ch += 1
-                        x_affinities = dst.get("A", {}).get("x_affinities", [1])
-                        for j in range(len(x_affinities)):
-                            h = _head_for(out_ch, channel + "x_{}".format(x_affinities[j]))
-                            self.model_output_channel_info[h] += "+" + channel + "x_{}".format(x_affinities[j])
-                            out_ch += 1
-                    elif channel == "R":
-                        for j in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
-                            h = _head_for(out_ch, channel + "_{}".format(j))
-                            self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
-                            out_ch += 1
-                    elif channel in ["E_offset", "E_sigma"]:
-                        for j in range(self.dims):
-                            h = _head_for(out_ch, channel + "_{}".format(j))
-                            self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
-                            out_ch += 1
-                    elif channel == "Db":
-                        if dst.get(channel, {}).get("val_type", "norm") == "discretize":
-                            for j in range(11):  # Default 10 bins + background
-                                h = _head_for(out_ch, channel + "_bin{}".format(j))
-                                self.model_output_channel_info[h] += "+" + channel + "_bin{}".format(j)
-                                out_ch += 1
-                        else:
-                            h = _head_for(out_ch, channel)
-                            self.model_output_channel_info[h] += "+" + channel
-                            out_ch += 1
+                # A DATA_CHANNEL maps to a single head; all of its physical sub-channels go to that head.
+                h = _head_for(logical_ch, channel)
+                if channel == "A":
+                    z_affinities = dst.get("A", {}).get("z_affinities", [1])
+                    for j in range(len(z_affinities)):
+                        self.model_output_channel_info[h] += "+" + channel + "z_{}".format(z_affinities[j])
+                        self.model_output_channels[h] += 1
+                    y_affinities = dst.get("A", {}).get("y_affinities", [1])
+                    for j in range(len(y_affinities)):
+                        self.model_output_channel_info[h] += "+" + channel + "y_{}".format(y_affinities[j])
+                        self.model_output_channels[h] += 1
+                    x_affinities = dst.get("A", {}).get("x_affinities", [1])
+                    for j in range(len(x_affinities)):
+                        self.model_output_channel_info[h] += "+" + channel + "x_{}".format(x_affinities[j])
+                        self.model_output_channels[h] += 1
+                elif channel == "R":
+                    for j in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
+                        self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
+                        self.model_output_channels[h] += 1
+                elif channel in ["E_offset", "E_sigma"]:
+                    for j in range(self.dims):
+                        self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
+                        self.model_output_channels[h] += 1
+                elif channel == "Db":
+                    if dst.get(channel, {}).get("val_type", "norm") == "discretize":
+                        for j in range(11):  # Default 10 bins + background
+                            self.model_output_channel_info[h] += "+" + channel + "_bin{}".format(j)
+                            self.model_output_channels[h] += 1
+                    else:
+                        self.model_output_channel_info[h] += "+" + channel
+                        self.model_output_channels[h] += 1
                 else:
-                    h = _head_for(out_ch, channel)
                     self.model_output_channel_info[h] += "+" + channel
-                    out_ch += 1
+                    self.model_output_channels[h] += 1
+                logical_ch += 1
         else:
             self.model_output_channels = [0]
             self.model_output_channel_info = [""]

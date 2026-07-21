@@ -2292,8 +2292,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 for line in self.test_metrics_message.split("\n"):
                     print(line)
             df_metrics = pd.DataFrame(self.metrics_per_test_file)
-            os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
             if self.save_to_disk:
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
                 df_metrics.to_csv(
                     os.path.join(
                         self.cfg.PATHS.RESULT_DIR.PATH,

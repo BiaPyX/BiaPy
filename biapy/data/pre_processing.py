@@ -1166,7 +1166,7 @@ def labels_into_channels(
                 instances,
             )
             if val_type == "discretize":
-                db_dis_bin_size = channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                db_dis_bin_size = 0.1
                 db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
             
                 db_channel = np.clip(db_channel, 0.0, 1.0)

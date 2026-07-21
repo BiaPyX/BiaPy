@@ -525,8 +525,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # Db — boundary distance-to-boundary
             if "Db" in chs:
                 if "Db" in dst:
-                    assert [x for x in dst["Db"].keys() if x not in ["val_type", "bin_size", "act", "mask_values"]] == [], (
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'Db' can only have 'val_type', 'bin_size', 'act' and 'mask_values' keys"
+                    assert [x for x in dst["Db"].keys() if x not in ["val_type", "act", "mask_values"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'Db' can only have 'val_type', 'act' and 'mask_values' keys"
                     )
                 val_type = dst.get("Db", {}).get("val_type", 'norm')
                 act = dst.get("Db", {}).get("act", "")
@@ -534,7 +534,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     act = "sigmoid"
                 dst["Db"] = {
                     "val_type": val_type,
-                    "bin_size": dst.get("Db", {}).get("bin_size", 0.1),
                     "act": act,
                     "mask_values": dst.get("Db", {}).get("mask_values", True),
                 }
@@ -1622,7 +1621,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
                     if val["val_type"] == "discretize":
                         assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db"}, "'Db' channel must be the only one used when 'val_type' is 'discretize'"
-                    _assert_float(val, "bin_size", ctx, min_val=0.0)
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
                     _assert_bool(val, "mask_values", ctx)
                 elif key == "Dc":  # distance-to-centroid

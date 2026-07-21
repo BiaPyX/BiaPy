@@ -381,7 +381,7 @@ class multiple_metrics:
                     assert self.channel_extra_opts is not None and "Db" in self.channel_extra_opts, "Distance to border channel options must be provided."
                     db_val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
                     if db_val_type == "discretize":
-                        db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                        db_dis_bin_size = 0.1
                         db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
                         db_channels = db_dis_K + 1   
                     else:
@@ -1608,7 +1608,7 @@ class instance_segmentation_loss:
                 elif channel == "Db":
                     val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
                     if val_type == "discretize":
-                        db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                        db_dis_bin_size = 0.1
                         db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
                         db_channels = db_dis_K + 1   
                     else:
