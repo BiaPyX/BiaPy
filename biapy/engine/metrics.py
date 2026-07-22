@@ -2346,27 +2346,35 @@ class SpatialEmbLoss(nn.Module):
 
     def __init__(
         self,
-        patch_size: List[int] = [32, 1024, 1024], 
+        patch_size: List[int] = [32, 1024, 1024],
         anisotropy: List[float | int] = [1,1,1],
-        ndims: int = 2, 
+        ndims: int = 2,
         center_mode: str = "centroid",      # "centroid" or "medoid"
         medoid_max_points: Optional[int] = 10000,  # cap to avoid O(N^2) on huge objects
         channel_weights: List[float] = [1.0, 1.0, 1.0, 1.0],
+        grid_size: int = 1024,
     ):
         super().__init__()
 
         self.ndims = ndims
         self.center_mode = center_mode
         self.medoid_max_points = medoid_max_points
-        
-        # Grid sizes (used to build the coordinate map buffer; sliced to input size on forward)
-        grid_z = patch_size[0] if ndims == 3 else 1
-        grid_y = patch_size[-3]
-        grid_x = patch_size[-2]
-        # Pixel sizes (coordinate extents)
+
+        # Canonical coordinate grid. In the original EmbedSeg the coordinate map is built on a fixed
+        # grid (``n_x = n_y`` = the dataset's max image size, e.g. 1024 for dsb2018) with pixel size 1,
+        # so the per-pixel coordinate step is ``1 / (grid_size - 1)`` and every training crop is just a
+        # slice of that grid. We reproduce that here instead of tying the step to DATA.PATCH_SIZE, so
+        # the coordinate scale (and hence the sigma init ``s = exp(10)``) matches the original.
+        self.grid_size = int(grid_size)
+        self.norm = float(self.grid_size - 1)  # coordinate step denominator (kept constant train/test)
+        # Per-axis spacing ratios relative to y. For isotropic data these are all 1; z carries the
+        # voxel anisotropy (matching the original's pixel_z = (n_z-1)/(n_x-1) * anisotropy_factor).
         pixel_z = anisotropy[0] if ndims == 3 else 1
         pixel_y = anisotropy[1]
         pixel_x = anisotropy[2]
+        self.ratio_x = float(pixel_x) / float(pixel_y)
+        self.ratio_y = 1.0
+        self.ratio_z = float(pixel_z) / float(pixel_y)
 
         self.channel_weights = channel_weights
         self.foreground_weight = self.channel_weights[0]
@@ -2374,26 +2382,37 @@ class SpatialEmbLoss(nn.Module):
         self.w_var = self.channel_weights[2]
         self.w_seed = self.channel_weights[3]
 
-        # Build max-size 3D coordinate grid buffer; for 2D we will slice z=1.
-        # This lets one class handle both 2D (uses x,y) and 3D (uses x,y,z).
-        xm = (
-            torch.linspace(0, pixel_x, grid_x)
-            .view(1, 1, 1, -1)
-            .expand(1, grid_z, grid_y, grid_x)
-        )
-        ym = (
-            torch.linspace(0, pixel_y, grid_y)
-            .view(1, 1, -1, 1)
-            .expand(1, grid_z, grid_y, grid_x)
-        )
-        zm = (
-            torch.linspace(0, pixel_z, grid_z)
-            .view(1, -1, 1, 1)
-            .expand(1, grid_z, grid_y, grid_x)
-        )
-        # Stack as (3, Z, Y, X); for 2D we’ll slice to (2, Y, X) at forward time.
-        xyzm = torch.cat((xm, ym, zm), 0)  # (3, Z, Y, X)
-        self.register_buffer("xyzm", xyzm)
+        # No large pre-built buffer: the coordinate map is generated on demand for the exact input
+        # size (see _coords_for). Since the per-pixel step is fixed at ``ratio_axis / (grid_size - 1)``,
+        # this is equivalent to slicing a grid_size x grid_size grid but avoids allocating a big buffer
+        # (important in 3D). A small (device, D, Z, H, W) cache avoids rebuilding every iteration.
+        self._coord_cache = {}
+
+    def _coords_for(self, D: int, Z: int, H: int, W: int, device) -> torch.Tensor:
+        """
+        Build the coordinate map ``(D, [Z,] H, W)`` for the given input size.
+
+        The coordinate at index ``i`` along an axis is ``i * ratio_axis / self.norm`` (per-pixel step
+        ``ratio_axis / (grid_size - 1)``), constant for any input size, so training crops and test
+        images -- of any size -- all share one coordinate scale (the original EmbedSeg convention).
+        """
+        key = (str(device), D, Z, H, W)
+        cached = self._coord_cache.get(key)
+        if cached is not None:
+            return cached
+
+        ym = (torch.arange(H, device=device, dtype=torch.float32) * (self.ratio_y / self.norm)).view(1, -1, 1)
+        xm = (torch.arange(W, device=device, dtype=torch.float32) * (self.ratio_x / self.norm)).view(1, 1, -1)
+        if D == 2:
+            coords = torch.cat((xm.expand(1, H, W), ym.expand(1, H, W)), 0)  # (2, H, W) as (x, y)
+        else:
+            zm = (torch.arange(Z, device=device, dtype=torch.float32) * (self.ratio_z / self.norm)).view(-1, 1, 1)
+            coords = torch.stack(
+                (xm.expand(Z, H, W), ym.expand(Z, H, W), zm.expand(Z, H, W)), 0
+            )  # (3, Z, H, W) as (x, y, z)
+        coords = coords.contiguous()
+        self._coord_cache[key] = coords
+        return coords
 
     def _calculate_binary_iou(self, pred, label):
         intersection = ((label == 1) & (pred == 1)).sum()
@@ -2470,13 +2489,13 @@ class SpatialEmbLoss(nn.Module):
         # Spatial sizes
         if D == 2:
             H, W = prediction.size(2), prediction.size(3)
-            # coords: (2, H, W) from self.xyzm (3, Z, Y, X)
-            coords = self.xyzm[:2, 0, :H, :W].contiguous()
+            # coords: (2, H, W) sliced from the canonical grid (grown if the input is larger)
+            coords = self._coords_for(D, 1, H, W, prediction.device)
             total_voxels = H * W
         else:
             Z, H, W = prediction.size(2), prediction.size(3), prediction.size(4)
             # coords: (3, Z, H, W)
-            coords = self.xyzm[:3, :Z, :H, :W].contiguous()
+            coords = self._coords_for(D, Z, H, W, prediction.device)
             total_voxels = Z * H * W
 
         # Remove the extra channel dimension in instances; cast to int32 because

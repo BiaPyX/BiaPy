@@ -384,6 +384,15 @@ class Config:
         # 'nuclei'). Both training and test rescale cells to this size. Ignored when TYPE is 'omnipose'.
         # Default: 30.0.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN = 30.0
+        # Cellpose only. Amount of random scale jitter applied on top of the per-image diameter rescale
+        # during training (data augmentation), mirroring Cellpose's 'scale_range'. Each training patch is
+        # scaled by a factor drawn as (1 - SCALE_RANGE/2) + SCALE_RANGE * U[0, 1), i.e. uniformly in
+        # [1 - SCALE_RANGE/2, 1 + SCALE_RANGE/2], and this factor multiplies the DIAM_MEAN / diameter
+        # normalization. Only applied when training with flow channels; validation/test use the plain
+        # diameter rescale with no jitter. 0.0 disables the jitter. Matches Cellpose's default for the
+        # rescale training path (cellpose/train.py: scale_range0 = 0.5 when rescale=True), giving the
+        # range [0.75, 1.25]. Default: 0.5.
+        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_RANGE = 0.5
         # Cellpose only. When DIAMETER == 0, estimate each test image's diameter with a cheap first
         # inference pass (on one central patch) instead of the training-set median, then rescale the
         # input for the real pass. Ignored when DIAMETER > 0, for the by-chunks/Zarr path, and for
@@ -412,6 +421,15 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM = 0
         # Minimum size of objects to be considered valid. Objects smaller than this will be ignored.
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE = 100
+        # Size (in pixels) of the canonical coordinate grid used to build the spatial-embedding
+        # coordinate map, i.e. the per-pixel coordinate step is ``1 / (GRID_SIZE - 1)``. This mirrors
+        # EmbedSeg's ``n_x = n_y`` (the dataset's max image size, ~1024 for dsb2018), and is decoupled
+        # from ``DATA.PATCH_SIZE`` on purpose: training patches are treated as slices of this grid so
+        # the coordinate scale (and hence the sigma initialisation ``s = exp(10)``) matches the
+        # original regardless of the patch size. The SAME value is used by the loss (training) and the
+        # clustering (inference), and the coordinate step is kept constant for images larger than the
+        # grid, so train and test always share one coordinate scale.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE = 1024
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.2.5 Synapse-specific options for instance segmentation

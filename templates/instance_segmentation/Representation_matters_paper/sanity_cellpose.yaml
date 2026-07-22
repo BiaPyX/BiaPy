@@ -14,7 +14,7 @@ PROBLEM:
             DIAMETER: 30.0
             DIAM_MEAN: 30.0
             FLOW_THRESHOLD: 0.4
-
+            SCALE_RANGE: 0.5
 DATA: 
     PATCH_SIZE: (224, 224, 1)  
     REFLECT_TO_COMPLETE_SHAPE: FALSE
@@ -48,14 +48,7 @@ AUGMENTOR:
     ZOOM_PROB: 1.0
     RANDOM_ROT: True                                                                                                    
     VFLIP: True                                                                                                         
-    HFLIP: True                                                                                                         
-    BRIGHTNESS: True                                                                                                    
-    BRIGHTNESS_FACTOR: (-0.1, 0.1)
-    CONTRAST: True                                                                                                      
-    CONTRAST_FACTOR: (-0.1, 0.1)
-    ZOOM: True
-    ZOOM_RANGE: (0.75, 1.25)   
-    ELASTIC: True                                                                                                                                                                              
+    HFLIP: True                                                                                                                                                                                                                                                                                     
     AFFINE_MODE: 'constant'                                                                                               
 
 MODEL:

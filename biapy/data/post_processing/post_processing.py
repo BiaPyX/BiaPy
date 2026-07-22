@@ -402,10 +402,11 @@ def watershed_by_channels(
 class Embedding_cluster:
     def __init__(
         self,
-        device: torch.device, 
-        patch_size: List[int] = [32, 1024, 1024], 
+        device: torch.device,
+        patch_size: List[int] = [32, 1024, 1024],
         anisotropy: List[float | int] = [1,1,1],
-        ndims: int = 2, 
+        ndims: int = 2,
+        grid_size: int = 1024,
     ):
         """
         Embedding-based clustering for instance segmentation inspired by the EmbedSeg method.
@@ -429,27 +430,44 @@ class Embedding_cluster:
 
         ndims : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+
+        grid_size : int, optional
+            Size of the canonical coordinate grid (per-pixel coordinate step ``1 / (grid_size - 1)``).
+            MUST match the value used by the training loss (``SpatialEmbLoss``) so inference and
+            training share the same coordinate scale.
         """
         self.device = device
-        # Pixel sizes (coordinate extents); stored so coords can be rebuilt for larger inputs.
-        self.pixel_z = anisotropy[0] if ndims == 3 else 1
-        self.pixel_y = anisotropy[1]
-        self.pixel_x = anisotropy[2]
         self.ndims = ndims
 
-        # Grid sizes (used to build the coordinate map buffer; sliced to input size on forward)
-        grid_z = patch_size[0] if ndims == 3 else 1
-        grid_y = patch_size[-3]
-        grid_x = patch_size[-2]
+        # Canonical coordinate grid, kept identical to SpatialEmbLoss: fixed per-pixel step
+        # ``ratio_axis / (grid_size - 1)`` (independent of patch/image size), with z carrying the
+        # voxel anisotropy. This is the original EmbedSeg convention (grid = dataset max image size,
+        # pixel = 1) and is what makes the learned offsets/sigmas mean the same thing at train & test.
+        self.grid_size = int(grid_size)
+        self.norm = float(self.grid_size - 1)
+        pixel_z = anisotropy[0] if ndims == 3 else 1
+        pixel_y = anisotropy[1]
+        pixel_x = anisotropy[2]
+        self.ratio_x = float(pixel_x) / float(pixel_y)
+        self.ratio_y = 1.0
+        self.ratio_z = float(pixel_z) / float(pixel_y)
 
-        self.xyzm = self._build_xyzm(grid_z, grid_y, grid_x)
+    def _build_coords(self, Z: int, H: int, W: int) -> "torch.Tensor":
+        """
+        Build the coordinate map for the exact input size (no large pre-allocated grid).
 
-    def _build_xyzm(self, grid_z: int, grid_y: int, grid_x: int) -> "torch.Tensor":
-        xm = torch.linspace(0, self.pixel_x, grid_x).view(1, 1, 1, -1).expand(1, grid_z, grid_y, grid_x)
-        ym = torch.linspace(0, self.pixel_y, grid_y).view(1, 1, -1, 1).expand(1, grid_z, grid_y, grid_x)
-        zm = torch.linspace(0, self.pixel_z, grid_z).view(1, -1, 1, 1).expand(1, grid_z, grid_y, grid_x)
-        return torch.cat((xm, ym, zm), 0).to(self.device)  # (3, Z, Y, X)
-        
+        Coordinate at index ``i`` along an axis is ``i * ratio_axis / self.norm`` (per-pixel step
+        ``ratio_axis / (grid_size - 1)``), so it is constant for any image size and matches the
+        training loss (``SpatialEmbLoss``) exactly -- images larger than ``grid_size`` keep the same
+        scale instead of being rescaled.
+        """
+        ym = (torch.arange(H, device=self.device, dtype=torch.float32) * (self.ratio_y / self.norm)).view(1, -1, 1)
+        xm = (torch.arange(W, device=self.device, dtype=torch.float32) * (self.ratio_x / self.norm)).view(1, 1, -1)
+        if self.ndims == 2:
+            return torch.cat((xm.expand(1, H, W), ym.expand(1, H, W)), 0)  # (2, H, W) as (x, y)
+        zm = (torch.arange(Z, device=self.device, dtype=torch.float32) * (self.ratio_z / self.norm)).view(-1, 1, 1)
+        return torch.stack((xm.expand(Z, H, W), ym.expand(Z, H, W), zm.expand(Z, H, W)), 0)  # (3, Z, H, W)
+
     def create_instances(
         self,
         pred: NDArray,
@@ -495,17 +513,13 @@ class Embedding_cluster:
 
         pred = torch.from_numpy(np.moveaxis(pred, -1, 0)).to(self.device)  # (C, *spatial)
 
-        # Spatial sizes — grow coord buffer if test image is larger than training patch size
+        # Build the coordinate map for this image at the fixed per-pixel step (constant train/test).
         if D == 2:
             H, W = pred.shape[1], pred.shape[2]
-            if H > self.xyzm.shape[2] or W > self.xyzm.shape[3]:
-                self.xyzm = self._build_xyzm(1, H, W)
-            coords = self.xyzm[:2, 0, :H, :W].contiguous()
+            coords = self._build_coords(1, H, W).contiguous()
         else:
             Z, H, W = pred.shape[1], pred.shape[2], pred.shape[3]
-            if Z > self.xyzm.shape[1] or H > self.xyzm.shape[2] or W > self.xyzm.shape[3]:
-                self.xyzm = self._build_xyzm(Z, H, W)
-            coords = self.xyzm[:3, :Z, :H, :W].contiguous()
+            coords = self._build_coords(Z, H, W).contiguous()
 
         # unpack heads
         offsets  = torch.tanh(pred[:D]) # (D, *spatial)

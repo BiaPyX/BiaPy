@@ -453,11 +453,17 @@ def build_model(
 
 def init_embedding_output(model: nn.Module, n_sigma: int = 2, output_channel_info: Optional[List[str]] = None) -> None:
     """
-    Initialize the sigma channels of the embedding output head(s).
+    Initialize the embedding output head(s), mirroring EmbedSeg's ``BranchedERFNet.init_output``.
 
-    Sets weight=0 and bias=1 on the E_sigma output channels so the model starts
-    with tight Gaussians: the loss computes s = exp(sigma * 10), so bias=1 gives
-    s = exp(10) ≈ 22026, concentrating the soft mask near each object center.
+    Two things are set so training starts from the same point as the original EmbedSeg:
+
+    - **E_offset channels**: weight=0 and bias=0. With ``spatial_emb = tanh(offset) + coords``,
+      a zero offset means every pixel's embedding starts exactly at its own coordinate (no
+      displacement), which is the stable starting point the original relies on.
+    - **E_sigma channels**: weight=0 and bias=1. The loss/clustering compute ``s = exp(sigma * 10)``,
+      so bias=1 gives ``s = exp(10) ≈ 22026``, concentrating the soft mask near each object center.
+
+    Reference: ``EmbedSeg/models/BranchedERFNet.py::BranchedERFNet.init_output``.
 
     Parameters
     ----------
@@ -474,15 +480,20 @@ def init_embedding_output(model: nn.Module, n_sigma: int = 2, output_channel_inf
     if output_channel_info is None:
         raise ValueError("output_channel_info must be provided to initialize embedding output")
 
-    # Find which head and which offset within that head the E_sigma channels start at
+    # Find which head and which offset within that head the E_offset / E_sigma channels start at.
+    # E_offset and E_sigma always live in the same head (the instance decoder), with E_offset first.
+    offset_head_idx = None
+    offset_offset = None
     sigma_head_idx = None
     sigma_offset = None
     for head_idx, head_info in enumerate(output_channel_info):
         for ch_offset, ch_name in enumerate(head_info.split("+")):
-            if ch_name.startswith("E_sigma_"):
+            if offset_offset is None and ch_name.startswith("E_offset_"):
+                offset_head_idx = head_idx
+                offset_offset = ch_offset
+            if sigma_offset is None and ch_name.startswith("E_sigma_"):
                 sigma_head_idx = head_idx
                 sigma_offset = ch_offset
-                break
         if sigma_head_idx is not None:
             break
 
@@ -490,15 +501,29 @@ def init_embedding_output(model: nn.Module, n_sigma: int = 2, output_channel_inf
         raise ValueError(
             "Could not find E_sigma channels in output_channel_info: {}".format(output_channel_info)
         )
+    if offset_head_idx is None:
+        raise ValueError(
+            "Could not find E_offset channels in output_channel_info: {}".format(output_channel_info)
+        )
 
-    head_conv = model.heads[sigma_head_idx]
-    print(
-        "Initialize embedding sigma channels: head {}, output indices [{}:{}], "
-        "conv weight size: {}".format(sigma_head_idx, sigma_offset, sigma_offset + n_sigma, head_conv.weight.size())
-    )
     with torch.no_grad():
-        head_conv.weight[sigma_offset : sigma_offset + n_sigma].fill_(0)
-        head_conv.bias[sigma_offset : sigma_offset + n_sigma].fill_(1)
+        # E_offset: weight=0, bias=0  -> initial embedding = pixel coordinate (no displacement)
+        offset_conv = model.heads[offset_head_idx]
+        print(
+            "Initialize embedding offset channels: head {}, output indices [{}:{}], "
+            "conv weight size: {}".format(offset_head_idx, offset_offset, offset_offset + n_sigma, offset_conv.weight.size())
+        )
+        offset_conv.weight[offset_offset : offset_offset + n_sigma].fill_(0)
+        offset_conv.bias[offset_offset : offset_offset + n_sigma].fill_(0)
+
+        # E_sigma: weight=0, bias=1  -> s = exp(sigma*10) = exp(10) at init (tight Gaussians)
+        sigma_conv = model.heads[sigma_head_idx]
+        print(
+            "Initialize embedding sigma channels: head {}, output indices [{}:{}], "
+            "conv weight size: {}".format(sigma_head_idx, sigma_offset, sigma_offset + n_sigma, sigma_conv.weight.size())
+        )
+        sigma_conv.weight[sigma_offset : sigma_offset + n_sigma].fill_(0)
+        sigma_conv.bias[sigma_offset : sigma_offset + n_sigma].fill_(1)
 
 def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
     """

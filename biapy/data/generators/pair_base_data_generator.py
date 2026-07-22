@@ -347,9 +347,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Cellpose reference diameter (pixels) the model is trained at (``DIAM_MEAN``). When > 0 and
         ``flow_channels`` is non-empty, each training patch is rescaled in-plane by
         ``DIAM_MEAN / diameter`` (the per-file diameter, read from ``DatasetFile.diameter``) so cells
-        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale. The random scale
-        augmentation on top of this normalization is provided by the ``zoom`` augmentation
-        (``AUGMENTOR.ZOOM`` / ``zoom_range``).
+        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale. The random scale jitter
+        applied on top of this normalization during training is controlled by ``cellpose_scale_range``
+        (Cellpose's ``scale_range``), independently of the general ``zoom`` augmentation.
+
+    cellpose_scale_range : float, optional
+        Cellpose-style random scale jitter (``CELLPOSE.SCALE_RANGE``) folded into the per-image diameter
+        rescale during training. Each patch is scaled by ``(1 - cellpose_scale_range / 2) +
+        cellpose_scale_range * U[0, 1)``, i.e. uniformly in ``[1 - cellpose_scale_range / 2,
+        1 + cellpose_scale_range / 2]``, and this factor multiplies ``DIAM_MEAN / diameter``. Only used
+        when ``cellpose_diam_mean > 0``, ``flow_channels`` is non-empty and augmentation is on
+        (``da=True``); validation/test apply the plain rescale with no jitter. ``0.0`` disables the
+        jitter. Default ``0.5`` matches Cellpose's rescale training path (range ``[0.75, 1.25]``).
 
     random_crop_scale : tuple of ints, optional
         Scale factor the mask used in super-resolution workflow. E.g. ``(2,2)``.
@@ -467,6 +476,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         instance_channel: Optional[int] = None,
         flow_gradient_type: str = "cellpose",
         cellpose_diam_mean: float = 0.0,
+        cellpose_scale_range: float = 0.5,
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
         preprocess_f=None,
@@ -550,6 +560,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # on ``da``); DIAM_MEAN <= 0 disables it.
         self.cellpose_diam_mean = float(cellpose_diam_mean)
         self.do_cellpose_rescale = len(self.flow_channels) > 0 and self.cellpose_diam_mean > 0
+        # Cellpose-style random scale jitter (CELLPOSE.SCALE_RANGE) applied on top of the diameter rescale
+        # during training only. See apply_transform for the sampling formula.
+        self.cellpose_scale_range = float(cellpose_scale_range)
         self.shape = shape
 
         # X data analysis
@@ -1088,10 +1101,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if sample.coords is None:
             # Capture probability map
             if self.prob_map is not None:
-                if isinstance(self.prob_map, list):
-                    img_prob = np.load(self.prob_map[idx])
+                # The list may hold file paths (directory-based prob maps) or raw ndarrays
+                # (variable-shaped data from calculate_volume_prob_map), so branch on the element type.
+                prob_entry = self.prob_map[idx]
+                if isinstance(prob_entry, (str, os.PathLike)):
+                    img_prob = np.load(prob_entry)
                 else:
-                    img_prob = self.prob_map[idx]
+                    img_prob = prob_entry
             else:
                 img_prob = None
 
@@ -1335,11 +1351,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # normalization (diam_factor = DIAM_MEAN / diameter, in-plane) is applied whenever needed, even
         # when no augmentation roll fires.
         do_diam_rescale = self.do_cellpose_rescale and diam_factor > 0 and abs(diam_factor - 1.0) > 1e-3
-        apply_zoom = self.zoom and self._roll("zoom")
+        # Cellpose-style random scale jitter around the diameter rescale, applied during training only
+        # (da=True). It provides the scale randomization for the Cellpose approach on its own, so the
+        # general 'zoom' augmentation is not additionally sampled when it is active.
+        apply_cellpose_jitter = self.do_cellpose_rescale and self.da and self.cellpose_scale_range > 0
+        apply_zoom = (not apply_cellpose_jitter) and self.zoom and self._roll("zoom")
         apply_rand_rot = self.rand_rot and self._roll("rand_rot")
         apply_rot90 = self.rotation90 and self._roll("rotation90")
-        if apply_zoom or apply_rand_rot or apply_rot90 or do_diam_rescale:
-            scale = random.uniform(self.zoom_range[0], self.zoom_range[1]) if apply_zoom else 1.0
+        if apply_cellpose_jitter or apply_zoom or apply_rand_rot or apply_rot90 or do_diam_rescale:
+            if apply_cellpose_jitter:
+                # Cellpose sampling: scale = (1 - scale_range/2) + scale_range * U[0, 1)
+                # (cellpose/transforms.py:random_rotate_and_resize).
+                scale = (1.0 - self.cellpose_scale_range / 2.0) + self.cellpose_scale_range * random.random()
+            elif apply_zoom:
+                scale = random.uniform(self.zoom_range[0], self.zoom_range[1])
+            else:
+                scale = 1.0
             angle = 0.0
             if apply_rand_rot:
                 angle += random.uniform(float(self.rnd_rot_range[0]), float(self.rnd_rot_range[1]))
@@ -1696,10 +1723,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             # Prob-map path: crop to the network size here and record the crop location for
             # save_aug_samples.
             if use_probmap_points:
-                if isinstance(self.prob_map, list):
-                    img_prob = np.load(self.prob_map[pos])
+                prob_entry = self.prob_map[pos]
+                if isinstance(prob_entry, (str, os.PathLike)):
+                    img_prob = np.load(prob_entry)
                 else:
-                    img_prob = self.prob_map[pos]
+                    img_prob = prob_entry
 
                 if self.ndim == 2:
                     img, mask, oy, ox, s_y, s_x = random_crop_pair(  # type: ignore

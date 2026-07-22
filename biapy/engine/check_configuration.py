@@ -764,7 +764,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has only {len(effective_channels_per_head)} "
                 f"entr{'y' if len(effective_channels_per_head) == 1 else 'ies'}, so no decoder separation can occur. "
                 f"Set 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' to a list with at least 2 entries whose values "
-                f"sum to the number of DATA_CHANNELS ({len(sorted_original_instance_channels)})."
+                f"sum to the number of output channels ({len(sorted_original_instance_channels)} or more if any "
+                f"channel expands, e.g. 'R' into rays or 'E_*' into per-axis offsets/sigmas)."
             )
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:

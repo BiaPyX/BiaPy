@@ -321,6 +321,8 @@ def create_train_val_augmentors(
                 # The per-file diameter lives on DatasetFile.diameter; the generator computes the
                 # per-sample rescale factor DIAM_MEAN / diameter itself.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
+                # Cellpose-style random scale jitter applied on top of the rescale during training.
+                dic["cellpose_scale_range"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_RANGE)
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX

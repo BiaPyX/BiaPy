@@ -260,33 +260,48 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             self.model_output_channels = [0] * len(channels_per_head)
             self.model_output_channel_info = [""] * len(channels_per_head)
 
-            # Cumulative DATA_CHANNEL (logical) boundaries to map a DATA_CHANNEL index → head index
+            if any(c <= 0 for c in channels_per_head):
+                raise ValueError(
+                    f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has a non-positive entry "
+                    f"({channels_per_head}); every head must output at least one channel."
+                )
+
+            # Cumulative PHYSICAL output-channel boundaries. CHANNELS_PER_HEAD_INFO counts the physical
+            # output channels assigned to each head (e.g. StarDist [1, 32] = 1 prob + 32 rays; EmbedSeg
+            # [4, 1] = 2 offsets + 2 sigmas in the first head, 1 seediness in the second). We therefore
+            # route each DATA_CHANNEL by the running count of physical channels already emitted, NOT by
+            # the logical DATA_CHANNEL index -- the latter mis-routes any channel that follows an
+            # expanding channel (E_*, R, discretized Db, A) within the same head, which would leave a
+            # later head empty and crash the model build with a "weight of size [0, ...]" conv error.
             head_boundaries = []
             cumulative = 0
             for h in channels_per_head:
                 cumulative += h
                 head_boundaries.append(cumulative)
 
-            def _head_for(logical_ch, channel_label):
-                h = next((k for k, b in enumerate(head_boundaries) if logical_ch < b), None)
+            def _head_for(physical_ch, channel_label):
+                h = next((k for k, b in enumerate(head_boundaries) if physical_ch < b), None)
                 if h is None:
                     total = head_boundaries[-1] if head_boundaries else 0
                     raise ValueError(
-                        f"DATA_CHANNEL index {logical_ch} (while mapping '{channel_label}') exceeds the "
-                        f"total DATA_CHANNELS declared in CHANNELS_PER_HEAD_INFO ({total}). "
-                        f"Make sure CHANNELS_PER_HEAD_INFO sums to the number of DATA_CHANNELS."
+                        f"Output-channel index {physical_ch} (while mapping '{channel_label}') exceeds the "
+                        f"total output channels declared in CHANNELS_PER_HEAD_INFO ({total}). Make sure "
+                        f"CHANNELS_PER_HEAD_INFO sums to the number of physical output channels (a DATA_CHANNEL "
+                        f"may expand into several, e.g. E_offset/E_sigma -> {self.dims} each, E_seediness -> 1, "
+                        f"'R' -> nrays, discretized 'Db' -> 11)."
                     )
                 return h
 
-            logical_ch = 0  # current DATA_CHANNEL index
             for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 if channel in ["I", "We"]:
                     # Virtual channels: "I" is used by the generator to regenerate the flows and dropped before
                     # the batch reaches the model; "We" is an extra weight map. Neither is predicted, so they
                     # consume no output channel and map to no head (consistent with the activations loop below).
                     continue
-                # A DATA_CHANNEL maps to a single head; all of its physical sub-channels go to that head.
-                h = _head_for(logical_ch, channel)
+                # A DATA_CHANNEL maps to a single head; route it by where its first physical channel falls
+                # and check afterwards that all of its physical sub-channels landed in that one head.
+                head_start = sum(self.model_output_channels)
+                h = _head_for(head_start, channel)
                 if channel == "A":
                     z_affinities = dst.get("A", {}).get("z_affinities", [1])
                     for j in range(len(z_affinities)):
@@ -319,7 +334,21 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 else:
                     self.model_output_channel_info[h] += "+" + channel
                     self.model_output_channels[h] += 1
-                logical_ch += 1
+
+            # A head that ends up with 0 channels means CHANNELS_PER_HEAD_INFO mis-routed the channels
+            # (e.g. an earlier head declared more channels than its DATA_CHANNELS actually produce, so a
+            # later channel was absorbed into it). Catch it here with a clear message instead of letting
+            # the model build fail deep inside a conv with a cryptic "weight of size [0, ...]" error.
+            if any(c == 0 for c in self.model_output_channels):
+                raise ValueError(
+                    f"CHANNELS_PER_HEAD_INFO={channels_per_head} produced an empty output head: the physical "
+                    f"output channels routed per head are {self.model_output_channels} for "
+                    f"DATA_CHANNELS={list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)}. Each entry of "
+                    f"CHANNELS_PER_HEAD_INFO must equal the number of physical output channels of the "
+                    f"DATA_CHANNELS assigned to that head (E_offset/E_sigma -> {self.dims} each, "
+                    f"E_seediness -> 1, 'R' -> nrays, discretized 'Db' -> 11). For a standard EmbedSeg setup "
+                    f"use CHANNELS_PER_HEAD_INFO=[{2 * self.dims}, 1]."
+                )
         else:
             self.model_output_channels = [0]
             self.model_output_channel_info = [""]
@@ -394,18 +423,18 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
                 elif channel == "E_offset":
                     for i in range(self.dims):
-                        self.head_activations.append("ce_sigmoid")
+                        self.head_activations.append("linear")
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
                             self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
                 elif channel == "E_sigma":
                     for i in range(self.dims):
-                        self.head_activations.append("ce_sigmoid")
+                        self.head_activations.append("linear")
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
                             self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
                 elif channel == "E_seediness":
-                    self.head_activations.append("ce_sigmoid")
+                    self.head_activations.append("linear")
                     if set_model_output_channels:
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
@@ -575,12 +604,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 channel_weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
                 center_mode=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("center_mode", "centroid"),
                 medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
+                grid_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE,
             ).to(self.device, non_blocking=True)
             self.embedding_cluster = Embedding_cluster(
                 device=self.test_device,
                 patch_size=self.cfg.DATA.PATCH_SIZE,
                 ndims=self.dims,
                 anisotropy=self.resolution,
+                grid_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE,
             )
         else:
             instance_loss = instance_segmentation_loss(
