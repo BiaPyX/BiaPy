@@ -116,7 +116,7 @@ class BiaPy:
         dist_url: Optional[str] = "env://",
         dist_backend: Optional[str] = "nccl",
         verbose: Optional[bool] = False,
-        save_files: Optional[bool] = True,
+        save_files: Optional[bool] = None,
     ):
         """
         Run the main functionality of the job.
@@ -131,9 +131,9 @@ class BiaPy:
 
         result_dir: str, optional
             Path where the job outputs (results, checkpoints, logs, config backup) are stored.
-            Required whenever files are written to disk (``save_files=True``). It may be omitted
-            only in the ephemeral API mode (``save_files=False``), where nothing is written and
-            in-memory prediction is the only supported output.
+            If omitted, BiaPy runs ephemerally (nothing is written to disk) and only in-memory
+            prediction is available; operations that must write then raise a clear error. See
+            ``save_files``.
 
         name: str, optional
             Job name. Defaults to "unknown_job".
@@ -169,13 +169,13 @@ class BiaPy:
             configuration on demand.
 
         save_files: bool, optional
-            Whether BiaPy is allowed to write files to disk. When ``True`` (default) the
-            configuration backup and the run log file are written as usual. When ``False``
-            nothing is written (a debugging/ephemeral mode useful to just load a model and
-            predict on new samples). Defaults to ``True``.
+            Whether BiaPy is allowed to write files to disk (config backup, run log, ...).
+            Defaults to ``None``, meaning it follows ``result_dir``: it writes when a
+            ``result_dir`` is given and stays ephemeral (nothing written) when it is not. Pass
+            ``True`` to force writing (a ``result_dir`` is then required) or ``False`` to force
+            an ephemeral run even when a ``result_dir`` is given.
         """
         self.verbose = bool(verbose)
-        self.save_files = bool(save_files)
 
         # Third instantiation option: a model checkpoint as the configuration source. A BiaPy
         # '.pth' embeds the whole configuration, so the workflow is rebuilt from it (see
@@ -186,17 +186,22 @@ class BiaPy:
         if dist_backend not in ["nccl", "gloo"]:
             raise ValueError("Invalid value for 'dist_backend'. Should be either 'nccl' or 'gloo'.")
 
-        # result_dir is mandatory whenever files are written; it may be omitted only in the
-        # ephemeral API mode (save_files=False), where a throwaway temp base is used for the
-        # internal path strings and nothing is ever written there.
+        # File writing follows result_dir: with a result_dir we write there, without one we run
+        # ephemerally (nothing on disk), which is enough to load a model and predict in memory.
+        # save_files can force it either way; forcing writes without a result_dir is an error.
         self._result_dir_provided = result_dir is not None and result_dir != ""
+        if save_files is None:
+            self.save_files = self._result_dir_provided
+        else:
+            self.save_files = bool(save_files)
+        if self.save_files and not self._result_dir_provided:
+            raise ValueError(
+                "save_files=True needs a 'result_dir' to write results, checkpoints and logs. "
+                "Pass result_dir=..., or omit save_files (it defaults to writing only when a "
+                "result_dir is given)."
+            )
         if not self._result_dir_provided:
-            if self.save_files:
-                raise ValueError(
-                    "'result_dir' must be provided: BiaPy writes results, checkpoints and logs "
-                    "there. Pass result_dir=... or, for an ephemeral run that writes nothing to "
-                    "disk, set save_files=False."
-                )
+            # Throwaway base for the internal path strings; nothing is ever written there.
             result_dir = os.path.join(tempfile.gettempdir(), "biapy_ephemeral")
 
         self.args = argparse.Namespace(
