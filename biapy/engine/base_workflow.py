@@ -91,9 +91,7 @@ from biapy.data.data_manipulation import (
 )
 from biapy.data.pre_processing import resize_images
 from biapy.data.post_processing.post_processing import (
-    ensemble8_2d_predictions,
-    ensemble_cellpose_flip_predictions,
-    ensemble16_3d_predictions,
+    ensemble_predictions,
     apply_binary_mask,
 )
 from biapy.data.post_processing import apply_post_processing
@@ -1545,41 +1543,19 @@ class Base_Workflow(metaclass=ABCMeta):
             Predicted batch.
         """
         if self.cfg.TEST.AUGMENTATION:
-            _tta_flow_ch = getattr(self, "cellpose_tta_flow_channels", None)
-            _tta_ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
             for k in tqdm(range(x_batch.shape[0]), leave=False, disable=disable_tqdm):
-                if _tta_flow_ch:
-                    # Cellpose-style flip TTA with flow-vector sign correction (2D & 3D flow workflow).
-                    p = ensemble_cellpose_flip_predictions(
-                        x_batch[k],
-                        axes_order_back=self.axes_order_back,
-                        axes_order=self.axes_order,
-                        device=self.test_device,
-                        pred_func=self.model_call_func,
-                        flow_channels=_tta_flow_ch,
-                        ndim=_tta_ndim,
-                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        mode=self.cfg.TEST.AUGMENTATION_MODE,
-                    )
-                elif self.cfg.PROBLEM.NDIM == "2D":
-                    p = ensemble8_2d_predictions(
-                        x_batch[k],
-                        axes_order_back=self.axes_order_back,
-                        axes_order=self.axes_order,
-                        device=self.test_device,
-                        pred_func=self.model_call_func,
-                        mode=self.cfg.TEST.AUGMENTATION_MODE,
-                    )
-                else:
-                    p = ensemble16_3d_predictions(
-                        x_batch[k],
-                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axes_order_back=self.axes_order_back,
-                        axes_order=self.axes_order,
-                        device=self.test_device,
-                        pred_func=self.model_call_func,
-                        mode=self.cfg.TEST.AUGMENTATION_MODE,
-                    )
+                p = ensemble_predictions(
+                    x_batch[k],
+                    pred_func=self.model_call_func,
+                    axes_order_back=self.axes_order_back,
+                    axes_order=self.axes_order,
+                    device=self.test_device,
+                    ndim=2 if self.cfg.PROBLEM.NDIM == "2D" else 3,
+                    batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                    mode=self.cfg.TEST.AUGMENTATION_MODE,
+                    flow_channels=getattr(self, "cellpose_tta_flow_channels", None),
+                    embedseg=getattr(self, "embedseg_tta", False),
+                )
 
                 # Multi-head concatenation
                 if isinstance(p, dict):
@@ -2105,29 +2081,18 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Make the prediction
                 if self.cfg.TEST.AUGMENTATION:
-                    _tta_flow_ch = getattr(self, "cellpose_tta_flow_channels", None)
-                    if _tta_flow_ch:
-                        # Cellpose-style flip TTA with flow-vector sign correction (2D & 3D flow workflow).
-                        pred = ensemble_cellpose_flip_predictions(
-                            self.current_sample["X"][0],
-                            axes_order_back=self.axes_order_back,
-                            pred_func=self.model_call_func,
-                            axes_order=self.axes_order,
-                            device=self.test_device,
-                            flow_channels=_tta_flow_ch,
-                            ndim=2 if self.cfg.PROBLEM.NDIM == "2D" else 3,
-                            batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                            mode=self.cfg.TEST.AUGMENTATION_MODE,
-                        )
-                    else:
-                        pred = ensemble8_2d_predictions(
-                            self.current_sample["X"][0],
-                            axes_order_back=self.axes_order_back,
-                            pred_func=self.model_call_func,
-                            axes_order=self.axes_order,
-                            device=self.test_device,
-                            mode=self.cfg.TEST.AUGMENTATION_MODE,
-                        )
+                    pred = ensemble_predictions(
+                        self.current_sample["X"][0],
+                        pred_func=self.model_call_func,
+                        axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
+                        device=self.test_device,
+                        ndim=2 if self.cfg.PROBLEM.NDIM == "2D" else 3,
+                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        mode=self.cfg.TEST.AUGMENTATION_MODE,
+                        flow_channels=getattr(self, "cellpose_tta_flow_channels", None),
+                        embedseg=getattr(self, "embedseg_tta", False),
+                    )
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
 

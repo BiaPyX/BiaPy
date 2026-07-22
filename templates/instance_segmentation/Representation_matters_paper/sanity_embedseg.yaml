@@ -1,0 +1,77 @@
+SYSTEM:
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: ["E_offset", "E_sigma", "E_seediness"]
+        CHANNELS_PER_HEAD_INFO: [4, 1] 
+        SEPARATED_DECODERS_PER_HEAD: True
+        EMBEDSEG:
+            GRID_SIZE: -1
+DATA: 
+    PATCH_SIZE: (96, 96, 1)  
+    REFLECT_TO_COMPLETE_SHAPE: True
+    NORMALIZATION:
+      TYPE: 'scale_range'
+      PERC_CLIP:
+          ENABLE: True
+          LOWER_PERC: 1.
+          UPPER_PERC: 99.8
+
+    TRAIN:                                                                                                              
+        PATH: /data/dfranco/datasets/dsb2018/train/images
+        GT_PATH: /data/dfranco/datasets/dsb2018/train/masks
+        IN_MEMORY: True
+        CHECK_DATA: True
+        # EXTRACT_RANDOM_PATCH: True
+        # PROBABILITY_MAP: True
+        # W_FOREGROUND: 0.94
+        # W_BACKGROUND: 0.06
+        # REPLICATE: 10
+    VAL:
+        FROM_TRAIN: True
+        IN_MEMORY: True
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        PATH: /data/dfranco/datasets/dsb2018/test/images
+        GT_PATH: /data/dfranco/datasets/dsb2018/test/masks
+        IN_MEMORY: False
+        LOAD_GT: True
+        PADDING: (32, 32)
+
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT_PROB: 1.0
+    RANDOM_ROT: True                                                                                                    
+    VFLIP: True                                                                                                         
+    HFLIP: True                                                                                                         
+
+MODEL:
+  ARCHITECTURE: unet
+  FEATURE_MAPS: [32, 64, 128, 256]
+  LOAD_CHECKPOINT: True
+      
+LOSS: 
+  CLASS_REBALANCE: True
+
+TRAIN:
+    ENABLE: False
+    OPTIMIZER: ADAMW
+    LR: 2.E-4
+    BATCH_SIZE: 4
+    EPOCHS: 1000
+    PATIENCE: 100
+    LR_SCHEDULER:                                                                                                       
+        NAME: 'warmupcosine'                                                                                            
+        MIN_LR: 1.E-5                                                                                                   
+        WARMUP_COSINE_DECAY_EPOCHS: 5
+  
+TEST:
+    ENABLE: True
+    POST_PROCESSING:
+      INSTANCE_REFINEMENT:
+        ENABLE: True
+        OPERATIONS: ["remove_small_objects"]
+        VALUES: [21]

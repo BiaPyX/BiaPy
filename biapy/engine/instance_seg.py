@@ -31,13 +31,13 @@ from biapy.data.post_processing.post_processing import (
     extract_points_in_predictions,
     remove_close_points,
     remove_close_points_by_mask,
-    Embedding_cluster,
     apply_label_refinement,
     extract_synapse_connectivity,
     collect_point_type_csv_files,
     extract_synful_synapses,
     connect_pre_post_synapse_points_by_distance,
 )
+from biapy.data.post_processing.embedseg import Embedding_cluster
 from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
 from biapy.data.post_processing.gradient_tracking import flows_to_instances
 from biapy.data.pre_processing import create_instance_channels, set_embedseg_grid_size
@@ -133,6 +133,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         # Reflect padding mirrors border cells and corrupts their flow field; pad with zeros as Cellpose does.
         if self.cellpose_tta_flow_channels:
             self.padding_type = "zeros"
+
+        # EmbedSeg outputs are vector fields (offsets/sigmas), so TTA needs the channel-aware remap in
+        # ensemble_embedseg_predictions instead of the generic scalar D4 ensemble.
+        self.embedseg_tta = "E_offset" in _dc
 
         # Merging the image
         self.all_matching_stats_merge_patches = []
@@ -803,7 +807,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         elif "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             pred_labels = self.embedding_cluster.create_instances(
                 pred=pred if self.dims == 3 else pred[0],
-                fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,
+                fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.FG_THRESH,
+                seed_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,
                 min_mask_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM,
                 min_unclustered_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM,
             )

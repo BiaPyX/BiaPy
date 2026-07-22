@@ -413,8 +413,11 @@ class Config:
         # Code adapted from: 
         #    Embedseg: https://github.com/juglab/EmbedSeg
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG = CN()
-        # Foreground threshold for seediness map to consider pixels for clustering.
-        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH = 0.5
+        # Seediness threshold defining the foreground pixels that get clustered into objects.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.FG_THRESH = 0.5
+        # Seediness threshold a pixel must reach to seed a new object; clustering stops once no
+        # remaining foreground pixel exceeds it.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH = 0.9
         # Minimum number of foreground pixels required to perform clustering.
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM = 0
         # Minimum number of unclustered foreground pixels to continue clustering.
