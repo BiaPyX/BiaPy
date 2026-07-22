@@ -201,6 +201,94 @@ def load_cellpose_diameter_stats(channels_dir: str, split: str) -> Dict:
     return {b: ws / wt for b, (ws, wt) in accum.items() if wt > 0}
 
 
+def _max_image_dim_in_dirs(dirs: List[str]) -> int:
+    """
+    Largest spatial dimension found across the image files in ``dirs`` (headers only when possible).
+
+    Channel-like axes (size <= 4) are ignored, so an ``(H, W, 3)`` RGB image contributes ``max(H, W)``.
+    """
+    import tifffile
+    mx, seen = 0, set()
+    for d in dirs:
+        if not d or d in seen or not os.path.isdir(d):
+            continue
+        seen.add(d)
+        for f in sorted(os.listdir(d)):
+            fp = os.path.join(d, f)
+            if not os.path.isfile(fp):
+                continue
+            try:
+                with tifffile.TiffFile(fp) as t:
+                    shape = t.series[0].shape
+            except Exception:
+                try:
+                    shape = read_img_as_ndarray(fp, is_3d=False).shape
+                except Exception:
+                    continue
+            dims = [int(s) for s in shape if int(s) > 4]
+            if dims:
+                mx = max(mx, max(dims))
+    return mx
+
+
+def save_embedseg_grid_size(grid_size: int, channels_dir: str):
+    """Persist the EmbedSeg coordinate ``GRID_SIZE`` in the parent of ``channels_dir`` (like the
+    Cellpose diameter stats), so it is carried from training to inference and both share one scale."""
+    if not grid_size or not channels_dir:
+        return
+    parent = os.path.dirname(os.path.normpath(channels_dir))
+    os.makedirs(parent, exist_ok=True)
+    with open(os.path.join(parent, "embedseg_grid_size.json"), "w") as f:
+        json.dump({"grid_size": int(grid_size)}, f, indent=2)
+
+
+def load_embedseg_grid_size(channels_dir: str) -> Optional[int]:
+    """Load the ``GRID_SIZE`` JSON written by :func:`save_embedseg_grid_size`, or ``None`` if absent."""
+    if not channels_dir:
+        return None
+    fp = os.path.join(os.path.dirname(os.path.normpath(channels_dir)), "embedseg_grid_size.json")
+    if not os.path.isfile(fp):
+        return None
+    try:
+        with open(fp) as f:
+            v = int(json.load(f).get("grid_size"))
+        return v if v > 0 else None
+    except Exception:
+        return None
+
+
+def set_embedseg_grid_size(cfg: CN) -> Optional[int]:
+    """
+    Resolve the EmbedSeg coordinate grid size (``PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE``).
+
+    If the config value is > 0 it is used as-is. Otherwise (``-1``, the default) the canonical grid is
+    the dataset's max image dimension rounded up to a multiple of 8 -- mirroring EmbedSeg's
+    ``n_x = n_y`` -- computed once from the train/val/test images and cached to a JSON next to the
+    training instance-channel folder (via :func:`save_embedseg_grid_size`) so training and inference
+    stay consistent, exactly like the Cellpose diameter. Returns ``None`` for non-EmbedSeg workflows.
+    """
+    if cfg.PROBLEM.TYPE != "INSTANCE_SEG" or "E_offset" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+        return None
+
+    configured = int(cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE)
+    if configured > 0:
+        return configured
+
+    train_channels_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
+    cached = load_embedseg_grid_size(train_channels_dir)
+    if cached:
+        return cached
+
+    grid = (int(_max_image_dim_in_dirs([cfg.DATA.TRAIN.PATH, cfg.DATA.VAL.PATH, cfg.DATA.TEST.PATH])) + 7) & (-8)
+    if grid <= 0:
+        raise ValueError(
+            "Could not auto-compute 'PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE' from the dataset images. "
+            "Set it to a positive value in the config."
+        )
+    save_embedseg_grid_size(grid, train_channels_dir)
+    return grid
+
+
 def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
     """
     Attach the per-image Cellpose diameter (pixels) to each GT ``DatasetFile``.

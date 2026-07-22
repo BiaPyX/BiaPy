@@ -2326,31 +2326,30 @@ def lovasz_hinge(logits: torch.Tensor,
 
 class SpatialEmbLoss(nn.Module):
     """
-    Spatial Embedding Loss for 2D and 3D inspired by `EmbedSeg <https://github.com/juglab/EmbedSeg/tree/main>`__.
+    Spatial Embedding loss (2D/3D) inspired by `EmbedSeg <https://github.com/juglab/EmbedSeg>`__.
 
     Parameters
     ----------
-    patch_size : List of int, optional
-        Patch size used during training (used to build coordinate map buffer).  
     anisotropy : List of float or int, optional
-        Anisotropy factors for each axis (z,y,x).
+        Voxel spacing ``(z, y, x)``; only the ratios matter (z carries the anisotropy).
     ndims : int, optional
         Number of spatial dimensions (2 or 3).
     center_mode : str, optional
-        Method to compute object center: "centroid" or "medoid".
+        Object center used in the loss: ``"centroid"`` or ``"medoid"``.
     medoid_max_points : int, optional
-        Maximum number of points to use when computing medoid (to avoid O(N^2) complexity).
+        Sub-sample cap for the medoid to avoid an O(N^2) ``cdist`` on huge objects.
     channel_weights : List of float, optional
-        Weights for the different loss components: [foreground, instance, variance, seed].
+        Weights ``[foreground, instance, variance, seed]``.
+    grid_size : int, optional
+        Canonical coordinate grid; the per-pixel step is ``1 / (grid_size - 1)`` (EmbedSeg's ``n_x=n_y``).
     """
 
     def __init__(
         self,
-        patch_size: List[int] = [32, 1024, 1024],
-        anisotropy: List[float | int] = [1,1,1],
+        anisotropy: List[float | int] = [1, 1, 1],
         ndims: int = 2,
-        center_mode: str = "centroid",      # "centroid" or "medoid"
-        medoid_max_points: Optional[int] = 10000,  # cap to avoid O(N^2) on huge objects
+        center_mode: str = "centroid",
+        medoid_max_points: Optional[int] = 10000,
         channel_weights: List[float] = [1.0, 1.0, 1.0, 1.0],
         grid_size: int = 1024,
     ):
@@ -2360,42 +2359,22 @@ class SpatialEmbLoss(nn.Module):
         self.center_mode = center_mode
         self.medoid_max_points = medoid_max_points
 
-        # Canonical coordinate grid. In the original EmbedSeg the coordinate map is built on a fixed
-        # grid (``n_x = n_y`` = the dataset's max image size, e.g. 1024 for dsb2018) with pixel size 1,
-        # so the per-pixel coordinate step is ``1 / (grid_size - 1)`` and every training crop is just a
-        # slice of that grid. We reproduce that here instead of tying the step to DATA.PATCH_SIZE, so
-        # the coordinate scale (and hence the sigma init ``s = exp(10)``) matches the original.
+        # Canonical coordinate grid with a fixed per-pixel step 1/(grid_size-1), so training crops and
+        # test images share one scale (the original's sigma init s = exp(10) assumes it). Built on
+        # demand (no big buffer) and cached per input shape. z ratios carry the voxel anisotropy.
         self.grid_size = int(grid_size)
-        self.norm = float(self.grid_size - 1)  # coordinate step denominator (kept constant train/test)
-        # Per-axis spacing ratios relative to y. For isotropic data these are all 1; z carries the
-        # voxel anisotropy (matching the original's pixel_z = (n_z-1)/(n_x-1) * anisotropy_factor).
+        self.norm = float(self.grid_size - 1)
         pixel_z = anisotropy[0] if ndims == 3 else 1
-        pixel_y = anisotropy[1]
-        pixel_x = anisotropy[2]
-        self.ratio_x = float(pixel_x) / float(pixel_y)
+        self.ratio_x = float(anisotropy[2]) / float(anisotropy[1])
         self.ratio_y = 1.0
-        self.ratio_z = float(pixel_z) / float(pixel_y)
+        self.ratio_z = float(pixel_z) / float(anisotropy[1])
 
         self.channel_weights = channel_weights
-        self.foreground_weight = self.channel_weights[0]
-        self.w_inst = self.channel_weights[1]
-        self.w_var = self.channel_weights[2]
-        self.w_seed = self.channel_weights[3]
-
-        # No large pre-built buffer: the coordinate map is generated on demand for the exact input
-        # size (see _coords_for). Since the per-pixel step is fixed at ``ratio_axis / (grid_size - 1)``,
-        # this is equivalent to slicing a grid_size x grid_size grid but avoids allocating a big buffer
-        # (important in 3D). A small (device, D, Z, H, W) cache avoids rebuilding every iteration.
+        self.foreground_weight, self.w_inst, self.w_var, self.w_seed = channel_weights
         self._coord_cache = {}
 
     def _coords_for(self, D: int, Z: int, H: int, W: int, device) -> torch.Tensor:
-        """
-        Build the coordinate map ``(D, [Z,] H, W)`` for the given input size.
-
-        The coordinate at index ``i`` along an axis is ``i * ratio_axis / self.norm`` (per-pixel step
-        ``ratio_axis / (grid_size - 1)``), constant for any input size, so training crops and test
-        images -- of any size -- all share one coordinate scale (the original EmbedSeg convention).
-        """
+        """Coordinate map ``(D, [Z,] H, W)``; coordinate at index ``i`` is ``i * ratio_axis / norm``."""
         key = (str(device), D, Z, H, W)
         cached = self._coord_cache.get(key)
         if cached is not None:
@@ -2415,13 +2394,11 @@ class SpatialEmbLoss(nn.Module):
         return coords
 
     def _calculate_binary_iou(self, pred, label):
-        intersection = ((label == 1) & (pred == 1)).sum()
-        union = ((label == 1) | (pred == 1)).sum()
-        if not union:
-            return 0
-        else:
-            iou = intersection.item() / union.item()
-            return iou
+        """Per-object IoU as an on-device scalar tensor (``clamp(min=1)`` avoids a host sync; the
+        caller accumulates these and calls ``.item()`` once per batch)."""
+        intersection = (label & pred).sum()
+        union = (label | pred).sum()
+        return intersection / union.clamp(min=1)
     
     @torch.no_grad()
     def _center_from_mask(
@@ -2429,21 +2406,7 @@ class SpatialEmbLoss(nn.Module):
         coords: torch.Tensor,   # (D, ...)
         in_mask: torch.Tensor,  # (1, ...)
     ) -> torch.Tensor:
-        """
-        Compute object center from binary mask using centroid or medoid.
-
-        Parameters
-        ----------
-        coords : torch.Tensor
-            Coordinate grid tensor of shape (D, ...), where D is the number of spatial dimensions
-        in_mask : torch.Tensor
-            Binary mask tensor of shape (1, ...), indicating the object pixels/voxels.  
-
-        Returns
-        -------
-        center : torch.Tensor
-            Computed center coordinates of shape (D, 1, ..., 1).
-        """
+        """Object center ``(D, 1, ..., 1)`` from the mask's coordinates (centroid or medoid)."""
         D = coords.size(0)
         # Extract coordinates of all pixels/voxels in the instance: (N, D)
         pts = coords[in_mask.expand_as(coords)].view(D, -1).t().contiguous()  # (N, D)
@@ -2474,7 +2437,7 @@ class SpatialEmbLoss(nn.Module):
         self,
         prediction: torch.Tensor,   # (B, C, H, W) or (B, C, D, H, W)
         instances: torch.Tensor,    # (B, H, W) or (B, D, H, W)
-    ) -> Tuple[torch.Tensor, float, str]:
+    ) -> Dict:
         if prediction.dim() not in (4, 5):
             raise ValueError(
                 f"Unsupported prediction tensor dimensionality {prediction.dim()}. "
@@ -2508,20 +2471,19 @@ class SpatialEmbLoss(nn.Module):
         seed_ch = 1
 
         loss = prediction.new_tensor(0.0)
-        iou = 0.0
+        iou = prediction.new_tensor(0.0)
 
         for b in range(B):
-            # Spatial embedding (tanh) + coordinate grid
-            spatial_emb = torch.tanh(prediction[b, :emb_ch]) + coords  # (D, ...)
+            # offset (tanh) and seed (sigmoid) activations are already applied by the model head; here we
+            # only add the coordinate grid to the offset. exp(sigma*10) below is part of the distance.
+            spatial_emb = prediction[b, :emb_ch] + coords              # (D, ...)
             sigma = prediction[b, emb_ch:emb_ch + sig_ch]              # (D, ...)
-            seed_map = torch.sigmoid(
-                prediction[b, emb_ch + sig_ch: emb_ch + sig_ch + seed_ch]
-            )  # (1, ...)
+            seed_map = prediction[b, emb_ch + sig_ch: emb_ch + sig_ch + seed_ch]  # (1, ...)
 
             var_loss = prediction.new_tensor(0.0)
             instance_loss = prediction.new_tensor(0.0)
             seed_loss = prediction.new_tensor(0.0)
-            batch_iou = 0.0
+            batch_iou = prediction.new_tensor(0.0)
             obj_count = 0
 
             instance = instances[b].unsqueeze(0)       # (1, ...)
@@ -2559,26 +2521,25 @@ class SpatialEmbLoss(nn.Module):
                     torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2)
                 )
 
-                # Measure IoU at 0.5 threshold
-                batch_iou += self._calculate_binary_iou(dist > 0.5, in_mask)
+                # Measure IoU at 0.5 threshold (accumulated on-device; synced once below)
+                batch_iou = batch_iou + self._calculate_binary_iou(dist > 0.5, in_mask)
 
                 obj_count += 1
 
             if obj_count > 0:
                 instance_loss = instance_loss / obj_count
                 var_loss = var_loss / obj_count
-                iou += batch_iou / obj_count
+                iou = iou + batch_iou / obj_count
 
             seed_loss = seed_loss / total_voxels
 
             loss = loss + (self.w_inst * instance_loss + self.w_var * var_loss + self.w_seed * seed_loss)
 
         loss = loss / B
-        iou = iou / B
 
         return {
             "losses": [loss + prediction.sum() * 0],
-            "metrics": {"IoU": iou}
+            "metrics": {"IoU": (iou / B).item()}  # single host sync per batch
         }
 
 class VGG(nn.Module):

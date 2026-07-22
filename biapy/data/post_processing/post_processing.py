@@ -403,7 +403,6 @@ class Embedding_cluster:
     def __init__(
         self,
         device: torch.device,
-        patch_size: List[int] = [32, 1024, 1024],
         anisotropy: List[float | int] = [1,1,1],
         ndims: int = 2,
         grid_size: int = 1024,
@@ -420,13 +419,8 @@ class Embedding_cluster:
         device : torch.device
             Device to run the computations on.
 
-        patch_size : List of int, optional
-            Patch size used during training (used to build the coordinate map buffer).
-            E.g. ``[32, 1024, 1024]`` for 3D and ``[1, 1024, 1024]`` for 2D.
-
         anisotropy : List of float/int, optional
-            Anisotropy used during training (used to build the coordinate map buffer).
-            E.g. ``[1, 8, 8]`` for 3D and ``[1, 1, 1]`` for 2D.
+            Voxel spacing ``(z, y, x)``; only the ratios matter (z carries the anisotropy).
 
         ndims : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
@@ -497,7 +491,9 @@ class Embedding_cluster:
             Minimum number of unclustered foreground pixels to continue clustering.
 
         min_object_size : int, optional
-            Minimum size of objects to be considered valid. Objects smaller than this will be ignored.
+            Minimum size (in pixels) a proposal must have to be kept. Defaults to 0 (keep all): small
+            objects are instead removed by the ``TEST.POST_PROCESSING.INSTANCE_REFINEMENT``
+            (``remove_small_objects``) step, so it is not exposed as a config option.
 
         Returns
         -------
@@ -521,11 +517,12 @@ class Embedding_cluster:
             Z, H, W = pred.shape[1], pred.shape[2], pred.shape[3]
             coords = self._build_coords(Z, H, W).contiguous()
 
-        # unpack heads
-        offsets  = torch.tanh(pred[:D]) # (D, *spatial)
-        sigma  = pred[D:2*D] # (D, *spatial)  per-axis σ
-        seed_map = torch.sigmoid(pred[2*D]) # (*spatial)
-        
+        # offset (tanh) and seed (sigmoid) activations are already applied by the model head; exp(sigma*10)
+        # further below is part of the distance, not an activation.
+        offsets  = pred[:D]      # (D, *spatial)
+        sigma  = pred[D:2*D]     # (D, *spatial)  per-axis σ
+        seed_map = pred[2*D]     # (*spatial)
+
         # embeddings e(x) = x + o(x)
         spatial_emb = offsets + coords  # (D, *spatial)
 

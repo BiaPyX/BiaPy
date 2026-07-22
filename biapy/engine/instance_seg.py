@@ -40,7 +40,7 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
 from biapy.data.post_processing.gradient_tracking import flows_to_instances
-from biapy.data.pre_processing import create_instance_channels
+from biapy.data.pre_processing import create_instance_channels, set_embedseg_grid_size
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
@@ -423,7 +423,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
                 elif channel == "E_offset":
                     for i in range(self.dims):
-                        self.head_activations.append("linear")
+                        self.head_activations.append("tanh")
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
                             self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
@@ -434,7 +434,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             self.model_output_channels[0] += 1
                             self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
                 elif channel == "E_seediness":
-                    self.head_activations.append("linear")
+                    self.head_activations.append("sigmoid")
                     if set_model_output_channels:
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
@@ -597,21 +597,23 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             self.test_metric_names += self.test_extra_metrics
 
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            # -1 (default) means auto: derive the coordinate grid from the dataset's max image size and
+            # cache it, so the loss (train) and clustering (inference) share the same coordinate scale.
+            grid_size = set_embedseg_grid_size(self.cfg)
+            print("EmbedSeg coordinate GRID_SIZE = {}".format(grid_size))
             instance_loss = SpatialEmbLoss(
-                patch_size=self.cfg.DATA.PATCH_SIZE,
                 ndims=self.dims,
                 anisotropy=self.resolution,
                 channel_weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
                 center_mode=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("center_mode", "centroid"),
                 medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
-                grid_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE,
+                grid_size=grid_size,
             ).to(self.device, non_blocking=True)
             self.embedding_cluster = Embedding_cluster(
                 device=self.test_device,
-                patch_size=self.cfg.DATA.PATCH_SIZE,
                 ndims=self.dims,
                 anisotropy=self.resolution,
-                grid_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE,
+                grid_size=grid_size,
             )
         else:
             instance_loss = instance_segmentation_loss(
@@ -804,7 +806,6 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,
                 min_mask_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM,
                 min_unclustered_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM,
-                min_object_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE,
             )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)

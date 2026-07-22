@@ -419,17 +419,16 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM = 0
         # Minimum number of unclustered foreground pixels to continue clustering.
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM = 0
-        # Minimum size of objects to be considered valid. Objects smaller than this will be ignored.
-        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE = 100
         # Size (in pixels) of the canonical coordinate grid used to build the spatial-embedding
         # coordinate map, i.e. the per-pixel coordinate step is ``1 / (GRID_SIZE - 1)``. This mirrors
-        # EmbedSeg's ``n_x = n_y`` (the dataset's max image size, ~1024 for dsb2018), and is decoupled
-        # from ``DATA.PATCH_SIZE`` on purpose: training patches are treated as slices of this grid so
-        # the coordinate scale (and hence the sigma initialisation ``s = exp(10)``) matches the
-        # original regardless of the patch size. The SAME value is used by the loss (training) and the
-        # clustering (inference), and the coordinate step is kept constant for images larger than the
-        # grid, so train and test always share one coordinate scale.
-        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE = 1024
+        # EmbedSeg's ``n_x = n_y`` (the dataset's max image size) and is decoupled from
+        # ``DATA.PATCH_SIZE`` on purpose: training patches are treated as slices of this grid so the
+        # coordinate scale (and hence the sigma initialisation ``s = exp(10)``) matches the original
+        # regardless of the patch size. The SAME value is used by the loss (training) and the clustering
+        # (inference). Leave it at -1 to compute it automatically from the dataset's max image size
+        # (cached to a JSON next to the instance-channel folder, like the Cellpose diameter); set a
+        # positive value to force it.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.GRID_SIZE = -1
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.2.5 Synapse-specific options for instance segmentation
