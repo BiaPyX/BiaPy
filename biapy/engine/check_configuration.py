@@ -369,6 +369,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
                     opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", ['bce', 'l1']])
                     channel_loss_set = True
+                # StarDist's 'Db' is the object-probability head (BCE); its background (target 0) must be
+                # supervised, so it is not foreground-masked (unless the user sets mask_values explicitly).
+                if "mask_values" not in dst.get("Db", {}):
+                    dst.setdefault("Db", {})["mask_values"] = False
             elif set(sorted_original_instance_channels) == {"Db"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Db"]
@@ -641,10 +645,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 sorted_original_instance_channels.append("We")
 
             # Carry the raw instance labels as an 'I' channel when the Cellpose/Omnipose flows are used.
-            # The generator regenerates the flows from the augmented labels and drops 'I' before the model,
-            # keeping image and flow target consistent under geometry-resampling augmentations (elastic,
-            # free rotation). Appended last so dropping it shifts no other index; carries no loss.
-            if any(ch in sorted_original_instance_channels for ch in ("Gv", "Gh", "Gz")) and "I" not in sorted_original_instance_channels:
+            # 'I' carries the labels so the generator can regenerate the geometry-dependent targets (flows
+            # 'Gv'/'Gh'/'Gz' and StarDist radial distances 'R') from the augmented labels, then drops it
+            # before the model. Appended last so dropping it shifts no other index; carries no loss.
+            if any(ch in sorted_original_instance_channels for ch in ("Gv", "Gh", "Gz", "R")) and "I" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("I")
 
             # Create unique folder names for instance segmentation channel masks
@@ -1508,8 +1512,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
                 assert "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'R' channel must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
-                # For now onlyb allow Db and R channels
-                assert set(sorted_original_instance_channels) == {"Db", "R"}, "'Db' and 'R' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
+                # For now only allow Db and R channels ('I' is auto-added and dropped before the model).
+                _sd_chs = set(sorted_original_instance_channels) - {"I"}
+                assert _sd_chs == {"Db", "R"}, "'Db' and 'R' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "embeddings":
                 assert "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_sigma" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_seediness" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'E_offset', 'E_sigma' and 'E_seediness' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
                 assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 3, "'E_offset', 'E_sigma' and 'E_seediness' channels must be the only ones used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"

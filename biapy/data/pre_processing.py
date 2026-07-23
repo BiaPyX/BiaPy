@@ -948,6 +948,49 @@ def unique_labels_fast(a: np.ndarray):
     return np.flatnonzero(present)    # sorted because we scan 0..K
 
 
+def channel_physical_offsets(mode: List[str], channel_extra_opts: Dict = {}) -> Dict[str, int]:
+    """
+    Compute the physical start channel index of each instance-segmentation data channel.
+
+    Most channels occupy a single channel, but some expand: ``'R'`` into ``nrays`` channels and ``'A'``
+    into the number of requested affinities. ``'E_sigma'``/``'E_seediness'`` are extra embedding targets
+    that are not materialised as their own channels here, so they are skipped. The returned offsets are the
+    cumulative widths of the preceding channels, so a channel placed after an expanded block (e.g. the
+    virtual ``'I'`` after ``'R'``) gets its true position rather than its index in ``mode`` — matching how
+    :func:`labels_into_channels` allocates the array.
+
+    Parameters
+    ----------
+    mode : list of str
+        Ordered channel names. E.g. ``['Db', 'R', 'I']``.
+
+    channel_extra_opts : dict, optional
+        Per-channel options, used to read ``R['nrays']`` and the ``A`` affinity lists.
+
+    Returns
+    -------
+    offsets : dict of str -> int
+        Physical start channel index of each entry in ``mode`` (last occurrence wins if repeated).
+    """
+    offsets: Dict[str, int] = {}
+    ofs = 0
+    for ch in mode:
+        if ch in ("E_sigma", "E_seediness"):
+            continue  # extra embedding targets, not stored as channels here
+        offsets[ch] = ofs
+        if ch == "R":
+            ofs += int(channel_extra_opts["R"]["nrays"])
+        elif ch == "A":
+            ofs += (
+                len(channel_extra_opts["A"]["z_affinities"])
+                + len(channel_extra_opts["A"]["y_affinities"])
+                + len(channel_extra_opts["A"]["x_affinities"])
+            )
+        else:
+            ofs += 1
+    return offsets
+
+
 def labels_into_channels(
     instance_labels: NDArray, 
     mode: List[str] = ["I", "C"], 
@@ -992,6 +1035,8 @@ def labels_into_channels(
     """
     assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
     assert instance_labels.ndim in [3, 4]
+    # Physical channel offsets (handle expanding channels so 'I' lands after the 'R' block, not on it).
+    channel_offsets = channel_physical_offsets(mode, channel_extra_opts)
     c_number = 0
     for ch in mode:
         if ch == "R":
@@ -1436,15 +1481,12 @@ def labels_into_channels(
         new_mask[..., mode.index("E_offset")] = vol.copy()
 
     # ---------- I (raw instance labels) ----------
-    # Virtual channel: carries the instance labels through the pipeline so the generator can regenerate
-    # the Cellpose/Omnipose flows from the *augmented* labels (see pair_base_data_generator.apply_transform).
-    # That keeps the image and the flow target consistent under augmentations which resample geometry
-    # (elastic, free rotation), instead of warping a precomputed flow field. It is auto-added when flow
-    # channels are requested (see check_configuration) and dropped by the generator before the batch
-    # reaches the model, so it is never predicted and never part of the loss. Labels are exactly
-    # representable in the float32 channel array (integers below 2**24).
+    # Virtual channel carrying the labels so the generator can regenerate the geometry-dependent targets
+    # (Cellpose/Omnipose flows, StarDist radial distances) from the *augmented* labels; auto-added by
+    # check_configuration and dropped before the model. Placed via channel_offsets so it lands after the
+    # 'R' block, not on it.
     if "I" in mode:
-        new_mask[..., mode.index("I")] = vol.copy()
+        new_mask[..., channel_offsets["I"]] = vol.copy()
 
     if "We" in mode:
         mask_to_use = vol
@@ -1784,6 +1826,147 @@ def generate_rays(n_rays: int, ndim: int, jitter: bool=False, seed: int=0):
         raise ValueError("Only 2D and 3D are supported.")
 
 
+@njit(cache=True, nogil=True)
+def _radial_distances_2d(labels, rays_idx, ray_step_phys, max_steps, max_dist):
+    """
+    Compiled (numba) 2D inner loop of :func:`radial_distances`.
+
+    Mirrors StarDist's compiled ``c_star_dist``: from every foreground pixel it marches along each ray in
+    unit index-space steps until the label changes or the image leaves the field of view, then applies a
+    half-step boundary correction along the ray's dominant axis. Results match the reference Python loop.
+
+    Parameters
+    ----------
+    labels : (H, W) int32 Numpy array
+        Instance labels (0 = background).
+
+    rays_idx : (n_rays, 2) float32 Numpy array
+        Unit ray directions in index (row, col) order.
+
+    ray_step_phys : (n_rays,) float32 Numpy array
+        Physical length of one index-space step along each ray (accounts for anisotropic spacing).
+
+    max_steps : int
+        Maximum number of steps to march (large enough to reach any boundary).
+
+    max_dist : float
+        Cap for the returned distances, or a negative value to disable capping.
+
+    Returns
+    -------
+    D : (H, W, n_rays) float32 Numpy array
+        Radial distance to the instance boundary along each ray; 0 on background.
+    """
+    H, W = labels.shape
+    n_rays = rays_idx.shape[0]
+    D = np.zeros((H, W, n_rays), np.float32)
+    for i in range(H):
+        for j in range(W):
+            inst = labels[i, j]
+            if inst <= 0:
+                continue
+            for k in range(n_rays):
+                uy = rays_idx[k, 0]
+                ux = rays_idx[k, 1]
+                # dominant-axis half-step correction (constant per ray).
+                ay = uy if uy >= 0.0 else -uy
+                ax = ux if ux >= 0.0 else -ux
+                max_comp = (ay if ay > ax else ax) + 1e-12
+                t_corr = 1.0 - 0.5 / max_comp
+                xy = 0.0
+                xx = 0.0
+                for _ in range(max_steps):
+                    xy += uy
+                    xx += ux
+                    ii = int(np.rint(i + xy))
+                    jj = int(np.rint(j + xx))
+                    out = ii < 0 or ii >= H or jj < 0 or jj >= W
+                    changed = (not out) and (labels[ii, jj] != inst)
+                    if out or changed:
+                        cy = xy - t_corr * uy
+                        cx = xx - t_corr * ux
+                        dist = np.sqrt(cy * cy + cx * cx) * ray_step_phys[k]
+                        if max_dist >= 0.0 and dist > max_dist:
+                            dist = max_dist
+                        D[i, j, k] = dist
+                        break
+    return D
+
+
+@njit(cache=True, nogil=True)
+def _radial_distances_3d(labels, rays_idx, ray_step_phys, max_steps, max_dist):
+    """
+    Compiled (numba) 3D counterpart of :func:`_radial_distances_2d`.
+
+    Parameters
+    ----------
+    labels : (A, B, C) int32 Numpy array
+        Instance labels (0 = background), in (z, y, x) index order.
+
+    rays_idx : (n_rays, 3) float32 Numpy array
+        Unit ray directions in index (z, y, x) order.
+
+    ray_step_phys : (n_rays,) float32 Numpy array
+        Physical length of one index-space step along each ray (accounts for anisotropic spacing).
+
+    max_steps : int
+        Maximum number of steps to march (large enough to reach any boundary).
+
+    max_dist : float
+        Cap for the returned distances, or a negative value to disable capping.
+
+    Returns
+    -------
+    D : (A, B, C, n_rays) float32 Numpy array
+        Radial distance to the instance boundary along each ray; 0 on background.
+    """
+    A, B, C = labels.shape
+    n_rays = rays_idx.shape[0]
+    D = np.zeros((A, B, C, n_rays), np.float32)
+    for a in range(A):
+        for b in range(B):
+            for c in range(C):
+                inst = labels[a, b, c]
+                if inst <= 0:
+                    continue
+                for k in range(n_rays):
+                    u0 = rays_idx[k, 0]
+                    u1 = rays_idx[k, 1]
+                    u2 = rays_idx[k, 2]
+                    m0 = u0 if u0 >= 0.0 else -u0
+                    m1 = u1 if u1 >= 0.0 else -u1
+                    m2 = u2 if u2 >= 0.0 else -u2
+                    max_comp = m0
+                    if m1 > max_comp:
+                        max_comp = m1
+                    if m2 > max_comp:
+                        max_comp = m2
+                    max_comp += 1e-12
+                    t_corr = 1.0 - 0.5 / max_comp
+                    x0 = 0.0
+                    x1 = 0.0
+                    x2 = 0.0
+                    for _ in range(max_steps):
+                        x0 += u0
+                        x1 += u1
+                        x2 += u2
+                        ii = int(np.rint(a + x0))
+                        jj = int(np.rint(b + x1))
+                        kk = int(np.rint(c + x2))
+                        out = ii < 0 or ii >= A or jj < 0 or jj >= B or kk < 0 or kk >= C
+                        changed = (not out) and (labels[ii, jj, kk] != inst)
+                        if out or changed:
+                            c0 = x0 - t_corr * u0
+                            c1 = x1 - t_corr * u1
+                            c2 = x2 - t_corr * u2
+                            dist = np.sqrt(c0 * c0 + c1 * c1 + c2 * c2) * ray_step_phys[k]
+                            if max_dist >= 0.0 and dist > max_dist:
+                                dist = max_dist
+                            D[a, b, c, k] = dist
+                            break
+    return D
+
+
 def radial_distances(
     labels: NDArray,
     rays: NDArray,
@@ -1826,51 +2009,17 @@ def radial_distances(
     rays_idx = rays_cart[:, ::-1].copy()  # Cartesian→index: [x,y]→[y,x] or [x,y,z]→[z,y,x]
 
     # per-ray physical step length: rays_idx and spacing are both in index/axis order
-    ray_step_phys = np.linalg.norm(rays_idx * spacing, axis=1)  # shape (n_rays,)
+    ray_step_phys = np.linalg.norm(rays_idx * spacing, axis=1).astype(np.float32)  # shape (n_rays,)
 
-    D = np.zeros(shape + (n_rays,), np.float32)
-
-    fg = np.argwhere(labels > 0)
+    # Hot loop JIT-compiled with numba (StarDist uses a compiled C++ 'c_star_dist'), so per-batch
+    # regeneration from the augmented labels is cheap.
     max_steps = int(np.ceil(np.linalg.norm(shape))) + 1  # guaranteed to reach any boundary
-    for (i, j, *rest) in fg:
-        inst_id = int(labels[i, j]) if ndim == 2 else int(labels[i, j, rest[0]])
-        p0 = np.array([i, j] if ndim == 2 else [i, j, rest[0]], np.float32)  # pixel center reference
-
-        for k in range(n_rays):
-            u = rays_idx[k]  # unit direction in index space
-            x = np.zeros(ndim, np.float32)  # accumulated offset in index space
-
-            # march in unit steps until hitting a boundary or leaving the image
-            for _ in range(max_steps):
-                x += u
-                p_samp = p0 + x
-                # rounded sampling
-                if ndim == 2:
-                    ii = int(np.rint(p_samp[0])); jj = int(np.rint(p_samp[1]))
-                    out = (ii < 0 or ii >= shape[0] or jj < 0 or jj >= shape[1])
-                    changed = (not out) and (labels[ii, jj] != inst_id)
-                else:
-                    ii = int(np.rint(p_samp[0])); jj = int(np.rint(p_samp[1])); kk = int(np.rint(p_samp[2]))
-                    out = (ii < 0 or ii >= shape[0] or jj < 0 or jj >= shape[1] or kk < 0 or kk >= shape[2])
-                    changed = (not out) and (labels[ii, jj, kk] != inst_id)
-
-                if out or changed:
-                    max_comp = np.max(np.abs(u)) + 1e-12
-                    t_corr = 1.0 - 0.5 / max_comp
-                    x = x - t_corr * u   # pull back along dominant axis
-                    # distance in pixels
-                    dist_idx = float(np.linalg.norm(x))
-                    # convert to physical units if requested
-                    dist = dist_idx * float(ray_step_phys[k])
-                    if max_dist is not None and dist > max_dist:
-                        dist = max_dist
-                    if ndim == 2:
-                        D[i, j, k] = dist
-                    else:
-                        D[i, j, rest[0], k] = dist
-                    break
-
-    return D
+    labels_c = np.ascontiguousarray(labels).astype(np.int32)
+    max_dist_c = -1.0 if max_dist is None else float(max_dist)
+    if ndim == 2:
+        return _radial_distances_2d(labels_c, rays_idx, ray_step_phys, max_steps, max_dist_c)
+    else:
+        return _radial_distances_3d(labels_c, rays_idx, ray_step_phys, max_steps, max_dist_c)
 
 def euler_integration(flow: NDArray, coords: NDArray, n_steps: int = 200, dt: float = 1.0, suppressed: bool = True):
     """

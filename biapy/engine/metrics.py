@@ -1534,17 +1534,70 @@ class instance_segmentation_loss:
         if self.separated_class_channel:
             self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights, reduction="none")
 
-    def _foreground_mask(self, y_true: torch.Tensor) -> "Optional[torch.Tensor]":
-        """Return a (B, 1, ...) float foreground mask from binary GT channels.
-
-        Checks for F or M first (foreground=1), then B (background=1 → foreground=0).
-        Returns None when no binary channel is present in the GT.
+    def _gt_channel_width(self, ch: str) -> int:
         """
-        for j, ch in enumerate(self.out_channels):
+        Number of physical channels a data channel occupies in the ground truth.
+
+        Most channels are a single GT channel. The exceptions are those that expand: ``'R'`` (one per ray)
+        and ``'A'`` (one per requested affinity). Note this is the *GT* width, which can differ from the
+        prediction width (e.g. a discretized ``'Db'`` is a single index channel in the GT but a K+1-way
+        softmax in the prediction).
+
+        Parameters
+        ----------
+        ch : str
+            Data channel name.
+
+        Returns
+        -------
+        int
+            Number of GT channels the channel occupies.
+        """
+        if ch == "R":
+            return int(self.channel_extra_opts.get("R", {}).get("nrays", 32)) if self.channel_extra_opts else 32
+        if ch == "A":
+            a_opts = self.channel_extra_opts.get("A", {}) if self.channel_extra_opts else {}
+            return (
+                len(a_opts.get("z_affinities", []))
+                + len(a_opts.get("y_affinities", []))
+                + len(a_opts.get("x_affinities", []))
+            ) or 1
+        return 1
+
+    def _foreground_mask(self, y_true: torch.Tensor) -> "Optional[torch.Tensor]":
+        """
+        Return a ``(B, 1, ...)`` float foreground mask from the ground-truth channels.
+
+        Preference order: a dedicated binary channel — ``'F'``/``'M'`` (foreground=1) or ``'B'``
+        (background=1 → foreground=0) — and, failing that, the ``'Db'`` distance-to-boundary channel, which
+        is ``> 0`` exactly on foreground pixels (StarDist-style setups have no binary channel, only
+        ``'Db'`` + ``'R'``). The GT channel offset is accumulated from the physical width of each preceding
+        channel (see :meth:`_gt_channel_width`) rather than the list position, so it stays correct when an
+        earlier channel expands into several GT channels (e.g. ``'R'`` → nrays).
+
+        Parameters
+        ----------
+        y_true : torch.Tensor
+            Ground-truth mask with channels laid out as in ``self.out_channels``.
+
+        Returns
+        -------
+        torch.Tensor or None
+            Float foreground mask, or ``None`` when no suitable channel is present.
+        """
+        phys = 0
+        db_offset = None
+        for ch in self.out_channels:
             if ch in ("F", "M"):
-                return (y_true[:, j : j + 1] > 0).float()
+                return (y_true[:, phys : phys + 1] > 0).float()
             if ch == "B":
-                return (y_true[:, j : j + 1] == 0).float()
+                return (y_true[:, phys : phys + 1] == 0).float()
+            if ch == "Db" and db_offset is None:
+                db_offset = phys
+            phys += self._gt_channel_width(ch)
+        # Fall back to 'Db' (>0 on foreground) only after ruling out every binary channel.
+        if db_offset is not None:
+            return (y_true[:, db_offset : db_offset + 1] > 0).float()
         return None
 
     def __call__(self, y_pred, y_true):
@@ -1639,17 +1692,15 @@ class instance_segmentation_loss:
                     # predict 0 there naturally.
                     mask = self._foreground_mask(y_true)
                 elif channel in ("Db", "Dc", "Dn", "R"):
-                    # Distance channels where legitimate foreground pixels can have value 0:
-                    #   Db: boundary pixels have Db=0 after per-cell normalization
-                    #   Dc: the centroid pixel has Dc=0 (most important point)
-                    #   Dn: isolated cells (no neighbor) have Dn=0
-                    #   R:  ray distances near boundary approach 0
-                    # Use a binary foreground channel (F/M/B) when available; fall back to
-                    # (y_true_slice > 0) which excludes background but also misses genuine
-                    # zero-valued foreground pixels (e.g. Dc at centroid, Db at boundary).
-                    mask = self._foreground_mask(y_true)
-                    if mask is None and mask_vals:
-                        mask = (y_true_slice > 0).float()
+                    # 'mask_values' restricts the loss to foreground (F/M/B or Db>0, else y_true_slice>0).
+                    # mask_values=False covers the whole image, as a probability channel needs (e.g.
+                    # StarDist's 'Db' BCE, where background is a real 0 target).
+                    if mask_vals:
+                        mask = self._foreground_mask(y_true)
+                        if mask is None:
+                            mask = (y_true_slice > 0).float()
+                    else:
+                        mask = None
                 elif mask_vals:
                     mask = (y_true_slice != 0).float()
                     if self.ignore_values:
@@ -1712,12 +1763,16 @@ class instance_segmentation_loss:
                 # apply optional element mask AFTER computing the per-element loss
                 if mask is not None:
                     loss_tensor = loss_tensor * mask
+                    # Normalise by masked *elements* (pixels x channels) so a multi-channel target like the
+                    # 'R' rays is a true mean over rays (matching StarDist) and DATA_CHANNEL_WEIGHTS behave
+                    # as set. The mask may have 1 channel or the full count, so scale by that ratio.
+                    ch_factor = loss_tensor.shape[1] // mask.shape[1]
                     if spatial_weight is not None:
                         # Normalise by total weight inside the mask so the loss scale is
                         # invariant to the magnitude of the combined weight map.
-                        denom = (spatial_weight * mask).sum().clamp_min(1.0)
+                        denom = (spatial_weight * mask).sum().clamp_min(1.0) * ch_factor
                     else:
-                        denom = mask.sum().clamp_min(1.0)
+                        denom = mask.sum().clamp_min(1.0) * ch_factor
                 else:
                     if spatial_weight is not None:
                         denom = spatial_weight.sum().clamp_min(1.0)

@@ -2,20 +2,23 @@ PROBLEM:
     TYPE: INSTANCE_SEG
     NDIM: 2D
     INSTANCE_SEG:
-        DATA_CHANNELS: ["E_offset", "E_sigma", "E_seediness"]
-        CHANNELS_PER_HEAD_INFO: [4, 1] 
+        DATA_CHANNELS: ['Db', 'R']
+        CHANNELS_PER_HEAD_INFO: [1, 32] 
+        DATA_CHANNEL_WEIGHTS: [1, 0.2]
+        DATA_CHANNELS_EXTRA_OPTS: [{'Db': {'mask_values': False}}]
         CLASS_REBALANCE_WITHIN_CHANNELS: True
-        SEPARATED_DECODERS_PER_HEAD: True
-        EMBEDSEG:
-            GRID_SIZE: -1
+        INSTANCE_CREATION_PROCESS: "stardist"
+        STARDIST:
+            PROB_THRESH: 0.5
+            NMS_IOU_THRESH: 0.4
 DATA: 
-    PATCH_SIZE: (96, 96, 1)  
+    PATCH_SIZE: (256, 256, 1)  
     REFLECT_TO_COMPLETE_SHAPE: True
     NORMALIZATION:
       TYPE: 'scale_range'
       PERC_CLIP:
           ENABLE: True
-          LOWER_PERC: 1.
+          LOWER_PERC: 1.0
           UPPER_PERC: 99.8
 
     TRAIN:                                                                                                              
@@ -36,10 +39,9 @@ DATA:
 
 AUGMENTOR:
     ENABLE: True
-    RANDOM_ROT_PROB: 1.0
-    RANDOM_ROT: True                                                                                                    
+    ROT90: True                                                                                                    
     VFLIP: True                                                                                                         
-    HFLIP: True                                                                                                         
+    HFLIP: True                                                                                                                                                
 
 MODEL:
   ARCHITECTURE: unet
@@ -49,7 +51,7 @@ MODEL:
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
-    LR: 2.E-4
+    LR: 0.0002
     BATCH_SIZE: 4
     EPOCHS: 1000
     PATIENCE: 100
@@ -60,9 +62,8 @@ TRAIN:
   
 TEST:
     ENABLE: True
-    AUGMENTATION: True
     POST_PROCESSING:
       INSTANCE_REFINEMENT:
         ENABLE: True
         OPERATIONS: ["remove_small_objects"]
-        VALUES: [21] # Extracted from Embedseg's paper and code
+        VALUES: [20]

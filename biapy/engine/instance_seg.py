@@ -467,7 +467,16 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
         super().define_activations_and_channels()
 
-        self.stardist_grid = (1,) * self.dims
+        # StarDist head output stride per axis; all-ones since BiaPy predicts at full resolution.
+        cfg_grid = list(self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.GRID)
+        if len(cfg_grid) == 0:
+            self.stardist_grid = (1,) * self.dims
+        else:
+            assert len(cfg_grid) == self.dims, (
+                f"'PROBLEM.INSTANCE_SEG.STARDIST.GRID' must have {self.dims} values (one per spatial axis), "
+                f"got {cfg_grid}"
+            )
+            self.stardist_grid = tuple(int(g) for g in cfg_grid)
 
     def define_metrics(self):
         """

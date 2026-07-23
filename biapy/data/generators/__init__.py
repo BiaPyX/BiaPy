@@ -29,6 +29,7 @@ from biapy.data.generators.test_single_data_generator import test_single_data_ge
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.generators.chunked_workflow_process_generator import chunked_workflow_process_generator
 from biapy.data.pre_processing import preprocess_data
+from biapy.data.pre_processing import channel_physical_offsets
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
@@ -314,9 +315,18 @@ def create_train_val_augmentors(
             flow_channels = {ch: i for i, ch in enumerate(data_channels) if ch in ("Gv", "Gh", "Gz")}
             dic["flow_channels"] = flow_channels
             # Virtual 'I' channel (raw labels) used to regenerate flows after augmentation, then dropped.
-            dic["instance_channel"] = data_channels.index("I") if "I" in data_channels else None
+            # Physical channel index (not list position): 'I' sits after the expanded 'R' block.
+            dic["instance_channel"] = (
+                channel_physical_offsets(data_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
+                if "I" in data_channels else None
+            )
             # Gradient strategy for the regenerated flows (diffusion iters are always "auto").
             dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
+            # StarDist 'Db'/'R' targets are recomputed from the augmented labels each batch (like the
+            # flows); pass their mask indices and the opts (nrays, Db val_type) needed to recreate them.
+            if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
+                dic["stardist_channels"] = {ch: i for i, ch in enumerate(data_channels) if ch in ("Db", "R")}
+                dic["stardist_channel_extra_opts"] = dict(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])
             if len(flow_channels) > 0:
                 # The per-file diameter lives on DatasetFile.diameter; the generator computes the
                 # per-sample rescale factor DIAM_MEAN / diameter itself.
@@ -374,7 +384,10 @@ def create_train_val_augmentors(
             dic["flow_channels"] = {ch: i for i, ch in enumerate(_val_channels) if ch in ("Gv", "Gh", "Gz")}
             # Virtual 'I' channel: feeds the flow regeneration that follows the rescale below, and is
             # dropped before the batch reaches the model.
-            dic["instance_channel"] = _val_channels.index("I") if "I" in _val_channels else None
+            dic["instance_channel"] = (
+                channel_physical_offsets(_val_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
+                if "I" in _val_channels else None
+            )
             dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
             if len(dic["flow_channels"]) > 0:
                 # Rescale cells to DIAM_MEAN px as Cellpose does on train and test, so val is scored at the
@@ -592,7 +605,10 @@ def create_test_generator(
         # 'I' is in the test GT too and must be dropped before the GT is used for the metrics.
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             _test_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-            dic["instance_channel"] = _test_channels.index("I") if "I" in _test_channels else None
+            dic["instance_channel"] = (
+                channel_physical_offsets(_test_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
+                if "I" in _test_channels else None
+            )
         dic["ignore_index"] = cfg.LOSS.IGNORE_INDEX
         dic["n_classes"] = cfg.DATA.N_CLASSES
     

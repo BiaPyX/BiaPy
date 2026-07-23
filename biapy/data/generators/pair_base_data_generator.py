@@ -30,7 +30,7 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
-from biapy.data.pre_processing import instances_to_flows
+from biapy.data.pre_processing import instances_to_flows, labels_into_channels
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -475,6 +475,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         flow_channels: Dict = {},
         instance_channel: Optional[int] = None,
         flow_gradient_type: str = "cellpose",
+        stardist_channels: Dict = {},
+        stardist_channel_extra_opts: Dict = {},
         cellpose_diam_mean: float = 0.0,
         cellpose_scale_range: float = 0.5,
         random_crop_scale: Tuple[int, ...] = (1, 1),
@@ -555,6 +557,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.instance_channel = instance_channel
         # Gradient strategy for the regenerated flows, mirrored from the channel options to match the GT.
         self.flow_gradient_type = flow_gradient_type
+        # StarDist targets ('Db'/'R') to regenerate from the augmented labels: {role -> mask channel index}.
+        # ``stardist_heat`` (filled below) maps each role to its start in ``heat``, like ``flow_heat``.
+        self.stardist_channels = dict(stardist_channels)
+        self.stardist_channel_extra_opts = dict(stardist_channel_extra_opts)
+        self.stardist_heat = {}
         # Per-sample Cellpose diameter rescale (in-plane by DIAM_MEAN / DatasetFile.diameter, read in
         # __getitem__). A domain normalization, not augmentation, so it runs on validation too (not gated
         # on ``da``); DIAM_MEAN <= 0 disables it.
@@ -639,6 +646,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         continue
                     hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
                     self.flow_heat[role_to_comp[role]] = hpos
+
+            # Map each StarDist role ('Db'/'R') to its start position inside ``heat``, as done for the flows.
+            if self.no_bin_channel_found and self.stardist_channels:
+                per = self.mask_norm["per_channel_info"]
+                for role, midx in self.stardist_channels.items():
+                    if midx not in per or per[midx]["type"] not in ("no_bin", "flow"):
+                        continue
+                    hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
+                    self.stardist_heat[role] = hpos
 
             # Position of the instance channel inside the split-off ``mask`` array (non-heat channels
             # before it), the counterpart of ``flow_heat`` for the label group.
@@ -1589,6 +1605,29 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat[..., self.flow_heat["vx"]] = Gh
             if "vz" in self.flow_heat and Gz is not None:
                 heat[..., self.flow_heat["vz"]] = Gz
+
+        # Regenerate the StarDist targets ('Db'/'R') from the augmented labels, as StarDist does every
+        # batch: the radial distances encode direction along fixed rays, so warping the precomputed
+        # channels leaves them pointing the wrong way. Same labels_into_channels path as the offline targets.
+        if (
+            self.instance_channel is not None
+            and self.instance_mask_pos is not None
+            and heat is not None
+            and self.stardist_heat
+        ):
+            labels_aug = np.expand_dims(mask[..., self.instance_mask_pos].astype(np.int32), -1)
+            roles = list(self.stardist_heat.keys())
+            regen = labels_into_channels(
+                labels_aug,
+                mode=roles,
+                channel_extra_opts=self.stardist_channel_extra_opts,
+            )
+            ofs = 0
+            for role in roles:
+                w = int(self.stardist_channel_extra_opts.get("R", {}).get("nrays", 32)) if role == "R" else 1
+                hpos = self.stardist_heat[role]
+                heat[..., hpos : hpos + w] = regen[..., ofs : ofs + w]
+                ofs += w
 
         # Merge heatmaps and masks again
         if self.no_bin_channel_found:

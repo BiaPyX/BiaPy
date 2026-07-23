@@ -340,6 +340,10 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH = 0.4
         # Non-maximum suppression IoU threshold to filter overlapping instance candidates
         _C.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH = 0.3
+        # Output stride of the StarDist head per axis (StarDist's 'grid'); post-processing scales candidate
+        # coordinates by it. BiaPy's U-Net predicts at full resolution, so keep it all-ones; only set >1 if
+        # the model is changed to emit the maps on a coarser lattice. Empty -> all ones for the given ndim.
+        _C.PROBLEM.INSTANCE_SEG.STARDIST.GRID = []
 
         
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
