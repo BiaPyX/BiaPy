@@ -43,7 +43,7 @@ dependencies = [
     "torchmetrics[image]==1.4.*",
     "safetensors",
     "torch>=2.12,<2.13",
-    "torchvision>=0.28,<0.29",
+    "torchvision>=0.27,<0.28",
     "nibabel>=5.4.2",
 ]
 

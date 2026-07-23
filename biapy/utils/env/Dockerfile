@@ -31,10 +31,13 @@ RUN pip3 install --no-cache-dir -U pip
 # Important: pin numpy<2 to avoid binary-extension breakage in many stacks
 RUN pip3 install --no-cache-dir "numpy<2"
 
-# Install PyTorch CUDA 11.8 wheels explicitly from cu118 index
+# Install PyTorch wheels pinned to match pyproject.toml's torch/torchvision range.
+# NOTE: cu118 wheels are no longer published past torch 2.7.1, so we pull from
+# the cu126 index instead; the resulting wheels bundle their own CUDA runtime
+# libs and work fine on this CUDA 11.8 base image / the "-11.8" image tag.
 RUN pip3 install --no-cache-dir \
-      torch torchvision \
-      --index-url https://download.pytorch.org/whl/cu118
+      torch==2.12.1 torchvision==0.27.1 \
+      --index-url https://download.pytorch.org/whl/cu126
 
 # Install BiaPy (master requires Python >=3.11)
 RUN pip3 install --no-cache-dir git+https://github.com/BiaPyX/BiaPy.git && \
