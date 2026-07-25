@@ -86,7 +86,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         mask : 4D Numpy array
             Transformed image mask. E.g.``(z, y, x, channels)``.
         """
-        # Apply flips in z
+        # Apply flips in z (flow channels are recomputed from the flipped labels by the base generator).
         if self.zflip and self._roll("zflip"):
             image = image[::-1, ...]
             mask  = mask[::-1, ...]
@@ -94,13 +94,6 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                 e_im  = e_im[::-1, ...]
             if e_mask is not None:
                 e_mask = e_mask[::-1, ...]
-            # Reversing the Z axis must negate the Gz flow component. This runs before the base
-            # generator splits the flows into `heat`, so operate on the full mask at its channel index.
-            gz_idx = self.flow_channels.get("Gz")
-            if gz_idx is not None and gz_idx < mask.shape[-1]:
-                mask[..., gz_idx] = -mask[..., gz_idx]
-                if e_mask is not None and gz_idx < e_mask.shape[-1]:
-                    e_mask[..., gz_idx] = -e_mask[..., gz_idx]
 
         return super().apply_transform(image, mask, e_im, e_mask, diam_factor=diam_factor)
 

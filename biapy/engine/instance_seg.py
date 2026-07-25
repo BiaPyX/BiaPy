@@ -38,8 +38,9 @@ from biapy.data.post_processing.post_processing import (
     connect_pre_post_synapse_points_by_distance,
 )
 from biapy.data.post_processing.embedseg import Embedding_cluster
+from biapy.data.post_processing.tta import build_tta_spec, parse_model_output_channel_names
 from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
-from biapy.data.post_processing.gradient_tracking import flows_to_instances
+from biapy.data.post_processing.gradient_tracking import cellpose_flows_to_instances, omnipose_flows_to_instances
 from biapy.data.pre_processing import create_instance_channels, set_embedseg_grid_size
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
@@ -122,21 +123,23 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         self.original_train_input_mask_axes_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
 
-        # Map each flow role to its output channel index so flip TTA can sign-correct the flow vectors
-        # (Gv on Y-flip, Gh on X-flip, Gz on Z-flip). Empty for non-flow workflows (keeps D4 TTA).
-        self.cellpose_tta_flow_channels = {}
+        # Every instance representation but the plain binary ones encodes geometry in its *values*
+        # (Cellpose/Omnipose flows, HoVerNet maps, StarDist rays, EmbedSeg offsets/sigmas,
+        # affinities), so test-time augmentation has to remap the channels along with the pixels.
+        # Describe the output layout once here and let ensemble_predictions do the rest; the names
+        # come from model_output_channel_info, the same metadata that sizes the model heads, so the
+        # spec cannot drift from what the model actually outputs.
         _dc = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-        for _role in ("Gv", "Gh", "Gz"):
-            if _role in _dc:
-                self.cellpose_tta_flow_channels[_role] = _dc.index(_role)
+        self.tta_spec = build_tta_spec(
+            parse_model_output_channel_names(self.model_output_channel_info),
+            ndim=self.dims,
+            channel_extra_opts=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
+            anisotropy=self.resolution[-self.dims :],
+        )
 
         # Reflect padding mirrors border cells and corrupts their flow field; pad with zeros as Cellpose does.
-        if self.cellpose_tta_flow_channels:
+        if any(ch in _dc for ch in ("Gv", "Gh", "Gz")):
             self.padding_type = "zeros"
-
-        # EmbedSeg outputs are vector fields (offsets/sigmas), so TTA needs the channel-aware remap in
-        # ensemble_embedseg_predictions instead of the generic scalar D4 ensemble.
-        self.embedseg_tta = "E_offset" in _dc
 
         # Merging the image
         self.all_matching_stats_merge_patches = []
@@ -825,29 +828,42 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 pred_labels = np.expand_dims(pred_labels, 0)
         elif any(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")):
             channels = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-            fg_channel = next((ch for ch in channels if ch in ("F", "M", "B")), "")
             _pred_in = pred if self.dims == 3 else pred[0]
-            # Rescaled inputs already have flows resized back to native, so pass the native diameter
-            # (sets niter) with already_rescaled=True to avoid rescaling the flow field again.
-            diam_mean = self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN
-            diameter = (
-                float(cellpose_diameter) if (cellpose_rescaled and cellpose_diameter)
-                else self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
-            )
-            pred_labels = flows_to_instances(
-                pred=_pred_in,
-                channels=channels,
-                flow_type=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE,
-                fg_channel=fg_channel,
-                fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH,
-                flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD,
-                n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
-                max_cluster_dist=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.MAX_CLUSTER_DIST,
-                resolution=list(self.resolution[-self.dims:]),
-                diameter=diameter,
-                diam_mean=diam_mean,
-                already_rescaled=cellpose_rescaled,
-            )
+            # Cellpose vs Omnipose is selected by the flow channels' gradient strategy.
+            gradient_type = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
+            if gradient_type == "omnipose":
+                # Omnipose: suppressed flow-following + DBSCAN on the predicted distance field ('Db').
+                dist_channel = next((ch for ch in channels if ch in ("Db",)), "Db")
+                niter = int(self.cfg.PROBLEM.INSTANCE_SEG.OMNIPOSE.NITER)
+                pred_labels = omnipose_flows_to_instances(
+                    pred=_pred_in,
+                    channels=channels,
+                    dist_channel=dist_channel,
+                    mask_threshold=self.cfg.PROBLEM.INSTANCE_SEG.OMNIPOSE.MASK_THRESHOLD,
+                    flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.OMNIPOSE.FLOW_THRESHOLD,
+                    niter=niter if niter > 0 else None,
+                )
+            else:
+                fg_channel = next((ch for ch in channels if ch in ("F", "M", "B")), "")
+                # Rescaled inputs already have flows resized back to native, so pass the native diameter
+                # (sets niter) with already_rescaled=True to avoid rescaling the flow field again.
+                diam_mean = self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN
+                diameter = (
+                    float(cellpose_diameter) if (cellpose_rescaled and cellpose_diameter)
+                    else self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER
+                )
+                pred_labels = cellpose_flows_to_instances(
+                    pred=_pred_in,
+                    channels=channels,
+                    fg_channel=fg_channel,
+                    fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FG_THRESH,
+                    flow_threshold=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.FLOW_THRESHOLD,
+                    n_steps=self.cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.N_STEPS,
+                    resolution=list(self.resolution[-self.dims:]),
+                    diameter=diameter,
+                    diam_mean=diam_mean,
+                    already_rescaled=cellpose_rescaled,
+                )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)
         else:

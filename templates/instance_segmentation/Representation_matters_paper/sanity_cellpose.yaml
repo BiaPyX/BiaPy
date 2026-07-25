@@ -7,7 +7,6 @@ PROBLEM:
         DATA_CHANNEL_WEIGHTS: [1, 0.25, 0.25]
         CLASS_REBALANCE_WITHIN_CHANNELS: False
         CELLPOSE:
-            TYPE: "cellpose"
             DIAMETER: 30.0
             DIAM_MEAN: 30.0
             FLOW_THRESHOLD: 0.4

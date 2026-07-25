@@ -5,6 +5,8 @@ from skimage.segmentation import relabel_sequential
 from typing import List, Optional
 from numpy.typing import NDArray
 
+from biapy.data.omnipose_core import compute_masks_omnipose
+
 
 def normalize99(x, eps=1e-6):
     """
@@ -312,75 +314,6 @@ def _cluster_to_instances(
     return final_labels.astype(np.int32)
 
 
-def _dbscan_cluster(
-    final_pos: NDArray,
-    fg_coords: NDArray,
-    shape: tuple,
-    eps: float,
-) -> NDArray:
-    """
-    Build an instance label map by clustering convergence positions with DBSCAN.
-
-    This is the Omnipose-style clustering strategy: because Omnipose flows point
-    toward the cell skeleton (EDT gradient), all pixels in one cell converge to a
-    small neighbourhood, forming a tight DBSCAN cluster.  No histogram peak
-    detection is needed.
-
-    Algorithm:
-    1. Run DBSCAN on ``final_pos`` with ``eps`` as the neighbourhood radius and
-       ``min_samples=1`` (every pixel is a potential cluster seed).
-    2. Map DBSCAN cluster IDs back to foreground pixel coordinates.
-    3. Split any disconnected region sharing the same DBSCAN label into separate
-       instances (preserves fine-grained boundaries).
-
-    Parameters
-    ----------
-    final_pos : (N, ndim) float array
-        Post-integration convergence positions (from :func:`_euler_integrate`).
-    fg_coords : (N, ndim) int array
-        Source foreground pixel voxel coordinates.
-    shape : tuple of int
-        Spatial shape of the volume.
-    eps : float
-        DBSCAN neighbourhood radius in pixels.  Equivalent to ``max_cluster_dist``
-        in :func:`_cluster_to_instances`.
-
-    Returns
-    -------
-    labels : (shape) int32 ndarray
-        Instance label map.  0 = background.
-    """
-    from sklearn.cluster import DBSCAN
-
-    ndim = final_pos.shape[1]
-    db = DBSCAN(eps=eps, min_samples=1, n_jobs=-1).fit(final_pos)
-    db_labels = db.labels_  # -1 = noise
-
-    # Map DBSCAN labels to the spatial grid (0 = unassigned / noise)
-    pk_labels = np.zeros(shape, dtype=np.int32)
-    for i in range(len(fg_coords)):
-        lbl = int(db_labels[i])
-        if lbl >= 0:
-            pk_labels[tuple(fg_coords[i])] = lbl + 1  # shift so 0 stays background
-
-    # Split disconnected regions sharing the same DBSCAN cluster
-    final_labels = np.zeros(shape, dtype=np.int32)
-    current_id = 0
-    n_clusters = int(pk_labels.max())
-    for pk in range(1, n_clusters + 1):
-        mask = pk_labels == pk
-        if not mask.any():
-            continue
-        cc = cc_label(mask, connectivity=ndim)
-        n = int(cc.max())
-        if n > 0:
-            final_labels[mask] = cc[mask] + current_id
-            current_id += n
-
-    final_labels, _, _ = relabel_sequential(final_labels)
-    return final_labels.astype(np.int32)
-
-
 def _mask_to_unit_flow(
     mask: NDArray,
     resolution: NDArray,
@@ -488,7 +421,7 @@ def _flow_error(
     cell centre), so its error exceeds the threshold and it is discarded.
 
     The network flows ``Gv``/``Gh``/``Gz`` are expected already divided by 5
-    (as done in :func:`flows_to_instances`), i.e. ≈ unit magnitude, matching the
+    (as done in :func:`cellpose_flows_to_instances`), i.e. ≈ unit magnitude, matching the
     unit ``dP_masks`` regenerated here — the same convention as Cellpose's
     ``dP_masks - dP_net / 5``.  In 3D the Z term is down-weighted by 0.5, exactly
     as Cellpose does.
@@ -618,7 +551,7 @@ def _estimate_cell_radius(
     default ``percentile=50`` this is the *median* object radius, matching
     Cellpose's median-diameter convention (``utils.diameters``); the diameter
     (``2 * radius``) can be fed straight into the rescaling of
-    :func:`flows_to_instances`.  This lets a test set whose images have different
+    :func:`cellpose_flows_to_instances`.  This lets a test set whose images have different
     cell scales be handled without a fixed value — Cellpose's ``diameter=0`` path.
 
     .. note::
@@ -674,30 +607,93 @@ def _estimate_cell_radius(
     return radius, stats
 
 
-def flows_to_instances(
+def omnipose_flows_to_instances(
     pred: NDArray,
     channels: List[str],
-    flow_type: str = "cellpose",
+    dist_channel: str = "Db",
+    mask_threshold: float = 0.0,
+    flow_threshold: float = 0.4,
+    niter: Optional[int] = None,
+) -> NDArray:
+    """
+    Reconstruct instances from Omnipose flow + distance predictions.
+
+    Thin wrapper over :func:`biapy.data.omnipose_core.compute_masks_omnipose`, the faithful port of
+    Omnipose's ``compute_masks`` cluster path: divergence-rescaled, suppressed Euler flow following
+    with ``niter`` derived from the predicted distance field, then DBSCAN clustering of the convergence
+    points. Omnipose reconstructs on the isotropic pixel grid, so no ``resolution`` is used here. The
+    Cellpose reconstruction is handled separately by :func:`cellpose_flows_to_instances`.
+
+    Parameters
+    ----------
+    pred : (Y, X, C) or (Z, Y, X, C) float ndarray
+        Model prediction (spatial dims + channel dim last).
+    channels : list of str
+        Channel names matching the last axis of ``pred`` (e.g. ``["Db", "Gv", "Gh"]``).
+    dist_channel : str, optional
+        Name of the predicted distance-field channel (Omnipose ``Db``). Default ``"Db"``.
+    mask_threshold : float, optional
+        Foreground threshold on the distance field. Default 0.0.
+    flow_threshold : float, optional
+        Flow-error threshold to discard inconsistent masks; ``<= 0`` skips the check. Default 0.4.
+    niter : int, optional
+        Euler-integration steps; ``None`` derives it from the distance field (Omnipose's rule).
+
+    Returns
+    -------
+    labels : int32 ndarray, shape (Y, X) or (Z, Y, X). 0 = background.
+    """
+    ch = list(channels)
+    if "Gv" not in ch or "Gh" not in ch:
+        raise ValueError("'pred' must contain at least 'Gv' and 'Gh' channels")
+    if dist_channel not in ch:
+        raise ValueError(
+            f"Omnipose post-processing needs the distance channel '{dist_channel}' in DATA_CHANNELS; "
+            f"got {ch}"
+        )
+
+    is_3d = pred.ndim == 4  # (Z, Y, X, C)
+    Gv = pred[..., ch.index("Gv")].astype(np.float32)
+    Gh = pred[..., ch.index("Gh")].astype(np.float32)
+    # Flow axis order [.., y, x] ([z, y, x] in 3D), matching Omnipose's dP = [dz, dy, dx].
+    if is_3d and "Gz" in ch:
+        Gz = pred[..., ch.index("Gz")].astype(np.float32)
+        dP = np.stack([Gz, Gv, Gh])
+    else:
+        dP = np.stack([Gv, Gh])
+
+    dist = pred[..., ch.index(dist_channel)].astype(np.float32)
+
+    labels = compute_masks_omnipose(
+        dP,
+        dist,
+        mask_threshold=mask_threshold,
+        flow_threshold=flow_threshold,
+        niter=niter,
+    )
+    return labels.astype(np.int32)
+
+
+def cellpose_flows_to_instances(
+    pred: NDArray,
+    channels: List[str],
     fg_channel: str = "",
     fg_thresh: float = 0.5,
     flow_threshold: float = 0.4,
     n_steps: int = 200,
-    max_cluster_dist: float = 5.0,
     resolution: List[float] = [1.0, 1.0, 1.0],
     diameter: float = 30.0,
     diam_mean: float = 30.0,
     already_rescaled: bool = False,
 ) -> NDArray:
     """
-    Convert predicted Cellpose / Omnipose flow fields into an instance label map.
+    Convert predicted Cellpose flow fields into an instance label map.
 
-    ``flow_type="cellpose"``: flows are the gradient of a per-instance heat-diffusion potential.
-    Euler-integrate each foreground pixel (≈1 px/step), detect histogram peaks and grow them with a
-    5-iteration 3x3 expansion; an optional flow-error check removes masks whose diffusion-regenerated
-    flow disagrees with the network.
+    Flows are the gradient of a per-instance heat-diffusion potential. Euler-integrate each foreground
+    pixel (≈1 px/step), detect histogram peaks and grow them with a 5-iteration 3x3 expansion; an
+    optional flow-error check removes masks whose diffusion-regenerated flow disagrees with the network.
 
-    ``flow_type="omnipose"``: flows are the gradient of the per-cell EDT. Euler-integrate, then DBSCAN
-    the convergence positions. The flow-error check is skipped.
+    Omnipose predictions use :func:`omnipose_flows_to_instances` instead.
 
     Parameters
     ----------
@@ -706,39 +702,32 @@ def flows_to_instances(
     channels : list of str
         Channel names matching the last axis of ``pred``,
         e.g. ``["F", "Gv", "Gh"]``, ``["B", "Gv", "Gh", "Gz"]``.
-    flow_type : {"cellpose", "omnipose"}, optional
-        Post-processing strategy. Default "cellpose".
     fg_channel : str, optional
         Channel thresholded for the foreground mask (``"B"`` inverts it). Empty derives the mask from
         the flow magnitude.
     fg_thresh : float, optional
         Sigmoid-space threshold applied to ``fg_channel``. Default 0.5.
     flow_threshold : float, optional
-        Cellpose only. Mean-squared flow error above which an instance is removed; ``<= 0`` skips the
-        check. Default 0.4.
+        Mean-squared flow error above which an instance is removed; ``<= 0`` skips the check. Default 0.4.
     n_steps : int, optional
         Ignored; the step count is derived from the diameter. Default 200.
-    max_cluster_dist : float, optional
-        Omnipose only. DBSCAN ``eps`` radius in pixels. Default 5.0.
     resolution : list of float, optional
         Physical voxel size ``[z, y, x]`` for converting flow steps to pixels. Default [1, 1, 1].
     diameter : float, optional
-        Cellpose only. Expected cell diameter (px); flows are rescaled by ``diam_mean / diameter`` so
-        cells become ~``diam_mean``. ``diam_mean`` disables rescaling; ``<= 0`` auto-estimates it from
-        the median object size. Default 30.0.
+        Expected cell diameter (px); flows are rescaled by ``diam_mean / diameter`` so cells become
+        ~``diam_mean``. ``diam_mean`` disables rescaling; ``<= 0`` auto-estimates it from the median
+        object size. Default 30.0.
     diam_mean : float, optional
-        Cellpose only. Diameter the model was trained at (30 cyto, 17 nuclei). Default 30.0.
+        Diameter the model was trained at (30 cyto, 17 nuclei). Default 30.0.
     already_rescaled : bool, optional
-        Cellpose only. ``True`` when the input was rescaled before the network and the flows resized
-        back, so the flow field is not rescaled again here. Default ``False``.
+        ``True`` when the input was rescaled before the network and the flows resized back, so the flow
+        field is not rescaled again here. Default ``False``.
 
     Returns
     -------
     labels : int32 ndarray, shape (Y, X) or (Z, Y, X)
         Instance label map.  0 = background.
     """
-    if flow_type not in ("cellpose", "omnipose"):
-        raise ValueError(f"flow_type must be 'cellpose' or 'omnipose', got '{flow_type}'")
     is_3d = pred.ndim == 4  # (Z, Y, X, C)
     spatial_shape = pred.shape[:-1]
     ndim = len(spatial_shape)
@@ -772,7 +761,7 @@ def flows_to_instances(
     # ── 2b. Diameter: auto-estimate per image when not provided ───────────
     # BiaPy has no SizeModel, so it measures the median object size from the foreground mask. An
     # explicit positive diameter skips estimation.
-    if flow_type == "cellpose" and diameter <= 0:
+    if diameter <= 0:
         radius, stats = _estimate_cell_radius(fg_mask, is_3d)
         if radius is not None and radius > 0:
             diameter = 2.0 * radius
@@ -783,14 +772,13 @@ def flows_to_instances(
             print(f"  Diameter auto-estimate unreliable (too few objects); "
                   f"falling back to diam_mean={diam_mean}")
 
-    # ── 2c. Cellpose diameter rescaling ───────────────────────────────────
+    # ── 2c. Diameter rescaling ────────────────────────────────────────────
     # Run the dynamics with cells at ~diam_mean. When the input was already rescaled before the network
     # (``already_rescaled``), skip it here to avoid resampling the flows twice; otherwise rescale the
-    # flow field by diam_mean/diameter and resize the labels back afterwards. Cellpose only (Omnipose
-    # clusters convergence positions directly). Rescale is uniform per axis (approximate for anisotropic
-    # 3D).
+    # flow field by diam_mean/diameter and resize the labels back afterwards. Rescale is uniform per axis
+    # (approximate for anisotropic 3D).
     rescale = float(diam_mean) / float(diameter) if diameter > 0 else 1.0
-    do_rescale = flow_type == "cellpose" and not already_rescaled and abs(rescale - 1.0) > 1e-3
+    do_rescale = not already_rescaled and abs(rescale - 1.0) > 1e-3
     if do_rescale:
         work_shape = tuple(max(1, int(round(s * rescale))) for s in spatial_shape)
         Gv = _resize_spatial(Gv, work_shape, order=1).astype(np.float32)
@@ -806,10 +794,7 @@ def flows_to_instances(
     # ── 2d. Integration step count ────────────────────────────────────────
     # Depends on the dynamics resolution: 200 steps when integrating at ~diam_mean (do_rescale),
     # (1/rescale)*200 when integrating at native resolution (Cellpose's niter rule).
-    if flow_type == "cellpose":
-        n_steps = 200 if do_rescale else max(1, int(round((1.0 / rescale) * 200)))
-    else:
-        n_steps = 200
+    n_steps = 200 if do_rescale else max(1, int(round((1.0 / rescale) * 200)))
 
     # ── 3. Scale and mask flows ───────────────────────────────────────────
     # Raw network output ≈ ±5 (5x targets); divide by 5 for ≈ ±1 px/step, then zero background.
@@ -828,24 +813,19 @@ def flows_to_instances(
     flow_comps: List[NDArray] = ([Gz, Gv, Gh] if Gz is not None else [Gv, Gh])  # type: ignore[list-item]
 
     # ── 6. Euler integration ──────────────────────────────────────────────
-    print(f"  Flow integration ({flow_type}): {len(fg_coords):,} foreground pixels, {n_steps} steps "
+    print(f"  Flow integration (cellpose): {len(fg_coords):,} foreground pixels, {n_steps} steps "
           f"(rescale={rescale:.3f}, work_shape={work_shape}) ...")
     final_pos = _euler_integrate(flow_comps, fg_coords, n_steps, res)
 
     # ── 7. Cluster convergence positions into instances ───────────────────
+    # Cellpose: histogram peak detection + 5-step 3×3 expansion.
     print("  Clustering convergence positions ...")
-    if flow_type == "omnipose":
-        # DBSCAN on convergence positions: each cluster = one cell.
-        # eps = max_cluster_dist (how close positions must be to belong to the same instance).
-        labels = _dbscan_cluster(final_pos, fg_coords, work_shape, max_cluster_dist)
-    else:
-        # Cellpose: histogram peak detection + 5-step 3×3 expansion.
-        labels = _cluster_to_instances(final_pos, fg_coords, work_shape)
+    labels = _cluster_to_instances(final_pos, fg_coords, work_shape)
 
-    # ── 8. Optional flow error check (Cellpose only) ──────────────────────
+    # ── 8. Optional flow error check ──────────────────────────────────────
     # Regenerates each mask's flow by diffusion and removes masks whose flow disagrees with the network
-    # (over-segmentation fragments). Skipped for Omnipose.
-    if flow_type == "cellpose" and flow_threshold > 0.0 and int(labels.max()) > 0:
+    # (over-segmentation fragments).
+    if flow_threshold > 0.0 and int(labels.max()) > 0:
         print(f"  Flow error check (threshold={flow_threshold}) ...")
         errors = _flow_error(Gv, Gh, labels, Gz, resolution=res)
         n_before = int(labels.max())

@@ -48,7 +48,12 @@ from numpy.typing import NDArray
 from biapy.utils.misc import to_numpy_format, to_pytorch_format, os_walk_clean
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread, reduce_dtype
 from biapy.data.pre_processing import generate_ellipse_footprint
-from biapy.data.post_processing.embedseg import ensemble_embedseg_predictions
+from biapy.data.post_processing.tta import (
+    TTA_GROUPS,
+    AxisTransform,
+    TTASpec,
+    build_axis_transform_group,
+)
 
 ZarrOrH5Array = Union[zarr.Array, h5py.Dataset]
 
@@ -1233,17 +1238,291 @@ def apply_median_filtering(
     return data
 
 
+def _pad_for_orientations(
+    img: NDArray,
+    orientations: List[AxisTransform],
+    pad_mode: str,
+) -> Tuple[NDArray, Optional[Tuple[int, ...]]]:
+    """
+    Pad the spatial axes that some orientation swaps so every orientation keeps one stackable shape.
+
+    Only the axes actually permuted by the chosen orientations are padded (a flips-only group needs
+    no padding at all), and only when their lengths differ.
+
+    Parameters
+    ----------
+    img : NDArray
+        Input image, ``(spatial..., channels)``.
+
+    orientations : list of AxisTransform
+        Orientations that will be applied.
+
+    pad_mode : str
+        ``numpy.pad`` mode. ``"reflect"`` is only safe for scalar predictions: mirroring the border
+        duplicates the cells sitting on it, which corrupts every direction-carrying channel there
+        (the same reason Cellpose pads with zeros). :func:`ensemble_predictions` therefore passes
+        ``"constant"`` whenever the spec is not scalar-only.
+
+    Returns
+    -------
+    img : NDArray
+        Padded image (or the input unchanged).
+
+    pad_before : tuple of int or None
+        Amount padded at the front of each spatial axis, to crop back afterwards. ``None`` when no
+        padding was needed.
+    """
+    n = img.ndim - 1
+    moved = set()
+    for t in orientations:
+        for a in range(n):
+            if t.perm[a] != a:
+                moved.update((a, t.perm[a]))
+    if not moved:
+        return img, None
+
+    target = max(img.shape[a] for a in moved)
+    if all(img.shape[a] == target for a in moved):
+        return img, None
+
+    pad_before = [0] * n
+    for a in moved:
+        pad_before[a] = target - img.shape[a]
+    # np.pad's "reflect" cannot pad more than dim-1 elements; fall back to edge replication there.
+    if pad_mode == "reflect" and any(pad_before[a] >= img.shape[a] for a in moved):
+        pad_mode = "edge"
+    pad_w = [(pad_before[a], 0) for a in range(n)] + [(0, 0)]
+    return np.pad(img, pad_w, mode=pad_mode), tuple(pad_before)
+
+
+def _crop_padding(arr: NDArray, pad_before: Optional[Tuple[int, ...]]) -> NDArray:
+    """Undo :func:`_pad_for_orientations` on a ``(spatial..., channels)`` array."""
+    if pad_before is None:
+        return arr
+    return arr[tuple(slice(p, None) for p in pad_before) + (slice(None),)]
+
+
+def _reduce_orientations(stack: NDArray, mode: str, mode_channels: Optional[List[int]]) -> NDArray:
+    """
+    Reduce the per-orientation predictions into one.
+
+    The mean is always valid. ``min``/``max`` are only applied to the channels the spec marks as
+    mode-reducible: a component-wise minimum over several flow/offset fields is not a flow field at
+    all, it just drags every vector towards the negative axis direction, so signed vector channels
+    are always averaged regardless of ``TEST.AUGMENTATION_MODE``.
+
+    Parameters
+    ----------
+    stack : NDArray
+        ``(n_orientations, spatial..., channels)``.
+
+    mode : str
+        ``"mean"``, ``"min"`` or ``"max"``.
+
+    mode_channels : list of int or None
+        Channels ``min``/``max`` may be applied to. ``None`` means "all of them".
+
+    Returns
+    -------
+    NDArray
+        ``(spatial..., channels)``.
+    """
+    out = np.mean(stack, axis=0)
+    if mode == "mean":
+        return out
+    funct = np.min if mode == "min" else np.max
+    if mode_channels is None:
+        return funct(stack, axis=0)
+    if mode_channels:
+        idx = np.asarray(mode_channels, dtype=np.int64)
+        out[..., idx] = funct(stack[..., idx], axis=0)
+    return out
+
+
+def ensemble_predictions(
+    o_img: NDArray,
+    pred_func: Callable,
+    axes_order_back: Tuple[int, ...],
+    axes_order: Tuple[int, ...],
+    device: torch.device,
+    ndim: int,
+    batch_size_value: int = 1,
+    mode: str = "mean",
+    tta_spec: Optional[TTASpec] = None,
+    group: str = "auto",
+    verbose: bool = False,
+) -> torch.Tensor | Dict:
+    """
+    Representation-aware test-time augmentation: one routine for every prediction type.
+
+    The image is predicted in several orientations, each prediction is un-transformed and the
+    results are reduced. The orientations are the signed axis permutations (:class:`AxisTransform`),
+    i.e. exactly the 90 degree rotations, the axis flips and their compositions: 8 in 2D, 16 in 3D
+    (Z is never swapped with Y/X, as volumes are usually anisotropic along Z).
+
+    Un-transforming a prediction spatially is only enough while every channel is a scalar field.
+    Cellpose/Omnipose flows, HoVerNet maps, StarDist rays, EmbedSeg offsets/sigmas and affinities
+    all encode a direction or an axis in their *values*, so those values must be remapped too. That
+    remap is derived from the very same ``(perm, sign)`` that moved the pixels, described once per
+    workflow by ``tta_spec`` -- there is no per-representation branch here.
+
+    A spec also declares which orientations it can represent exactly. Orientations it cannot are
+    dropped instead of silently producing wrong output; see :meth:`TTASpec.filter_orientations`.
+    Typical degradations: 3D StarDist (Fibonacci ray directions map onto nothing) falls back to no
+    TTA, and EmbedSeg on anisotropic data falls back to flips only.
+
+    Parameters
+    ----------
+    o_img : Numpy array
+        Input image. ``(y, x, channels)`` in 2D, ``(z, y, x, channels)`` in 3D.
+
+    pred_func : function
+        Function to make predictions. Receives ``(batch, spatial..., channels)`` and returns a
+        tensor or a dict holding at least ``"pred"``.
+
+    axes_order_back : tuple
+        Axis order to convert from tensor to numpy. E.g. ``(0, 3, 1, 2)`` (2D) or
+        ``(0, 4, 1, 2, 3)`` (3D).
+
+    axes_order : tuple
+        Axis order to convert from numpy to tensor.
+
+    device : Torch device
+        Device used.
+
+    ndim : int
+        Number of spatial dimensions of ``o_img`` (2 or 3).
+
+    batch_size_value : int, optional
+        Batch size value.
+
+    mode : str, optional
+        Ensemble mode. Possible options: ``"mean"``, ``"min"``, ``"max"``. ``"min"``/``"max"`` are
+        applied only to the channels for which they are meaningful (see
+        :func:`_reduce_orientations`); signed vector channels are always averaged.
+
+    tta_spec : TTASpec, optional
+        Description of what each output channel is, from
+        :func:`biapy.data.post_processing.tta.build_tta_spec`. ``None`` treats every channel as a
+        scalar field, which is exactly right for semantic segmentation, denoising, SSL, etc.
+
+    group : str, optional
+        Largest orientation set to consider: ``"auto"``/``"full"`` (rotations + flips), ``"flips"``
+        (flips only, what Cellpose does upstream) or ``"none"`` (identity only, i.e. no TTA). The
+        spec may still shrink it for correctness.
+
+    verbose : bool, optional
+        Print the orientations actually used and why any were dropped.
+
+    Returns
+    -------
+    out : torch.Tensor or dict
+        Model output with the ``pred`` key assembled. Extra outputs returned by ``pred_func``
+        (e.g. ``"class"``) are ensembled as scalar fields when they are spatial maps of the same
+        shape, and passed through from the first orientation otherwise.
+    """
+    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
+    assert ndim in (2, 3), "ndim must be 2 or 3, got {}".format(ndim)
+    assert group in TTA_GROUPS, "group must be one of {}, got '{}'".format(TTA_GROUPS, group)
+    if o_img.ndim != ndim + 1:
+        raise ValueError("Expected a {}D input (spatial..., channels); got shape {}".format(ndim, o_img.shape))
+
+    # 1) Pick the orientations, letting the spec veto the ones it cannot represent exactly.
+    orientations = build_axis_transform_group(ndim, level=("full" if group == "auto" else group))
+    dropped = []
+    if tta_spec is not None:
+        orientations, dropped = tta_spec.filter_orientations(orientations)
+    if verbose:
+        print(
+            "TTA: {} orientation(s) over {}".format(
+                len(orientations), tta_spec.describe() if tta_spec else "scalar channels"
+            )
+        )
+        for reason in dropped:
+            print("TTA: some orientations skipped because {}".format(reason))
+
+    # 2) Square off the axes that get swapped. Reflect padding mirrors the cells sitting on the
+    #    border and corrupts their flows/offsets/rays, so it is only used for scalar predictions.
+    pad_mode = "reflect" if (tta_spec is None or tta_spec.is_scalar_only) else "constant"
+    img, pad_before = _pad_for_orientations(o_img, orientations, pad_mode)
+
+    # 3) Predict every orientation.
+    aug_img = np.stack([t.apply(img) for t in orientations], axis=0)
+    preds: List[NDArray] = []
+    extra_chunks: Dict[str, List] = {}
+    total = aug_img.shape[0]
+    for i in range(int(math.ceil(total / batch_size_value))):
+        low, top = i * batch_size_value, min((i + 1) * batch_size_value, total)
+        r_aux = pred_func(aug_img[low:top])
+        if isinstance(r_aux, dict):
+            for key, val in r_aux.items():
+                if key != "pred":
+                    extra_chunks.setdefault(key, []).append(val)
+            r_aux = r_aux["pred"]
+        r_aux = to_numpy_format(r_aux, axes_order_back)
+        if r_aux.ndim == ndim + 1:
+            r_aux = np.expand_dims(r_aux, 0)
+        preds.append(r_aux)
+    pred = np.concatenate(preds, axis=0).astype(np.float32)  # (N, spatial..., ch)
+    del preds, aug_img
+
+    if tuple(pred.shape[1 : 1 + ndim]) != tuple(img.shape[:ndim]):
+        raise ValueError(
+            "TTA needs the prediction to keep the input's spatial shape to undo the augmentation; "
+            "got {} for an input of {}".format(pred.shape[1 : 1 + ndim], img.shape[:ndim])
+        )
+
+    # 4) Undo each orientation: spatially first, then the channel remap the spec prescribes.
+    for n, t in enumerate(orientations):
+        restored = t.inverse.apply(pred[n])
+        if tta_spec is not None:
+            tta_spec.remap_channels(restored, t)
+        pred[n] = restored
+
+    # 5) Reduce and crop the padding back off.
+    mode_channels = tta_spec.mode_reducible_channels if tta_spec is not None else None
+    out = _crop_padding(_reduce_orientations(pred, mode, mode_channels), pad_before)
+    out = to_pytorch_format(np.expand_dims(out, 0), axes_order, device)
+
+    if not extra_chunks:
+        return out
+
+    # 6) Extra model outputs (e.g. the classification head). Spatial maps matching the prediction
+    #    shape are ensembled as scalar fields; anything else is passed through unchanged.
+    rest_of_outs: Dict = {}
+    for key, chunks in extra_chunks.items():
+        arrs = []
+        for c in chunks:
+            a = to_numpy_format(c, axes_order_back)
+            arrs.append(np.expand_dims(a, 0) if a.ndim == ndim + 1 else a)
+        stacked = np.concatenate(arrs, axis=0)
+        if stacked.shape[0] != len(orientations) or tuple(stacked.shape[1 : 1 + ndim]) != tuple(img.shape[:ndim]):
+            rest_of_outs[key] = chunks[0]  # not a matching spatial map: keep it as the model gave it
+            continue
+        stacked = stacked.astype(np.float32)
+        for n, t in enumerate(orientations):
+            stacked[n] = t.inverse.apply(stacked[n])
+        reduced = _crop_padding(_reduce_orientations(stacked, mode, None), pad_before)
+        rest_of_outs[key] = to_pytorch_format(np.expand_dims(reduced, 0), axes_order, device)
+
+    rest_of_outs["pred"] = out
+    return rest_of_outs
+
+
 def ensemble8_2d_predictions(
     o_img: NDArray,
     pred_func: Callable,
-    axes_order_back: Tuple[int,...],
-    axes_order: Tuple[int,...],
+    axes_order_back: Tuple[int, ...],
+    axes_order: Tuple[int, ...],
     device: torch.device,
-    batch_size_value: int=1,
-    mode="mean",
+    batch_size_value: int = 1,
+    mode: str = "mean",
 ) -> torch.Tensor | Dict:
     """
     Output the mean prediction of a given image generating its 8 possible rotations and flips.
+
+    Thin wrapper kept for the scalar workflows (denoising, self-supervised, ...); it is
+    :func:`ensemble_predictions` with no ``tta_spec``, i.e. every channel treated as a scalar field.
 
     Parameters
     ----------
@@ -1258,10 +1537,10 @@ def ensemble8_2d_predictions(
 
     axes_order : tuple
         Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
- 
+
     device : Torch device
         Device used.
- 
+
     batch_size_value : int, optional
         Batch size value.
 
@@ -1273,279 +1552,47 @@ def ensemble8_2d_predictions(
     out : dict
         Output of the model with the pred key assembled.
     """
-    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
-    rest_of_outs = {}
-    # Prepare all the image transformations per channel
-    total_img = []
-    for channel in range(o_img.shape[-1]):
-        aug_img = []
-
-        # Transformations per channel
-        _img = np.expand_dims(o_img[..., channel], -1)
-
-        # Convert into square image to make the rotations properly
-        pad_to_square = _img.shape[0] - _img.shape[1]
-        if pad_to_square < 0:
-            img = np.pad(_img, [(abs(pad_to_square), 0), (0, 0), (0, 0)], "reflect")
-        else:
-            img = np.pad(_img, [(0, 0), (pad_to_square, 0), (0, 0)], "reflect")
-
-        # Make 8 different combinations of the img
-        aug_img.append(img)
-        aug_img.append(np.rot90(img, axes=(0, 1), k=1))
-        aug_img.append(np.rot90(img, axes=(0, 1), k=2))
-        aug_img.append(np.rot90(img, axes=(0, 1), k=3))
-        aug_img.append(img[:, ::-1])
-        img_aux = img[:, ::-1]
-        aug_img.append(np.rot90(img_aux, axes=(0, 1), k=1))
-        aug_img.append(np.rot90(img_aux, axes=(0, 1), k=2))
-        aug_img.append(np.rot90(img_aux, axes=(0, 1), k=3))
-        aug_img = np.array(aug_img)
-
-        total_img.append(aug_img)
-
-    del aug_img, img_aux
-
-    # Merge channels
-    total_img = np.concatenate(total_img, -1)
-
-    # Make the prediction
-    _decoded_aug_img = []
-    l = int(math.ceil(total_img.shape[0] / batch_size_value))
-    for i in range(l):
-        top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_img.shape[0] else total_img.shape[0]
-        r_aux = pred_func(total_img[i * batch_size_value : top])
-        
-        # Save the first time the rest of the outputs given by the model
-        if len(rest_of_outs) == 0 and isinstance(r_aux, dict):
-            for key in [x for x in r_aux.keys() if x != "pred"]:
-                rest_of_outs[key] = r_aux[key]
-        
-        if isinstance(r_aux, dict):
-            r_aux = r_aux["pred"]
-        
-        r_aux = to_numpy_format(r_aux, axes_order_back)        
-        _decoded_aug_img.append(r_aux)
-    _decoded_aug_img = np.concatenate(_decoded_aug_img)
-
-    # Undo the combinations of the img
-    arr = []
-    for c in range(_decoded_aug_img.shape[-1]):
-        # Remove the last channel to make the transformations correctly
-        decoded_aug_img = _decoded_aug_img[..., c].astype(np.float32)
-
-        # Undo the combinations of the image
-        out_img = []
-        out_img.append(decoded_aug_img[0])
-        out_img.append(np.rot90(decoded_aug_img[1], axes=(0, 1), k=3))
-        out_img.append(np.rot90(decoded_aug_img[2], axes=(0, 1), k=2))
-        out_img.append(np.rot90(decoded_aug_img[3], axes=(0, 1), k=1))
-        out_img.append(decoded_aug_img[4][:, ::-1])
-        out_img.append(np.rot90(decoded_aug_img[5], axes=(0, 1), k=3)[:, ::-1])
-        out_img.append(np.rot90(decoded_aug_img[6], axes=(0, 1), k=2)[:, ::-1])
-        out_img.append(np.rot90(decoded_aug_img[7], axes=(0, 1), k=1)[:, ::-1])
-        out_img = np.array(out_img)
-        out_img = np.expand_dims(out_img, -1)
-        arr.append(out_img)
-
-    out_img = np.concatenate(arr, -1)
-    del decoded_aug_img, _decoded_aug_img, arr
-
-    if pad_to_square != 0:
-        if pad_to_square < 0:
-            out = np.zeros(
-                (
-                    out_img.shape[0],
-                    img.shape[0] + pad_to_square,
-                    img.shape[1],
-                    out_img.shape[-1],
-                )
-            )
-        else:
-            out = np.zeros(
-                (
-                    out_img.shape[0],
-                    img.shape[0],
-                    img.shape[1] - pad_to_square,
-                    out_img.shape[-1],
-                )
-            )
-    else:
-        out = np.zeros(out_img.shape)
-
-    # Undo the padding
-    for i in range(out_img.shape[0]):
-        if pad_to_square < 0:
-            out[i] = out_img[i, abs(pad_to_square) :, :]
-            if "class" in rest_of_outs:
-                rest_of_outs["class"] = rest_of_outs["class"][i, abs(pad_to_square) :, :]
-        else:
-            out[i] = out_img[i, :, abs(pad_to_square) :]
-            if "class" in rest_of_outs:
-                rest_of_outs["class"] = rest_of_outs["class"][i, :, abs(pad_to_square) :]
-
-    funct = np.mean
-    if mode == "min":
-        funct = np.min
-    elif mode == "max":
-        funct = np.max
-    out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axes_order, device)
-    if len(rest_of_outs) == 0:
-        return out
-    else:
-        rest_of_outs.update({"pred": out})
-        return rest_of_outs
-
-
-def ensemble_cellpose_flip_predictions(
-    o_img: NDArray,
-    pred_func: Callable,
-    axes_order_back: Tuple[int, ...],
-    axes_order: Tuple[int, ...],
-    device: torch.device,
-    flow_channels: Dict,
-    ndim: int,
-    batch_size_value: int = 1,
-    mode: str = "mean",
-) -> torch.Tensor | Dict:
-    """
-    Cellpose-style flip test-time augmentation for flow-field (Gv/Gh/Gz) predictions (2D and 3D).
-
-    Faithful port of Cellpose's ``transforms.make_tiles(augment=True)`` + ``unaugment_tiles``,
-    generalized to ``ndim`` spatial dimensions: the image is predicted in **all ``2**ndim`` flip
-    orientations** (every combination of reflecting the spatial axes), each prediction is un-flipped
-    spatially, and the flow-vector component parallel to every reflected axis is negated so the
-    averaged flow field stays consistent (``Gv`` = y-flow, ``Gh`` = x-flow, ``Gz`` = z-flow; a
-    reflection reverses the component along the mirrored axis, exactly as Cellpose negates
-    ``dY``/``dX``). No rotations are used (Cellpose does not rotate in TTA). Scalar channels
-    (foreground, class, ...) are only un-flipped. The orientations are then reduced with ``mode``.
-
-    Parameters
-    ----------
-    o_img : Numpy array
-        Input image. ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
-
-    pred_func : function
-        Function to make predictions.
-
-    axes_order_back : tuple
-        Axis order to convert from tensor to numpy. E.g. ``(0, 3, 1, 2)`` (2D) or ``(0, 4, 1, 2, 3)`` (3D).
-
-    axes_order : tuple
-        Axis order to convert from numpy to tensor.
-
-    device : Torch device
-        Device used.
-
-    flow_channels : dict
-        Output-prediction channel indices of the flow components, e.g. ``{"Gv": i, "Gh": j, "Gz": k}``
-        (any role may be absent). ``Gv`` is negated on a Y flip, ``Gh`` on an X flip, ``Gz`` on a Z flip.
-
-    ndim : int
-        Number of spatial dimensions of ``o_img`` (2 or 3).
-
-    batch_size_value : int, optional
-        Batch size value.
-
-    mode : str, optional
-        Ensemble mode. Possible options: "mean", "min", "max".
-
-    Returns
-    -------
-    out : torch.Tensor or dict
-        Model output with the ``pred`` key assembled (matching :func:`ensemble8_2d_predictions`).
-    """
-    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
-    assert ndim in (2, 3), "ndim must be 2 or 3, got {}".format(ndim)
-
-    # Spatial axis -> flow role that must be sign-flipped when that axis is reflected. The channel
-    # axis is -1 and the leading ``ndim`` axes are spatial: (y, x) in 2D, (z, y, x) in 3D.
-    axis_role = {0: "Gv", 1: "Gh"} if ndim == 2 else {0: "Gz", 1: "Gv", 2: "Gh"}
-
-    def _flip_slice(combo):
-        # Slicing tuple that reflects the spatial axes marked in ``combo`` (channel axis kept intact).
-        return tuple(slice(None, None, -1) if combo[a] else slice(None) for a in range(ndim)) + (slice(None),)
-
-    # All 2**ndim flip combinations (Cellpose make_tiles augment=True, generalized): bit a of the
-    # orientation index selects whether spatial axis a is reflected.
-    combos = [tuple((o >> a) & 1 for a in range(ndim)) for o in range(2 ** ndim)]
-
-    # Build the augmented inputs.
-    aug_img = np.stack([o_img[_flip_slice(c)] for c in combos], axis=0)  # (N, spatial..., ch)
-
-    # Predict (batched, like ensemble8_2d_predictions).
-    preds, class_outs = [], []
-    l = int(math.ceil(aug_img.shape[0] / batch_size_value))
-    for i in range(l):
-        top = min((i + 1) * batch_size_value, aug_img.shape[0])
-        r_aux = pred_func(aug_img[i * batch_size_value : top])
-        cls = None
-        if isinstance(r_aux, dict):
-            cls = r_aux.get("class")
-            r_aux = r_aux["pred"]
-        preds.append(to_numpy_format(r_aux, axes_order_back))
-        if cls is not None:
-            class_outs.append(to_numpy_format(cls, axes_order_back))
-    pred = np.concatenate(preds, axis=0).astype(np.float32)  # (N, spatial..., ch)
-    has_class = len(class_outs) > 0
-    cls = np.concatenate(class_outs, axis=0).astype(np.float32) if has_class else None
-
-    # Undo each flip spatially (a flip is its own inverse) and sign-correct the flow components along
-    # every reflected axis. ``.copy()`` avoids in-place reversed-stride aliasing on self-assignment.
-    for n, combo in enumerate(combos):
-        sl = _flip_slice(combo)
-        pred[n] = pred[n][sl].copy()
-        for a in range(ndim):
-            if combo[a]:
-                idx = flow_channels.get(axis_role[a])
-                if idx is not None:
-                    pred[n][..., idx] *= -1.0
-        if has_class:
-            assert cls is not None
-            cls[n] = cls[n][sl].copy()
-
-    funct = np.mean
-    if mode == "min":
-        funct = np.min
-    elif mode == "max":
-        funct = np.max
-
-    out = np.expand_dims(funct(pred, axis=0), 0)
-    out = to_pytorch_format(out, axes_order, device)
-    if has_class:
-        cls_out = np.expand_dims(funct(cls, axis=0), 0)
-        cls_out = to_pytorch_format(cls_out, axes_order, device)
-        return {"pred": out, "class": cls_out}
-    return out
+    return ensemble_predictions(
+        o_img,
+        pred_func=pred_func,
+        axes_order_back=axes_order_back,
+        axes_order=axes_order,
+        device=device,
+        ndim=2,
+        batch_size_value=batch_size_value,
+        mode=mode,
+    )
 
 
 def ensemble16_3d_predictions(
     vol: NDArray,
     pred_func: Callable,
-    axes_order_back: Tuple[int,...],
-    axes_order: Tuple[int,...],
+    axes_order_back: Tuple[int, ...],
+    axes_order: Tuple[int, ...],
     device: torch.device,
-    batch_size_value: int=1,
-    mode: str="mean"
+    batch_size_value: int = 1,
+    mode: str = "mean",
 ) -> torch.Tensor | Dict:
     """
     Output the mean prediction of a given image generating its 16 possible rotations and flips.
 
+    Thin wrapper kept for the scalar workflows (denoising, self-supervised, ...); it is
+    :func:`ensemble_predictions` with no ``tta_spec``, i.e. every channel treated as a scalar field.
+
     Parameters
     ----------
-    o_img : 4D Numpy array
+    vol : 4D Numpy array
         Input image. E.g. ``(z, y, x, channels)``.
 
     pred_func : function
         Function to make predictions.
 
     axes_order_back : tuple
-        Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2,4)``.
+        Axis order to convert from tensor to numpy. E.g. ``(0,4,1,2,3)``.
 
     axes_order : tuple
-        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
- 
+        Axis order to convert from numpy to tensor.
+
     device : Torch device
         Device used.
 
@@ -1560,377 +1607,13 @@ def ensemble16_3d_predictions(
     out : dict
         Output of the model with the pred key assembled.
     """
-    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
-    rest_of_outs = {}
-    total_vol = []
-    for channel in range(vol.shape[-1]):
-
-        aug_vols = []
-
-        # Transformations per channel
-        _vol = vol[..., channel]
-
-        # Convert into square image to make the rotations properly
-        pad_to_square = _vol.shape[2] - _vol.shape[1]
-        if pad_to_square < 0:
-            volume = np.pad(_vol, [(0, 0), (0, 0), (abs(pad_to_square), 0)], "reflect")
-        else:
-            volume = np.pad(_vol, [(0, 0), (pad_to_square, 0), (0, 0)], "reflect")
-
-        # Make 16 different combinations of the volume
-        aug_vols.append(volume)
-        aug_vols.append(rotate(volume, mode="reflect", axes=(2, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume, mode="reflect", axes=(2, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume, mode="reflect", axes=(2, 1), angle=270, reshape=False))
-        volume_aux = np.flip(volume, 0)
-        aug_vols.append(volume_aux)
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False))
-        volume_aux = np.flip(volume, 1)
-        aug_vols.append(volume_aux)
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False))
-        volume_aux = np.flip(volume, 2)
-        aug_vols.append(volume_aux)
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False))
-        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False))
-        aug_vols = np.array(aug_vols)
-
-        # Add the last channel again
-        aug_vols = np.expand_dims(aug_vols, -1)
-        total_vol.append(aug_vols)
-
-    del aug_vols, volume_aux
-    # Merge channels
-    total_vol = np.concatenate(total_vol, -1)
-
-    _decoded_aug_vols = []
-
-    l = int(math.ceil(total_vol.shape[0] / batch_size_value))
-    for i in range(l):
-        top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_vol.shape[0] else total_vol.shape[0]
-        r_aux = pred_func(total_vol[i * batch_size_value : top])
-
-        # Save the first time the rest of the outputs given by the model
-        if len(rest_of_outs) == 0 and isinstance(r_aux, dict):
-            for key in [x for x in r_aux.keys() if x != "pred"]:
-                rest_of_outs[key] = r_aux[key]
-
-        if isinstance(r_aux, dict):
-            r_aux = r_aux["pred"]
-
-        if r_aux.ndim == 4:
-            r_aux = np.expand_dims(r_aux, 0)
-        r_aux = to_numpy_format(r_aux, axes_order_back) 
-        
-        _decoded_aug_vols.append(r_aux)
-
-    _decoded_aug_vols = np.concatenate(_decoded_aug_vols)
-    volume = np.expand_dims(volume, -1)
-
-    arr = []
-    for c in range(_decoded_aug_vols.shape[-1]):
-        # Remove the last channel to make the transformations correctly
-        decoded_aug_vols = _decoded_aug_vols[..., c].astype(np.float32)
-        # Undo the combinations of the volume
-        out_vols = []
-        out_vols.append(np.array(decoded_aug_vols[0]))
-        out_vols.append(
-            rotate(
-                np.array(decoded_aug_vols[1]),
-                mode="reflect",
-                axes=(2, 1),
-                angle=-90,
-                reshape=False,
-            )
-        )
-        out_vols.append(
-            rotate(
-                np.array(decoded_aug_vols[2]),
-                mode="reflect",
-                axes=(2, 1),
-                angle=-180,
-                reshape=False,
-            )
-        )
-        out_vols.append(
-            rotate(
-                np.array(decoded_aug_vols[3]),
-                mode="reflect",
-                axes=(2, 1),
-                angle=-270,
-                reshape=False,
-            )
-        )
-        out_vols.append(np.flip(np.array(decoded_aug_vols[4]), 0))
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[5]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-90,
-                    reshape=False,
-                ),
-                0,
-            )
-        )
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[6]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-180,
-                    reshape=False,
-                ),
-                0,
-            )
-        )
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[7]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-270,
-                    reshape=False,
-                ),
-                0,
-            )
-        )
-        out_vols.append(np.flip(np.array(decoded_aug_vols[8]), 1))
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[9]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-90,
-                    reshape=False,
-                ),
-                1,
-            )
-        )
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[10]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-180,
-                    reshape=False,
-                ),
-                1,
-            )
-        )
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[11]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-270,
-                    reshape=False,
-                ),
-                1,
-            )
-        )
-        out_vols.append(np.flip(np.array(decoded_aug_vols[12]), 2))
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[13]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-90,
-                    reshape=False,
-                ),
-                2,
-            )
-        )
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[14]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-180,
-                    reshape=False,
-                ),
-                2,
-            )
-        )
-        out_vols.append(
-            np.flip(
-                rotate(
-                    np.array(decoded_aug_vols[15]),
-                    mode="reflect",
-                    axes=(2, 1),
-                    angle=-270,
-                    reshape=False,
-                ),
-                2,
-            )
-        )
-
-        out_vols = np.array(out_vols)
-        out_vols = np.expand_dims(out_vols, -1)
-        arr.append(out_vols)
-
-    out_vols = np.concatenate(arr, -1)
-    del decoded_aug_vols, _decoded_aug_vols, arr
-
-    # Create the output data
-    if pad_to_square != 0:
-        if pad_to_square < 0:
-            out = np.zeros(
-                (
-                    out_vols.shape[0],
-                    volume.shape[0],
-                    volume.shape[1],
-                    volume.shape[2] + pad_to_square,
-                    out_vols.shape[-1],
-                )
-            )
-        else:
-            out = np.zeros(
-                (
-                    out_vols.shape[0],
-                    volume.shape[0],
-                    volume.shape[1] - pad_to_square,
-                    volume.shape[2],
-                    out_vols.shape[-1],
-                )
-            )
-    else:
-        out = np.zeros(out_vols.shape)
-
-    # Undo the padding
-    for i in range(out_vols.shape[0]):
-        if pad_to_square < 0:
-            out[i] = out_vols[i, :, :, abs(pad_to_square) :, :]
-            if "class" in rest_of_outs:
-                rest_of_outs["class"] = rest_of_outs["class"][i, :, :, abs(pad_to_square) :, :]
-        else:
-            out[i] = out_vols[i, :, abs(pad_to_square) :, :, :]
-            if "class" in rest_of_outs:
-                rest_of_outs["class"] = rest_of_outs["class"][i, :, abs(pad_to_square) :, :, :]
-
-    funct = np.mean
-    if mode == "min":
-        funct = np.min
-    elif mode == "max":
-        funct = np.max
-    out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axes_order, device)
-
-    if len(rest_of_outs) == 0:
-        return out
-    else:
-        rest_of_outs.update({"pred": out})
-        return rest_of_outs
-
-
-def ensemble_predictions(
-    o_img: NDArray,
-    pred_func: Callable,
-    axes_order_back: Tuple[int, ...],
-    axes_order: Tuple[int, ...],
-    device: torch.device,
-    ndim: int,
-    batch_size_value: int = 1,
-    mode: str = "mean",
-    flow_channels: Optional[Dict] = None,
-    embedseg: bool = False,
-) -> torch.Tensor | Dict:
-    """
-    Dispatch test-time augmentation to the ensembling routine matching the prediction type.
-
-    Picks the right TTA (in priority order): Cellpose flow-vector flip TTA when ``flow_channels`` is
-    given, EmbedSeg vector-field TTA when ``embedseg`` is set, otherwise the generic D4 scalar
-    ensemble (``ensemble8_2d_predictions`` in 2D, ``ensemble16_3d_predictions`` in 3D). All of them
-    share the same call convention and return type.
-
-    Parameters
-    ----------
-    o_img : Numpy array
-        Input image ``(y, x, channels)`` in 2D or ``(z, y, x, channels)`` in 3D.
-
-    pred_func : function
-        Function to make predictions.
-
-    axes_order_back : tuple
-        Axis order to convert from tensor to numpy.
-
-    axes_order : tuple
-        Axis order to convert from numpy to tensor.
-
-    device : Torch device
-        Device used.
-
-    ndim : int
-        Number of spatial dimensions of ``o_img`` (2 or 3).
-
-    batch_size_value : int, optional
-        Batch size value.
-
-    mode : str, optional
-        Ensemble mode. Possible options: "mean", "min", "max".
-
-    flow_channels : dict, optional
-        Cellpose flow-role -> output channel index map; when non-empty selects the Cellpose flip TTA.
-
-    embedseg : bool, optional
-        When True selects the EmbedSeg vector-field TTA.
-
-    Returns
-    -------
-    out : torch.Tensor or dict
-        Model output with the ``pred`` key assembled.
-    """
-    if flow_channels:
-        return ensemble_cellpose_flip_predictions(
-            o_img,
-            pred_func=pred_func,
-            axes_order_back=axes_order_back,
-            axes_order=axes_order,
-            device=device,
-            flow_channels=flow_channels,
-            ndim=ndim,
-            batch_size_value=batch_size_value,
-            mode=mode,
-        )
-    if embedseg:
-        return ensemble_embedseg_predictions(
-            o_img,
-            pred_func=pred_func,
-            axes_order_back=axes_order_back,
-            axes_order=axes_order,
-            device=device,
-            ndim=ndim,
-            batch_size_value=batch_size_value,
-            mode=mode,
-        )
-    if ndim == 2:
-        return ensemble8_2d_predictions(
-            o_img,
-            pred_func=pred_func,
-            axes_order_back=axes_order_back,
-            axes_order=axes_order,
-            device=device,
-            batch_size_value=batch_size_value,
-            mode=mode,
-        )
-    return ensemble16_3d_predictions(
-        o_img,
+    return ensemble_predictions(
+        vol,
         pred_func=pred_func,
         axes_order_back=axes_order_back,
         axes_order=axes_order,
         device=device,
+        ndim=3,
         batch_size_value=batch_size_value,
         mode=mode,
     )

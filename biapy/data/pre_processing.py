@@ -37,6 +37,7 @@ from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
 from typing import List, Optional, Dict, Tuple, Sequence, Union
 from scipy.spatial import cKDTree
+from biapy.data.omnipose_core import omnipose_masks_to_flows
 
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.util import (
@@ -837,28 +838,13 @@ def instances_to_flows(
         vol = vol.astype(np.int32)
 
     if gradient_type == "omnipose":
-        # Distance transform computed per cell so touching cells are not merged into one region (which
-        # would give wrong EDT values at shared interfaces).
-        dist_field = np.zeros(vol.shape, dtype=np.float32)
-        for lb in np.unique(vol):
-            if lb == 0:
-                continue
-            cell_mask = vol == lb
-            dist_field[cell_mask] = edt.edt(cell_mask, anisotropy=resolution, parallel=-1)[cell_mask]
-
-        if vol.ndim == 3:
-            grads = np.gradient(dist_field, resolution[0], resolution[1], resolution[2])
-        else:
-            grads = np.gradient(dist_field, resolution[1], resolution[2])
-
-        mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
-        grads = [g / mag for g in grads]
-
-        fg = vol > 0
+        # Gradient of the Omnipose Eikonal distance field (biapy.data.omnipose_core).
+        # mu is (ndim,) + vol.shape in axis order [.., y, x].
+        _T, mu = omnipose_masks_to_flows(vol)
         if vol.ndim == 3 and Gz is not None:
-            Gz[fg] = grads[-3][fg]
-        Gv[fg] = grads[-2][fg]
-        Gh[fg] = grads[-1][fg]
+            Gz[:] = mu[-3]
+        Gv[:] = mu[-2]
+        Gh[:] = mu[-1]
         return Gv, Gh, Gz
 
     # Cellpose strategy: per-cell heat diffusion. find_objects gives each label's bounding box directly
@@ -946,6 +932,29 @@ def unique_labels_fast(a: np.ndarray):
     present = np.zeros(K + 1, dtype=bool)
     present[a.ravel().astype(int)] = True        # O(n) and very cache-friendly
     return np.flatnonzero(present)    # sorted because we scan 0..K
+
+
+#: Instance-seg channels whose GT is directional (flows, HoVer displacements, StarDist rays,
+#: affinities): warping moves them without re-orienting, so they must be regenerated after any
+#: geometry-resampling augmentation.
+_DIRECTIONAL_CHANNELS = frozenset({"Gv", "Gh", "Gz", "H", "V", "Z", "R", "A"})
+
+
+def instance_channel_needs_regen(ch: str, channel_extra_opts: Dict = {}) -> bool:
+    """Whether a channel's GT must be recomputed from the augmented labels (vs. warped).
+
+    Directional channels are always corrupted by warping; distance channels only when they keep
+    absolute (unnormalized) values, since per-cell normalization makes them scale-invariant.
+    Everything else (binary masks, per-instance-normalized ``D``, embedding labels) warps safely.
+    """
+    opts = (channel_extra_opts or {}).get(ch, {})
+    if ch in _DIRECTIONAL_CHANNELS:
+        return True
+    if ch == "Db":
+        return opts.get("val_type", "norm") in ("raw", "omnipose")
+    if ch in ("Dc", "Dn"):
+        return not opts.get("norm", True)
+    return False
 
 
 def channel_physical_offsets(mode: List[str], channel_extra_opts: Dict = {}) -> Dict[str, int]:
@@ -1074,6 +1083,15 @@ def labels_into_channels(
 
     if np.issubdtype(vol.dtype, np.floating):
         vol = vol.astype(np.uint32)
+
+    # Omnipose builds its distance field ('Db') and flow field ('Gv'/'Gh'/'Gz') from the same Eikonal
+    # relaxation. Compute it once here and share it between both channel blocks below.
+    _omni_cache: Dict = {}
+
+    def _omni_flows():
+        if not _omni_cache:
+            _omni_cache["T"], _omni_cache["mu"] = omnipose_masks_to_flows(vol)
+        return _omni_cache["T"], _omni_cache["mu"]
 
     # Precompute regionprops only when needed
     needs_props = False
@@ -1287,15 +1305,24 @@ def labels_into_channels(
 
     # ---------- Db (distance to boundary) ----------
     if "Db" in mode:
-        db_channel = edt.edt(vol, anisotropy=resolution, parallel=-1)
-        assert isinstance(db_channel, np.ndarray), "Expected db to be a numpy array"
+        val_type = channel_extra_opts.get("Db", {}).get("val_type", "norm")
+        if val_type == "omnipose":
+            # Omnipose distance field: smooth Eikonal distance (biapy.data.omnipose_core),
+            # background set to -dist_bg (Omnipose's batch_labels convention).
+            db_channel = _omni_flows()[0].copy()
+            dist_bg = float(channel_extra_opts.get("Db", {}).get("dist_bg", 5.0))
+            db_channel[db_channel <= 0] = -dist_bg
+            val_type = None  # skip the EDT-based normalization branches below
+
+        if val_type is not None:
+            db_channel = edt.edt(vol, anisotropy=resolution, parallel=-1)
+            assert isinstance(db_channel, np.ndarray), "Expected db to be a numpy array"
 
         # Normalization
-        val_type = channel_extra_opts.get("Db", {}).get("val_type", "norm")
         if val_type in ["norm", "discretize"]:
             db_channel = norm_channel(
-                db_channel, 
-                vol, 
+                db_channel,
+                vol,
                 instances,
             )
             if val_type == "discretize":
@@ -1429,9 +1456,15 @@ def labels_into_channels(
     # ---------- Gv / Gh / Gz (flow-like channels) ----------
     if 'Gv' in mode:
         gtype = channel_extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
-        # Shared with the data generator, which regenerates the flows from the augmented labels. The
-        # diffusion iteration count is always "auto" (Cellpose's per-cell formula), never user-configured.
-        Gv, Gh, Gz = instances_to_flows(vol, resolution=resolution, niter="auto", gradient_type=gtype)
+        if gtype == "omnipose":
+            # Reuse the shared Eikonal computation (same field the 'Db' distance channel comes from).
+            mu = _omni_flows()[1]
+            Gz = mu[-3] if vol.ndim == 3 else None
+            Gv, Gh = mu[-2], mu[-1]
+        else:
+            # Shared with the data generator, which regenerates the flows from the augmented labels. The
+            # diffusion iteration count is always "auto" (Cellpose's per-cell formula), never user-configured.
+            Gv, Gh, Gz = instances_to_flows(vol, resolution=resolution, niter="auto", gradient_type=gtype)
 
         # Map back to the new_mask channels
         if "Gz" in mode and Gz is not None:
@@ -3074,14 +3107,21 @@ def create_HoVe_channels(
             x_map_box = x_map[inst_box[0] : inst_box[1], inst_box[2] : inst_box[3], inst_box[4] : inst_box[5]]
             x_map_box[inst_map > 0] = inst_x[inst_map > 0]
 
+    # ``axis_order`` may be given either as axis letters ("ZYX") or as the channel names the
+    # instance-segmentation workflow uses for them ("Z"/"V"/"H"); accept both, and drop the depth
+    # entry on 2D data where there is no z map to stack.
+    per_axis = {"Z": None, "Y": y_map, "X": x_map}
+    if dim == 3:
+        per_axis["Z"] = z_map
+    aliases = {"Z": "Z", "V": "Y", "H": "X", "Y": "Y", "X": "X"}
+
     stack = []
-    for x in axis_order:
-        if x == "Z":
-            stack.append(z_map)
-        elif x == "V":
-            stack.append(y_map)
-        elif x == "H":
-            stack.append(x_map)
+    for ch in axis_order:
+        axis = aliases.get(ch)
+        if axis is None:
+            raise ValueError("Unknown entry '{}' in 'axis_order'; expected any of ZYX / ZVH".format(ch))
+        if per_axis[axis] is not None:
+            stack.append(per_axis[axis])
     hv_map = np.stack(stack, axis=-1)
 
     return hv_map

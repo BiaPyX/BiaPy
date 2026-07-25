@@ -312,24 +312,21 @@ def create_train_val_augmentors(
             dic["instance_problem"] = True
             # Tag flow (Gv/Gh/Gz) channels so augmentation treats them as direction fields, not heatmaps.
             data_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-            flow_channels = {ch: i for i, ch in enumerate(data_channels) if ch in ("Gv", "Gh", "Gz")}
-            dic["flow_channels"] = flow_channels
-            # Virtual 'I' channel (raw labels) used to regenerate flows after augmentation, then dropped.
-            # Physical channel index (not list position): 'I' sits after the expanded 'R' block.
+            _extra_opts = dict(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])
+            # Channel names + opts so the generator can regenerate every geometry-derived channel from the
+            # augmented labels each batch (warping would corrupt directional/absolute values).
+            dic["data_channels"] = data_channels
+            dic["channel_extra_opts"] = _extra_opts
+            # Virtual 'I' channel (raw labels) used as the regeneration source, then dropped. Physical
+            # channel index (not list position): 'I' sits after the expanded 'R' block.
             dic["instance_channel"] = (
-                channel_physical_offsets(data_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
-                if "I" in data_channels else None
+                channel_physical_offsets(data_channels, _extra_opts)["I"] if "I" in data_channels else None
             )
-            # Gradient strategy for the regenerated flows (diffusion iters are always "auto").
-            dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
-            # StarDist 'Db'/'R' targets are recomputed from the augmented labels each batch (like the
-            # flows); pass their mask indices and the opts (nrays, Db val_type) needed to recreate them.
-            if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
-                dic["stardist_channels"] = {ch: i for i, ch in enumerate(data_channels) if ch in ("Db", "R")}
-                dic["stardist_channel_extra_opts"] = dict(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])
-            if len(flow_channels) > 0:
-                # The per-file diameter lives on DatasetFile.diameter; the generator computes the
-                # per-sample rescale factor DIAM_MEAN / diameter itself.
+            _gradient_type = _extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
+            if any(ch in data_channels for ch in ("Gv", "Gh", "Gz")) and _gradient_type != "omnipose":
+                # Cellpose only (Omnipose is diameter-agnostic, no rescaling). The per-file diameter lives
+                # on DatasetFile.diameter; the generator computes the per-sample rescale factor
+                # DIAM_MEAN / diameter itself.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
                 # Cellpose-style random scale jitter applied on top of the rescale during training.
                 dic["cellpose_scale_range"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_RANGE)
@@ -381,17 +378,19 @@ def create_train_val_augmentors(
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
             _val_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-            dic["flow_channels"] = {ch: i for i, ch in enumerate(_val_channels) if ch in ("Gv", "Gh", "Gz")}
-            # Virtual 'I' channel: feeds the flow regeneration that follows the rescale below, and is
-            # dropped before the batch reaches the model.
+            _extra_opts = dict(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])
+            dic["data_channels"] = _val_channels
+            dic["channel_extra_opts"] = _extra_opts
+            # Virtual 'I' channel: regeneration source that follows the rescale below, dropped before
+            # the batch reaches the model.
             dic["instance_channel"] = (
-                channel_physical_offsets(_val_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
-                if "I" in _val_channels else None
+                channel_physical_offsets(_val_channels, _extra_opts)["I"] if "I" in _val_channels else None
             )
-            dic["flow_gradient_type"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
-            if len(dic["flow_channels"]) > 0:
-                # Rescale cells to DIAM_MEAN px as Cellpose does on train and test, so val is scored at the
-                # scale the net trains at. Augmentation stays off (da=False); only this rescale is applied.
+            _gradient_type = _extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
+            if any(ch in _val_channels for ch in ("Gv", "Gh", "Gz")) and _gradient_type != "omnipose":
+                # Cellpose only (Omnipose is diameter-agnostic). Rescale cells to DIAM_MEAN px as Cellpose
+                # does on train and test, so val is scored at the scale the net trains at. Augmentation
+                # stays off (da=False); only this rescale is applied.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True

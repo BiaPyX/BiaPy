@@ -16,6 +16,8 @@ from yacs.config import CfgNode as CN
 
 from biapy.utils.misc import get_checkpoint_path, os_walk_clean
 from biapy.data.data_manipulation import check_value
+from biapy.data.pre_processing import instance_channel_needs_regen
+from biapy.data.post_processing.tta import TTA_GROUPS
 from biapy.config import Config
 
 def check_configuration(cfg, jobname, check_data_paths=True):
@@ -536,10 +538,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 act = dst.get("Db", {}).get("act", "")
                 if act == "" and val_type == "norm":
                     act = "sigmoid"
+                # Omnipose trains the distance field over the whole image (background = -dist_bg), so the
+                # loss must not be masked to foreground; other Db modes keep the foreground-only default.
                 dst["Db"] = {
                     "val_type": val_type,
                     "act": act,
-                    "mask_values": dst.get("Db", {}).get("mask_values", True),
+                    "mask_values": dst.get("Db", {}).get("mask_values", val_type != "omnipose"),
                 }
             # Dc — center/skeleton distance-to-center
             if "Dc" in chs:
@@ -644,11 +648,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("We")
 
-            # Carry the raw instance labels as an 'I' channel when the Cellpose/Omnipose flows are used.
-            # 'I' carries the labels so the generator can regenerate the geometry-dependent targets (flows
-            # 'Gv'/'Gh'/'Gz' and StarDist radial distances 'R') from the augmented labels, then drops it
-            # before the model. Appended last so dropping it shifts no other index; carries no loss.
-            if any(ch in sorted_original_instance_channels for ch in ("Gv", "Gh", "Gz", "R")) and "I" not in sorted_original_instance_channels:
+            # Carry the raw instance labels as an 'I' channel whenever a geometry-derived target must be
+            # recomputed from the augmented labels (see instance_channel_needs_regen): directional
+            # (flows Gv/Gh/Gz, HoVer H/V/Z, rays R, affinities A) or absolute-scale (raw/omnipose Db,
+            # unnormalized Dc/Dn) channels are corrupted by warping. 'I' is appended last (dropped before
+            # the model, carries no loss) so removing it shifts no other index.
+            _extra_opts = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+            if any(instance_channel_needs_regen(ch, _extra_opts) for ch in sorted_original_instance_channels) \
+                    and "I" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("I")
 
             # Create unique folder names for instance segmentation channel masks
@@ -691,13 +698,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             
             if "Gv" in sorted_original_instance_channels:
                 gradient_type = dst.get("Gv", {}).get("gradient_type", "cellpose")
-                cellpose_type = cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE
-                if gradient_type != cellpose_type:
-                    raise ValueError(
-                        f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0][\"Gv\"][\"gradient_type\"]' is '{gradient_type}' "
-                        f"but 'PROBLEM.INSTANCE_SEG.CELLPOSE.TYPE' is '{cellpose_type}'. "
-                        "Both must match: the GT is generated with 'gradient_type' and post-processing uses 'CELLPOSE.TYPE'."
-                    )
+                # The flow gradient strategy selects both the GT generation and the post-processing
+                # (Cellpose vs Omnipose). Omnipose reconstruction needs the predicted distance field, so a
+                # 'Db' channel built with val_type 'omnipose' must accompany omnipose flows.
+                if gradient_type == "omnipose":
+                    if "Db" not in sorted_original_instance_channels or dst.get("Db", {}).get("val_type") != "omnipose":
+                        raise ValueError(
+                            "Omnipose flows (DATA_CHANNELS_EXTRA_OPTS[0]['Gv']['gradient_type'] == 'omnipose') require a "
+                            "'Db' distance channel with DATA_CHANNELS_EXTRA_OPTS[0]['Db']['val_type'] == 'omnipose'."
+                        )
 
         else: # synapses
             chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
@@ -1402,6 +1411,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if not cfg.TEST.FULL_IMG and cfg.PROBLEM.TYPE != "CLASSIFICATION":
             raise ValueError("With TorchVision models only 'TEST.FULL_IMG' setting is available, so please set it")
 
+    if cfg.TEST.AUGMENTATION_MODE not in ["mean", "min", "max"]:
+        raise ValueError("'TEST.AUGMENTATION_MODE' needs to be one of ['mean', 'min', 'max']")
+
+    if cfg.TEST.AUGMENTATION_GROUP not in TTA_GROUPS:
+        raise ValueError("'TEST.AUGMENTATION_GROUP' needs to be one of {}".format(list(TTA_GROUPS)))
+
     if cfg.TEST.AUGMENTATION and cfg.TEST.REDUCE_MEMORY:
         raise ValueError(
             "'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
@@ -1523,9 +1538,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 # 'I' is auto-added and dropped before the model, so exclude it from this check.
                 _gflow_chs = set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) - {"I"}
                 if cfg.PROBLEM.NDIM == "2D":
-                    assert _gflow_chs == {"F", "Gv", "Gh"}, "'Gv' and 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '2D'"
+                    assert _gflow_chs in [{"Db", "Gv", "Gh"}, {"F", "Gv", "Gh"}], "'Gv' and 'Gh' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '2D'"
                 else:
-                    assert _gflow_chs == {"F", "Gv", "Gh", "Gz"}, "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
+                    assert _gflow_chs in [{"Db", "Gv", "Gh", "Gz"}, {"F", "Gv", "Gh", "Gz"}], "'Gv', 'Gh' and 'Gz' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'gradient-flow' and 'PROBLEM.NDIM' is '3D'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":  
                 for ch in ["R", "Gv", "Gh", "E_offset", "E_sigma", "E_seediness"]:
                     if ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
@@ -1624,7 +1639,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                    # 2*(ly+lx) / 6*(...) formula); only the gradient strategy is exposed.
                    _assert_str_in(val, "gradient_type", {"omnipose", "cellpose"}, ctx)
                 elif key  == "Db":  # distance channels group
-                    _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
+                    _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize", "omnipose"}, ctx)
                     if val["val_type"] == "discretize":
                         assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db"}, "'Db' channel must be the only one used when 'val_type' is 'discretize'"
                     _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)

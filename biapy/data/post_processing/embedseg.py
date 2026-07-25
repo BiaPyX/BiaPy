@@ -3,20 +3,19 @@ EmbedSeg post-processing utilities for BiaPy.
 
 This module gathers the EmbedSeg-specific inference code (spatial-embedding clustering) used by the
 ``E_offset``/``E_sigma``/``E_seediness`` instance-segmentation channels, kept separate from the
-generic ``post_processing`` module.
+generic ``post_processing`` module. Test-time augmentation lives in
+``biapy.data.post_processing.tta`` and covers EmbedSeg through its channel spec, so there is no
+EmbedSeg-specific ensembler here.
 
 Reference: `EmbedSeg: Embedding-based Instance Segmentation for Biomedical Microscopy Data
 <https://www.sciencedirect.com/science/article/pii/S1361841522001700>`_.
 
 Code adapted from: `EmbedSeg <https://github.com/juglab/EmbedSeg>`_.
 """
-import math
 import torch
 import numpy as np
-from typing import List, Tuple, Callable
+from typing import List
 from numpy.typing import NDArray
-
-from biapy.utils.misc import to_numpy_format, to_pytorch_format
 
 
 class Embedding_cluster:
@@ -188,166 +187,3 @@ class Embedding_cluster:
                 unclustered[proposal] = 0
             labels[mask_fg.squeeze().cpu()] = labels_masked.cpu()
         return labels
-
-
-def ensemble_embedseg_predictions(
-    o_img: NDArray,
-    pred_func: Callable,
-    axes_order_back: Tuple[int, ...],
-    axes_order: Tuple[int, ...],
-    device: torch.device,
-    ndim: int = 2,
-    batch_size_value: int = 1,
-    mode: str = "mean",
-) -> "torch.Tensor":
-    """
-    EmbedSeg-specific test-time augmentation for 2D/3D spatial-embedding predictions.
-
-    Faithful port of ``EmbedSeg.utils.test_time_augmentation.apply_tta_2d`` / ``apply_tta_3d``: the
-    image is predicted in every orientation of the XY-plane dihedral group crossed with the axis flips
-    -- ``4 rotations × Y-flip`` in 2D (8 orientations) and ``4 rotations × Y-flip × Z-flip`` in 3D
-    (16 orientations). Each prediction is spatially un-transformed **and** its vector channels are
-    remapped back to the canonical frame, then all orientations are reduced with ``mode``.
-
-    Unlike the generic :func:`ensemble8_2d_predictions`, the offset and sigma channels are not scalar
-    fields: an XY-plane rotation rotates the offset vector ``(off_x, off_y)`` by the rotation matrix
-    ``[cosθ sinθ; -sinθ cosθ]`` (channel swap + sign changes) and swaps the per-axis sigmas
-    ``(sig_x, sig_y)``; a Y-flip negates ``off_y`` and a Z-flip negates ``off_z``. ``off_z``/``sig_z``
-    are untouched by the XY rotation (rotations are only in-plane, as in the original). The physical
-    channel order is ``[off_x, off_y, (off_z,) sig_x, sig_y, (sig_z,) seed]`` -- identical between the
-    training loss and clustering (both build coordinates as ``cat((xm, ym(, zm)))``), which is what
-    makes the remap valid.
-
-    Parameters
-    ----------
-    o_img : Numpy array
-        Input image ``(y, x, channels)`` (2D) or ``(z, y, x, channels)`` (3D) -- the raw intensity
-        channels fed to the model.
-
-    pred_func : function
-        Function to make predictions.
-
-    axes_order_back : tuple
-        Axis order to convert from tensor to numpy. E.g. ``(0, 3, 1, 2)`` (2D) or ``(0, 4, 1, 2, 3)`` (3D).
-
-    axes_order : tuple
-        Axis order to convert from numpy to tensor.
-
-    device : Torch device
-        Device used.
-
-    ndim : int
-        Number of spatial dimensions of ``o_img`` (2 or 3).
-
-    batch_size_value : int, optional
-        Batch size value.
-
-    mode : str, optional
-        Ensemble mode. Possible options: "mean", "min", "max" ("mean" is the original behaviour).
-
-    Returns
-    -------
-    out : torch.Tensor
-        Model output with the ``pred`` key assembled (matching :func:`ensemble8_2d_predictions`).
-    """
-    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
-    assert ndim in (2, 3), "ndim must be 2 or 3, got {}".format(ndim)
-    assert o_img.ndim == ndim + 1, "Expected {}D input (spatial..., channels); got {}".format(ndim, o_img.shape)
-
-    # Per-sample spatial axes in the (spatial..., ch) layout: rotations act in the Y-X plane, Y/Z are
-    # the flip axes (Z only in 3D). Channel roles follow the coord order [x, y(, z)] used everywhere.
-    if ndim == 2:
-        y_ax, x_ax, z_ax = 0, 1, None
-        off_x, off_y, off_z = 0, 1, None
-        sig_x, sig_y = 2, 3
-    else:
-        z_ax, y_ax, x_ax = 0, 1, 2
-        off_x, off_y, off_z = 0, 1, 2
-        sig_x, sig_y = 3, 4
-    yx_fwd = (y_ax, x_ax)
-    yx_inv = (x_ax, y_ax)  # reversed axes => inverse rotation
-
-    # Reflect-pad the Y-X plane to a square so the 90° rotations keep a single stackable shape (same
-    # trick as ensemble8_2d_predictions); Z is left untouched. Cropped off the predictions at the end.
-    pad_to_square = o_img.shape[y_ax] - o_img.shape[x_ax]
-    pad_w = [(0, 0)] * o_img.ndim
-    if pad_to_square < 0:
-        pad_w[y_ax] = (abs(pad_to_square), 0)
-    elif pad_to_square > 0:
-        pad_w[x_ax] = (pad_to_square, 0)
-    img = np.pad(o_img, pad_w, "reflect")
-
-    # Forward augmentations: rot90(k) in the Y-X plane, then optional Z- and Y-flips.
-    fz_opts = [0, 1] if ndim == 3 else [0]
-    combos = [(k, fy, fz) for fz in fz_opts for fy in (0, 1) for k in range(4)]
-
-    def _augment(a, k, fy, fz):
-        a = np.rot90(a, k, yx_fwd)
-        if fz:
-            a = np.flip(a, z_ax)
-        if fy:
-            a = np.flip(a, y_ax)
-        return np.ascontiguousarray(a)
-
-    aug_img = np.stack([_augment(img, *c) for c in combos], axis=0)  # (N, spatial..., ch)
-
-    # Predict (batched, like ensemble8_2d_predictions).
-    preds = []
-    l = int(math.ceil(aug_img.shape[0] / batch_size_value))
-    for i in range(l):
-        top = min((i + 1) * batch_size_value, aug_img.shape[0])
-        r_aux = pred_func(aug_img[i * batch_size_value : top])
-        if isinstance(r_aux, dict):
-            r_aux = r_aux["pred"]
-        preds.append(to_numpy_format(r_aux, axes_order_back))
-    pred = np.concatenate(preds, axis=0).astype(np.float32)  # (N, spatial..., C)
-    C = pred.shape[-1]
-    exp_C = 2 * ndim + 1
-    assert C == exp_C, "EmbedSeg {}D expects {} output channels; got {}".format(ndim, exp_C, C)
-
-    def _rotate_channels(p, k):
-        """Rotate the offset vector (off_x, off_y) by k*90° and swap (sig_x, sig_y); rest untouched."""
-        out = p.copy()
-        if k == 1:
-            out[..., off_x], out[..., off_y] = -p[..., off_y], p[..., off_x]
-            out[..., sig_x], out[..., sig_y] = p[..., sig_y], p[..., sig_x]
-        elif k == 2:
-            out[..., off_x], out[..., off_y] = -p[..., off_x], -p[..., off_y]
-        elif k == 3:
-            out[..., off_x], out[..., off_y] = p[..., off_y], -p[..., off_x]
-            out[..., sig_x], out[..., sig_y] = p[..., sig_y], p[..., sig_x]
-        return out
-
-    def _restore(p, k, fy, fz):
-        # Un-transform spatially (reverse order: un-flip Y, un-flip Z, then un-rotate).
-        if fy:
-            p = np.flip(p, y_ax)
-        if fz:
-            p = np.flip(p, z_ax)
-        p = np.rot90(p, k, yx_inv).copy()
-        # Channel corrections: flip negations first (off_y / off_z), then the rotation remap.
-        if fy:
-            p[..., off_y] *= -1.0
-        if fz and off_z is not None:
-            p[..., off_z] *= -1.0
-        if k:
-            p = _rotate_channels(p, k)
-        return p
-
-    corrected = np.stack([_restore(pred[n], *c) for n, c in enumerate(combos)], axis=0)
-
-    funct = {"mean": np.mean, "min": np.min, "max": np.max}[mode]
-    out = funct(corrected, axis=0)  # (spatial..., C)
-
-    # Crop the square padding back off (inverse of the reflect-pad above).
-    if pad_to_square < 0:
-        sl = [slice(None)] * out.ndim
-        sl[y_ax] = slice(abs(pad_to_square), None)
-        out = out[tuple(sl)]
-    elif pad_to_square > 0:
-        sl = [slice(None)] * out.ndim
-        sl[x_ax] = slice(pad_to_square, None)
-        out = out[tuple(sl)]
-
-    out = np.expand_dims(out, 0)
-    return to_pytorch_format(out, axes_order, device)

@@ -30,7 +30,7 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
-from biapy.data.pre_processing import instances_to_flows, labels_into_channels
+from biapy.data.pre_processing import labels_into_channels, channel_physical_offsets
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -336,16 +336,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
 
-    flow_channels : dict, optional
-        Cellpose flow channels present in the mask, mapping each role to its channel index:
-        ``{"Gv": i, "Gh": j, "Gz": k}`` (any role may be absent). These channels are direction fields
-        (not plain heatmaps): they are tagged ``"flow"`` in the per-channel normalization info and are
-        re-oriented (rotated/flipped/rescaled), not just moved, by the augmentation pipeline. Empty
-        (default) for non-flow workflows.
+    data_channels : list, optional
+        Instance-seg channel names (``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``). Together with
+        ``channel_extra_opts`` and ``instance_channel``, they let the generator regenerate every
+        geometry-derived ("no_bin"/"flow") channel from the augmented labels each batch (warping would
+        corrupt directional/absolute-scale values). Empty (default) for non-instance workflows.
+
+    channel_extra_opts : dict, optional
+        Per-channel options (``DATA_CHANNELS_EXTRA_OPTS[0]``) used to recreate the channels.
 
     cellpose_diam_mean : float, optional
-        Cellpose reference diameter (pixels) the model is trained at (``DIAM_MEAN``). When > 0 and
-        ``flow_channels`` is non-empty, each training patch is rescaled in-plane by
+        Cellpose reference diameter (pixels) the model is trained at (``DIAM_MEAN``). When > 0 and flow
+        channels are present, each training patch is rescaled in-plane by
         ``DIAM_MEAN / diameter`` (the per-file diameter, read from ``DatasetFile.diameter``) so cells
         become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale. The random scale jitter
         applied on top of this normalization during training is controlled by ``cellpose_scale_range``
@@ -356,7 +358,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         rescale during training. Each patch is scaled by ``(1 - cellpose_scale_range / 2) +
         cellpose_scale_range * U[0, 1)``, i.e. uniformly in ``[1 - cellpose_scale_range / 2,
         1 + cellpose_scale_range / 2]``, and this factor multiplies ``DIAM_MEAN / diameter``. Only used
-        when ``cellpose_diam_mean > 0``, ``flow_channels`` is non-empty and augmentation is on
+        when ``cellpose_diam_mean > 0``, flow channels are present and augmentation is on
         (``da=True``); validation/test apply the plain rescale with no jitter. ``0.0`` disables the
         jitter. Default ``0.5`` matches Cellpose's rescale training path (range ``[0.75, 1.25]``).
 
@@ -472,11 +474,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         n2v_structMask=np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]),
         n2v_load_gt: bool = False,
         instance_problem: bool = False,
-        flow_channels: Dict = {},
+        data_channels: List = [],
+        channel_extra_opts: Dict = {},
         instance_channel: Optional[int] = None,
-        flow_gradient_type: str = "cellpose",
-        stardist_channels: Dict = {},
-        stardist_channel_extra_opts: Dict = {},
         cellpose_diam_mean: float = 0.0,
         cellpose_scale_range: float = 0.5,
         random_crop_scale: Tuple[int, ...] = (1, 1),
@@ -546,27 +546,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.real_length = self.length
         self.no_bin_channel_found = False
 
-        # Maps each flow role ("Gv"/"Gh"/"Gz") to its channel index in the mask, so they can be
-        # re-oriented (not just moved) by the augmentation pipeline.
-        self.flow_channels = dict(flow_channels)
-        # Positions of the flow components inside the split-off ``heat`` array ({"vy": i, "vx": j, "vz": k}),
-        # filled in once the mask normalization info is known.
-        self.flow_heat = {}
-        # Raw instance-label channel index, used to regenerate flows from the augmented labels and then
-        # dropped in __getitem__. ``None`` otherwise.
+        # Instance-seg channel names + their extra opts: used to regenerate every geometry-derived
+        # ("no_bin"/"flow") channel from the augmented labels each batch (``heat_cols`` below indexes them).
+        self.data_channels = list(data_channels)
+        self.channel_extra_opts = dict(channel_extra_opts)
+        self.heat_cols: List[int] = []
+        # Directional binary channels (affinities 'A') live in the mask group, not heat, but must also be
+        # regenerated: list of (mask-group position, full-mask column).
+        self.regen_mask_map: List[Tuple[int, int]] = []
+        # Raw instance-label channel index (regeneration source), dropped in __getitem__. ``None`` otherwise.
         self.instance_channel = instance_channel
-        # Gradient strategy for the regenerated flows, mirrored from the channel options to match the GT.
-        self.flow_gradient_type = flow_gradient_type
-        # StarDist targets ('Db'/'R') to regenerate from the augmented labels: {role -> mask channel index}.
-        # ``stardist_heat`` (filled below) maps each role to its start in ``heat``, like ``flow_heat``.
-        self.stardist_channels = dict(stardist_channels)
-        self.stardist_channel_extra_opts = dict(stardist_channel_extra_opts)
-        self.stardist_heat = {}
+        # Whether flow channels are present (they force constant padding and gate the Cellpose rescale).
+        self.has_flow_channels = any(ch in self.data_channels for ch in ("Gv", "Gh", "Gz"))
         # Per-sample Cellpose diameter rescale (in-plane by DIAM_MEAN / DatasetFile.diameter, read in
         # __getitem__). A domain normalization, not augmentation, so it runs on validation too (not gated
         # on ``da``); DIAM_MEAN <= 0 disables it.
         self.cellpose_diam_mean = float(cellpose_diam_mean)
-        self.do_cellpose_rescale = len(self.flow_channels) > 0 and self.cellpose_diam_mean > 0
+        self.do_cellpose_rescale = self.has_flow_channels and self.cellpose_diam_mean > 0
         # Cellpose-style random scale jitter (CELLPOSE.SCALE_RANGE) applied on top of the diameter rescale
         # during training only. See apply_transform for the sampling formula.
         self.cellpose_scale_range = float(cellpose_scale_range)
@@ -611,13 +607,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 else:
                     self.mask_norm = update_mask_norm_info(self.mask_norm, new_mask_norm)
 
-            # Tag flow channels (Gv/Gh/Gz) as "flow" (overriding the auto "no_bin"): interpolated as floats
-            # but re-oriented, not just moved, by the augmentation pipeline.
-            for j in self.flow_channels.values():
-                if j in self.mask_norm["per_channel_info"]:
-                    self.mask_norm["per_channel_info"][j]["type"] = "flow"
-                    self.mask_norm["per_channel_info"][j]["div"] = False
-
             # Tag the instance channel as "label" so raw IDs stay in the nearest-interpolated ``mask``
             # group and are never normalized.
             if self.instance_channel is not None and self.instance_channel in self.mask_norm["per_channel_info"]:
@@ -636,28 +625,26 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 for j in range(len(self.mask_norm["per_channel_info"]))
             )
 
-            # Map each flow role to its position within the split-off ``heat`` array (non-binary channels
-            # before it). Used by the vector-aware augmentors.
-            if self.no_bin_channel_found and self.flow_channels:
-                per = self.mask_norm["per_channel_info"]
-                role_to_comp = {"Gv": "vy", "Gh": "vx", "Gz": "vz"}
-                for role, midx in self.flow_channels.items():
-                    if role not in role_to_comp or midx not in per:
-                        continue
-                    hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
-                    self.flow_heat[role_to_comp[role]] = hpos
+            # Mask-channel indices of the geometry-derived channels ("no_bin"/"flow"), i.e. those split
+            # into ``heat`` and regenerated from the augmented labels in apply_transform.
+            per = self.mask_norm["per_channel_info"]
+            if self.no_bin_channel_found:
+                self.heat_cols = [j for j in range(len(per)) if per[j]["type"] in ("no_bin", "flow")]
 
-            # Map each StarDist role ('Db'/'R') to its start position inside ``heat``, as done for the flows.
-            if self.no_bin_channel_found and self.stardist_channels:
-                per = self.mask_norm["per_channel_info"]
-                for role, midx in self.stardist_channels.items():
-                    if midx not in per or per[midx]["type"] not in ("no_bin", "flow"):
-                        continue
-                    hpos = sum(1 for k in range(midx) if per[k]["type"] in ("no_bin", "flow"))
-                    self.stardist_heat[role] = hpos
+            # Affinities ('A') are directional but binary, so they stay in the mask group; still regenerate
+            # them. Map each affinity column to its mask-group position (non-heat channels before it).
+            if "A" in self.data_channels:
+                offsets = channel_physical_offsets(self.data_channels, self.channel_extra_opts)
+                a_opts = self.channel_extra_opts.get("A", {})
+                a_width = (len(a_opts.get("z_affinities", [1])) + len(a_opts.get("y_affinities", [1]))
+                           + len(a_opts.get("x_affinities", [1])))
+                a_start = offsets.get("A", 0)
+                for col in range(a_start, a_start + a_width):
+                    mpos = sum(1 for k in range(col) if per[k]["type"] not in ("no_bin", "flow"))
+                    self.regen_mask_map.append((mpos, col))
 
             # Position of the instance channel inside the split-off ``mask`` array (non-heat channels
-            # before it), the counterpart of ``flow_heat`` for the label group.
+            # before it), the counterpart of ``heat_cols`` for the label group.
             self.instance_mask_pos = None
             if self.instance_channel is not None:
                 per = self.mask_norm["per_channel_info"]
@@ -674,13 +661,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         print("Normalization config used for X (first sample): {}".format(xnorm_info))
         print("Normalization config used for Y: {}".format(self.mask_norm))
-
-        # Voxel spacing in (z, y, x) order (the layout instances_to_flows and labels_into_channels use),
-        # kept before the (x, y[, z]) reorder below.
-        if self.ndim == 2:
-            self.flow_resolution = [1.0, float(resolution[0]), float(resolution[1])]
-        else:
-            self.flow_resolution = [float(resolution[0]), float(resolution[1]), float(resolution[2])]
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
@@ -800,7 +780,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.affine_mode = affine_mode
         # Flow channels must pad with zeros (background = no flow), never mirrored: reflecting a flow
         # field fabricates border cells with vectors pointing the wrong way.
-        if self.flow_channels:
+        if self.has_flow_channels:
             self.affine_mode = "constant"
         self.g_sigma = g_sigma
         self.mb_kernel = mb_kernel
@@ -1397,7 +1377,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 angle=angle,
                 mode=self.affine_mode,
                 mask_type=self.norm_module["target_type"],
-                flow_heat=self.flow_heat,
             )  # type: ignore
 
         # Crop the (possibly enlarged) patch back to the network size right after the warp, so later
@@ -1436,11 +1415,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.cutnoise and self._roll("cutnoise"):
             image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size)
 
-        # Misalignment: threads the flow channels through the same ops and re-orients their vectors.
+        # Misalignment
         if self.misalignment and self._roll("misalignment"):
             image, mask, heat = misalignment(
-                image, mask, self.ms_displacement, self.ms_rotate_ratio,
-                heat=heat, flow_heat=self.flow_heat,
+                image, mask, self.ms_displacement, self.ms_rotate_ratio, heat=heat,
             )
 
         # Apply brightness
@@ -1519,9 +1497,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
             )
 
-        # Elastic is skipped for flow channels: this non-rigid warp would need the flow vectors
-        # re-oriented by its local Jacobian, which is not done here, corrupting the targets.
-        if self.elastic and not self.flow_channels and self._roll("elastic"):
+        if self.elastic and self._roll("elastic"):
             image, mask, heat = elastic(
                 image,
                 mask=mask,
@@ -1532,8 +1508,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mode=self.e_mode
             ) # type: ignore
 
-        # Shear is skipped for flow channels: it skews directions and the vectors are not re-oriented.
-        if self.shear and not self.flow_channels and self._roll("shear"):
+        if self.shear and self._roll("shear"):
             image, mask, heat = shear(
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
@@ -1551,12 +1526,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.vflip and self._roll("vflip"):
             image, mask, heat = flip_vertical(
-                image, mask=mask, heat=heat, flow_heat=self.flow_heat
+                image, mask=mask, heat=heat
             ) # type: ignore
 
         if self.hflip and self._roll("hflip"):
             image, mask, heat = flip_horizontal(
-                image, mask=mask, heat=heat, flow_heat=self.flow_heat
+                image, mask=mask, heat=heat
             ) # type: ignore
             
         if self.g_blur and self._roll("g_blur"):
@@ -1583,51 +1558,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 drop_range=self.drop_range
             )
 
-        # Regenerate the flows from the augmented labels, replacing the warped ones. Warping a precomputed
-        # flow field only stays valid for grid-preserving transforms (flips, 90-degree rotations);
-        # anything that resamples geometry leaves image and target disagreeing, so recompute from labels.
+        # Regenerate every geometry-derived channel from the augmented labels. Warping only stays valid
+        # for grid-preserving transforms; anything that resamples geometry corrupts directional (flows,
+        # rays, HoVer, affinities) and absolute-scale (omnipose/raw distance) channels, so recompute from
+        # the labels exactly as the offline targets are built.
         if (
             self.instance_channel is not None
             and self.instance_mask_pos is not None
-            and heat is not None
-            and self.flow_heat
-        ):
-            labels_aug = mask[..., self.instance_mask_pos].astype(np.int32)
-            Gv, Gh, Gz = instances_to_flows(
-                labels_aug,
-                resolution=self.flow_resolution,
-                niter="auto",
-                gradient_type=self.flow_gradient_type,
-            )
-            if "vy" in self.flow_heat:
-                heat[..., self.flow_heat["vy"]] = Gv
-            if "vx" in self.flow_heat:
-                heat[..., self.flow_heat["vx"]] = Gh
-            if "vz" in self.flow_heat and Gz is not None:
-                heat[..., self.flow_heat["vz"]] = Gz
-
-        # Regenerate the StarDist targets ('Db'/'R') from the augmented labels, as StarDist does every
-        # batch: the radial distances encode direction along fixed rays, so warping the precomputed
-        # channels leaves them pointing the wrong way. Same labels_into_channels path as the offline targets.
-        if (
-            self.instance_channel is not None
-            and self.instance_mask_pos is not None
-            and heat is not None
-            and self.stardist_heat
+            and (self.heat_cols or self.regen_mask_map)
         ):
             labels_aug = np.expand_dims(mask[..., self.instance_mask_pos].astype(np.int32), -1)
-            roles = list(self.stardist_heat.keys())
             regen = labels_into_channels(
-                labels_aug,
-                mode=roles,
-                channel_extra_opts=self.stardist_channel_extra_opts,
+                labels_aug, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts,
             )
-            ofs = 0
-            for role in roles:
-                w = int(self.stardist_channel_extra_opts.get("R", {}).get("nrays", 32)) if role == "R" else 1
-                hpos = self.stardist_heat[role]
-                heat[..., hpos : hpos + w] = regen[..., ofs : ofs + w]
-                ofs += w
+            if heat is not None and self.heat_cols:
+                heat[...] = regen[..., self.heat_cols]
+            for mpos, col in self.regen_mask_map:  # affinities ('A'): directional but in the mask group
+                mask[..., mpos] = regen[..., col]
 
         # Merge heatmaps and masks again
         if self.no_bin_channel_found:

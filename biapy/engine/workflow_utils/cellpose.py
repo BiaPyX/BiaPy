@@ -47,8 +47,14 @@ class CellposeTestPhaseMixin:
         :meth:`_resolve_cellpose_test_diameter` (which may return ``None`` ⇒ run at native resolution).
         """
         c = self.cfg.PROBLEM.INSTANCE_SEG
+        # Omnipose is diameter-agnostic (trained/validated without the Cellpose rescale, see
+        # biapy/data/generators/__init__.py), so it must also run at native resolution at test time;
+        # otherwise the model sees cells at a scale it was never trained on. gradient_type is
+        # propagated to 'Gv' for the whole Gv/Gh/Gz group in check_configuration.
+        gradient_type = c.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
         return (
-            self.cfg.MODEL.SOURCE != "torchvision"
+            gradient_type != "omnipose"
+            and self.cfg.MODEL.SOURCE != "torchvision"
             and not self.cfg.TEST.BY_CHUNKS.ENABLE
             and any(ch in c.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz"))
             and isinstance(getattr(self, "current_sample", None), dict)

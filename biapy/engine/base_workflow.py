@@ -1515,6 +1515,23 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
             self.print_stats(image_counter)
 
+    def _log_tta_once(self) -> bool:
+        """
+        Return ``True`` the first time it is called, ``False`` afterwards.
+
+        Used to make :func:`ensemble_predictions` print which orientations it ended up using (and
+        why it dropped any) once per run instead of once per patch.
+
+        Returns
+        -------
+        bool
+            Whether the TTA summary should be printed for this call.
+        """
+        if getattr(self, "_tta_logged", False):
+            return False
+        self._tta_logged = True
+        return True
+
     def predict_batches_in_test(
         self, x_batch: NDArray, y_batch: Optional[NDArray], stats_name="per_crop", disable_tqdm: bool = False
     ) -> NDArray:
@@ -1553,8 +1570,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     ndim=2 if self.cfg.PROBLEM.NDIM == "2D" else 3,
                     batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                     mode=self.cfg.TEST.AUGMENTATION_MODE,
-                    flow_channels=getattr(self, "cellpose_tta_flow_channels", None),
-                    embedseg=getattr(self, "embedseg_tta", False),
+                    tta_spec=getattr(self, "tta_spec", None),
+                    group=self.cfg.TEST.AUGMENTATION_GROUP,
+                    verbose=self._log_tta_once(),
                 )
 
                 # Multi-head concatenation
@@ -2090,8 +2108,9 @@ class Base_Workflow(metaclass=ABCMeta):
                         ndim=2 if self.cfg.PROBLEM.NDIM == "2D" else 3,
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
-                        flow_channels=getattr(self, "cellpose_tta_flow_channels", None),
-                        embedseg=getattr(self, "embedseg_tta", False),
+                        tta_spec=getattr(self, "tta_spec", None),
+                        group=self.cfg.TEST.AUGMENTATION_GROUP,
+                        verbose=self._log_tta_once(),
                     )
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
