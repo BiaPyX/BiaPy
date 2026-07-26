@@ -63,6 +63,7 @@ from biapy.utils.misc import (
     get_world_size,
     setup_for_distributed,
     compute_threads_and_workers,
+    load_checkpoint_file,
 )
 from biapy.models.bmz_utils import (
     create_model_doc,
@@ -799,11 +800,9 @@ class BiaPy:
         if not os.path.isfile(source):
             raise FileNotFoundError("Checkpoint file not found: {}".format(source))
 
-        from functools import partial as _partial
         from biapy.config.config import Config as _Config
 
-        torch.serialization.add_safe_globals([CN, set, _partial, torch.nn.modules.normalization.LayerNorm])
-        checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+        checkpoint = load_checkpoint_file(source, map_location="cpu")
         if "cfg" not in checkpoint:
             raise ValueError(
                 "Checkpoint '{}' does not embed a BiaPy configuration; the workflow cannot be "
@@ -1816,7 +1815,7 @@ class BiaPy:
             state_dict_sha256 = None
 
             # Isolate pytorch_state_dict from checkpoint
-            checkpoint = torch.load(state_dict_source, map_location="cpu", weights_only=True)
+            checkpoint = load_checkpoint_file(state_dict_source, map_location="cpu")
             if "model" in checkpoint:
                 state_dict_source = os.path.join(building_dir, "checkpoint.pth")
                 os.makedirs(building_dir, exist_ok=True)

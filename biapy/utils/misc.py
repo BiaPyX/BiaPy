@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import builtins
+import pickle
 import time
 import glob
 import datetime
@@ -369,7 +370,10 @@ def save_model(output_dir, cfg, biapy_version, jobname, epoch, model_without_ddp
             "model": model_without_ddp.state_dict(),
             "optimizer": [opt.state_dict() for opt in optimizer],
             "epoch": epoch,
-            "cfg": cfg,
+            # Stored as a plain dict (not as a CfgNode) so the checkpoint can be read back with
+            # torch.load(..., weights_only=True): its unpickler only accepts dict/OrderedDict/Counter
+            # when filling a mapping, so a dict subclass such as yacs' CfgNode makes the load fail.
+            "cfg": cfg_to_plain_dict(cfg),
             "biapy_version": biapy_version,
         }
         
@@ -404,6 +408,57 @@ def save_on_master(model_dict, checkpoint_path):
             save_file(model_dict["model"], checkpoint_path)
         else:
             raise ValueError("Unsupported checkpoint extension: {}".format(checkpoint_path))
+
+
+def cfg_to_plain_dict(cfg):
+    """
+    Convert a YACS ``CfgNode`` (or any nested mapping) into plain Python containers.
+
+    Needed to store the configuration inside a checkpoint, as ``CfgNode`` objects cannot be
+    read back by ``torch.load(..., weights_only=True)``.
+    """
+    if isinstance(cfg, collections.abc.Mapping):
+        return {k: cfg_to_plain_dict(v) for k, v in cfg.items()}
+    elif isinstance(cfg, (list, tuple)):
+        return type(cfg)(cfg_to_plain_dict(v) for v in cfg)
+    return cfg
+
+
+def load_checkpoint_file(path, map_location="cpu"):
+    """
+    Load a ``.pth`` checkpoint safely, falling back to a full unpickling when needed.
+
+    Checkpoints are first read with ``weights_only=True``. Those created by older BiaPy
+    versions embed the configuration as a yacs ``CfgNode``, which recent PyTorch versions
+    reject in that mode (only ``dict``/``OrderedDict``/``Counter`` are allowed as mapping
+    targets, even after registering the class as a safe global), so in that case the
+    checkpoint is loaded again with ``weights_only=False``.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the checkpoint file.
+    map_location : str or torch.device, optional
+        Device where the tensors will be loaded. Defaults to "cpu".
+
+    Returns
+    -------
+    dict
+        Content of the checkpoint.
+    """
+    torch.serialization.add_safe_globals(
+        [CN, set, partial, torch.nn.modules.normalization.LayerNorm]
+    )
+    try:
+        return torch.load(path, map_location=map_location, weights_only=True)
+    except pickle.UnpicklingError as e:
+        print(
+            "Checkpoint '{}' could not be loaded with 'weights_only=True' ({}). It was probably created "
+            "with an older BiaPy version, so it will be loaded with 'weights_only=False'. Only do this with "
+            "checkpoints coming from a trusted source.".format(path, e)
+        )
+        return torch.load(path, map_location=map_location, weights_only=False)
+
 
 def get_checkpoint_path(cfg, jobname):
     """
@@ -524,10 +579,6 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             print("Loading checkpoint from file {}".format(resume))
 
     # Load checkpoint file
-    torch.serialization.add_safe_globals([CN])
-    torch.serialization.add_safe_globals([set])
-    torch.serialization.add_safe_globals([partial])
-    torch.serialization.add_safe_globals([torch.nn.modules.normalization.LayerNorm])
     if resume.startswith("https"):
         checkpoint = torch.hub.load_state_dict_from_url(resume, map_location=device, check_hash=True)
     elif resume.endswith(".safetensors"):
@@ -536,7 +587,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             "model": load_file(resume, device="cpu")
         }
     else: # ends with .pth
-        checkpoint = torch.load(resume, map_location=device, weights_only=True)
+        checkpoint = load_checkpoint_file(resume, map_location=device)
 
     if just_extract_checkpoint_info:
         if "cfg" not in checkpoint and not resume.endswith(".safetensors"):
