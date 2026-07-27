@@ -567,6 +567,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # during training only. See apply_transform for the sampling formula.
         self.cellpose_scale_range = float(cellpose_scale_range)
         self.shape = shape
+        # Padding mode of the affine augmentations, also used by ``load_sample``, so it must be set
+        # before the data analysis below. Cellpose flows pad with zeros (reflecting a flow field
+        # fabricates border cells); Omnipose completes border cells by reflection, so reflect suits it.
+        self.gradient_type = self.channel_extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
+        self.affine_mode = (
+            "constant" if self.has_flow_channels and self.gradient_type == "cellpose" else affine_mode
+        )
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
@@ -726,7 +733,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.rand_rot = rand_rot
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
-        self.affine_mode = affine_mode
         self.zoom = zoom
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
@@ -777,11 +783,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.e_mode = e_mode
         self.shear_range = shear_range
         self.shift_range = shift_range
-        self.affine_mode = affine_mode
-        # Flow channels must pad with zeros (background = no flow), never mirrored: reflecting a flow
-        # field fabricates border cells with vectors pointing the wrong way.
-        if self.has_flow_channels:
-            self.affine_mode = "constant"
         self.g_sigma = g_sigma
         self.mb_kernel = mb_kernel
         self.motb_k_range = motb_k_range 
@@ -982,7 +983,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Extract a bigger patch when a later geometric augmentation, or the Cellpose diameter rescale on
         # its own (validation), could otherwise pull in padding.
-        enlarge = geom_enlarge and (self.da or self.do_cellpose_rescale) and (not first_load) and any(self.aug_load_inc)
+        # ``first_load`` is checked first as the attributes below are set after the initial sample loads
+        enlarge = geom_enlarge and (not first_load) and (self.da or self.do_cellpose_rescale) and any(self.aug_load_inc)
 
         # X data
         if sample.img_is_loaded():
