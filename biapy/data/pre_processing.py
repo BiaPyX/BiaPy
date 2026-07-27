@@ -2926,10 +2926,10 @@ def create_HoVe_channels(
         ``(200, 1000, 1000)`` for 3D.
 
     ref_point : str, optional
-        Reference point to be used to create the horizontal/vertical/depth channels. Possible values: ``center``, 
-        ``presynaptic``. Details:
-            - 'center': point to the centroid.
-            - 'presynaptic': point to the presynaptic site. To use this ``label_to_pre_site`` must be provided.
+        Reference point used to create the horizontal/vertical/depth channels.
+        Possible values are ``center`` and ``presynaptic``. ``center`` points to the centroid,
+        while ``presynaptic`` points to the presynaptic site (and requires
+        ``label_to_pre_site``).
 
     label_to_pre_site : dict, optional
         Reference of the presynaptic site for each label within the provided volume (``data``).

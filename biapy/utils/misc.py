@@ -524,14 +524,12 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     Parameters
     ----------
     cfg : YACS CN object
-        The configuration object. Key parameters:
-        - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to checkpoint.
-        - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for checkpoint selection.
-        - `cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT`: List of items to load from the checkpoint (if available). Options are:
-          - "weights": Load model weights.
-          - "model_arch": Load model architecture.
-          - "optimizer": Load optimizer state.
-          - "epoch": Load epoch number.
+                The configuration object. Key parameters are ``cfg.PATHS.CHECKPOINT_FILE``
+                (explicit checkpoint path), ``cfg.MODEL.LOAD_CHECKPOINT_EPOCH``
+                (checkpoint selection strategy), and
+                ``cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT`` (items to load from the
+                checkpoint, such as ``weights``, ``model_arch``, ``optimizer``, and
+                ``epoch``).
     jobname : str
         The name of the current job/experiment.
     model_without_ddp : nn.Module
