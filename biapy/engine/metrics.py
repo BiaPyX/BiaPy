@@ -1684,13 +1684,6 @@ class instance_segmentation_loss:
                     # so leave mask=None.
                     y_true_slice = y_true_slice * self.flow_target_scale
                     mask = None
-                elif channel in ("H", "V", "Z"):
-                    # HoVer-Net channels: values in [-1, 1] (signed), centroid = 0 = background.
-                    # Masking by (!=0) would exclude the entire center row/column of every cell.
-                    # Use a binary foreground channel (F/M/B) when present; otherwise train on
-                    # all pixels — background=0 is a valid target and the network learns to
-                    # predict 0 there naturally.
-                    mask = self._foreground_mask(y_true)
                 elif channel in ("Db", "Dc", "Dn", "R"):
                     # 'mask_values' restricts the loss to foreground (F/M/B or Db>0, else y_true_slice>0).
                     # mask_values=False covers the whole image, as a probability channel needs (e.g.

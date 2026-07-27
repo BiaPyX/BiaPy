@@ -22,7 +22,7 @@ import difflib
 from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree, distance_matrix
-from scipy.ndimage import rotate, grey_dilation, grey_erosion, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
+from scipy.ndimage import rotate, grey_dilation, grey_erosion, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt, correlate1d
 from scipy.signal import savgol_filter
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
 from skimage.segmentation import watershed, relabel_sequential, find_boundaries, clear_border
@@ -71,6 +71,51 @@ def _otsu_auto_threshold(arr: NDArray) -> float:
     except ValueError:
         norm = (arr - vmin) / (vmax - vmin)
         return float(threshold_otsu(norm)) * (vmax - vmin) + vmin
+
+
+def _minmax01(arr: NDArray) -> NDArray:
+    """Rescale ``arr`` to ``[0, 1]`` using its global min/max (constant arrays map to all zeros)."""
+    vmin, vmax = float(arr.min()), float(arr.max())
+    if vmax <= vmin:
+        return np.zeros_like(arr, dtype=np.float32)
+    return ((arr - vmin) / (vmax - vmin)).astype(np.float32)
+
+
+def _sobel_along_axis(arr: NDArray, axis: int, ksize: int = 21) -> NDArray:
+    """
+    Sobel derivative of ``arr`` along ``axis``, smoothed along the remaining in-plane axis/axes.
+
+    ``cv2.Sobel`` cannot be used here: OpenCV reads a ``(z, y, x)`` array as a single 2D image with
+    ``x`` channels, so it differentiates the wrong axis (and, for a leading singleton axis, returns
+    zeros). The same separable kernels are applied per axis instead, which works for any number of
+    dimensions. Smoothing is restricted to the last two axes so no long kernel is ever applied
+    across ``z``: in 2D this is exactly ``cv2.Sobel``, and in 3D each ``y``/``x`` derivative reduces
+    to the per-slice 2D result.
+
+    Parameters
+    ----------
+    arr : NDArray
+        2D ``(y, x)`` or 3D ``(z, y, x)`` array.
+
+    axis : int
+        Axis to differentiate along. Negative values are supported (e.g. ``-1`` for ``x``).
+
+    ksize : int, optional
+        Sobel kernel size (odd).
+
+    Returns
+    -------
+    NDArray
+        The derivative, same shape as ``arr``.
+    """
+    axis = axis % arr.ndim
+    # kd: derivative kernel, ks: smoothing kernel (the two factors of the separable Sobel operator)
+    kd, ks = cv2.getDerivKernels(1, 0, ksize, normalize=False)
+    out = correlate1d(arr.astype(np.float64), kd.ravel(), axis=axis, mode="mirror")
+    for ax in range(arr.ndim - 2, arr.ndim):
+        if ax != axis:
+            out = correlate1d(out, ks.ravel(), axis=ax, mode="mirror")
+    return out
 
 
 def watershed_by_channels(
@@ -173,8 +218,10 @@ def watershed_by_channels(
         return sort_key
     custom_sort_key = get_sort_key(CUSTOM_ORDER)
 
-    # Sort the lists to have the ones that can define a good starting points for the seeds first
-    channels = sorted(channels, key=custom_sort_key)
+    # Sort the lists to have the ones that can define a good starting points for the seeds first.
+    # 'channels' is NOT sorted: it names the columns of 'data', so it must keep the caller's order
+    # (which follows check_configuration's own ordering, e.g. 'V' before 'H') or every lookup below
+    # would read the wrong channel.
     orig_order = seed_channels.copy()
     seed_channels = sorted(seed_channels, key=custom_sort_key)
     positions = [orig_order.index(item) for item in seed_channels]
@@ -267,37 +314,14 @@ def watershed_by_channels(
                     elif ch in ["C", "B", "T", "Dn", "Dc"]:
                         seed_map *= data[..., ch_pos] < th
                 elif not hvz_channels_processed and ch in ['H', 'V', 'Z']:
-                    h_dir = cv2.normalize(
-                        data[..., channels.index("H")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-                    ) # type: ignore
-                    sobelh = cv2.Sobel(h_dir, cv2.CV_64F, 1, 0, ksize=21)
-                    v_dir = cv2.normalize(
-                        data[..., channels.index("V")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-                    ) # type: ignore
-                    sobelv = cv2.Sobel(v_dir, cv2.CV_64F, 0, 1, ksize=21)
-                    if "Z" in channels:
-                        z_dir = cv2.normalize(
-                            data[..., channels.index("Z")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-                        ) # type: ignore
-                        sobelz = cv2.Sobel(z_dir, cv2.CV_64F, 0, 1, ksize=21)
-
-                    sobelh = 1 - (
-                        cv2.normalize(
-                            sobelh, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-                        )
-                    ) # type: ignore
-                    sobelv = 1 - (
-                        cv2.normalize(
-                            sobelv, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-                        )
-                    ) # type: ignore
+                    # Each channel is differentiated along its own axis: 'H' -> x, 'V' -> y, 'Z' -> z.
+                    # The response peaks where two instances meet (the maps jump from +1 to -1 there),
+                    # so 1 - minmax(sobel) gives a map that is high on the boundaries between instances.
+                    sobelh = 1 - _minmax01(_sobel_along_axis(_minmax01(data[..., channels.index("H")]), -1))
+                    sobelv = 1 - _minmax01(_sobel_along_axis(_minmax01(data[..., channels.index("V")]), -2))
                     overall = np.maximum(sobelh, sobelv)
                     if "Z" in channels:
-                        sobelz = 1 - (
-                            cv2.normalize(
-                                sobelz, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
-                            )
-                        ) # type: ignore
+                        sobelz = 1 - _minmax01(_sobel_along_axis(_minmax01(data[..., channels.index("Z")]), -3))
                         overall = np.maximum(overall, sobelz)
 
                     hvz_ths = [seed_channel_ths[i] for i, x in enumerate(seed_channels) if x in ['H', 'V', 'Z']]
@@ -335,12 +359,17 @@ def watershed_by_channels(
                 elif ch in ["C", "B", "Dn", "Dc"]:
                     growth_mask *= data[..., ch_pos] < th
 
-        # Define the topographic surface to grow the seeds
+        # Define the topographic surface to grow the seeds. The watershed floods from the lowest values
+        # up, so instance interiors must be the valleys and the boundaries between them the ridges: as
+        # 'overall' is already high on those boundaries, it is used directly (shifted to [-1, 0] to keep
+        # the same sign convention as the channel-based surfaces below).
         if "overall" in locals():
-            topografic_surface = 1.0 - overall
+            topografic_surface = overall - 1.0
         else:
             ch_pos = channels.index(topo_surface_channel)
-            if ch in ["C", "B", "Dn", "Dc"]:
+            # Channels that are low inside the instances are used as-is; the rest are negated, so that
+            # in both cases the interiors end up as the valleys the watershed floods from.
+            if topo_surface_channel in ["C", "B", "Dn", "Dc"]:
                 topografic_surface = data[..., ch_pos]
             else:
                 topografic_surface = - data[..., ch_pos]

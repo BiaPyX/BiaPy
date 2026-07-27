@@ -495,8 +495,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 else:
                     norm = True
                     act = ""
-                if act == "" and norm:
-                    act = "sigmoid"
+                # H/V/Z hold signed displacements (centroid = 0), so the activation must keep negative
+                # values: 'linear' by default, 'tanh' when the [-1, 1] range should be enforced.
+                if act == "":
+                    act = "linear"
                 resolved_hvz = {"norm": norm, "act": act}
                 for ch in hvz_chs_present:
                     dst[ch] = resolved_hvz.copy()
@@ -1627,7 +1629,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 elif key in ("Z", "V", "H"):  # distance channels group
                     _assert_bool(val, "norm", ctx)
                     assert isinstance(val["norm"], bool)
-                    _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
+                    # 'sigmoid' is not allowed: these channels are signed and it would clip everything to [0, 1]
+                    _assert_str_in(val, "act", {"", "linear", "tanh"}, ctx)
                 elif key in ("Gv", "Gh", "Gz"):  # gradient flow channels
                    # The diffusion iteration count is not user-configurable (always Cellpose's per-cell
                    # 2*(ly+lx) / 6*(...) formula); only the gradient strategy is exposed.

@@ -363,8 +363,11 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
                 elif channel in ["Dc", "Dn", "Z", "V", "H"]:
-                    if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
+                    act = dst.get(channel, {}).get("act", "")
+                    if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or act == "sigmoid":
                         self.head_activations.append("ce_sigmoid")
+                    elif act == "tanh":
+                        self.head_activations.append("tanh")
                     else:
                         self.head_activations.append("linear")
                     if set_model_output_channels:

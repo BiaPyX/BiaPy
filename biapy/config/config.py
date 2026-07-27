@@ -168,9 +168,11 @@ class Config:
         #   - 'H', 'V' and 'Z' channels. Possible options:
         #       - 'norm': bool, specifies whether signed displacements are normalized to [-1, 1] (centroid = 0). Default: True
         #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
-        #          Options are 'linear', and 'sigmoid'. Default: ''
-        #       Note: the loss mask for H/V/Z is derived automatically from a binary foreground channel (F, M, or B) in the GT
-        #       when one is present; otherwise all pixels are included (background = 0 is a valid training target).
+        #          These channels are signed, so the activation must allow negative values: 'linear' (unbounded) or 'tanh'
+        #          (bounded to [-1, 1], only meaningful with 'norm'=True). Options are 'linear' and 'tanh'. Default: 'linear'
+        #       Note: the loss for H/V/Z is computed over all pixels, not masked to the foreground, so the background
+        #       target (0) also trains the model. That keeps the predictions bounded outside the instances, which the
+        #       instance creation relies on (it min-max normalizes these channels over the whole image).
         #   - 'Gh', 'Gv' and 'Gz' channels. Possible options:
         #       - 'gradient_type': str, method to compute the gradients. Options are "cellpose" and "omnipose". Default: "cellpose"
         #   - 'Db' channel. Possible options:
