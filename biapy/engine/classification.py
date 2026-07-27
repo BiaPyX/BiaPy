@@ -19,7 +19,11 @@ from numpy.typing import NDArray
 
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
+from biapy.data.data_manipulation import (
+    load_and_prepare_train_data_cls,
+    load_and_prepare_cls_test_data,
+    prepare_in_memory_test_data,
+)
 from biapy.utils.misc import is_main_process, MetricLogger
 from biapy.engine.metrics import loss_encapsulation
 
@@ -290,12 +294,35 @@ class Classification_Workflow(Base_Workflow):
         )
         self.Y_train, self.Y_val = None, None
 
-    def load_test_data(self):
-        """Load test data."""
+    def load_test_data(self, image=None, gt=None):
+        """
+        Load test data. If ``image`` (NDArray) is given, build the test dataset from it
+        in memory (via :func:`prepare_in_memory_test_data`) instead of ``DATA.TEST.PATH``;
+        ``gt`` is the optional ground truth class of ``image``.
+        """
         if self.cfg.TEST.ENABLE:
             print("######################")
             print("#   LOAD TEST DATA   #")
             print("######################")
+
+            self.X_test, self.Y_test = None, None
+
+            if image is not None:
+                print("Building test data from an in-memory image (skipping disk read)")
+                self.X_test, _, _ = prepare_in_memory_test_data(
+                    image=image,
+                    is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
+                )
+                # In this workflow the test filenames are the dataset files themselves (and not
+                # just their names, as in other workflows)
+                self.test_filenames = self.X_test.dataset_info
+
+                # In classification the ground truth is the class of the image, which is stored
+                # within the dataset file information (and not as a separate image, as in other workflows)
+                if gt is not None and self.use_gt:
+                    self.X_test.dataset_info[0].class_num = int(np.array(gt).squeeze())
+                return
+
             use_val_as_test_info = None
             if self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                 use_val_as_test_info = {
