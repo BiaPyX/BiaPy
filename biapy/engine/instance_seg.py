@@ -41,7 +41,7 @@ from biapy.data.post_processing.embedseg import Embedding_cluster
 from biapy.data.post_processing.tta import build_tta_spec, parse_model_output_channel_names
 from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
 from biapy.data.post_processing.gradient_tracking import cellpose_flows_to_instances, omnipose_flows_to_instances
-from biapy.data.pre_processing import create_instance_channels, set_embedseg_grid_size
+from biapy.data.pre_processing import affinity_channel_names, create_instance_channels, set_embedseg_grid_size
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
@@ -137,9 +137,13 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             anisotropy=self.resolution[-self.dims :],
         )
 
-        # Reflect padding mirrors border cells and corrupts their flow field; pad with zeros as Cellpose does.
+        # Border padding mode for test-time tiling of flow workflows. Cellpose pads with zeros (reflect
+        # would mirror border cells and corrupt their flow field). Omnipose is the opposite: it completes
+        # partial border cells (reflection in masks_to_flows_batch), so zero-padding at test suppresses the
+        # predicted distance field of edge-touching cells and they get dropped; reflect keeps them.
         if any(ch in _dc for ch in ("Gv", "Gh", "Gz")):
-            self.padding_type = "zeros"
+            _gradient_type = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Gv", {}).get("gradient_type", "cellpose")
+            self.padding_type = "reflect" if _gradient_type == "omnipose" else "zeros"
 
         # Merging the image
         self.all_matching_stats_merge_patches = []
@@ -310,17 +314,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 head_start = sum(self.model_output_channels)
                 h = _head_for(head_start, channel)
                 if channel == "A":
-                    z_affinities = dst.get("A", {}).get("z_affinities", [1])
-                    for j in range(len(z_affinities)):
-                        self.model_output_channel_info[h] += "+" + channel + "z_{}".format(z_affinities[j])
-                        self.model_output_channels[h] += 1
-                    y_affinities = dst.get("A", {}).get("y_affinities", [1])
-                    for j in range(len(y_affinities)):
-                        self.model_output_channel_info[h] += "+" + channel + "y_{}".format(y_affinities[j])
-                        self.model_output_channels[h] += 1
-                    x_affinities = dst.get("A", {}).get("x_affinities", [1])
-                    for j in range(len(x_affinities)):
-                        self.model_output_channel_info[h] += "+" + channel + "x_{}".format(x_affinities[j])
+                    for name in affinity_channel_names(dst.get("A", {})):
+                        self.model_output_channel_info[h] += "+" + name
                         self.model_output_channels[h] += 1
                 elif channel == "R":
                     for j in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
@@ -404,23 +399,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
                 elif channel == "A":
-                    z_affinities = dst.get("A", {}).get("z_affinities", [1])
-                    for i in range(len(z_affinities)):
+                    for name in affinity_channel_names(dst.get("A", {})):
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"z_{}".format(z_affinities[i])
-                        self.head_activations.append("ce_sigmoid")
-                    y_affinities = dst.get("A", {}).get("y_affinities", [1])
-                    for i in range(len(y_affinities)):
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"y_{}".format(y_affinities[i])
-                        self.head_activations.append("ce_sigmoid")
-                    x_affinities = dst.get("A", {}).get("x_affinities", [1])
-                    for i in range(len(x_affinities)):
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"x_{}".format(x_affinities[i])
+                            self.model_output_channel_info[0] += "+" + name
                         self.head_activations.append("ce_sigmoid")
                 elif channel == "R":
                     for i in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):

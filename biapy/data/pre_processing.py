@@ -957,6 +957,44 @@ def instance_channel_needs_regen(ch: str, channel_extra_opts: Dict = {}) -> bool
     return False
 
 
+def affinity_channel_names(a_opts: Dict) -> List[str]:
+    """
+    Physical channel names of the ``'A'`` (affinities) block, in the order they are stored.
+
+    The three offset lists are paired **by index**: entry ``k`` of ``z_affinities``/``y_affinities``/
+    ``x_affinities`` describes one set of neighbour offsets, and :func:`labels_into_channels` writes
+    them as one ``(z, y, x)`` triple per ``k``. The names are therefore interleaved
+    (``Az_1, Ay_1, Ax_1, Az_2, Ay_2, Ax_2, ...``), not grouped by axis -- this is the single
+    definition of that order, shared by the target generation, the model output-channel metadata
+    (``model_output_channel_info``) and the TTA channel spec, so they cannot drift apart.
+
+    Downstream consumers rely on it too: the affinity watershed takes ``data[..., [0, 1, 2]]`` as
+    "the first ``(z, y, x)`` triple".
+
+    Parameters
+    ----------
+    a_opts : dict
+        ``DATA_CHANNELS_EXTRA_OPTS[0]['A']``, i.e. the ``z_affinities``/``y_affinities``/
+        ``x_affinities`` lists (each defaulting to ``[1]``).
+
+    Returns
+    -------
+    list of str
+        E.g. ``['Az_1', 'Ay_1', 'Ax_1']`` or, for two offset sets,
+        ``['Az_1', 'Ay_1', 'Ax_1', 'Az_2', 'Ay_3', 'Ax_3']``.
+    """
+    offsets = [a_opts.get("{}_affinities".format(ax), [1]) for ax in ("z", "y", "x")]
+    if len({len(o) for o in offsets}) != 1:
+        raise ValueError(
+            "'z_affinities', 'y_affinities' and 'x_affinities' must be lists of equal length; got "
+            "{}".format([len(o) for o in offsets])
+        )
+    names = []
+    for triple in zip(*offsets):
+        names += ["A{}_{}".format(ax, off) for ax, off in zip(("z", "y", "x"), triple)]
+    return names
+
+
 def channel_physical_offsets(mode: List[str], channel_extra_opts: Dict = {}) -> Dict[str, int]:
     """
     Compute the physical start channel index of each instance-segmentation data channel.
@@ -1486,16 +1524,19 @@ def labels_into_channels(
         if wb:
             ins_vol = seg_widen_border(vol, tsz_h=wb)
             
-        k = 0
-        for zaff, yaff, xaff in zip(
-            channel_extra_opts["A"].get("z_affinities", []),
-            channel_extra_opts["A"].get("y_affinities", []),
-            channel_extra_opts["A"].get("x_affinities", []),
+        # One (z, y, x) triple per offset index, laid out from the 'A' block's own start channel --
+        # the order affinity_channel_names() declares and every consumer expects.
+        a_start = channel_offsets["A"]
+        for k, (zaff, yaff, xaff) in enumerate(
+            zip(
+                channel_extra_opts["A"].get("z_affinities", []),
+                channel_extra_opts["A"].get("y_affinities", []),
+                channel_extra_opts["A"].get("x_affinities", []),
+            )
         ):
             affs = seg2aff_pni(ins_vol, dz=zaff, dy=yaff, dx=xaff, dtype=dtype)  # shape: (n_affs, Z, Y, X)
             affs = np.transpose(affs, (1, 2, 3, 0))  # shape: (Z, Y, X, n_affs)
-            new_mask[..., k*3:(k+1)*3] = affs
-            k += 1
+            new_mask[..., a_start + k * 3 : a_start + (k + 1) * 3] = affs
 
     # ---------- R (radial distances) ----------
     if "R" in mode:

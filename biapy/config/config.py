@@ -216,7 +216,10 @@ class Config:
         #       - 'y_affinities': list of int, specifies offsets along the y axis. Default: [1]
         #       - 'x_affinities': list of int, specifies offsets along the x axis. Default: [1]
         #       - 'widen_borders': int, specifies the number of pixels used to widen affinity borders. Default: 1
-        #       Note that 'z_affinities', 'y_affinities', and 'x_affinities' must be lists of equal length.
+        #       Note that 'z_affinities', 'y_affinities', and 'x_affinities' must be lists of equal length: they are
+        #       paired by index, so entry k of each describes one set of neighbour offsets. The resulting channels are
+        #       stored as one (z, y, x) triple per offset index, i.e. interleaved (Az_1, Ay_1, Ax_1, Az_2, Ay_2, Ax_2,
+        #       ...) rather than grouped by axis.
         #       To reproduce the paper "Superhuman Accuracy on the SNEMI3D Connectomics Challenge", use:
         #       'z_affinities': [1, 2, 3, 4], 'y_affinities': [1, 3, 9, 27], and 'x_affinities': [1, 3, 9, 27]
         #   - 'E' channel. Possible options:

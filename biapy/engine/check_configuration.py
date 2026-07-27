@@ -1417,12 +1417,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.TEST.AUGMENTATION_GROUP not in TTA_GROUPS:
         raise ValueError("'TEST.AUGMENTATION_GROUP' needs to be one of {}".format(list(TTA_GROUPS)))
 
-    if cfg.TEST.AUGMENTATION and cfg.TEST.REDUCE_MEMORY:
-        raise ValueError(
-            "'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
-            "does not support float16 data type."
-        )
-
     if cfg.DATA.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in [
         "SEMANTIC_SEG",
         "INSTANCE_SEG",
