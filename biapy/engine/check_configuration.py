@@ -408,7 +408,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         seed_channels
                     ]
                 )
-            if seed_channels_thresh != []:
+            # The threshold defaults are derived inside the '*_CHANNELS == []' branches above, so they must
+            # not be pushed when the user set the thresholds explicitly (and left the channels to default),
+            # or their values would be silently replaced by "auto".
+            if seed_channels_thresh != [] and cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH == []:
                 opts.extend(
                     [
                         "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH",
@@ -429,7 +432,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         growth_mask_channels
                     ]
                 )
-            if growth_mask_channel_ths != []:
+            if growth_mask_channel_ths != [] and cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH == []:
                 opts.extend(
                     [
                         "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH",

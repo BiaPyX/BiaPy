@@ -160,6 +160,13 @@ class test_pair_data_generator(Dataset):
                 apply_norm=False
             )
 
+    def _mask_fits_uint8(self) -> bool:
+        """Whether every ground-truth channel holds integer-like values, i.e. survives a uint8 cast."""
+        info = getattr(self, "mask_norm", None)
+        if not isinstance(info, dict) or "per_channel_info" not in info:
+            return False
+        return all(ch.get("type") not in ("no_bin", "flow") for ch in info["per_channel_info"].values())
+
     def load_sample(
         self,
         idx: int,
@@ -316,14 +323,19 @@ class test_pair_data_generator(Dataset):
                     assert isinstance(mask, np.ndarray)
 
             # Drop the virtual instance-label channel before the GT is used: it carries raw instance IDs
-            # (which the uint8 cast below would truncate anyway) and is not something the model predicts.
+            # and is not something the model predicts.
             if self.provide_Y and self.instance_channel is not None and mask is not None:
                 mask = np.delete(np.array(mask), self.instance_channel, axis=-1)
 
             img = np.expand_dims(img, 0)
             if self.provide_Y:
                 mask = np.expand_dims(np.array(mask), 0)
-                if self.norm_module["target_type"] == "mask":
+                # uint8 saves memory on label/binary masks, but it would destroy any channel holding
+                # real values (the signed H/V/Z maps, flows, distances...), so cast only when every
+                # channel is integer-like. Never on the first load: the channel types are derived from
+                # that sample, and casting first would make normalize_mask see integers and tag every
+                # channel as binary.
+                if self.norm_module["target_type"] == "mask" and not first_load and self._mask_fits_uint8():
                     mask = mask.astype(np.uint8)
 
             if self.convert_to_rgb:
