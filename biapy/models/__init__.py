@@ -557,8 +557,10 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
     scanned_files = []
     queue = [model_file]
 
-    # {name: source_code} for all class/function definitions
+    # {name: source_code} for all class/function/constant definitions
     name_to_source: Dict[str, str] = {}
+    # {name: file that defined it}, used to detect ambiguous names across scanned files
+    name_owner: Dict[str, str] = {}
 
     # === Step 1: Scan all relevant files and build name → source map ===
     while queue:
@@ -598,22 +600,44 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 else:
                     all_import_lines.add(full)
 
-        # Extract all top-level classes and functions and map name → source
+        # Extract all top-level definitions and map name → source. Classes and functions
+        # are taken from their first decorator (if any) up to `end_lineno`, so decorated
+        # definitions are not truncated. Module-level constants are collected too, as a
+        # class/function body may reference them and they would otherwise be missing from
+        # the generated file.
         for _node in tree.body:
-            if isinstance(_node, (ast.FunctionDef, ast.ClassDef)):
-                name = _node.name
+            if isinstance(_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                defined_names = [_node.name]
+                # Decorators live above the `def`/`class` line, so they must be included
+                # explicitly: `_node.lineno` points at the `def`/`class` keyword.
+                start_line = min([d.lineno for d in _node.decorator_list] + [_node.lineno]) - 1
+            elif isinstance(_node, ast.Assign):
+                defined_names = []
+                for target in _node.targets:
+                    if isinstance(target, ast.Name):
+                        defined_names.append(target.id)
+                    elif isinstance(target, (ast.Tuple, ast.List)):
+                        defined_names += [e.id for e in target.elts if isinstance(e, ast.Name)]
                 start_line = _node.lineno - 1
-                # Try to find the end of the block
-                end_line = start_line + 1
-                indent = len(source_lines[start_line]) - len(source_lines[start_line].lstrip())
+            elif isinstance(_node, ast.AnnAssign) and isinstance(_node.target, ast.Name):
+                defined_names = [_node.target.id]
+                start_line = _node.lineno - 1
+            else:
+                continue
 
-                while end_line < len(source_lines):
-                    line_indent = len(source_lines[end_line]) - len(source_lines[end_line].lstrip())
-                    if source_lines[end_line].strip() and line_indent <= indent:
-                        break
-                    end_line += 1
-
-                name_to_source[name] = "".join(source_lines[start_line:end_line])
+            source = "".join(source_lines[start_line : _node.end_lineno])
+            for name in defined_names:
+                # A name defined by two different scanned files cannot be resolved: the
+                # flat map would silently keep one body and the generated file would be
+                # wrong in a way that still imports cleanly. Fail loudly instead.
+                if name_owner.get(name, filepath) != filepath:
+                    raise RuntimeError(
+                        "Cannot generate a self-contained model file: '{}' is defined both in "
+                        "{} and in {}. Rename one of them so every top-level symbol shipped "
+                        "with BiaPy is unique.".format(name, name_owner[name], filepath)
+                    )
+                name_owner[name] = filepath
+                name_to_source[name] = source
 
         # Follow BiaPy module imports (if file-based)
         visited = set()
@@ -677,9 +701,15 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 dependency_queue.append(FakeObject(dep_name))
 
     # === Step 3: Populate collected_sources in reverse order (Dependencies First) ===
-    # By reversing the list, the deepest dependencies (discovered last) are placed 
+    # By reversing the list, the deepest dependencies (discovered last) are placed
     # at the start of the dictionary, ensuring they are defined before being used.
+    # A single statement can define several names (e.g. `A, B = 1, 2`), so its source is
+    # emitted only once.
+    emitted_sources = set()
     for name, source in reversed(definition_list):
+        if source in emitted_sources:
+            continue
+        emitted_sources.add(source)
         collected_sources[name] = source
 
     return collected_sources, sorted(all_import_lines), scanned_files
@@ -1029,27 +1059,21 @@ def check_bmz_args(
             "nclasses": cfg.DATA.N_CLASSES,
         }
 
-    (
-        preproc_info,
-        error,
-        error_message,
-        opts,
-        workflow_info,
-    ) = check_bmz_model_compatibility(
+    compat = check_bmz_model_compatibility(
         model_dict,
         workflow_specs=workflow_specs,
     )
 
-    if error:
-        raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
+    if compat["error"]:
+        raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{compat['reason_message']}\n")
 
-    return preproc_info, opts, workflow_info
+    return compat["preproc_info"], compat["opts"], compat["workflow_info"]
 
 
 def check_bmz_model_compatibility(
     model_rdf: Dict,
     workflow_specs: Optional[Dict] = None,
-) -> Tuple[List, bool, str, Dict, Dict]:
+) -> Dict:
     """
     Check one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one used in BMZ's continuous integration with BiaPy.
 
@@ -1063,21 +1087,20 @@ def check_bmz_model_compatibility(
 
     Returns
     -------
-    preproc_info: dict
-        Preprocessing names that the model is using.
+    result : dict
+        Compatibility report with the following keys:
 
-    error : bool
-        Whether it there is a problem to consume the model in BiaPy or not.
+        - ``preproc_info`` (list): preprocessing names that the model is using.
 
-    reason_message: str
-        Reason why the model can not be consumed if there is any.
+        - ``error`` (bool): whether it there is a problem to consume the model in BiaPy or not.
 
-    opts : dict
-        Configuration overrides extracted from the model RDF.
+        - ``reason_message`` (str): reason why the model can not be consumed if there is any.
 
-    workflow_info : dict
-        Inferred workflow information: ``workflow_type`` (PROBLEM.TYPE), ``ndim``
-        (PROBLEM.NDIM) and ``nclasses`` (DATA.N_CLASSES) when available.
+        - ``opts`` (dict): configuration overrides extracted from the model RDF.
+
+        - ``workflow_info`` (dict): inferred workflow information: ``workflow_type``
+          (PROBLEM.TYPE), ``ndim`` (PROBLEM.NDIM) and ``nclasses`` (DATA.N_CLASSES)
+          when available.
     """
 
     # --------- helpers ---------
@@ -1089,6 +1112,16 @@ def check_bmz_model_compatibility(
             else:
                 return default
         return cur
+
+    def _result(error: bool, reason_message: str = "") -> Dict:
+        """Build the compatibility report returned by this function."""
+        return {
+            "preproc_info": preproc_info,
+            "error": error,
+            "reason_message": reason_message,
+            "opts": opts,
+            "workflow_info": workflow_info,
+        }
 
     m = g(model_rdf, "raw", "manifest", default=model_rdf) or model_rdf
 
@@ -1106,10 +1139,10 @@ def check_bmz_model_compatibility(
 
     if not (isinstance(weights, dict) and weights):
         reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
-        return preproc_info, True, reason_message, opts, workflow_info
+        return _result(True, reason_message)
     if not (isinstance(inputs, list) and len(inputs) == 1):
         reason_message = f"[{specific_workflow}] Model needs to have a single input.\n"
-        return preproc_info, True, reason_message, opts, workflow_info
+        return _result(True, reason_message)
 
     # Model format version (defaults to 0.5 for your legacy logic)
     model_version = Version("0.5")
@@ -1127,7 +1160,7 @@ def check_bmz_model_compatibility(
     elif "architecture" in weights and isinstance(weights["architecture"], dict):
         model_kwargs = weights["architecture"].get("kwargs", None)
     if model_kwargs is None:
-        return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n", opts, workflow_info
+        return _result(True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n")
 
     # --------- Problem type via tags ---------
     tags = g(m, "tags", default=[]) or []
@@ -1149,7 +1182,7 @@ def check_bmz_model_compatibility(
             reason_message = (
                 f"[{specific_workflow}] 'DATA.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
             )
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
         
         if (
             classes == -1
@@ -1183,10 +1216,10 @@ def check_bmz_model_compatibility(
             if ref_classes != "all":
                 if classes > 2 and ref_classes != classes:
                     reason_message = f"[{specific_workflow}] 'DATA.N_CLASSES' does not match network's output classes. Please check it!\n"
-                    return preproc_info, True, reason_message, opts, workflow_info
+                    return _result(True, reason_message)
         else:
             reason_message = f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
 
         opts["DATA.N_CLASSES"] = max(2, classes)
 
@@ -1268,7 +1301,7 @@ def check_bmz_model_compatibility(
         workflow_info["workflow_type"] = "IMAGE_TO_IMAGE"
     else:
         reason_message = f"[{specific_workflow}] no workflow tag recognized in {tags}.\n"
-        return preproc_info, True, reason_message, opts, workflow_info
+        return _result(True, reason_message)
 
     # --------- Axes checks ---------
     axes_order = g(inputs[0], "axes")
@@ -1308,13 +1341,13 @@ def check_bmz_model_compatibility(
     for x in input_image_shape:
         if not isinstance(x, int):
             reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
 
     try:
         opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
     except Exception:
         reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
-        return preproc_info, True, reason_message, opts, workflow_info
+        return _result(True, reason_message)
 
     if axes_order == "bcyx":
         workflow_info["ndim"] = "2D"
@@ -1326,23 +1359,23 @@ def check_bmz_model_compatibility(
     if specific_dims == "2D":
         if axes_order != "bcyx":
             reason_message = f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
         elif "2d" not in tags and "3d" in tags:
             reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
     elif specific_dims == "3D":
         if axes_order != "bczyx":
             reason_message = f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
         elif "3d" not in tags and "2d" in tags:
             reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
     else:  # "all"
         if axes_order not in ["bcyx", "bczyx"]:
             reason_message = (
                 f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
             )
-            return preproc_info, True, reason_message, opts, workflow_info
+            return _result(True, reason_message)
 
     # --------- Preprocessing ---------
     if "preprocessing" in (inputs[0] or {}):
@@ -1366,7 +1399,7 @@ def check_bmz_model_compatibility(
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
                     )
-                    return preproc_info, True, reason_message, opts, workflow_info
+                    return _result(True, reason_message)
                 
                 proc_id = preproc_info[key_to_find]
                 if proc_id not in [
@@ -1379,7 +1412,7 @@ def check_bmz_model_compatibility(
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
                     )
-                    return preproc_info, True, reason_message, opts, workflow_info
+                    return _result(True, reason_message)
 
                 # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
                 if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
@@ -1433,18 +1466,18 @@ def check_bmz_model_compatibility(
         reason_message = (
             f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
         )
-        return preproc_info, True, reason_message, opts, workflow_info
+        return _result(True, reason_message)
 
     # --------- Dependency checks ---------
     if "dependencies" in weights and weights["dependencies"] is not None:
         try:
             nickname = model_rdf.get("nickname") or model_rdf.get("alias")
         except Exception:
-            return preproc_info, True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n", opts, workflow_info
+            return _result(True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n")
         try:
             current_model = load_description(nickname)
         except Exception:
-            return preproc_info, True, f"[{specific_workflow}] Couldn't load model for dependency check.\n", opts, workflow_info
+            return _result(True, f"[{specific_workflow}] Couldn't load model for dependency check.\n")
         
         ok, msg = True, ""
         try:
@@ -1462,12 +1495,12 @@ def check_bmz_model_compatibility(
                 yaml_reader = download(deps.file)  # returns a file-like BytesReader
                 ok, msg = can_import_env_deps(yaml_reader) 
         except Exception:            
-            return preproc_info, True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n", opts, workflow_info
+            return _result(True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n")
         if not ok:
-            return preproc_info, True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n", opts, workflow_info
+            return _result(True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n")
 
     # All checks passed
-    return preproc_info, False, "", opts, workflow_info
+    return _result(False)
 
 
 def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, Callable]:

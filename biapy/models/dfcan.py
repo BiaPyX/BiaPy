@@ -92,7 +92,7 @@ def fftshift3d(img, size_psc=128):
     return torch.cat([output1, output2], dim=2)
 
 
-class RCAB(nn.Module):
+class RCAB_dfcan(nn.Module):
     """
     Residual Channel Attention Block (RCAB).
 
@@ -197,7 +197,7 @@ class ResGroup(nn.Module):
         super().__init__()
         RCABs = []
         for _ in range(n_RCAB):
-            RCABs.append(RCAB(size_psc, conv=conv))
+            RCABs.append(RCAB_dfcan(size_psc, conv=conv))
         self.RCABs = nn.Sequential(*RCABs)
 
     def forward(self, x):

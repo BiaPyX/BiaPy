@@ -102,7 +102,7 @@ class ChannelAttention(nn.Module):
         return x * self.module(x)
 
 
-class RCAB(nn.Module):
+class RCAB_rcan(nn.Module):
     """
     Residual Channel Attention Block (RCAB).
 
@@ -130,7 +130,7 @@ class RCAB(nn.Module):
             The number of spatial dimensions of the input data (2 for 2D, 3 for 3D).
             Defaults to 2.
         """
-        super(RCAB, self).__init__()
+        super(RCAB_rcan, self).__init__()
         if ndim == 2:
             conv = nn.Conv2d
         else:
@@ -196,7 +196,7 @@ class RG(nn.Module):
             conv = nn.Conv2d
         else:
             conv = nn.Conv3d
-        self.module = [RCAB(num_features, reduction, ndim=ndim) for _ in range(num_rcab)]
+        self.module = [RCAB_rcan(num_features, reduction, ndim=ndim) for _ in range(num_rcab)]
         self.module.append(conv(num_features, num_features, kernel_size=3, padding="same"))
         self.module = nn.Sequential(*self.module)
 

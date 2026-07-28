@@ -410,8 +410,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
             # The threshold defaults are derived inside the '*_CHANNELS == []' branches above, so they must
             # not be pushed when the user set the thresholds explicitly (and left the channels to default),
-            # or their values would be silently replaced by "auto".
-            if seed_channels_thresh != [] and cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH == []:
+            # or their values would be silently replaced by "auto". Only the lengths are compared, and not
+            # whether the thresholds are set at all, because this function may run more than once over the
+            # same config (e.g. after merging a BMZ/checkpoint config, which can change the channels): the
+            # thresholds left by the previous run are stale and must be re-derived.
+            if seed_channels_thresh != [] and len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH) != len(seed_channels):
                 opts.extend(
                     [
                         "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH",
@@ -432,7 +435,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         growth_mask_channels
                     ]
                 )
-            if growth_mask_channel_ths != [] and cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH == []:
+            if growth_mask_channel_ths != [] and len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH) != len(growth_mask_channels):
                 opts.extend(
                     [
                         "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH",
