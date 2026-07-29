@@ -452,7 +452,7 @@ def merge_data_with_overlap(
             padding[0] : data_mask.shape[1] - padding[0],
             padding[1] : data_mask.shape[2] - padding[1],
         ]
-        merged_data_mask = np.zeros(original_shape, dtype=np.float32)
+        merged_data_mask = np.zeros(original_shape[:-1] + (data_mask.shape[-1],), dtype=np.float32)
 
     merged_data = np.zeros(original_shape, dtype=np.float32)
     # Using float32 for the weight map to accurately accumulate spline weights
