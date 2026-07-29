@@ -2995,7 +2995,31 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if model_arch in ["unetr", "vit", "mae"]:
             if model_arch == "mae" and cfg.PROBLEM.TYPE != "SELF_SUPERVISED":
                 raise ValueError("'mae' model can only be used in 'SELF_SUPERVISED' workflow")
-            if cfg.MODEL.VIT_EMBED_DIM % cfg.MODEL.VIT_NUM_HEADS != 0:
+            # With a predefined UNETR backbone the ViT is fully defined by it, so 'MODEL.VIT_*' are not used
+            custom_vit = model_arch != "unetr" or cfg.MODEL.UNETR_VIT_MODEL == "custom"
+            if model_arch == "unetr":
+                _unetr_vit_models = ["custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14"]
+                if cfg.MODEL.UNETR_VIT_MODEL not in _unetr_vit_models:
+                    raise ValueError(
+                        f"'MODEL.UNETR_VIT_MODEL' needs to be in {_unetr_vit_models}. "
+                        f"Provided: '{cfg.MODEL.UNETR_VIT_MODEL}'"
+                    )
+                # UNETR's decoder upsamples the ViT features by a factor of two on each of its levels
+                if custom_vit:
+                    token_size = cfg.MODEL.VIT_TOKEN_SIZE
+                else:
+                    token_size = 14 if cfg.MODEL.UNETR_VIT_MODEL == "vit_huge_patch14" else 16
+                if token_size < 2 or 2 ** int(np.log2(token_size)) != token_size:
+                    raise ValueError(
+                        "UNETR's token size needs to be a power of two greater than one, as its decoder upsamples "
+                        "the ViT features by a factor of two on each level. Resulting token size: {}{}".format(
+                            token_size,
+                            f" (set by 'MODEL.UNETR_VIT_MODEL' as '{cfg.MODEL.UNETR_VIT_MODEL}', so "
+                            "'MODEL.UNETR_VIT_MODEL' must be set to 'custom' to be able to select the token "
+                            "size with 'MODEL.VIT_TOKEN_SIZE')" if not custom_vit else "",
+                        )
+                    )
+            if custom_vit and cfg.MODEL.VIT_EMBED_DIM % cfg.MODEL.VIT_NUM_HEADS != 0:
                 raise ValueError("'MODEL.VIT_EMBED_DIM' should be divisible by 'MODEL.VIT_NUM_HEADS'")
             if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):
                 raise ValueError(
@@ -4040,7 +4064,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower():
                 modelname = old_cfg["MODEL"]["ARCHITECTURE"]
                 # Extract base channels dynamically (e.g., 'hrnet32' -> 32)
-                match = re.search(r'\d+', modelname)
+                match = re.search(r'\d+', architecture)
                 if match and variant_str != "custom":
                     variant_str = "W" + str(int(match.group()))
                 old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"

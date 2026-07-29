@@ -38,6 +38,16 @@ from biapy.models.blocks import (
 from biapy.models.tr_layers import PatchEmbed
 from biapy.models.heads import ProjectionHead
 
+# Predefined ViT backbones that can be used as UNETR's encoder. They mirror the models available in
+# `biapy.models.vit` (`vit_base_patch16`, `vit_large_patch16` and `vit_huge_patch14`), so the same ViT
+# type can be built with or without the UNETR decoder. With any of them the ViT is fully defined by the
+# preset, whereas with "custom" the values provided to the model are used.
+UNETR_VIT_MODELS = {
+    "vit_base_patch16": dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4.0),
+    "vit_large_patch16": dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4.0),
+    "vit_huge_patch14": dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4.0),
+}
+
 
 class UNETR(nn.Module):
     """
@@ -61,6 +71,7 @@ class UNETR(nn.Module):
         depth,
         num_heads,
         mlp_ratio=4.0,
+        vit_model="custom",
         num_filters=16,
         norm_layer=nn.LayerNorm,
         output_channels=[1],
@@ -96,21 +107,32 @@ class UNETR(nn.Module):
 
         patch_size : int
             Size of the square/cubic patches that are extracted from the input image.
-            For example, to use `16x16` patches, set `patch_size = 16`.
+            For example, to use `16x16` patches, set `patch_size = 16`. As the decoder
+            upsamples the ViT features by a factor of two on each of its levels, it needs
+            to be a power of two. Ignored unless `vit_model` is "custom".
 
         embed_dim : int
             Dimension of the embedding space for the Vision Transformer. This is
-            the dimensionality of the patch tokens.
+            the dimensionality of the patch tokens. Ignored unless `vit_model` is "custom".
 
         depth : int
             Number of transformer encoder layers (blocks) in the ViT backbone.
+            Ignored unless `vit_model` is "custom".
 
         num_heads : int
             Number of attention heads in the multi-head attention layer of the ViT.
+            Ignored unless `vit_model` is "custom".
 
         mlp_ratio : float, optional
             Ratio to multiply `embed_dim` to obtain the hidden dimension of the
-            MLP block within each Transformer block. Defaults to 4.0.
+            MLP block within each Transformer block. Defaults to 4.0. Ignored unless
+            `vit_model` is "custom".
+
+        vit_model : str, optional
+            Type of ViT backbone to build. With "custom" (default) the backbone is built with
+            the `patch_size`, `embed_dim`, `depth`, `num_heads` and `mlp_ratio` values provided.
+            Otherwise it must be one of the presets in `UNETR_VIT_MODELS`, which define all those
+            values, e.g. "vit_base_patch16".
 
         num_filters : int, optional
             Number of filters in the first layer of the UNETR's convolutional decoder.
@@ -187,9 +209,36 @@ class UNETR(nn.Module):
             raise ValueError("'output_channels' needs to has at least one value")
         if contrast and len(output_channels) > 2:
             raise ValueError("If 'contrast' is True, 'output_channels' can only have two values at max: one for the main output and one for the class.")
-        print("Selected output channels:")        
+        print("Selected output channels:")
         for i, info in enumerate(output_channel_info):
             print(f"  - {i} channel for {info} output")
+
+        # Build the ViT backbone out of one of the predefined models, if selected
+        if vit_model != "custom":
+            if vit_model not in UNETR_VIT_MODELS:
+                raise ValueError(
+                    "'vit_model' needs to be 'custom' or one of {}. Provided: '{}'".format(
+                        list(UNETR_VIT_MODELS.keys()), vit_model
+                    )
+                )
+            vit_params = UNETR_VIT_MODELS[vit_model]
+            patch_size = vit_params["patch_size"]
+            embed_dim = vit_params["embed_dim"]
+            depth = vit_params["depth"]
+            num_heads = vit_params["num_heads"]
+            mlp_ratio = vit_params["mlp_ratio"]
+            print(f"Building UNETR's ViT backbone as '{vit_model}': {vit_params}")
+
+        # The decoder recovers the input resolution upsampling the ViT features by a factor of two on each
+        # of its levels, so there must be an exact number of levels, i.e. log2(patch_size) must be an integer
+        if patch_size < 2 or 2 ** int(math.log2(patch_size)) != patch_size:
+            raise ValueError(
+                "UNETR's patch size needs to be a power of two greater than one, as its decoder upsamples "
+                "the ViT features by a factor of two on each level. Provided: {}{}".format(
+                    patch_size,
+                    f" (set by the '{vit_model}' ViT model)" if vit_model != "custom" else "",
+                )
+            )
 
         self.input_shape = input_shape
         self.embed_dim = embed_dim

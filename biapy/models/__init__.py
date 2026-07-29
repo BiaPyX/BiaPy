@@ -314,6 +314,7 @@ def build_model(
                 depth=cfg.MODEL.VIT_NUM_LAYERS,
                 num_heads=cfg.MODEL.VIT_NUM_HEADS,
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
+                vit_model=cfg.MODEL.UNETR_VIT_MODEL,
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS,
                 output_channels=output_channels,
                 output_channel_info=output_channel_info,

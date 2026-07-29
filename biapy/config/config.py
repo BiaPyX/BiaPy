@@ -1367,6 +1367,12 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.1.2 UNETR architecture options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Type of ViT model to use as UNETR's backbone. Options are "custom", "vit_base_patch16", "vit_large_patch16"
+        # and "vit_huge_patch14". On "custom" setting the backbone is built with the 'MODEL.VIT_*' variables, whereas
+        # with the rest of the options all of them ('MODEL.VIT_TOKEN_SIZE' included) are set automatically. Notice that
+        # UNETR's decoder upsamples the ViT features by a factor of two on each of its levels, so the resulting token
+        # size must be a power of two: "vit_huge_patch14" can not be used and "custom" must be selected instead.
+        _C.MODEL.UNETR_VIT_MODEL = "custom"
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
         _C.MODEL.UNETR_VIT_HIDD_MULT = 3
         # Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is doubled.
@@ -1378,7 +1384,7 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.2 Transformer-based architectures options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On "custom" setting
+        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch14". On "custom" setting
         # the rest of the ViT parameters can be modified as other options will set them automatically.
         _C.MODEL.VIT_MODEL = "custom"
         # Size of the patches that are extracted from the input image.
