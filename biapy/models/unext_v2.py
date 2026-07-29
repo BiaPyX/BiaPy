@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, List
 
-from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2, prepare_activation_layers, init_weights
+from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2, get_decoder_feature_maps, prepare_activation_layers, init_weights
 from torchvision.ops.misc import Permute
 from biapy.models.heads import ProjectionHead
 
@@ -62,6 +62,7 @@ class U_NeXt_V2(nn.Module):
         yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
+        divide_decoder_feature_maps=False,
         output_channel_info=["F"],
         explicit_activations: bool = False,
         head_activations: List[str] = ["ce_sigmoid"],
@@ -124,6 +125,12 @@ class U_NeXt_V2(nn.Module):
 
         separated_decoders : bool, optional
             Whether to use separated decoders for each output head.
+
+        divide_decoder_feature_maps : bool, optional
+            Whether to divide ``feature_maps`` by the number of decoders created when
+            ``separated_decoders`` is enabled. This way the model keeps a number of parameters
+            closer to the one built with a single decoder. If ``False`` each decoder is built
+            with ``feature_maps`` as they are.
 
         output_channel_info : list of str, optional
             Information about the type of output channels. Possible values are:
@@ -306,6 +313,7 @@ class U_NeXt_V2(nn.Module):
 
         # DECODER
         self.num_decoders = 1 if not separated_decoders else len(output_channels)
+        dec_feature_maps = get_decoder_feature_maps(feature_maps, self.num_decoders, divide_decoder_feature_maps)
         self.up_paths = nn.ModuleList([nn.ModuleList() for _ in range(self.num_decoders)])
         for j in range(self.num_decoders):
             in_channels = feature_maps[-1]
@@ -317,7 +325,8 @@ class U_NeXt_V2(nn.Module):
                         ndim=self.ndim,
                         convtranspose=convtranspose,
                         in_size=in_channels,
-                        out_size=feature_maps[i],
+                        out_size=dec_feature_maps[i],
+                        in_size_bridge=feature_maps[i],
                         z_down=z_down[i],
                         yx_down=yx_down[i],
                         up_mode=upsample_layer,
@@ -329,15 +338,15 @@ class U_NeXt_V2(nn.Module):
                         k_size=kernel_size,
                     ) # type: ignore
                 )
-                in_channels = feature_maps[i]
+                in_channels = dec_feature_maps[i]
 
             # Inverted Stem
             mpool = (stem_k_size * z_factor, stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
             self.up_paths[j].append(
                 nn.Sequential(
-                    convtranspose(feature_maps[0], feature_maps[0], kernel_size=mpool, stride=mpool),
+                    convtranspose(dec_feature_maps[0], dec_feature_maps[0], kernel_size=mpool, stride=mpool),
                     pre_ln_permutation,
-                    layer_norm(feature_maps[0]),
+                    layer_norm(dec_feature_maps[0]),
                     post_ln_permutation,
                 ) # type: ignore
             )
@@ -346,8 +355,8 @@ class U_NeXt_V2(nn.Module):
         self.post_upsampling = None
         if len(upsampling_factor) > 0 and upsampling_position == "post":
             self.post_upsampling = convtranspose(
-                feature_maps[0],
-                feature_maps[0],
+                dec_feature_maps[0],
+                dec_feature_maps[0],
                 kernel_size=upsampling_factor,
                 stride=upsampling_factor,
             )
@@ -355,17 +364,17 @@ class U_NeXt_V2(nn.Module):
         if self.contrast:
             # extra added layers
             self.heads = nn.Sequential(
-                conv(feature_maps[0], feature_maps[0], kernel_size=3, stride=1, padding=1),
-                layer_norm(feature_maps[0]),
+                conv(dec_feature_maps[0], dec_feature_maps[0], kernel_size=3, stride=1, padding=1),
+                layer_norm(dec_feature_maps[0]),
                 dropout(0.10),
-                conv(feature_maps[0], output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+                conv(dec_feature_maps[0], output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
             )
 
-            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=feature_maps[0], proj_dim=contrast_proj_dim)
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=dec_feature_maps[0], proj_dim=contrast_proj_dim)
         else:
             self.heads = nn.Sequential()
             for i, out_ch in enumerate(output_channels):
-                self.heads.append(conv(feature_maps[0], out_ch, kernel_size=1, padding="same"))
+                self.heads.append(conv(dec_feature_maps[0], out_ch, kernel_size=1, padding="same"))
 
         init_weights(self)
 

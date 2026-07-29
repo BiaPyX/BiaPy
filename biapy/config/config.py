@@ -274,6 +274,11 @@ class Config:
         # so at least two entries are required there. Only supported by: ['unet', 'resunet', 'resunet++', 'seunet',
         # 'resunet_se', 'attention_unet', 'unext_v1', 'unext_v2'].
         _C.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD = False
+        # Whether to divide 'MODEL.FEATURE_MAPS' by the number of decoders created when 'SEPARATED_DECODERS_PER_HEAD'
+        # is enabled. This way the model keeps a number of parameters closer to the one built with just one decoder.
+        # If False each decoder is built with 'MODEL.FEATURE_MAPS' as they are, so the model will be as many times
+        # bigger (in its decoder part) as decoders are created. Only used when 'SEPARATED_DECODERS_PER_HEAD' is True.
+        _C.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS = False
         # Weights to be applied to the channels. Notice that these weights are not applied directly to the loss, but to the predicted channels before
         # calculating the loss. The length of the list must be equal to the number of channels. 
         # Notice that this is different from LOSS.WEIGHTS, which are used to apply weights to different losses.
@@ -517,6 +522,11 @@ class Config:
         # predictions. Only supported by: ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet',
         # 'unext_v1', 'unext_v2'].
         _C.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD = False
+        # Whether to divide 'MODEL.FEATURE_MAPS' by the number of decoders created when 'SEPARATED_DECODERS_PER_HEAD'
+        # is enabled. This way the model keeps a number of parameters closer to the one built with just one decoder.
+        # If False each decoder is built with 'MODEL.FEATURE_MAPS' as they are, so the model will be as many times
+        # bigger (in its decoder part) as decoders are created. Only used when 'SEPARATED_DECODERS_PER_HEAD' is True.
+        _C.PROBLEM.DETECTION.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS = False
         # Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
         # The weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
         # In the specific case of detection, where there are usually much less pixels representing the center of the objects to detect than
@@ -583,6 +593,11 @@ class Config:
         # so at least two entries are required there. Only supported by: ['unet', 'resunet', 'resunet++', 'seunet',
         # 'resunet_se', 'attention_unet', 'unext_v1', 'unext_v2'].
         _C.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD = False
+        # Whether to divide 'MODEL.FEATURE_MAPS' by the number of decoders created when 'SEPARATED_DECODERS_PER_HEAD'
+        # is enabled. This way the model keeps a number of parameters closer to the one built with just one decoder.
+        # If False each decoder is built with 'MODEL.FEATURE_MAPS' as they are, so the model will be as many times
+        # bigger (in its decoder part) as decoders are created. Only used when 'SEPARATED_DECODERS_PER_HEAD' is True.
+        _C.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS = False
         # Expected output channels to be predicted by the model.
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = 1
         # To use a custom data loader to load a random image from each image sample folder. The data needs to be structured

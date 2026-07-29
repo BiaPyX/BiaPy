@@ -106,12 +106,16 @@ def build_model(
         "unext_v2",
     ]:
         separated_decoders = False
+        divide_decoder_feature_maps = False
         if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
             separated_decoders = True
+            divide_decoder_feature_maps = cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS
         elif cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD:
             separated_decoders = True
+            divide_decoder_feature_maps = cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS
         elif cfg.PROBLEM.TYPE == "DETECTION" and cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD:
             separated_decoders = True
+            divide_decoder_feature_maps = cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS
 
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
@@ -130,6 +134,7 @@ def build_model(
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
             separated_decoders=separated_decoders,
+            divide_decoder_feature_maps=divide_decoder_feature_maps,
             isotropy=cfg.MODEL.ISOTROPY,
             larger_io=cfg.MODEL.LARGER_IO,
             conv_layers=cfg.MODEL.CONV_LAYERS,

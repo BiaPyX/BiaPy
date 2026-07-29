@@ -535,6 +535,7 @@ class UpBlock(nn.Module):
         se_block=False,
         nconvs=2,
         order="conv_norm_act",
+        in_size_bridge=None,
     ):
         """
         Initialize the Upsampling block.
@@ -587,9 +588,15 @@ class UpBlock(nn.Module):
         nconvs : int, optional
             Number of convolutional layers used to refine the concatenated features after
             upsampling. Defaults to 2 (equivalent to the former `DoubleConvBlock`).
+        in_size_bridge : int, optional
+            Number of channels of the skip connection (bridge) tensor from the encoder path.
+            Only needed when it differs from `out_size`, e.g. when the decoder is built with
+            less feature maps than the encoder. Defaults to `out_size`.
         """
         super(UpBlock, self).__init__()
         self.ndim = ndim
+        if in_size_bridge is None:
+            in_size_bridge = out_size
         block = []
         mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
         if up_mode == "convtranspose":
@@ -607,12 +614,14 @@ class UpBlock(nn.Module):
         self.up = nn.Sequential(*block)
 
         if attention_gate:
-            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size // 2, norm=norm)
+            self.attention_gate = AttentionBlock(
+                conv=conv, in_size=out_size, out_size=out_size // 2, norm=norm, in_size_bridge=in_size_bridge
+            )
         else:
             self.attention_gate = None
         self.conv_block = ConvBlock(
             conv=conv,
-            in_size=out_size * 2,
+            in_size=out_size + in_size_bridge,
             out_size=out_size,
             k_size=k_size,
             act=act,
@@ -639,7 +648,7 @@ class UpBlock(nn.Module):
             Expected shape: (batch_size, in_size, D, H, W) or (batch_size, in_size, H, W).
         bridge : torch.Tensor
             The skip connection tensor from the corresponding encoder stage (higher resolution).
-            Expected shape: (batch_size, out_size, D', H', W') or (batch_size, out_size, H', W'),
+            Expected shape: (batch_size, in_size_bridge, D', H', W') or (batch_size, in_size_bridge, H', W'),
             where D', H', W' match the spatial dimensions after upsampling `x`.
 
         Returns
@@ -685,6 +694,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         layer_scale=1e-6,
         layer_norm=None,
         k_size=7,
+        in_size_bridge=None,
     ):
         """
         Initialize an Upsampling block using ConvNeXt V1 components.
@@ -738,9 +748,15 @@ class UpConvNeXtBlock_V1(nn.Module):
         k_size : int or tuple, optional
             Height, width, and depth (for 3D) of the depthwise convolution window
             within the `ConvNeXtBlock_V1` layers. Defaults to 7.
+        in_size_bridge : int, optional
+            Number of channels of the skip connection (bridge) tensor from the encoder path.
+            Only needed when it differs from `out_size`, e.g. when the decoder is built with
+            less feature maps than the encoder. Defaults to `out_size`.
         """
         super(UpConvNeXtBlock_V1, self).__init__()
         self.ndim = ndim
+        if in_size_bridge is None:
+            in_size_bridge = out_size
         block = []
         mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
 
@@ -768,12 +784,16 @@ class UpConvNeXtBlock_V1(nn.Module):
 
         # Define attention gate
         if attention_gate:
-            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size // 2)
+            self.attention_gate = AttentionBlock(
+                conv=conv, in_size=out_size, out_size=out_size // 2, in_size_bridge=in_size_bridge
+            )
         else:
             self.attention_gate = None
 
         # Convolution block to change dimensions of concatenated tensor
-        self.conv_block = ConvBlock(conv, in_size=out_size * 2, out_size=out_size, k_size=1, se_block=se_block)
+        self.conv_block = ConvBlock(
+            conv, in_size=out_size + in_size_bridge, out_size=out_size, k_size=1, se_block=se_block
+        )
 
         # ConvNeXtBlock
         stage = nn.ModuleList()
@@ -800,7 +820,7 @@ class UpConvNeXtBlock_V1(nn.Module):
             Expected shape: (batch_size, in_size, D, H, W) or (batch_size, in_size, H, W).
         bridge : torch.Tensor
             The skip connection tensor from the corresponding encoder stage (higher resolution).
-            Expected shape: (batch_size, out_size, D', H', W') or (batch_size, out_size, H', W'),
+            Expected shape: (batch_size, in_size_bridge, D', H', W') or (batch_size, in_size_bridge, H', W'),
             where D', H', W' match the spatial dimensions after upsampling `x`.
 
         Returns
@@ -847,6 +867,7 @@ class UpConvNeXtBlock_V2(nn.Module):
         sd_probs=[0.0],
         layer_norm=None,
         k_size=7,
+        in_size_bridge=None,
     ):
         """
         Initialize an Upsampling block using ConvNeXt V2 components.
@@ -898,9 +919,15 @@ class UpConvNeXtBlock_V2(nn.Module):
         k_size : int or tuple, optional
             Height, width, and depth (for 3D) of the depthwise convolution window
             within the `ConvNeXtBlock_V2` layers. Defaults to 7.
+        in_size_bridge : int, optional
+            Number of channels of the skip connection (bridge) tensor from the encoder path.
+            Only needed when it differs from `out_size`, e.g. when the decoder is built with
+            less feature maps than the encoder. Defaults to `out_size`.
         """
         super(UpConvNeXtBlock_V2, self).__init__()
         self.ndim = ndim
+        if in_size_bridge is None:
+            in_size_bridge = out_size
         block = []
         mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
 
@@ -928,12 +955,16 @@ class UpConvNeXtBlock_V2(nn.Module):
 
         # Define attention gate
         if attention_gate:
-            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size // 2)
+            self.attention_gate = AttentionBlock(
+                conv=conv, in_size=out_size, out_size=out_size // 2, in_size_bridge=in_size_bridge
+            )
         else:
             self.attention_gate = None
 
         # Convolution block to change dimensions of concatenated tensor
-        self.conv_block = ConvBlock(conv, in_size=out_size * 2, out_size=out_size, k_size=1, se_block=se_block)
+        self.conv_block = ConvBlock(
+            conv, in_size=out_size + in_size_bridge, out_size=out_size, k_size=1, se_block=se_block
+        )
 
         # ConvNeXtBlock
         stage = nn.ModuleList()
@@ -958,7 +989,7 @@ class UpConvNeXtBlock_V2(nn.Module):
             Expected shape: (batch_size, in_size, D, H, W) or (batch_size, in_size, H, W).
         bridge : torch.Tensor
             The skip connection tensor from the corresponding encoder stage (higher resolution).
-            Expected shape: (batch_size, out_size, D', H', W') or (batch_size, out_size, H', W'),
+            Expected shape: (batch_size, in_size_bridge, D', H', W') or (batch_size, in_size_bridge, H', W'),
             where D', H', W' match the spatial dimensions after upsampling `x`.
 
         Returns
@@ -991,7 +1022,7 @@ class AttentionBlock(nn.Module):
     Reference: `Attention U-Net: Learning Where to Look for the Pancreas <https://arxiv.org/abs/1804.03999>`_.
     """
 
-    def __init__(self, conv, in_size, out_size, norm="none"):
+    def __init__(self, conv, in_size, out_size, norm="none", in_size_bridge=None):
         """
         Initialize the Attention Block with convolutional layers for gating and input signals.
 
@@ -1004,8 +1035,8 @@ class AttentionBlock(nn.Module):
         conv : Type[nn.Conv2d | nn.Conv3d]
             The convolutional layer type to use (e.g., `nn.Conv2d` for 2D, `nn.Conv3d` for 3D).
         in_size : int
-            Number of input feature channels for both the gating signal (`g`) and
-            the skip connection input (`x`).
+            Number of input feature channels for the gating signal (`g`), and also for the
+            skip connection input (`x`) unless `in_size_bridge` is provided.
         out_size : int
             Number of output channels for the intermediate convolutional layers
             (`w_g` and `w_x` outputs). The `psi` layer reduces this to 1 channel.
@@ -1014,8 +1045,14 @@ class AttentionBlock(nn.Module):
             Options include `'bn'` (BatchNorm), `'sync_bn'` (SyncBatchNorm),
             `'in'` (InstanceNorm), `'gn'` (GroupNorm), or `'none'` (no normalization).
             Defaults to "none".
+        in_size_bridge : int, optional
+            Number of channels of the skip connection input (`x`). Only needed when it differs
+            from the gating signal channels, e.g. when the decoder is built with less feature
+            maps than the encoder. Defaults to `in_size`.
         """
         super(AttentionBlock, self).__init__()
+        if in_size_bridge is None:
+            in_size_bridge = in_size
         w_g = []
         w_g.append(conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True))
         if norm != "none":
@@ -1026,7 +1063,7 @@ class AttentionBlock(nn.Module):
         self.w_g = nn.Sequential(*w_g)
 
         w_x = []
-        w_x.append(conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True))
+        w_x.append(conv(in_size_bridge, out_size, kernel_size=1, stride=1, padding=0, bias=True))
         if norm != "none":
             if conv == nn.Conv2d:
                 w_g.append(get_norm_2d(norm, out_size))
@@ -1064,7 +1101,7 @@ class AttentionBlock(nn.Module):
             Expected shape: (batch_size, in_size, D, H, W) or (batch_size, in_size, H, W).
         x : torch.Tensor
             The skip connection tensor from the corresponding encoder pathway.
-            Expected shape: (batch_size, in_size, D, H, W) or (batch_size, in_size, H, W).
+            Expected shape: (batch_size, in_size_bridge, D, H, W) or (batch_size, in_size_bridge, H, W).
             Spatial dimensions must match those of `g` after any necessary upsampling of `g`.
 
         Returns
@@ -2013,6 +2050,44 @@ def prepare_activation_layers(
         return nn.ModuleList(activation_list), nn.ModuleList(class_activation_list)
     else:
         return nn.ModuleList(activation_list), None
+
+def get_decoder_feature_maps(
+    feature_maps: List[int],
+    num_decoders: int,
+    divide_feature_maps: bool,
+) -> List[int]:
+    """
+    Calculate the feature maps to use in each decoder branch.
+
+    When more than one decoder is created (one per output head) each of them can be built either
+    with the same feature maps as the encoder or with them divided by the number of decoders, so
+    the resulting model keeps a size closer to the one built with a single decoder.
+
+    Parameters
+    ----------
+    feature_maps : List[int]
+        Feature maps used on each level of the encoder.
+
+    num_decoders : int
+        Number of decoder branches that are going to be created.
+
+    divide_feature_maps : bool
+        Whether to divide the feature maps between the decoder branches. It is only taken into
+        account when more than one decoder is created.
+
+    Returns
+    -------
+    decoder_feature_maps : List[int]
+        Feature maps to use on each level of every decoder branch.
+    """
+    if num_decoders <= 1 or not divide_feature_maps:
+        return list(feature_maps)
+
+    decoder_feature_maps = [max(1, x // num_decoders) for x in feature_maps]
+    print(
+        f"Building {num_decoders} decoders with the feature maps divided by {num_decoders}: {decoder_feature_maps}"
+    )
+    return decoder_feature_maps
 
 def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
     """

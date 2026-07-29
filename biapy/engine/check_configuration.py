@@ -2743,7 +2743,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-            opts.extend(["PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD", False])
+            opts.extend([
+                "PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD", False,
+                "PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS", False,
+            ])
         else:
             if cfg.MODEL.LARGER_IO and model_arch not in larger_io_supported_with_separated_decoders:
                 raise ValueError(
@@ -2759,10 +2762,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is only supported by {_inst_supported}. "
                     f"Selected architecture '{model_arch}' does not support it."
                 )
+    elif cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS:
+        # Feature maps can only be divided between decoders if more than one decoder is created
+        opts.extend(["PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS", False])
 
     if cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "DETECTION":
-            opts.extend(["PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD", False])
+            opts.extend([
+                "PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD", False,
+                "PROBLEM.DETECTION.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS", False,
+            ])
         else:
             if cfg.DATA.N_CLASSES <= 2:
                 raise ValueError(
@@ -2782,10 +2791,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     f"'PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD' is only supported by {_det_supported}. "
                     f"Selected architecture '{model_arch}' does not support it."
                 )
+    elif cfg.PROBLEM.DETECTION.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS:
+        # Feature maps can only be divided between decoders if more than one decoder is created
+        opts.extend(["PROBLEM.DETECTION.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS", False])
 
     if cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD:
         if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
-            opts.extend(["PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD", False])
+            opts.extend([
+                "PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD", False,
+                "PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS", False,
+            ])
         else:
             if cfg.MODEL.LARGER_IO and model_arch not in larger_io_supported_with_separated_decoders:
                 raise ValueError(
@@ -2801,6 +2816,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     f"'PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD' is only supported by {_i2i_supported}. "
                     f"Selected architecture '{model_arch}' does not support it."
                 )
+    elif cfg.PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS:
+        # Feature maps can only be divided between decoders if more than one decoder is created
+        opts.extend(["PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS", False])
 
     if cfg.MODEL.NORMALIZATION == "":
         opts.extend(["MODEL.NORMALIZATION", "in"])

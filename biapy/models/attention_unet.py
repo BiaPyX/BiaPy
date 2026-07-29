@@ -22,6 +22,7 @@ from biapy.models.blocks import (
     ConvBlock, 
     DoubleConvBlock, 
     UpBlock, 
+    get_decoder_feature_maps,
     get_norm_2d, 
     get_norm_3d, 
     prepare_activation_layers, 
@@ -50,6 +51,7 @@ class Attention_U_Net(nn.Module):
         yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
+        divide_decoder_feature_maps=False,
         output_channel_info=["F"],
         explicit_activations: bool = False,
         head_activations: List[str] = ["ce_sigmoid"],
@@ -104,6 +106,12 @@ class Attention_U_Net(nn.Module):
 
         separated_decoders : bool, optional
             Whether to use separated decoders for each output head.
+
+        divide_decoder_feature_maps : bool, optional
+            Whether to divide ``feature_maps`` by the number of decoders created when
+            ``separated_decoders`` is enabled. This way the model keeps a number of parameters
+            closer to the one built with a single decoder. If ``False`` each decoder is built
+            with ``feature_maps`` as they are.
 
         output_channel_info : list of str, optional
             Information about the type of output channels. Possible values are:
@@ -279,6 +287,7 @@ class Attention_U_Net(nn.Module):
 
         # DECODER
         self.num_decoders = 1 if not separated_decoders else len(output_channels)
+        dec_feature_maps = get_decoder_feature_maps(feature_maps, self.num_decoders, divide_decoder_feature_maps)
         self.up_paths = nn.ModuleList([nn.ModuleList() for _ in range(self.num_decoders)])
         for j in range(self.num_decoders):
             in_channels = feature_maps[-1]
@@ -291,7 +300,8 @@ class Attention_U_Net(nn.Module):
                         ndim=self.ndim,
                         convtranspose=convtranspose,
                         in_size=in_channels,
-                        out_size=feature_maps[i],
+                        out_size=dec_feature_maps[i],
+                        in_size_bridge=feature_maps[i],
                         z_down=z_down[i],
                         yx_down=yx_down[i],
                         up_mode=upsample_layer,
@@ -305,7 +315,7 @@ class Attention_U_Net(nn.Module):
                         order=conv_block_order,
                     ) # type: ignore
                 )
-                in_channels = feature_maps[i]
+                in_channels = dec_feature_maps[i]
 
         # extra (larger) output layer
         if larger_io:
@@ -315,8 +325,8 @@ class Attention_U_Net(nn.Module):
             self.conv_out = nn.ModuleList([
                 ConvBlock(
                     conv=conv,
-                    in_size=feature_maps[0],
-                    out_size=feature_maps[0],
+                    in_size=dec_feature_maps[0],
+                    out_size=dec_feature_maps[0],
                     k_size=kernel_size,
                     act=activation,
                     norm=normalization,
@@ -330,8 +340,8 @@ class Attention_U_Net(nn.Module):
         self.post_upsampling = None
         if len(upsampling_factor) > 0 and upsampling_position == "post":
             self.post_upsampling = convtranspose(
-                feature_maps[0],
-                feature_maps[0],
+                dec_feature_maps[0],
+                dec_feature_maps[0],
                 kernel_size=upsampling_factor,
                 stride=upsampling_factor,
             )
@@ -339,17 +349,17 @@ class Attention_U_Net(nn.Module):
         if self.contrast:
             # extra added layers
             self.heads = nn.Sequential(
-                conv(feature_maps[0], feature_maps[0], kernel_size=3, stride=1, padding=1),
-                norm_func(normalization, feature_maps[0]),
+                conv(dec_feature_maps[0], dec_feature_maps[0], kernel_size=3, stride=1, padding=1),
+                norm_func(normalization, dec_feature_maps[0]),
                 dropout(0.10),
-                conv(feature_maps[0], output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+                conv(dec_feature_maps[0], output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
             )
 
-            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=feature_maps[0], proj_dim=contrast_proj_dim)
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=dec_feature_maps[0], proj_dim=contrast_proj_dim)
         else:
             self.heads = nn.Sequential()
             for i, out_ch in enumerate(output_channels):
-                self.heads.append(conv(feature_maps[0], out_ch, kernel_size=1, padding="same"))
+                self.heads.append(conv(dec_feature_maps[0], out_ch, kernel_size=1, padding="same"))
 
         init_weights(self)
 
