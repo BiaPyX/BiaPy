@@ -3804,6 +3804,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["NORMALIZE_DISTANCES"]
                 if "POSTSITE_DILATION_DISTANCE_CHANNELS" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]:
                     del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["POSTSITE_DILATION_DISTANCE_CHANNELS"]
+                if "POSTSITE_DILATION" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]:
+                    del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["POSTSITE_DILATION"]
 
     if "DATA" in old_cfg:
         if "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]:
@@ -3960,6 +3962,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
                 old_cfg["MODEL"]["NORMALIZATION"] = "bn"
             del old_cfg["MODEL"]["BATCH_NORMALIZATION"]
+        if "CONVNEXT_LAYERS" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["CONV_LAYERS"] = old_cfg["MODEL"]["CONVNEXT_LAYERS"]
+            del old_cfg["MODEL"]["CONVNEXT_LAYERS"]
         if "UNETR_DEC_ACTIVATION" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["ACTIVATION"] = old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
             del old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
@@ -4048,7 +4053,11 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
 
-        if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower() or "HRNET" in old_cfg["MODEL"]:
+        # 'ARCHITECTURE' may not be present in the old configuration, as it is not a mandatory field
+        architecture = old_cfg["MODEL"].get("ARCHITECTURE", "")
+        if not isinstance(architecture, str):
+            architecture = ""
+        if 'hrnet' in architecture.lower() or "HRNET" in old_cfg["MODEL"]:
             if "HRNET" not in old_cfg["MODEL"]:
                 old_cfg["MODEL"]["HRNET"] = {}
             hrnet_block = old_cfg["MODEL"]["HRNET"]
@@ -4061,8 +4070,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 is_custom = hrnet_block.pop("CUSTOM")
                 if is_custom:
                     variant_str = "custom"
-            if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower():
-                modelname = old_cfg["MODEL"]["ARCHITECTURE"]
+            if 'hrnet' in architecture.lower():
                 # Extract base channels dynamically (e.g., 'hrnet32' -> 32)
                 match = re.search(r'\d+', architecture)
                 if match and variant_str != "custom":
