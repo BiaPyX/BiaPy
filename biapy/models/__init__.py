@@ -241,6 +241,15 @@ def build_model(
 
     elif "stunet" in modelname:
         callable_model = build_stunet  # type: ignore
+        # The pretrained weights are not downloaded when resuming from a checkpoint, as the
+        # checkpoint loaded afterwards would replace them anyway
+        stunet_pretrained = cfg.MODEL.STUNET.PRETRAINED
+        if stunet_pretrained and cfg.MODEL.LOAD_CHECKPOINT:
+            print(
+                "Skipping the download of STUNet's pretrained weights, as 'MODEL.LOAD_CHECKPOINT' is enabled "
+                "and the checkpoint loaded afterwards would replace them"
+            )
+            stunet_pretrained = False
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
             output_channels=output_channels,
@@ -250,7 +259,7 @@ def build_model(
             head_activations=head_activations,
             output_channel_info=output_channel_info,
             return_one_tensor=False,
-            pretrained=cfg.MODEL.STUNET.PRETRAINED,
+            pretrained=stunet_pretrained,
         )
         model = build_stunet(**args) # type: ignore
     else:
@@ -417,6 +426,22 @@ def build_model(
             )
             callable_model = NAFNet   # type: ignore
             model = callable_model(**args)  # type: ignore
+
+    # Initialize the ViT backbone with pretrained weights, if requested. It is done here, and not
+    # within the models, so the architectures stay self-contained (e.g. when they are exported to
+    # the BioImage Model Zoo, where the weights shipped are the trained ones).
+    vit_backbone = cfg.MODEL.VIT_MODEL if modelname == "vit" else cfg.MODEL.UNETR_VIT_MODEL
+    if modelname in ["vit", "unetr"] and vit_backbone == "sam3_vit" and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
+        if cfg.MODEL.LOAD_CHECKPOINT:
+            print(
+                "Skipping the download of SAM 3's pretrained weights, as 'MODEL.LOAD_CHECKPOINT' is enabled "
+                "and the checkpoint loaded afterwards would replace them"
+            )
+        else:
+            from biapy.models.sam3_vit import load_sam3_pretrained_encoder
+
+            load_sam3_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
+
     # Check the network created
     model.to(device)
     if cfg.PROBLEM.NDIM == "2D":

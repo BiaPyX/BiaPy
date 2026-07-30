@@ -1367,14 +1367,21 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.1.2 UNETR architecture options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model to use as UNETR's backbone. Options are "custom", "vit_base_patch16", "vit_large_patch16"
-        # and "vit_huge_patch14". On "custom" setting the backbone is built with the 'MODEL.VIT_*' variables, whereas
-        # with the rest of the options all of them ('MODEL.VIT_TOKEN_SIZE' included) are set automatically. Notice that
-        # UNETR's decoder upsamples the ViT features by a factor of two on each of its levels, so the resulting token
-        # size must be a power of two: "vit_huge_patch14" can not be used and "custom" must be selected instead.
+        # Type of ViT model to use as UNETR's backbone. Options are "custom", "vit_base_patch16", "vit_large_patch16",
+        # "vit_huge_patch14" and "sam3_vit". On "custom" setting the backbone is built with the 'MODEL.VIT_*' variables,
+        # whereas with the rest of the options all of them ('MODEL.VIT_TOKEN_SIZE' included) are set automatically.
+        # Notice that UNETR's decoder upsamples the ViT features by a factor of two on each of its levels, so the
+        # resulting token size must be a power of two: "vit_huge_patch14" can not be used and "custom" must be selected
+        # instead. "sam3_vit" builds the image encoder of SAM 3, which can be initialized with its pretrained weights
+        # through 'MODEL.VIT_PRETRAINED_WEIGHTS'. As SAM 3's 14x14 tokens are not a power of two, 16x16 ones are used
+        # here and its patch embedding is resized to them. It is 2D only, as SAM 3's pretrained weights are 2D.
         _C.MODEL.UNETR_VIT_MODEL = "custom"
-        # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted
-        _C.MODEL.UNETR_VIT_HIDD_MULT = 3
+        # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
+        # Leave it as -1 to decide it automatically based on the encoder selected, which spaces the skip connections
+        # evenly along it taking one every 'MODEL.VIT_NUM_LAYERS // log2(token size)' blocks. That gives the 3 that
+        # used to be the default with the classic 12-layer ViT and 16x16 tokens, and adapts it to deeper encoders,
+        # e.g. it gives 8 with the 32 blocks of "sam3_vit" (so blocks 8, 16 and 24 feed the decoder).
+        _C.MODEL.UNETR_VIT_HIDD_MULT = -1
         # Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is doubled.
         _C.MODEL.UNETR_VIT_NUM_FILTERS = 16
 
@@ -1384,10 +1391,23 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.2 Transformer-based architectures options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch14". On "custom" setting
-        # the rest of the ViT parameters can be modified as other options will set them automatically.
+        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14" and
+        # "sam3_vit". On "custom" setting the rest of the ViT parameters can be modified as other options will set
+        # them automatically. "sam3_vit" builds the image encoder of SAM 3 (Segment Anything Model 3), which can be
+        # initialized with its pretrained weights through 'MODEL.VIT_PRETRAINED_WEIGHTS'. It uses SAM 3's 14x14
+        # tokens, so 'DATA.PATCH_SIZE' must be a multiple of 14, and it is 2D only.
         _C.MODEL.VIT_MODEL = "custom"
-        # Size of the patches that are extracted from the input image.
+        # Pretrained weights to initialize the ViT backbone with. Leave it empty to train from scratch. It can be a
+        # Hugging Face repository, i.e. "facebook/sam3" or "facebook/sam3.1" (both share the same image encoder, so
+        # "sam3_vit" builds the backbone for either of them), or the path to a local file with the weights. Only used when
+        # the selected ViT is "sam3_vit" ('MODEL.VIT_MODEL' or 'MODEL.UNETR_VIT_MODEL'). Notice that SAM 3 is a gated
+        # model, so its license needs to be accepted in https://huggingface.co/facebook/sam3 and this machine needs
+        # to be authenticated (running "hf auth login" or exporting the HF_TOKEN environment variable) to download it.
+        # The weights are not downloaded when 'MODEL.LOAD_CHECKPOINT' is enabled, as the checkpoint replaces them.
+        _C.MODEL.VIT_PRETRAINED_WEIGHTS = ""
+        # Size of the patches (tokens) that are extracted from the input image. Only used when the ViT model selected
+        # is "custom", as the rest of them are built with the token size they were designed with (e.g. "sam3_vit"
+        # uses SAM 3's 14x14 tokens, or the closest power of two under UNETR, as its decoder needs it).
         _C.MODEL.VIT_TOKEN_SIZE = 16
         # Dimension of the embedding space
         _C.MODEL.VIT_EMBED_DIM = 768

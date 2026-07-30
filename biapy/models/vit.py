@@ -16,6 +16,7 @@ Functions:
 - ``vit_base_patch16``: Factory function for a base-sized ViT model with 16x16 patches.
 - ``vit_large_patch16``: Factory function for a large-sized ViT model with 16x16 patches.
 - ``vit_huge_patch14``: Factory function for a huge-sized ViT model with 14x14 patches.
+- ``sam3_vit``: Factory function for a ViT with SAM 3's image encoder as backbone.
 
 References:
 
@@ -33,6 +34,7 @@ import timm.models.vision_transformer
 
 from biapy.models.blocks import prepare_activation_layers
 from biapy.models.tr_layers import PatchEmbed
+from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
 
 
 class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
@@ -148,6 +150,9 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
         x = self.pos_drop(x)
+        # Normalization applied before the blocks. It is an identity unless the model was created
+        # with 'pre_norm', which is the case of the SAM 3 backbone (its 'ln_pre' layer).
+        x = self.norm_pre(x)
 
         for blk in self.blocks:
             x = blk(x)
@@ -188,6 +193,9 @@ def vit_base_patch16(**kwargs):
     model : VisionTransformer
         An initialized Base-sized ViT model.
     """
+    # The patch size is defined by the model itself, so the one provided (e.g. 'MODEL.VIT_TOKEN_SIZE')
+    # is discarded. Without this, passing it would raise a "multiple values for 'patch_size'" error.
+    kwargs.pop("patch_size", None)
     model = VisionTransformer(
         patch_size=16,
         embed_dim=768,
@@ -219,6 +227,9 @@ def vit_large_patch16(**kwargs):
     model : VisionTransformer
         An initialized Large-sized ViT model.
     """
+    # The patch size is defined by the model itself, so the one provided (e.g. 'MODEL.VIT_TOKEN_SIZE')
+    # is discarded. Without this, passing it would raise a "multiple values for 'patch_size'" error.
+    kwargs.pop("patch_size", None)
     model = VisionTransformer(
         patch_size=16,
         embed_dim=1024,
@@ -250,6 +261,9 @@ def vit_huge_patch14(**kwargs):
     model : VisionTransformer
         An initialized Huge-sized ViT model.
     """
+    # The patch size is defined by the model itself, so the one provided (e.g. 'MODEL.VIT_TOKEN_SIZE')
+    # is discarded. Without this, passing it would raise a "multiple values for 'patch_size'" error.
+    kwargs.pop("patch_size", None)
     model = VisionTransformer(
         patch_size=14,
         embed_dim=1280,
@@ -258,5 +272,66 @@ def vit_huge_patch14(**kwargs):
         mlp_ratio=4,
         qkv_bias=True,
         **kwargs,
+    )
+    return model
+
+
+def sam3_vit(**kwargs):
+    """
+    Create a Vision Transformer (ViT) with the image encoder of SAM 3.
+
+    The encoder is built exactly as SAM 3's one (1024 embedding dimensions, 32 blocks, 16 heads,
+    a 4.625 MLP ratio, 2D rotary position embeddings and window attention in all the blocks but
+    the global ones), so its pretrained weights can be loaded into it afterwards with
+    `biapy.models.sam3_vit.load_sam3_pretrained_encoder`. Every value defining the architecture is
+    the one of SAM 3, its ``14x14`` token size included, so the size of the input images needs to
+    be a multiple of it.
+
+    Unlike SAM 3's trunk, the model keeps a class token, as it is what BiaPy's ViT uses to
+    classify. It is randomly initialized, as there is none in SAM 3's checkpoint, and it is not
+    rotated within the attention, as it has no position in the token grid.
+
+    Parameters
+    ----------
+    **kwargs
+        Arbitrary keyword arguments to be passed to the `VisionTransformer` constructor, such as
+        `img_size`, `in_chans` or `num_classes`. Every ViT parameter defining the architecture of
+        SAM 3's encoder, the token size included, is ignored, as it is set by the encoder itself.
+
+    Returns
+    -------
+    model : VisionTransformer
+        An initialized ViT with SAM 3's image encoder as backbone.
+    """
+    params = SAM3_VIT_PARAMS
+    if kwargs.get("ndim", 2) != 2:
+        raise ValueError(
+            "SAM 3's image encoder ('sam3_vit') can only be used with 2D data, as its pretrained weights "
+            "are 2D (its patch embedding projects 3-channel 2D images). Set 'MODEL.VIT_MODEL' to another "
+            "value to work with 3D data."
+        )
+    # Everything defining the architecture is set by SAM 3's encoder, so the values provided
+    # (e.g. 'MODEL.VIT_TOKEN_SIZE') are discarded
+    for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "pre_norm"]:
+        kwargs.pop(k, None)
+
+    model = VisionTransformer(
+        patch_size=params["patch_size"],
+        embed_dim=params["embed_dim"],
+        # The blocks are replaced below by SAM 3's ones, so only one is created here to avoid
+        # allocating (and immediately discarding) the parameters of the 32 blocks of the encoder
+        depth=1,
+        num_heads=params["num_heads"],
+        mlp_ratio=params["mlp_ratio"],
+        qkv_bias=params["qkv_bias"],
+        norm_layer=partial(nn.LayerNorm, eps=params["norm_eps"]),
+        pre_norm=True,  # SAM 3's 'ln_pre'
+        **kwargs,
+    )
+    grid_size = model.patch_embed.grid_size
+    model.blocks = build_sam3_blocks((grid_size, grid_size), num_prefix_tokens=model.num_prefix_tokens)
+    print(
+        f"SAM 3 image encoder built with {params['depth']} blocks over a {grid_size}x{grid_size} token grid "
+        f"({params['patch_size']}x{params['patch_size']} tokens)"
     )
     return model

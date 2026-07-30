@@ -37,6 +37,7 @@ from biapy.models.blocks import (
 )
 from biapy.models.tr_layers import PatchEmbed
 from biapy.models.heads import ProjectionHead
+from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
 
 # Predefined ViT backbones that can be used as UNETR's encoder. They mirror the models available in
 # `biapy.models.vit` (`vit_base_patch16`, `vit_large_patch16` and `vit_huge_patch14`), so the same ViT
@@ -46,6 +47,16 @@ UNETR_VIT_MODELS = {
     "vit_base_patch16": dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4.0),
     "vit_large_patch16": dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4.0),
     "vit_huge_patch14": dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4.0),
+    # SAM 3's image encoder. It uses 14x14 tokens, but UNETR's decoder upsamples the ViT features by a
+    # factor of two on each of its levels, so it needs a power of two: the closest one is used instead
+    # and the pretrained patch embedding is resized to it when the weights are loaded.
+    "sam3_vit": dict(
+        patch_size=16,
+        embed_dim=SAM3_VIT_PARAMS["embed_dim"],
+        depth=SAM3_VIT_PARAMS["depth"],
+        num_heads=SAM3_VIT_PARAMS["num_heads"],
+        mlp_ratio=SAM3_VIT_PARAMS["mlp_ratio"],
+    ),
 }
 
 
@@ -79,7 +90,7 @@ class UNETR(nn.Module):
         explicit_activations: bool = False,
         head_activations: List[str] = ["ce_sigmoid"],
         decoder_activation="relu",
-        ViT_hidd_mult=3,
+        ViT_hidd_mult=-1,
         normalization="bn",
         dropout=0.0,
         k_size=3,
@@ -132,7 +143,10 @@ class UNETR(nn.Module):
             Type of ViT backbone to build. With "custom" (default) the backbone is built with
             the `patch_size`, `embed_dim`, `depth`, `num_heads` and `mlp_ratio` values provided.
             Otherwise it must be one of the presets in `UNETR_VIT_MODELS`, which define all those
-            values, e.g. "vit_base_patch16".
+            values, e.g. "vit_base_patch16". With "sam3_vit" the backbone is SAM 3's image encoder
+            (2D only), whose pretrained weights can be loaded afterwards with
+            `biapy.models.sam3_vit.load_sam3_pretrained_encoder`; in that case `patch_size` is the
+            only value kept, as the decoder needs it to be a power of two.
 
         num_filters : int, optional
             Number of filters in the first layer of the UNETR's convolutional decoder.
@@ -172,7 +186,8 @@ class UNETR(nn.Module):
             Multiplier to select which intermediate transformer encoder layers' outputs
             are used as skip connections for the decoder. For example, if `depth` is 12
             and `ViT_hidd_mult = 3`, skip connections will be taken from layers 3, 6, and 9.
-            Defaults to 3.
+            Set it to ``-1`` (default) to space them evenly along the encoder, which takes
+            one every ``depth // log2(patch_size)`` blocks.
 
         normalization : str, optional
             Normalization layer type for the convolutional decoder (one of `'bn'`,
@@ -221,6 +236,12 @@ class UNETR(nn.Module):
                         list(UNETR_VIT_MODELS.keys()), vit_model
                     )
                 )
+            if vit_model == "sam3_vit" and len(input_shape) == 4:
+                raise ValueError(
+                    "SAM 3's image encoder ('sam3_vit') can only be used with 2D data, as its pretrained "
+                    "weights are 2D (its patch embedding projects 3-channel 2D images). Set "
+                    "'MODEL.UNETR_VIT_MODEL' to another value to work with 3D data."
+                )
             vit_params = UNETR_VIT_MODELS[vit_model]
             patch_size = vit_params["patch_size"]
             embed_dim = vit_params["embed_dim"]
@@ -238,6 +259,26 @@ class UNETR(nn.Module):
                     patch_size,
                     f" (set by the '{vit_model}' ViT model)" if vit_model != "custom" else "",
                 )
+            )
+
+        # The decoder takes one skip connection from the transformer at every level but the last one, i.e.
+        # from the blocks 'ViT_hidd_mult', '2 * ViT_hidd_mult' ... So the multiplier must be small enough for
+        # all of them to exist, and spreading them evenly along the encoder means one every 'depth // levels'
+        # blocks. That is what is used when no multiplier is provided, which with the classic 12-block ViT
+        # and 16x16 tokens gives the 3 that used to be the default.
+        decoder_levels = int(math.log2(patch_size))
+        if ViT_hidd_mult <= 0:
+            ViT_hidd_mult = max(1, depth // decoder_levels)
+            print(
+                f"Extracting UNETR's skip connections every {ViT_hidd_mult} transformer blocks, i.e. from the "
+                f"blocks {[ViT_hidd_mult * i for i in range(1, decoder_levels)]} of the {depth} of the encoder"
+            )
+        elif ViT_hidd_mult * (decoder_levels - 1) > depth:
+            raise ValueError(
+                "'ViT_hidd_mult' is too large for this encoder: UNETR takes its skip connections from the "
+                f"transformer blocks {[ViT_hidd_mult * i for i in range(1, decoder_levels)]}, but the encoder "
+                f"only has {depth} blocks. Reduce it to {max(1, depth // decoder_levels)} or below, or set it to "
+                "-1 ('MODEL.UNETR_VIT_HIDD_MULT') to let BiaPy space them evenly along the encoder."
             )
 
         self.input_shape = input_shape
@@ -297,18 +338,30 @@ class UNETR(nn.Module):
             torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False
         )  # fixed sin-cos embedding
 
-        self.blocks = nn.ModuleList(
-            [
-                Block(
-                    embed_dim,
-                    num_heads,
-                    mlp_ratio,
-                    qkv_bias=True,
-                    norm_layer=norm_layer,
-                )
-                for i in range(depth)
-            ]
-        )
+        if vit_model == "sam3_vit":
+            # SAM 3's encoder: rotary position embeddings and window attention within its blocks,
+            # plus a layer normalization applied to the tokens before them
+            grid_size = self.patch_embed.grid_size
+            self.blocks = build_sam3_blocks((grid_size, grid_size), num_prefix_tokens=1)
+            self.ln_pre = nn.LayerNorm(embed_dim, eps=SAM3_VIT_PARAMS["norm_eps"])
+            print(
+                f"SAM 3 image encoder built with {depth} blocks over a {grid_size}x{grid_size} token grid "
+                f"({patch_size}x{patch_size} tokens)"
+            )
+        else:
+            self.blocks = nn.ModuleList(
+                [
+                    Block(
+                        embed_dim,
+                        num_heads,
+                        mlp_ratio,
+                        qkv_bias=True,
+                        norm_layer=norm_layer,
+                    )
+                    for i in range(depth)
+                ]
+            )
+            self.ln_pre = nn.Identity()
 
         # UNETR Part (bottom_up, from the bottle-neck, to the output)
         self.total_upscale_factor = int(math.log2(patch_size))
@@ -464,6 +517,8 @@ class UNETR(nn.Module):
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
+        # Identity unless SAM 3's encoder is used, where it is its 'ln_pre' layer
+        x = self.ln_pre(x)
 
         # Collect skip connections from ViT blocks
         skip_connection_index = [self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)]

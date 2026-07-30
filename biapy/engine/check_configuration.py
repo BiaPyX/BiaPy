@@ -2995,32 +2995,82 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if model_arch in ["unetr", "vit", "mae"]:
             if model_arch == "mae" and cfg.PROBLEM.TYPE != "SELF_SUPERVISED":
                 raise ValueError("'mae' model can only be used in 'SELF_SUPERVISED' workflow")
-            # With a predefined UNETR backbone the ViT is fully defined by it, so 'MODEL.VIT_*' are not used
-            custom_vit = model_arch != "unetr" or cfg.MODEL.UNETR_VIT_MODEL == "custom"
+
+            _vit_models = ["custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14", "sam3_vit"]
             if model_arch == "unetr":
-                _unetr_vit_models = ["custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14"]
-                if cfg.MODEL.UNETR_VIT_MODEL not in _unetr_vit_models:
-                    raise ValueError(
-                        f"'MODEL.UNETR_VIT_MODEL' needs to be in {_unetr_vit_models}. "
-                        f"Provided: '{cfg.MODEL.UNETR_VIT_MODEL}'"
-                    )
+                vit_backbone, vit_backbone_var = cfg.MODEL.UNETR_VIT_MODEL, "MODEL.UNETR_VIT_MODEL"
+            elif model_arch == "vit":
+                vit_backbone, vit_backbone_var = cfg.MODEL.VIT_MODEL, "MODEL.VIT_MODEL"
+            else:  # 'mae' is always built with the 'MODEL.VIT_*' variables
+                vit_backbone, vit_backbone_var = "custom", "MODEL.VIT_MODEL"
+            if vit_backbone not in _vit_models:
+                raise ValueError(f"'{vit_backbone_var}' needs to be in {_vit_models}. Provided: '{vit_backbone}'")
+
+            # Only "custom" builds the ViT out of the 'MODEL.VIT_*' variables. The rest of the models are
+            # built with the values they were designed with, 'MODEL.VIT_TOKEN_SIZE' included.
+            custom_vit = vit_backbone == "custom"
+            if custom_vit:
+                token_size = cfg.MODEL.VIT_TOKEN_SIZE
+            elif vit_backbone == "sam3_vit":
+                # SAM 3 uses 14x14 tokens, but UNETR's decoder needs a power of two, so the closest one is
+                # used there and its patch embedding is resized to it when loading the pretrained weights
+                token_size = 16 if model_arch == "unetr" else 14
+            else:
+                token_size = 14 if vit_backbone == "vit_huge_patch14" else 16
+
+            if model_arch == "unetr":
                 # UNETR's decoder upsamples the ViT features by a factor of two on each of its levels
-                if custom_vit:
-                    token_size = cfg.MODEL.VIT_TOKEN_SIZE
-                else:
-                    token_size = 14 if cfg.MODEL.UNETR_VIT_MODEL == "vit_huge_patch14" else 16
                 if token_size < 2 or 2 ** int(np.log2(token_size)) != token_size:
                     raise ValueError(
                         "UNETR's token size needs to be a power of two greater than one, as its decoder upsamples "
                         "the ViT features by a factor of two on each level. Resulting token size: {}{}".format(
                             token_size,
-                            f" (set by 'MODEL.UNETR_VIT_MODEL' as '{cfg.MODEL.UNETR_VIT_MODEL}', so "
+                            f" (set by 'MODEL.UNETR_VIT_MODEL' as '{vit_backbone}', so "
                             "'MODEL.UNETR_VIT_MODEL' must be set to 'custom' to be able to select the token "
                             "size with 'MODEL.VIT_TOKEN_SIZE')" if not custom_vit else "",
                         )
                     )
             if custom_vit and cfg.MODEL.VIT_EMBED_DIM % cfg.MODEL.VIT_NUM_HEADS != 0:
                 raise ValueError("'MODEL.VIT_EMBED_DIM' should be divisible by 'MODEL.VIT_NUM_HEADS'")
+
+            if vit_backbone == "sam3_vit":
+                if cfg.DATA.PATCH_SIZE[0] % token_size != 0:
+                    valid = [token_size * i for i in range(4, 10)]
+                    why = (
+                        "under UNETR, whose decoder needs a power of two (SAM 3 itself uses 14x14 tokens)"
+                        if model_arch == "unetr"
+                        else "in SAM 3"
+                    )
+                    raise ValueError(
+                        f"'DATA.PATCH_SIZE' needs to be a multiple of {token_size} when the ViT backbone is "
+                        f"'sam3_vit', as that is the token size it is built with {why}. Provided: "
+                        f"{cfg.DATA.PATCH_SIZE[0]}. Valid sizes are, for example: {valid}"
+                    )
+                if cfg.PROBLEM.NDIM == "3D":
+                    raise ValueError(
+                        f"'{vit_backbone_var}' can not be set to 'sam3_vit' with 3D data, as SAM 3's pretrained "
+                        "weights are 2D (its patch embedding projects 3-channel 2D images)"
+                    )
+                if cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "" and cfg.DATA.PATCH_SIZE[-1] not in [1, 3]:
+                    raise ValueError(
+                        "SAM 3's pretrained weights can only be loaded with 1 or 3 input channels, but "
+                        f"'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}. SAM 3 was trained on RGB images, and BiaPy "
+                        "can only adapt its patch embedding automatically when the input is grayscale (1 channel), by "
+                        f"adding up its three kernels. With {cfg.DATA.PATCH_SIZE[-1]} channels there is no meaningful "
+                        "way of doing it, so the data needs to be converted beforehand: keep the channel of interest "
+                        "(1 channel), combine them into an RGB image (3 channels), or set 'MODEL.VIT_PRETRAINED_WEIGHTS' "
+                        f"to '' to train from scratch with the {cfg.DATA.PATCH_SIZE[-1]} channels."
+                    )
+            elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
+                raise ValueError(
+                    "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit', as it is "
+                    f"the only one with pretrained weights available. '{vit_backbone_var}' is set to '{vit_backbone}'."
+                )
+        elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
+            raise ValueError(
+                "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used with the 'vit' and 'unetr' architectures, but "
+                f"'MODEL.ARCHITECTURE' is '{cfg.MODEL.ARCHITECTURE}'"
+            )
             if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):
                 raise ValueError(
                     "'unetr', 'vit' 'mae' models need to have same shape in all dimensions (e.g. DATA.PATCH_SIZE = (80,80,80,1) )"
