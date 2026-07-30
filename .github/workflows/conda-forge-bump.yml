@@ -196,18 +196,31 @@ jobs:
             --body "$BODY" \
             --head "${OWNER}:${BRANCH}" \
             --base "main"
-      - name: Enable auto-merge on PR
+      # conda-forge feedstocks disallow GitHub's native auto-merge
+      # (enablePullRequestAutoMerge). Their own bot merges once every status
+      # passes, triggered by the `automerge` label. Requires `bot: automerge`
+      # in the feedstock's conda-forge.yml, and write access for CF_GH_TOKEN.
+      - name: Request conda-forge automerge on PR
         working-directory: feedstock
         env:
           GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+        shell: bash
         run: |
-          # Get the last PR number created by this workflow run
+          # `gh pr list --head` matches headRefName, i.e. the bare branch name
+          # with no `owner:` prefix -- adding one silently matches nothing.
+          BRANCH="bump-v${{ steps.ver.outputs.version }}-${GITHUB_RUN_ID}"
           PR_NUMBER=$(gh pr list \
             --repo conda-forge/${PACKAGE_NAME}-feedstock \
-            --head "$(echo $FEEDSTOCK_FORK | cut -d/ -f1):bump-v${{ steps.ver.outputs.version }}-${GITHUB_RUN_ID}" \
+            --head "$BRANCH" \
             --json number --jq '.[0].number')
 
-          echo "Enabling auto-merge for PR #$PR_NUMBER"
-          gh pr merge "$PR_NUMBER" \
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+            echo "No PR found for branch $BRANCH; skipping automerge request."
+            exit 0
+          fi
+
+          echo "Labelling PR #$PR_NUMBER for conda-forge automerge"
+          gh pr edit "$PR_NUMBER" \
             --repo conda-forge/${PACKAGE_NAME}-feedstock \
-            --auto --merge
+            --add-label automerge \
+            || echo "Could not add the automerge label; merge PR #$PR_NUMBER manually."
