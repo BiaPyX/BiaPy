@@ -1541,12 +1541,12 @@ def random_3D_crop_pair(
             choices = np.prod(img_prob.shape)
             index = np.random.choice(choices, size=1, p=prob)
             coordinates = np.unravel_index(index, shape=img_prob.shape)
-            x = int(coordinates[2])
-            y = int(coordinates[1])
-            z = int(coordinates[0])
-            ox = int(coordinates[2])
-            oy = int(coordinates[1])
-            oz = int(coordinates[0])
+            x = int(coordinates[2][0])
+            y = int(coordinates[1][0])
+            z = int(coordinates[0][0])
+            ox = int(coordinates[2][0])
+            oy = int(coordinates[1][0])
+            oz = int(coordinates[0][0])
 
             # Adjust the coordinates to be the origin of the crop and control to
             # not be out of the volume
