@@ -685,9 +685,13 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
             except Exception as e:
                 warnings.warn(f"Failed to resolve {name}: {e}")
 
-    # === Step 2: Traverse dependency tree and store definitions in discovery order ===
-    # We use a list to store the (name, source) tuples in the order they are found (BFS).
-    # This order is: [Dependent_A, Dependency_B, Dependency_C, ...]
+    # === Step 2: Traverse the dependency tree, emitting each definition after its dependencies ===
+    # The order is not the discovery order: the generated file is executed top to bottom, so a
+    # definition whose body is evaluated at import time (a module-level constant, a base class,
+    # a decorator or a default argument) must appear after everything it references. For instance
+    # `UNETR_VIT_MODELS` builds its "sam3_vit" entry out of `SAM3_VIT_PARAMS`, and writing it
+    # first raises a NameError as soon as the model file is imported. A post-order DFS gives that
+    # guarantee whatever the order in which the names show up.
     definition_list: List[Tuple[str, str]] = []
 
     class NameVisitor(ast.NodeVisitor):
@@ -703,41 +707,49 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 self.names.append(node.value.id)
             self.generic_visit(node)
 
-    while dependency_queue:
-        obj = dependency_queue.pop()
-        name = obj.__name__
-        if name in visited_names:
-            continue
-        visited_names.add(name)
+    def collected_dependencies(source: str) -> List[str]:
+        """Names referenced by ``source`` that are defined in one of the scanned files."""
+        visitor = NameVisitor()
+        visitor.visit(ast.parse(source))
+        deps, seen = [], set()
+        for dep_name in visitor.names:
+            if dep_name in name_to_source and dep_name not in seen:
+                seen.add(dep_name)
+                deps.append(dep_name)
+        return deps
 
+    # Names whose dependencies are still being emitted. Reaching one again means the references
+    # form a cycle (mutually recursive functions, a class using another one that uses it back).
+    # No ordering can satisfy both sides, and none is needed: those lookups happen when the code
+    # runs, not while the module is being executed.
+    in_progress = set()
+
+    def emit(name: str):
+        if name in visited_names:
+            return
         source = name_to_source.get(name)
         if not source:
             warnings.warn(f"Source not found for {name}")
-            continue
+            visited_names.add(name)
+            return
 
-        # Add the definition to the temporary list
+        in_progress.add(name)
+        for dep_name in collected_dependencies(source):
+            if dep_name != name and dep_name not in in_progress:
+                emit(dep_name)
+        in_progress.discard(name)
+
+        visited_names.add(name)
         definition_list.append((name, source))
 
-        # Find dependencies
-        visitor = NameVisitor()
-        visitor.visit(ast.parse(source))
+    while dependency_queue:
+        emit(dependency_queue.pop().__name__)
 
-        for dep_name in visitor.names:
-            if dep_name not in visited_names and dep_name in name_to_source:
-
-                class FakeObject:
-                    def __init__(self, __name__):
-                        self.__name__ = __name__
-
-                dependency_queue.append(FakeObject(dep_name))
-
-    # === Step 3: Populate collected_sources in reverse order (Dependencies First) ===
-    # By reversing the list, the deepest dependencies (discovered last) are placed
-    # at the start of the dictionary, ensuring they are defined before being used.
+    # === Step 3: Populate collected_sources, keeping the dependencies-first order ===
     # A single statement can define several names (e.g. `A, B = 1, 2`), so its source is
     # emitted only once.
     emitted_sources = set()
-    for name, source in reversed(definition_list):
+    for name, source in definition_list:
         if source in emitted_sources:
             continue
         emitted_sources.add(source)
