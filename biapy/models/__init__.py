@@ -755,7 +755,67 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
         emitted_sources.add(source)
         collected_sources[name] = source
 
+    # === Step 4: Ensure nothing shipped still reaches back into BiaPy ===
+    # Only the `import biapy...` statements written at the top of a file are recognised in
+    # Step 1 and replaced by the inlined definitions. A reference made any other way (an
+    # `importlib.import_module("biapy...")` call, an import inside a function body) is copied
+    # verbatim into the generated file, which then silently needs BiaPy installed to be
+    # imported: the package still builds, and it only breaks later, for whoever consumes it.
+    for name, source in collected_sources.items():
+        references = biapy_references(source)
+        if references:
+            raise RuntimeError(
+                "Cannot generate a self-contained model file: '{}' (defined in {}) reaches BiaPy at "
+                "runtime through {}, which cannot be inlined. Import what it needs with a plain "
+                "`from biapy... import ...` at the top of the file instead.".format(
+                    name, name_owner[name], ", ".join(sorted(set(references)))
+                )
+            )
+
     return collected_sources, sorted(all_import_lines), scanned_files
+
+
+def biapy_references(source: str) -> List[str]:
+    """
+    Find the references to BiaPy in ``source`` that ``extract_model()`` cannot inline.
+
+    Top-level ``import biapy...`` statements are resolved by following the module and
+    inlining the definitions it provides, so they are not reported here. Everything else
+    survives into the generated file as-is and keeps it tied to a BiaPy installation.
+
+    Parameters
+    ----------
+    source : str
+        Source code of a single definition, as collected by ``extract_model()``.
+
+    Returns
+    -------
+    references : list of str
+        The BiaPy modules referenced, empty when the source is self-contained.
+    """
+    references = []
+    for node in ast.walk(ast.parse(source)):
+        # Imports nested in a function/class body: the module is scanned, but the statement
+        # itself remains in the source that gets written out.
+        if isinstance(node, ast.Import):
+            references += [alias.name for alias in node.names if alias.name.split(".")[0] == "biapy"]
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split(".")[0] == "biapy":
+                references.append(node.module)
+        # Dynamic imports: the module is named by a string, so Step 1 never sees it.
+        elif isinstance(node, ast.Call):
+            func = node.func
+            func_name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if func_name in ("import_module", "__import__"):
+                for arg in node.args:
+                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                        if arg.value.split(".")[0] == "biapy":
+                            references.append(arg.value)
+        # Use of the package itself, e.g. `biapy.__version__`.
+        elif isinstance(node, ast.Name) and node.id == "biapy":
+            references.append("biapy")
+
+    return references
 
 
 def merge_import_lines(import_lines: List[str]) -> List[str]:
