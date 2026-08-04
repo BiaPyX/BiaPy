@@ -123,10 +123,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
             channels_provided += 1
         
+        # 'I' (raw labels) and 'We' (weight map) are auxiliary channels appended by this function, so they
+        # must not count as "another representation" when it re-runs on an already-checked cfg (e.g. after
+        # loading a checkpoint).
+        _user_instance_channels = set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) - {"I", "We"}
         if "E" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"E"}, "'E' representation can only be used alone"
+            assert _user_instance_channels == {"E"}, "'E' representation can only be used alone"
         if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"A"}, "'A' representation can only be used alone"
+            assert _user_instance_channels == {"A"}, "'A' representation can only be used alone"
 
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             # Pre-fill per-channel extra options only if the first details dict is empty
