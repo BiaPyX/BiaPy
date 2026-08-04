@@ -444,6 +444,11 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
         # Multi-head: instances + classification
         self.gt_channels_expected = len(self.head_activations)
+        if "Db" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and dst.get("Db", {}).get("val_type", "norm") == "discretize":
+            # Discretized 'Db' is predicted as 11 softmax channels (10 bins + background) but is stored
+            # in the GT as a single class-index channel (see pre_processing.py), not one-hot, so it only
+            # occupies 1 GT channel instead of the 11 entries it added to head_activations.
+            self.gt_channels_expected -= 10
         if self.cfg.DATA.N_CLASSES > 2:
             self.head_activations += ["ce_softmax"] * self.cfg.DATA.N_CLASSES
             self.model_output_channels += [self.cfg.DATA.N_CLASSES,]
