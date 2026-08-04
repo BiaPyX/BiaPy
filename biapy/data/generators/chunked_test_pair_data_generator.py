@@ -180,6 +180,20 @@ class chunked_test_pair_data_generator(IterableDataset):
         self.file_type = "h5" if looks_like_hdf5(self.filename) else "zarr"
         self.dir = self.sample_to_process["X_dir"]
         self.norm_module = norm_module
+        # The declared axes order (e.g. DATA.TEST.INPUT_IMG_AXES_ORDER) describes the raw axes of a
+        # chunked H5/Zarr dataset, which may include a leading 'T' dimension. Formats that can't be
+        # read in chunks (e.g. .tif) are instead loaded fully into memory and normalized to a plain
+        # (Z, Y, X, C) array with no 'T' axis (see ensure_3d_shape), so reconcile the declared axes
+        # with the actual data rank the same way ensure_3d_shape does, or order_dimensions() below
+        # will index past the end of the shape tuple.
+        if "T" in input_axes and len(input_axes) != self.X_parallel_data.ndim:
+            input_axes = input_axes.replace("T", "")
+        if (
+            self.Y_parallel_data is not None
+            and "T" in mask_input_axes
+            and len(mask_input_axes) != self.Y_parallel_data.ndim
+        ):
+            mask_input_axes = mask_input_axes.replace("T", "")
         self.input_axes = input_axes
         self.mask_input_axes = mask_input_axes
         self.dtype_str = dtype_str
