@@ -2290,6 +2290,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 else:
                     print("Found {} test classes".format(len(list_of_classes)))
             
+        if cfg.DATA.TEST.ROI_MASK.ENABLE and not cfg.TEST.BY_CHUNKS.ENABLE:
+            raise ValueError(
+                "'DATA.TEST.ROI_MASK.ENABLE' can only be used when 'TEST.BY_CHUNKS.ENABLE' is True. To mask the "
+                "prediction of a normal (not chunked) inference use 'TEST.POST_PROCESSING.APPLY_MASK' with "
+                "'DATA.TEST.BINARY_MASKS' instead."
+            )
+
         if cfg.TEST.BY_CHUNKS.ENABLE:
             if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
                 raise ValueError("'TEST.BY_CHUNKS' can only be activated in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
@@ -2317,6 +2324,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError("'TEST.BY_CHUNKS.Z_START' must be less than 'TEST.BY_CHUNKS.Z_END'")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+            if cfg.DATA.TEST.ROI_MASK.ENABLE:
+                if cfg.DATA.TEST.ROI_MASK.PATH == "":
+                    raise ValueError("'DATA.TEST.ROI_MASK.PATH' needs to be set when 'DATA.TEST.ROI_MASK.ENABLE' is True")
+                if check_data_paths and not os.path.exists(cfg.DATA.TEST.ROI_MASK.PATH):
+                    raise ValueError(f"'DATA.TEST.ROI_MASK.PATH' not found: {cfg.DATA.TEST.ROI_MASK.PATH}")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
                 if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
                     raise ValueError(

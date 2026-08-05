@@ -723,6 +723,8 @@ def create_chunked_test_generator(
         instance_problem=cfg.PROBLEM.TYPE == "INSTANCE_SEG",
         z_start=cfg.TEST.BY_CHUNKS.Z_START,
         z_end=cfg.TEST.BY_CHUNKS.Z_END,
+        roi_mask_path=cfg.DATA.TEST.ROI_MASK.PATH if cfg.DATA.TEST.ROI_MASK.ENABLE else "",
+        roi_mask_axes_order=cfg.DATA.TEST.ROI_MASK.AXES_ORDER,
     )
 
     # ---- Choose num_workers for this DataLoader ----
@@ -840,6 +842,8 @@ def create_chunked_workflow_process_generator(
         dtype_str=dtype_str,
         z_start=cfg.TEST.BY_CHUNKS.Z_START,
         z_end=cfg.TEST.BY_CHUNKS.Z_END,
+        roi_mask_path=cfg.DATA.TEST.ROI_MASK.PATH if cfg.DATA.TEST.ROI_MASK.ENABLE else "",
+        roi_mask_axes_order=cfg.DATA.TEST.ROI_MASK.AXES_ORDER,
     )
 
     # ---- Choose num_workers for this DataLoader ----

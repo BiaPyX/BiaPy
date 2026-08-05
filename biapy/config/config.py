@@ -928,6 +928,24 @@ class Config:
         _C.DATA.TEST.MEDIAN_PADDING = False
         # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.POST_PROCESSING.APPLY_MASK  == True
         _C.DATA.TEST.BINARY_MASKS = os.path.join("user_data", "test", "bin_mask")
+
+        # Region of interest (ROI) mask to guide the inference when 'TEST.BY_CHUNKS.ENABLE' is True. Patches that do not
+        # overlap the mask foreground are not read, not predicted and not post-processed, and they are left as background
+        # in the output Zarr. Unlike 'DATA.TEST.BINARY_MASKS' (which zeroes an already computed full size prediction), the
+        # mask does NOT need to have the same shape as the test image: it is kept at its own resolution and the patch
+        # coordinates are mapped into it, so a coarse/downsampled mask (e.g. one voxel per 64x64x64 block) is enough.
+        _C.DATA.TEST.ROI_MASK = CN()
+        # Whether to discard the patches outside the ROI mask
+        _C.DATA.TEST.ROI_MASK.ENABLE = False
+        # Path to the ROI mask. It can be a file (used for all the test samples) or a directory. In a directory, if only one
+        # mask is found it is used for all the test samples, otherwise the mask named as the test sample is used for it.
+        # Any value greater than 0 in the mask is considered foreground, and a patch is processed as soon as it covers one
+        # single foreground voxel.
+        _C.DATA.TEST.ROI_MASK.PATH = ""
+        # Order of the axes of the ROI mask. Leave it empty to reuse 'DATA.TEST.INPUT_IMG_AXES_ORDER', which is the right
+        # choice when the mask was created by downsampling the test image (its axes are then in the same order).
+        _C.DATA.TEST.ROI_MASK.AXES_ORDER = ""
+
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Order of the axes of the image when using Zarr/H5 images in test data.

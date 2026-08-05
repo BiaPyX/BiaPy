@@ -29,6 +29,7 @@ from biapy.data.data_manipulation import sample_satisfy_conds, save_tif, extract
 from biapy.utils.misc import get_world_size, get_rank, is_main_process
 from biapy.data.dataset import PatchCoords
 from biapy.data.norm import normalize_image, normalize_mask
+from biapy.data.roi_mask import load_roi_mask
 
 class chunked_test_pair_data_generator(IterableDataset):
     """
@@ -117,6 +118,8 @@ class chunked_test_pair_data_generator(IterableDataset):
         instance_problem: bool = False,
         z_start: int = -1,
         z_end: int = -1,
+        roi_mask_path: str = "",
+        roi_mask_axes_order: str = "",
     ):
         """
         Initialize the chunked_test_pair_data_generator.
@@ -161,6 +164,12 @@ class chunked_test_pair_data_generator(IterableDataset):
             First Z slice (inclusive) to process. -1 means start from the beginning.
         z_end : int, optional
             Last Z slice (exclusive) to process. -1 means process until the end.
+        roi_mask_path : str, optional
+            Path to a region of interest mask to restrict the inference to. Patches not overlapping it
+            are not extracted nor predicted. The mask does not need to match the data shape.
+        roi_mask_axes_order : str, optional
+            Order of the axes of the ROI mask. If not given the axes order of the image is assumed, as
+            the mask is usually a downsampled version of it.
         """
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
@@ -281,7 +290,41 @@ class chunked_test_pair_data_generator(IterableDataset):
         self.z_vol_end = min(math.ceil(effective_z_end / self.step_z), self.vols_per_z)
         self.vols_per_z_effective = self.z_vol_end - self.z_vol_start
 
-        self.len = self.vols_per_z_effective * self.vols_per_y * self.vols_per_x
+        self.total_vols = self.vols_per_z_effective * self.vols_per_y * self.vols_per_x
+
+        # Keep only the tiles overlapping the region of interest, if any. Tiles are filtered here, and not
+        # while iterating, so that the ones left are evenly spread among ranks/workers by the sampler.
+        self.roi_mask = (
+            load_roi_mask(
+                roi_mask_path,
+                data_shape_zyx=(self.z_dim, self.y_dim, self.x_dim),
+                sample_filename=self.filename,
+                axes_order=roi_mask_axes_order if roi_mask_axes_order else self.input_axes,
+            )
+            if roi_mask_path
+            else None
+        )
+        roi_msg = ""
+        if self.roi_mask is None:
+            self.vol_ids = list(range(self.total_vols))
+        else:
+            self.vol_ids = [
+                vol_id
+                for vol_id in range(self.total_vols)
+                if self.roi_mask.patch_is_inside(self._tile_coords(vol_id)[4])
+            ]
+            if len(self.vol_ids) == 0:
+                raise ValueError(
+                    f"No patch of sample {self.filename} overlaps the ROI mask set in 'DATA.TEST.ROI_MASK.PATH', so "
+                    "there is nothing to predict. Check that the mask is not empty and that it covers the same field "
+                    "of view as the image (its shape is mapped to the image shape by scaling each axis)."
+                )
+            roi_msg = (
+                f"ROI mask: {len(self.vol_ids)} of {self.total_vols} patches to process "
+                f"({self.total_vols - len(self.vol_ids)} discarded as outside the ROI). "
+            )
+
+        self.len = len(self.vol_ids)
 
         if is_main_process():
             z_range_msg = ""
@@ -293,9 +336,59 @@ class chunked_test_pair_data_generator(IterableDataset):
             print(
                 f"Initialized chunked_test_pair_data_generator with sample {self.filename} and shape {self.X_parallel_data.shape}.\n"
                 f"Crop shape: {self.crop_shape}, padding: {self.padding}. Input axes: {self.input_axes}. Mask input axes: {self.mask_input_axes}.\n"
-                f"Output data axes order: {self.out_data_order}. {z_range_msg}"
+                f"Output data axes order: {self.out_data_order}. {z_range_msg}{roi_msg}"
                 ""
             )
+
+    def _tile_coords(self, vol_id: int) -> Tuple[int, int, int, PatchCoords, PatchCoords]:
+        """
+        Translate a tile identifier into the coordinates of the patch it represents.
+
+        Parameters
+        ----------
+        vol_id : int
+            Tile identifier within the ``(vols_per_z_effective, vols_per_y, vols_per_x)`` grid.
+
+        Returns
+        -------
+        z, y, x : int
+            Position of the tile in the grid.
+
+        patch_to_extract : PatchCoords
+            Coordinates of the region to read, i.e. including the padding used to give context to the
+            patch (it is clipped to the image limits).
+
+        real_patch_in_data : PatchCoords
+            Coordinates of the region the patch is responsible for, i.e. without the padding. This is
+            where the prediction is written back.
+        """
+        assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
+        z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
+        z = int(z_local) + self.z_vol_start
+        y = int(y)
+        x = int(x)
+
+        patch_to_extract = PatchCoords(
+            z_start=max(0, z * self.step_z - self.padding[0]),
+            z_end=min((z + 1) * self.step_z + self.padding[0], self.z_dim),
+            y_start=max(0, y * self.step_y - self.padding[1]),
+            y_end=min((y + 1) * self.step_y + self.padding[1], self.y_dim),
+            x_start=max(0, x * self.step_x - self.padding[2]),
+            x_end=min((x + 1) * self.step_x + self.padding[2], self.x_dim),
+        )
+
+        # The real data that is being processed. This doesn't take into account the adding pad.
+        # This coordinates are useful to know after where to insert the data
+        real_patch_in_data = PatchCoords(
+            z_start=z * self.step_z,
+            z_end=min((z + 1) * self.step_z, self.z_dim),
+            y_start=y * self.step_y,
+            y_end=min((y + 1) * self.step_y, self.y_dim),
+            x_start=x * self.step_x,
+            x_end=min((x + 1) * self.step_x, self.x_dim),
+        )
+
+        return z, y, x, patch_to_extract, real_patch_in_data
 
 
     def extract_and_prepare_sample(
@@ -418,39 +511,13 @@ class chunked_test_pair_data_generator(IterableDataset):
             self, num_replicas=(n_workers * world_size), rank=(process_rank * n_workers + worker_id), shuffle=False
         )
 
-        for vol_id in sampler:
+        for sampler_id in sampler:
             mask = None
 
-            z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
-            z = int(z_local) + self.z_vol_start
-            y = int(y)
-            x = int(x)
-
-            start_z = max(0, z * self.step_z - self.padding[0])
-            finish_z = min((z + 1) * self.step_z + self.padding[0], self.z_dim)
-            start_y = max(0, y * self.step_y - self.padding[1])
-            finish_y = min((y + 1) * self.step_y + self.padding[1], self.y_dim)
-            start_x = max(0, x * self.step_x - self.padding[2])
-            finish_x = min((x + 1) * self.step_x + self.padding[2], self.x_dim)
-            patch_to_extract = PatchCoords(
-                y_start=start_y,
-                y_end=finish_y,
-                x_start=start_x,
-                x_end=finish_x,
-                z_start=start_z,
-                z_end=finish_z,
-            )
-
-            # The real data that is being processed. This doesn't take into account the adding pad.
-            # This coordinates are useful to know after where to insert the data
-            real_patch_in_data = PatchCoords(
-                z_start=z * self.step_z,
-                z_end=min((z + 1) * self.step_z, self.z_dim),
-                y_start=y * self.step_y,
-                y_end=min((y + 1) * self.step_y, self.y_dim),
-                x_start=x * self.step_x,
-                x_end=min((x + 1) * self.step_x, self.x_dim),
-            )
+            # 'sampler_id' indexes the tiles left to process, which are not all of them when a ROI mask
+            # is used, so translate it into the tile id within the full grid.
+            vol_id = self.vol_ids[int(sampler_id)]
+            z, y, x, patch_to_extract, real_patch_in_data = self._tile_coords(vol_id)
 
             img, added_pad = self.extract_and_prepare_sample(z, y, x, patch_to_extract)
             if self.Y_parallel_data is not None:
