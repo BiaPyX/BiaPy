@@ -92,8 +92,8 @@ from biapy.data.data_manipulation import (
 from biapy.data.pre_processing import resize_images
 from biapy.data.post_processing.post_processing import (
     ensemble_predictions,
-    apply_binary_mask,
 )
+from biapy.data.roi_mask import load_roi_mask
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import set_cellpose_diameters
@@ -1735,6 +1735,45 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
                 self.bmz_config["cover_gt"] = np.expand_dims(np.argmax(self.bmz_config["cover_gt"], -1), -1)
 
+    def apply_roi_mask(self, pred: NDArray) -> NDArray:
+        """
+        Zero out the prediction outside the ROI mask set in ``DATA.TEST.ROI_MASK``, if enabled.
+
+        Only used in the normal inference. The "by chunks" one discards the patches outside the ROI
+        instead (see ``chunked_test_pair_data_generator``).
+
+        Parameters
+        ----------
+        pred : NDArray
+            Prediction of the sample being processed. E.g. ``(b, y, x, c)`` for 2D or
+            ``(b, z, y, x, c)`` for 3D (the batch axis is optional).
+
+        Returns
+        -------
+        NDArray
+            Prediction with everything outside the ROI set to 0, or ``pred`` untouched if no ROI
+            mask was set.
+        """
+        if not self.cfg.DATA.TEST.ROI_MASK.ENABLE:
+            return pred
+
+        is_3d = self.cfg.PROBLEM.NDIM == "3D"
+        filename = self.current_sample["X_filename"]
+        # Reuse the mask of the sample along the steps that mask its prediction
+        if getattr(self, "_roi_mask_filename", None) != filename:
+            spatial_shape = pred.shape[-4:-1] if is_3d else (1,) + pred.shape[-3:-1]
+            self._roi_mask = load_roi_mask(
+                self.cfg.DATA.TEST.ROI_MASK.PATH,
+                data_shape_zyx=spatial_shape,
+                sample_filename=filename,
+                axes_order=self.cfg.DATA.TEST.ROI_MASK.AXES_ORDER or ("ZYX" if is_3d else "YX"),
+                is_3d=is_3d,
+                verbose=self.cfg.TEST.VERBOSE,
+            )
+            self._roi_mask_filename = filename
+
+        return self._roi_mask.apply(pred)
+
     def process_test_sample(self):
         """Process a sample in the inference phase."""
         # Skip processing image
@@ -1994,9 +2033,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                     -reflected_orig_shape[3] :,
                                 ]
 
-                # Apply mask
-                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                    pred = np.expand_dims(apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS), 0)
+                pred = self.apply_roi_mask(pred)
 
                 if self.separated_class_channel:
                     class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
@@ -2143,8 +2180,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         meta=self.current_sample.get("img_meta"),
                     )
 
-                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+                pred = self.apply_roi_mask(pred)
 
             else:
                 # load prediction from file

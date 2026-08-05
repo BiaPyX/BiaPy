@@ -26,7 +26,6 @@ from biapy.data.post_processing.post_processing import (
     voronoi_on_mask,
     measure_morphological_props_and_filter,
     repare_large_blobs,
-    apply_binary_mask,
     create_synapses_from_point_probs,
     extract_points_in_predictions,
     remove_close_points,
@@ -1807,8 +1806,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
-            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+            pred = self.apply_roi_mask(pred)
 
             self.after_full_image(pred)
 

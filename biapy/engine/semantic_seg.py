@@ -16,7 +16,6 @@ from skimage.filters import threshold_otsu
 
 from biapy.data.data_3D_manipulation import read_chunked_data
 from biapy.data.dataset import PatchCoords
-from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
@@ -257,8 +256,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
-            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+            pred = self.apply_roi_mask(pred)
 
             if self.current_sample["Y"] is not None:
                 if pred.shape[1:-1] != self.current_sample["Y"].shape[1:-1]:

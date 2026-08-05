@@ -926,24 +926,19 @@ class Config:
         _C.DATA.TEST.PADDING = (0, 0)
         # Whether to use median values to fill padded pixels or zeros
         _C.DATA.TEST.MEDIAN_PADDING = False
-        # Directory where binary masks to apply to resulting images should be. Used when _C.TEST.POST_PROCESSING.APPLY_MASK  == True
-        _C.DATA.TEST.BINARY_MASKS = os.path.join("user_data", "test", "bin_mask")
-
-        # Region of interest (ROI) mask to guide the inference when 'TEST.BY_CHUNKS.ENABLE' is True. Patches that do not
-        # overlap the mask foreground are not read, not predicted and not post-processed, and they are left as background
-        # in the output Zarr. Unlike 'DATA.TEST.BINARY_MASKS' (which zeroes an already computed full size prediction), the
-        # mask does NOT need to have the same shape as the test image: it is kept at its own resolution and the patch
-        # coordinates are mapped into it, so a coarse/downsampled mask (e.g. one voxel per 64x64x64 block) is enough.
+        # Region of interest (ROI) mask restricting where the inference is done. Anything greater than 0 in the mask is
+        # ROI. With 'TEST.BY_CHUNKS.ENABLE' the patches not overlapping the ROI are not predicted, and are left as
+        # background in the output Zarr; otherwise the prediction is zeroed outside the ROI. The mask does not need to
+        # have the same shape as the test image: it is mapped to it by scaling each axis, so a coarse mask (e.g. one
+        # voxel per 64x64x64 block) is enough.
         _C.DATA.TEST.ROI_MASK = CN()
-        # Whether to discard the patches outside the ROI mask
+        # Whether to restrict the inference to the ROI mask
         _C.DATA.TEST.ROI_MASK.ENABLE = False
         # Path to the ROI mask. It can be a file (used for all the test samples) or a directory. In a directory, if only one
         # mask is found it is used for all the test samples, otherwise the mask named as the test sample is used for it.
-        # Any value greater than 0 in the mask is considered foreground, and a patch is processed as soon as it covers one
-        # single foreground voxel.
         _C.DATA.TEST.ROI_MASK.PATH = ""
-        # Order of the axes of the ROI mask. Leave it empty to reuse 'DATA.TEST.INPUT_IMG_AXES_ORDER', which is the right
-        # choice when the mask was created by downsampling the test image (its axes are then in the same order).
+        # Order of the axes of the ROI mask. Leave it empty to use the axes order of the test image:
+        # 'DATA.TEST.INPUT_IMG_AXES_ORDER' when reading Zarr/H5 by chunks and 'ZYX'/'YX' otherwise.
         _C.DATA.TEST.ROI_MASK.AXES_ORDER = ""
 
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
@@ -2013,10 +2008,6 @@ class Config:
         # Those filter that imply 'z' axis are going to be applied only in 3D or in 2D if TEST.ANALIZE_2D_IMGS_AS_3D_STACK is selected
         _C.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS = []
         _C.TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE = []
-        # Apply a binary mask to remove possible segmentation outside it (you need to provide the mask and it must
-        # contain two values: '1' -> preserve the pixel ; '0' discard pixel ). A mask for each test sample must be
-        # provided and it will be loaded using 'DATA.TEST.BINARY_MASKS' variable.
-        _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 8.3.1 Instance segmentation post-processing options
@@ -2340,9 +2331,6 @@ def update_dependencies(cfg) -> None:
     tdata = call.DATA.TEST.GT_PATH if not call.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TEST.PATH
     call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = tdata
 
-    # If value is not the default
-    if call.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
-        call.DATA.TEST.BINARY_MASKS = os.path.join(call.DATA.TEST.PATH, "..", "bin_mask")
     call.DATA.TEST.DETECTION_MASK_DIR = call.DATA.TEST.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.TEST.SSL_SOURCE_DIR = call.DATA.TEST.PATH + "_ssl_source"
     call.PATHS.TEST_FULL_GT_H5 = os.path.join(call.DATA.TEST.GT_PATH, "h5")

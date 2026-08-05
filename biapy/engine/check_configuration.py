@@ -2290,12 +2290,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 else:
                     print("Found {} test classes".format(len(list_of_classes)))
             
-        if cfg.DATA.TEST.ROI_MASK.ENABLE and not cfg.TEST.BY_CHUNKS.ENABLE:
-            raise ValueError(
-                "'DATA.TEST.ROI_MASK.ENABLE' can only be used when 'TEST.BY_CHUNKS.ENABLE' is True. To mask the "
-                "prediction of a normal (not chunked) inference use 'TEST.POST_PROCESSING.APPLY_MASK' with "
-                "'DATA.TEST.BINARY_MASKS' instead."
-            )
+        if cfg.DATA.TEST.ROI_MASK.ENABLE:
+            if cfg.DATA.TEST.ROI_MASK.PATH == "":
+                raise ValueError("'DATA.TEST.ROI_MASK.PATH' needs to be set when 'DATA.TEST.ROI_MASK.ENABLE' is True")
+            if check_data_paths and not os.path.exists(cfg.DATA.TEST.ROI_MASK.PATH):
+                raise ValueError(f"'DATA.TEST.ROI_MASK.PATH' not found: {cfg.DATA.TEST.ROI_MASK.PATH}")
 
         if cfg.TEST.BY_CHUNKS.ENABLE:
             if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
@@ -2324,11 +2323,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError("'TEST.BY_CHUNKS.Z_START' must be less than 'TEST.BY_CHUNKS.Z_END'")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
-            if cfg.DATA.TEST.ROI_MASK.ENABLE:
-                if cfg.DATA.TEST.ROI_MASK.PATH == "":
-                    raise ValueError("'DATA.TEST.ROI_MASK.PATH' needs to be set when 'DATA.TEST.ROI_MASK.ENABLE' is True")
-                if check_data_paths and not os.path.exists(cfg.DATA.TEST.ROI_MASK.PATH):
-                    raise ValueError(f"'DATA.TEST.ROI_MASK.PATH' not found: {cfg.DATA.TEST.ROI_MASK.PATH}")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
                 if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
                     raise ValueError(
@@ -3901,6 +3895,13 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "TEST" in old_cfg["DATA"]:
             if "ARGMAX_TO_OUTPUT" in old_cfg["DATA"]["TEST"]:
                 del old_cfg["DATA"]["TEST"]["ARGMAX_TO_OUTPUT"]
+            if "BINARY_MASKS" in old_cfg["DATA"]["TEST"]:
+                bin_masks = old_cfg["DATA"]["TEST"]["BINARY_MASKS"]
+                del old_cfg["DATA"]["TEST"]["BINARY_MASKS"]
+                apply_mask = old_cfg.get("TEST", {}).get("POST_PROCESSING", {}).get("APPLY_MASK", False)
+                if apply_mask:
+                    old_cfg["DATA"]["TEST"].setdefault("ROI_MASK", {})
+                    old_cfg["DATA"]["TEST"]["ROI_MASK"]["PATH"] = bin_masks
         if "NORMALIZATION" in old_cfg["DATA"]:
             if "PERC_CLIP" in old_cfg["DATA"]["NORMALIZATION"]:
                 val = old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
@@ -4013,6 +4014,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
 
     if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
         del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
+
+    if "TEST" in old_cfg and "POST_PROCESSING" in old_cfg["TEST"] and "APPLY_MASK" in old_cfg["TEST"]["POST_PROCESSING"]:
+        apply_mask = old_cfg["TEST"]["POST_PROCESSING"]["APPLY_MASK"]
+        del old_cfg["TEST"]["POST_PROCESSING"]["APPLY_MASK"]
+        if apply_mask:
+            old_cfg.setdefault("DATA", {}).setdefault("TEST", {}).setdefault("ROI_MASK", {})["ENABLE"] = True
 
     if "MODEL" in old_cfg:
         load_checkpoint = True if "LOAD_CHECKPOINT" in old_cfg["MODEL"] and old_cfg["MODEL"]["LOAD_CHECKPOINT"] else False

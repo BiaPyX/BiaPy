@@ -94,12 +94,10 @@ class chunked_workflow_process_generator(IterableDataset):
         z_end : int, optional
             Last Z slice (exclusive) to process. -1 means process until the end.
         roi_mask_path : str, optional
-            Path to a region of interest mask to restrict the processing to. Tiles not overlapping it
-            are not read nor processed, so they are left as background in the output. The mask does not
-            need to match the data shape.
+            Path to a region of interest mask. Tiles not overlapping it are not read nor processed, so
+            they are left as background in the output. It does not need to match the data shape.
         roi_mask_axes_order : str, optional
-            Order of the axes of the ROI mask. If not given the axes order of the data is assumed, as
-            the mask is usually a downsampled version of the test image.
+            Order of the axes of the ROI mask. Defaults to the axes order of the data.
         """
         super(chunked_workflow_process_generator).__init__()
         self.model_predictions = model_predictions
@@ -172,8 +170,8 @@ class chunked_workflow_process_generator(IterableDataset):
 
         self.total_vols = self.vols_per_z_effective * self.vols_per_y * self.vols_per_x
 
-        # Keep only the tiles overlapping the region of interest, if any. Tiles are filtered here, and not
-        # while iterating, so that the ones left are evenly spread among ranks/workers by the sampler.
+        # Filter the tiles here, and not while iterating, so the ones left are evenly spread among
+        # ranks/workers by the sampler.
         self.roi_mask = (
             load_roi_mask(
                 roi_mask_path,
@@ -229,8 +227,7 @@ class chunked_workflow_process_generator(IterableDataset):
         Returns
         -------
         PatchCoords
-            Coordinates of the tile within the data. Tiles do not overlap, so this is both the region
-            read and the region written back.
+            Coordinates of the tile within the data.
         """
         assert isinstance(self.z_dim, int) and isinstance(self.y_dim, int) and isinstance(self.x_dim, int)
         z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
@@ -288,8 +285,7 @@ class chunked_workflow_process_generator(IterableDataset):
         assert isinstance(self.z_dim, int) and isinstance(self.y_dim, int) and isinstance(self.x_dim, int)
         
         for sampler_id in sampler:
-            # 'sampler_id' indexes the tiles left to process, which are not all of them when a ROI mask
-            # is used, so translate it into the tile id within the full grid.
+            # 'sampler_id' indexes the tiles left to process, so translate it into the tile id within the full grid
             vol_id = self.vol_ids[int(sampler_id)]
             patch_in_data = self._tile_coords(vol_id)
 

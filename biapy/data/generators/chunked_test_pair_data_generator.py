@@ -165,11 +165,10 @@ class chunked_test_pair_data_generator(IterableDataset):
         z_end : int, optional
             Last Z slice (exclusive) to process. -1 means process until the end.
         roi_mask_path : str, optional
-            Path to a region of interest mask to restrict the inference to. Patches not overlapping it
-            are not extracted nor predicted. The mask does not need to match the data shape.
+            Path to a region of interest mask. Patches not overlapping it are not extracted nor
+            predicted. It does not need to match the data shape.
         roi_mask_axes_order : str, optional
-            Order of the axes of the ROI mask. If not given the axes order of the image is assumed, as
-            the mask is usually a downsampled version of it.
+            Order of the axes of the ROI mask. Defaults to the axes order of the image.
         """
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
@@ -292,8 +291,8 @@ class chunked_test_pair_data_generator(IterableDataset):
 
         self.total_vols = self.vols_per_z_effective * self.vols_per_y * self.vols_per_x
 
-        # Keep only the tiles overlapping the region of interest, if any. Tiles are filtered here, and not
-        # while iterating, so that the ones left are evenly spread among ranks/workers by the sampler.
+        # Filter the tiles here, and not while iterating, so the ones left are evenly spread among
+        # ranks/workers by the sampler.
         self.roi_mask = (
             load_roi_mask(
                 roi_mask_path,
@@ -355,12 +354,10 @@ class chunked_test_pair_data_generator(IterableDataset):
             Position of the tile in the grid.
 
         patch_to_extract : PatchCoords
-            Coordinates of the region to read, i.e. including the padding used to give context to the
-            patch (it is clipped to the image limits).
+            Coordinates of the region to read, padding included and clipped to the image limits.
 
         real_patch_in_data : PatchCoords
-            Coordinates of the region the patch is responsible for, i.e. without the padding. This is
-            where the prediction is written back.
+            Coordinates of the region without the padding, where the prediction is written back.
         """
         assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
         z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
@@ -514,8 +511,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         for sampler_id in sampler:
             mask = None
 
-            # 'sampler_id' indexes the tiles left to process, which are not all of them when a ROI mask
-            # is used, so translate it into the tile id within the full grid.
+            # 'sampler_id' indexes the tiles left to process, so translate it into the tile id within the full grid
             vol_id = self.vol_ids[int(sampler_id)]
             z, y, x, patch_to_extract, real_patch_in_data = self._tile_coords(vol_id)
 

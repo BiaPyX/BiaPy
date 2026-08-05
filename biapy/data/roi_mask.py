@@ -1,15 +1,11 @@
 """
-Coarse ROI mask support for "by chunks" inference.
+Region of interest (ROI) mask support for inference (``DATA.TEST.ROI_MASK``).
 
-Provides :class:`CoarseROIMask`, a helper that answers "does this patch overlap the region of
-interest?" for patches of a large Zarr/H5 test image, using a mask that does **not** need to
-match the image shape. The mask is kept at its own (typically much coarser) resolution and the
-patch coordinates are mapped into it, so no upsampling of the mask into the full image grid is
-ever needed.
-
-This is different from ``DATA.TEST.BINARY_MASKS``/``TEST.POST_PROCESSING.APPLY_MASK``, which
-zeroes an already computed, full-size prediction: here the patches falling outside the ROI are
-never read nor passed through the model.
+Provides :class:`CoarseROIMask`, which restricts the inference to a region defined by a mask that
+does not need to match the image shape: it is kept at its own resolution and the image coordinates
+are mapped into it. Used to discard the patches outside the ROI in the "by chunks" inference
+(:meth:`CoarseROIMask.patch_is_inside`) and to zero the prediction outside it in the normal one
+(:meth:`CoarseROIMask.apply`).
 """
 from __future__ import annotations
 
@@ -34,9 +30,9 @@ def mask_to_zyx(mask: NDArray, axes_order: str, name: str = "") -> NDArray:
         Mask as read from disk.
 
     axes_order : str
-        Order of the axes of ``mask``, e.g. ``'ZYX'``, ``'XYZ'`` or ``'TZCYX'``. Axes declared but
-        not present in the array (usually ``'T'``, and ``'C'`` for a mask saved without channels)
-        are ignored, following the same convention used for the test images.
+        Order of the axes of ``mask``, e.g. ``'ZYX'``, ``'XYZ'`` or ``'TZCYX'`` in 3D and ``'YX'``
+        in 2D. Axes declared but not present in the array (usually ``'T'``, and ``'C'`` for a mask
+        saved without channels) are ignored, following the same convention used for the test images.
 
     name : str, optional
         Path/description of the mask. Only used in the error messages.
@@ -44,7 +40,7 @@ def mask_to_zyx(mask: NDArray, axes_order: str, name: str = "") -> NDArray:
     Returns
     -------
     NDArray
-        Boolean mask in ``(z, y, x)`` order.
+        Boolean mask in ``(z, y, x)`` order. A 2D mask gets a singleton ``z`` axis.
     """
     where = f" ({name})" if name else ""
     axes = axes_order.upper()
@@ -68,10 +64,15 @@ def mask_to_zyx(mask: NDArray, axes_order: str, name: str = "") -> NDArray:
         mask = mask.max(axis=axes.index("C"))
         axes = axes.replace("C", "")
 
+    # A 2D mask is handled as a 3D one with a single Z slice
+    if "Z" not in axes:
+        mask = np.expand_dims(mask, 0)
+        axes = "Z" + axes
+
     if sorted(axes) != ["X", "Y", "Z"]:
         raise ValueError(
-            f"The axes order given for the ROI mask{where} ('{axes_order}') must contain 'Z', 'Y' and 'X' axes "
-            "(plus, optionally, 'T' and 'C')"
+            f"The axes order given for the ROI mask{where} ('{axes_order}') must contain 'Y' and 'X' axes, plus 'Z' "
+            "in 3D (and, optionally, 'T' and 'C')"
         )
 
     return (mask > 0).transpose(axes.index("Z"), axes.index("Y"), axes.index("X"))
@@ -81,23 +82,24 @@ class CoarseROIMask:
     """
     Region of interest defined by a (possibly coarse) binary mask.
 
-    The mask is mapped to the image grid by simple axis-wise scaling factors, i.e. mask voxel
-    ``m`` on an axis covers image range ``[m / scale, (m + 1) / scale)`` where
-    ``scale = mask_size / image_size``. A patch is kept as soon as the mask block it falls into
-    holds one single foreground voxel.
+    The mask is mapped to the image grid by axis-wise scaling factors, so it can be of any shape:
+    coarser, equal or finer than the data.
 
     Parameters
     ----------
     mask : NDArray
-        Binary (or labelled, anything ``> 0`` counts as foreground) 3D mask. It can be of any
-        shape: coarser, equal or finer than the data.
+        Mask where anything ``> 0`` counts as ROI.
 
     data_shape_zyx : tuple of int
-        Shape of the data the mask refers to, in ``(z, y, x)`` order.
+        Shape of the data the mask refers to, in ``(z, y, x)`` order. In 2D, use ``(1, y, x)``.
 
     axes_order : str, optional
-        Order of the axes of ``mask``, e.g. ``'ZYX'``, ``'XYZ'`` or ``'TZCYX'``. ``'T'`` and
-        ``'C'`` axes, if present, are collapsed.
+        Order of the axes of ``mask``, e.g. ``'ZYX'``, ``'XYZ'`` or ``'TZCYX'`` in 3D and ``'YX'``
+        in 2D. ``'T'`` and ``'C'`` axes, if present, are collapsed.
+
+    is_3d : bool, optional
+        Whether the data the mask is applied to is 3D. Only used by :meth:`apply`, to know the
+        spatial axes of the arrays it receives.
 
     name : str, optional
         Description of where the mask comes from. Only used in the printed messages.
@@ -108,6 +110,7 @@ class CoarseROIMask:
         mask: NDArray,
         data_shape_zyx: Sequence[int],
         axes_order: str = "ZYX",
+        is_3d: bool = True,
         name: str = "",
     ):
         """Initialize the ROI mask and precompute the image -> mask scaling factors."""
@@ -115,21 +118,20 @@ class CoarseROIMask:
         if len(data_shape_zyx) != 3:
             raise ValueError(f"'data_shape_zyx' must have 3 values and not {len(data_shape_zyx)}")
 
+        self.is_3d = is_3d
         self.mask = mask
         self.mask_shape = tuple(int(x) for x in self.mask.shape)
         self.data_shape = tuple(int(x) for x in data_shape_zyx)
         self.name = name
-        # Image voxels -> mask voxels. Kept as floats: the mask does not need to divide the data
-        # shape exactly (e.g. a 2x16x16 mask over a 128x1024x1024 image gives exactly 64, but a
-        # mask built by rounding up may not).
+        # Image voxels -> mask voxels. Kept as floats: the mask does not need to divide the data shape exactly.
         self.scales = tuple(m / d for m, d in zip(self.mask_shape, self.data_shape))
 
     def block_for(self, coords: PatchCoords) -> Tuple[slice, slice, slice]:
         """
         Return the slices of the mask covered by the given patch coordinates.
 
-        The block always contains at least one mask voxel per axis, so patches smaller than a
-        mask voxel are still resolved against the mask voxel they fall in.
+        The block holds at least one mask voxel per axis, so patches smaller than a mask voxel are
+        resolved against the one they fall in.
         """
         starts = (coords.z_start, coords.y_start, coords.x_start)
         ends = (coords.z_end, coords.y_end, coords.x_end)
@@ -149,6 +151,52 @@ class CoarseROIMask:
         """Whether the patch at ``coords`` covers any foreground voxel of the region of interest."""
         zs, ys, xs = self.block_for(coords)
         return bool(self.mask[zs, ys, xs].any())
+
+    def expanded_to(self, shape_zyx: Sequence[int]) -> NDArray:
+        """
+        Return the mask resampled (nearest neighbour) to the given ``(z, y, x)`` shape.
+
+        The mask is stretched over the shape given, which does not need to be a multiple of it.
+        """
+        index_per_axis = [
+            np.minimum((np.arange(size) * m) // max(size, 1), m - 1)
+            for size, m in zip(shape_zyx, self.mask_shape)
+        ]
+        return self.mask[np.ix_(*index_per_axis)]
+
+    def apply(self, data: NDArray) -> NDArray:
+        """
+        Zero out everything outside the region of interest.
+
+        Parameters
+        ----------
+        data : NDArray
+            Data to mask: ``(y, x, c)``/``(b, y, x, c)`` in 2D and ``(z, y, x, c)``/``(b, z, y, x, c)``
+            in 3D. The mask is stretched over its spatial shape, so it may be of any size.
+
+        Returns
+        -------
+        NDArray
+            ``data`` with the values outside the ROI set to 0.
+        """
+        spatial_ndim = 3 if self.is_3d else 2
+        if data.ndim == spatial_ndim + 1:
+            spatial_shape = data.shape[:-1]
+        elif data.ndim == spatial_ndim + 2:
+            spatial_shape = data.shape[1:-1]
+        else:
+            raise ValueError(
+                "Data to mask with the ROI mask has {} dimensions (shape {}) but {} or {} were expected for {} data "
+                "(spatial axes plus channel, with an optional leading batch axis)".format(
+                    data.ndim, data.shape, spatial_ndim + 1, spatial_ndim + 2, "3D" if self.is_3d else "2D"
+                )
+            )
+
+        mask = self.expanded_to((1,) + tuple(spatial_shape) if not self.is_3d else tuple(spatial_shape))
+        if not self.is_3d:
+            mask = mask[0]
+
+        return data * np.expand_dims(mask, -1)
 
     def __repr__(self) -> str:
         """Return a short description of the mask and the mapping it defines."""
@@ -195,7 +243,7 @@ def find_roi_mask_file(path: str, sample_filename: Optional[str] = None) -> str:
     if len(candidates) == 1:
         return candidates[0]
 
-    # More than one mask: the one named as the sample is the one to use
+    # More than one mask: use the one named as the sample
     if sample_filename:
         sample_base = os.path.splitext(os.path.basename(sample_filename))[0]
         for candidate in candidates:
@@ -214,6 +262,7 @@ def load_roi_mask(
     data_shape_zyx: Sequence[int],
     sample_filename: Optional[str] = None,
     axes_order: str = "ZYX",
+    is_3d: bool = True,
     verbose: bool = True,
 ) -> CoarseROIMask:
     """
@@ -233,20 +282,23 @@ def load_roi_mask(
     axes_order : str, optional
         Order of the axes of the mask file.
 
+    is_3d : bool, optional
+        Whether the data the mask is applied to is 3D.
+
     verbose : bool, optional
         Whether to print the loaded mask information.
 
     Returns
     -------
     CoarseROIMask
-        Mask ready to filter patches.
+        Mask ready to filter patches or to be applied to a prediction.
     """
     # Imported here to avoid a circular import (data_manipulation imports from this package tree)
     from biapy.data.data_manipulation import imread
 
     mask_file = find_roi_mask_file(path, sample_filename)
-    # Read the mask as it is stored: functions such as read_img_as_ndarray() guess the axes order of
-    # 3D data from the shape (smallest axis first), which would silently transpose a coarse mask.
+    # Read the mask as it is stored: read_img_as_ndarray() guesses the axes order of 3D data from the
+    # shape (smallest axis first), which would silently transpose a coarse mask.
     if mask_file.endswith((".zarr", ".n5")) or looks_like_hdf5(mask_file):
         from biapy.data.data_3D_manipulation import read_chunked_data
 
@@ -255,7 +307,7 @@ def load_roi_mask(
     else:
         mask = imread(mask_file)[0]
     assert isinstance(mask, np.ndarray)
-    roi_mask = CoarseROIMask(mask, data_shape_zyx, axes_order=axes_order, name=mask_file)
+    roi_mask = CoarseROIMask(mask, data_shape_zyx, axes_order=axes_order, is_3d=is_3d, name=mask_file)
 
     if verbose and is_main_process():
         print(f"ROI mask loaded from {mask_file}: {roi_mask}")
