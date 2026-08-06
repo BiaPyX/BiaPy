@@ -2310,8 +2310,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "chunk_by_chunk",
                     "entire_pred",
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
-                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO < -1 or cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO == 0:
-                    raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO' must be -1 (auto) or a positive integer")
+                patches_per_tile = cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE
+                if len(patches_per_tile) != 3 or any(x < 1 for x in patches_per_tile):
+                    raise ValueError(
+                        "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE' must be a (z,y,x) tuple of positive integers"
+                    )
                 if not (0 < cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH <= 1):
                     raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH' must be in (0, 1]")
             if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_START < 0:
@@ -4012,8 +4015,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 if cls_weights != []:
                     old_cfg["LOSS"]["CLASS_REBALANCE"] = "manual"
 
-    if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
-        del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
+    if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"]:
+        if "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
+            del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
+        if "WORKFLOW_PROCESS" in old_cfg["TEST"]["BY_CHUNKS"]:
+            if "INSTANCE_SEG_HALO" in old_cfg["TEST"]["BY_CHUNKS"]["WORKFLOW_PROCESS"]:
+                del old_cfg["TEST"]["BY_CHUNKS"]["WORKFLOW_PROCESS"]["INSTANCE_SEG_HALO"]
 
     if "TEST" in old_cfg and "POST_PROCESSING" in old_cfg["TEST"] and "APPLY_MASK" in old_cfg["TEST"]["POST_PROCESSING"]:
         apply_mask = old_cfg["TEST"]["POST_PROCESSING"]["APPLY_MASK"]

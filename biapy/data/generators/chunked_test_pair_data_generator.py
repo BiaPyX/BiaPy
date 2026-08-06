@@ -120,6 +120,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         z_end: int = -1,
         roi_mask_path: str = "",
         roi_mask_axes_order: str = "",
+        patches_per_tile: Tuple[int, int, int] = (1, 1, 1),
     ):
         """
         Initialize the chunked_test_pair_data_generator.
@@ -169,6 +170,8 @@ class chunked_test_pair_data_generator(IterableDataset):
             predicted. It does not need to match the data shape.
         roi_mask_axes_order : str, optional
             Order of the axes of the ROI mask. Defaults to the axes order of the image.
+        patches_per_tile : tuple of int, optional
+            Patches grouped into each workflow process tile, on each axis.
         """
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
@@ -310,7 +313,7 @@ class chunked_test_pair_data_generator(IterableDataset):
             self.vol_ids = [
                 vol_id
                 for vol_id in range(self.total_vols)
-                if self.roi_mask.patch_is_inside(self._tile_coords(vol_id)[4])
+                if self.roi_mask.patch_is_inside(self._patch_coords(vol_id)[4])
             ]
             if len(self.vol_ids) == 0:
                 raise ValueError(
@@ -325,6 +328,34 @@ class chunked_test_pair_data_generator(IterableDataset):
 
         self.len = len(self.vol_ids)
 
+        # Group the patches into the tiles the workflow process works on. Tiles are groups of consecutive
+        # patches of the global grid, so each patch belongs to exactly one tile.
+        self.patches_per_tile = tuple(max(1, int(x)) for x in patches_per_tile)
+        self.tile_step = (
+            self.step_z * self.patches_per_tile[0],
+            self.step_y * self.patches_per_tile[1],
+            self.step_x * self.patches_per_tile[2],
+        )
+        self.tiles_per_z = math.ceil(self.vols_per_z / self.patches_per_tile[0])
+        self.tiles_per_y = math.ceil(self.vols_per_y / self.patches_per_tile[1])
+        self.tiles_per_x = math.ceil(self.vols_per_x / self.patches_per_tile[2])
+
+        self.patches_of_tile: Dict[int, List[int]] = {}
+        for vol_id in self.vol_ids:
+            z_local, y, x = np.unravel_index(vol_id, (self.vols_per_z_effective, self.vols_per_y, self.vols_per_x))
+            tile_id = int(
+                np.ravel_multi_index(
+                    (
+                        (int(z_local) + self.z_vol_start) // self.patches_per_tile[0],
+                        int(y) // self.patches_per_tile[1],
+                        int(x) // self.patches_per_tile[2],
+                    ),
+                    (self.tiles_per_z, self.tiles_per_y, self.tiles_per_x),
+                )
+            )
+            self.patches_of_tile.setdefault(tile_id, []).append(vol_id)
+        self.tile_ids = sorted(self.patches_of_tile.keys())
+
         if is_main_process():
             z_range_msg = ""
             if z_start != -1 or z_end != -1:
@@ -335,11 +366,78 @@ class chunked_test_pair_data_generator(IterableDataset):
             print(
                 f"Initialized chunked_test_pair_data_generator with sample {self.filename} and shape {self.X_parallel_data.shape}.\n"
                 f"Crop shape: {self.crop_shape}, padding: {self.padding}. Input axes: {self.input_axes}. Mask input axes: {self.mask_input_axes}.\n"
-                f"Output data axes order: {self.out_data_order}. {z_range_msg}{roi_msg}"
+                f"Output data axes order: {self.out_data_order}. {z_range_msg}{roi_msg}\n"
+                f"Workflow process tile: {self.tile_step} ({self.patches_per_tile} patches), "
+                f"{len(self.tile_ids)} tiles to process."
                 ""
             )
 
-    def _tile_coords(self, vol_id: int) -> Tuple[int, int, int, PatchCoords, PatchCoords]:
+    def tile_coords(self, tile_id: int) -> PatchCoords:
+        """
+        Return the coordinates of the region a tile is responsible for, i.e. without the padding.
+
+        Parameters
+        ----------
+        tile_id : int
+            Tile identifier within the ``(tiles_per_z, tiles_per_y, tiles_per_x)`` grid.
+
+        Returns
+        -------
+        PatchCoords
+            Coordinates of the tile within the data.
+        """
+        assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
+        z, y, x = np.unravel_index(tile_id, (self.tiles_per_z, self.tiles_per_y, self.tiles_per_x))
+        z0 = int(z) * self.tile_step[0]
+        y0 = int(y) * self.tile_step[1]
+        x0 = int(x) * self.tile_step[2]
+        return PatchCoords(
+            z_start=z0,
+            z_end=min(z0 + self.tile_step[0], self.z_dim),
+            y_start=y0,
+            y_end=min(y0 + self.tile_step[1], self.y_dim),
+            x_start=x0,
+            x_end=min(x0 + self.tile_step[2], self.x_dim),
+        )
+
+    def rank_workload(self, num_workers: int, world_size: int, rank: int) -> Tuple[int, int]:
+        """
+        Return the patches and tiles that a given rank will process, to report the progress.
+
+        It follows the same distribution the sampler does in :meth:`__iter__`, where the tiles are
+        shared among the workers of every rank, repeating some of them when they do not divide evenly.
+
+        Parameters
+        ----------
+        num_workers : int
+            Workers of the data loader that reads from this generator.
+
+        world_size : int
+            Number of processes among which the tiles are distributed.
+
+        rank : int
+            Process to return the workload of.
+
+        Returns
+        -------
+        patches, tiles : int
+            Patches and tiles the given rank processes.
+        """
+        workers = max(1, int(num_workers))
+        replicas = workers * max(1, int(world_size))
+        total = len(self.tile_ids)
+        if total == 0:
+            return 0, 0
+
+        padded = math.ceil(total / replicas) * replicas
+        order = [i % total for i in range(padded)]
+        mine = set()
+        for worker in range(workers):
+            mine.update(order[rank * workers + worker :: replicas])
+
+        return sum(len(self.patches_of_tile[self.tile_ids[i]]) for i in mine), len(mine)
+
+    def _patch_coords(self, vol_id: int) -> Tuple[int, int, int, PatchCoords, PatchCoords]:
         """
         Translate a tile identifier into the coordinates of the patch it represents.
 
@@ -482,6 +580,12 @@ class chunked_test_pair_data_generator(IterableDataset):
 
         Returns
         -------
+        vol_id : int
+            Patch identifier.
+
+        tile_info : tuple of int
+            Identifier of the tile the patch belongs to and number of patches of that tile.
+
         img : NDArray
             X patch of data to process.
 
@@ -504,74 +608,93 @@ class chunked_test_pair_data_generator(IterableDataset):
         world_size = get_world_size()
         process_rank = get_rank()
 
+        # Tiles, and not patches, are distributed, so all the patches of a tile are predicted by the same
+        # process and it can be post-processed as soon as its last patch is predicted.
         sampler = DistributedSampler(
-            self, num_replicas=(n_workers * world_size), rank=(process_rank * n_workers + worker_id), shuffle=False
+            self.tile_ids,
+            num_replicas=(n_workers * world_size),
+            rank=(process_rank * n_workers + worker_id),
+            shuffle=False,
         )
 
         for sampler_id in sampler:
-            mask = None
+            tile_id = self.tile_ids[int(sampler_id)]
+            patches_of_tile = self.patches_of_tile[tile_id]
+            for vol_id in patches_of_tile:
+                yield from self._prepare_patch(vol_id, (tile_id, len(patches_of_tile)))
 
-            # 'sampler_id' indexes the tiles left to process, so translate it into the tile id within the full grid
-            vol_id = self.vol_ids[int(sampler_id)]
-            z, y, x, patch_to_extract, real_patch_in_data = self._tile_coords(vol_id)
+    def _prepare_patch(self, vol_id: int, tile_info: Tuple[int, int]):
+        """
+        Read, filter and normalize one patch, yielding nothing when it is filtered out.
 
-            img, added_pad = self.extract_and_prepare_sample(z, y, x, patch_to_extract)
-            if self.Y_parallel_data is not None:
-                mask, _ = self.extract_and_prepare_sample(z, y, x, patch_to_extract, extract="mask")
+        Parameters
+        ----------
+        vol_id : int
+            Patch identifier.
 
-            # Skip processing image
-            discard = False
-            if self.filter_samples:
-                foreground_filter_requested = False
-                for cond in self.filter_props:
-                    if (
-                        "foreground" in cond
-                        or "diff" in cond
-                        or "diff_by_min_max_ratio" in cond
-                        or "diff_by_target_min_max_ratio" in cond
-                        or "target_mean" in cond
-                        or "target_min" in cond
-                        or "target_max" in cond
-                    ):
-                        foreground_filter_requested = True
-                assert self.filter_vals and self.filter_signs
-                discard = sample_satisfy_conds(
-                    img,
-                    self.filter_props,
-                    self.filter_vals,
-                    self.filter_signs,
-                    mask=mask if foreground_filter_requested else None,
-                )
+        tile_info : tuple of int
+            Identifier of the tile the patch belongs to and number of patches of that tile.
+        """
+        mask = None
+        z, y, x, patch_to_extract, real_patch_in_data = self._patch_coords(vol_id)
 
-            if not discard:
-                # Preprocess test data
-                if self.preprocess_data:
-                    img = self.preprocess_data(
+        img, added_pad = self.extract_and_prepare_sample(z, y, x, patch_to_extract)
+        if self.Y_parallel_data is not None:
+            mask, _ = self.extract_and_prepare_sample(z, y, x, patch_to_extract, extract="mask")
+
+        # Skip processing image
+        discard = False
+        if self.filter_samples:
+            foreground_filter_requested = False
+            for cond in self.filter_props:
+                if (
+                    "foreground" in cond
+                    or "diff" in cond
+                    or "diff_by_min_max_ratio" in cond
+                    or "diff_by_target_min_max_ratio" in cond
+                    or "target_mean" in cond
+                    or "target_min" in cond
+                    or "target_max" in cond
+                ):
+                    foreground_filter_requested = True
+            assert self.filter_vals and self.filter_signs
+            discard = sample_satisfy_conds(
+                img,
+                self.filter_props,
+                self.filter_vals,
+                self.filter_signs,
+                mask=mask if foreground_filter_requested else None,
+            )
+
+        if not discard:
+            # Preprocess test data
+            if self.preprocess_data:
+                img = self.preprocess_data(
+                    self.preprocess_cfg,
+                    x_data=[img],
+                    is_2d=(img.ndim == 3),
+                )[0]
+                if self.Y_parallel_data:
+                    mask = self.preprocess_data(
                         self.preprocess_cfg,
-                        x_data=[img],
+                        y_data=[mask],
                         is_2d=(img.ndim == 3),
+                        is_y_mask=True,
                     )[0]
-                    if self.Y_parallel_data:
-                        mask = self.preprocess_data(
-                            self.preprocess_cfg,
-                            y_data=[mask],
-                            is_2d=(img.ndim == 3),
-                            is_y_mask=True,
-                        )[0]
 
-                # Normalization
-                img, xnorm_info = normalize_image(img, norm_module=self.norm_module)
-                if mask is not None:
-                    mask, _ = normalize_mask(
-                        np.array(mask), 
-                        norm_module=self.norm_module, 
-                        n_classes=self.n_classes, 
-                        ignore_index=self.ignore_index, 
-                        instance_problem=self.instance_problem
-                    )
-                    assert isinstance(mask, np.ndarray)
+            # Normalization
+            img, xnorm_info = normalize_image(img, norm_module=self.norm_module)
+            if mask is not None:
+                mask, _ = normalize_mask(
+                    np.array(mask),
+                    norm_module=self.norm_module,
+                    n_classes=self.n_classes,
+                    ignore_index=self.ignore_index,
+                    instance_problem=self.instance_problem
+                )
+                assert isinstance(mask, np.ndarray)
 
-                yield vol_id, img, mask, real_patch_in_data, added_pad, xnorm_info
+            yield vol_id, tile_info, img, mask, real_patch_in_data, added_pad, xnorm_info
 
     def _shared_zarr_path(self) -> str:
         base = os.path.splitext(self.filename)[0]

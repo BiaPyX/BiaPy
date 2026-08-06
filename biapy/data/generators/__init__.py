@@ -657,11 +657,12 @@ def by_chunks_collate_fn(data):
     return (
         # torch.cat([torch.from_numpy(x[0]) for x in data]),
         [x[0] for x in data],
-        np.stack([x[1] for x in data]),
-        np.stack([x[2] for x in data if x is not None]) if len(data) > 0 and data[0][2] is not None else None,
-        [x[3] for x in data],
+        [x[1] for x in data],
+        np.stack([x[2] for x in data]),
+        np.stack([x[3] for x in data if x is not None]) if len(data) > 0 and data[0][3] is not None else None,
         [x[4] for x in data],
         [x[5] for x in data],
+        [x[6] for x in data],
     )
 
 def create_chunked_test_generator(
@@ -725,6 +726,7 @@ def create_chunked_test_generator(
         z_end=cfg.TEST.BY_CHUNKS.Z_END,
         roi_mask_path=cfg.DATA.TEST.ROI_MASK.PATH if cfg.DATA.TEST.ROI_MASK.ENABLE else "",
         roi_mask_axes_order=cfg.DATA.TEST.ROI_MASK.AXES_ORDER,
+        patches_per_tile=cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE,
     )
 
     # ---- Choose num_workers for this DataLoader ----
@@ -736,16 +738,9 @@ def create_chunked_test_generator(
     else:
         num_workers = int(system_dict.get("num_workers_hint", 0))
 
-    # Cap by dataset length if the generator supports __len__
-    try:
-        n_chunks = len(chunked_generator)  # may raise TypeError if __len__ not implemented
-        if n_chunks > 0:
-            num_workers = min(num_workers, n_chunks)
-        else:
-            num_workers = 0
-    except TypeError:
-        # length unknown -> keep computed num_workers
-        pass
+    # Each worker holds the prediction of the tile it is filling, so cap them by the tiles to process
+    n_tiles = len(chunked_generator.tile_ids)
+    num_workers = min(num_workers, n_tiles) if n_tiles > 0 else 0
 
     # Ensure DataLoader workers don't each spawn many threads
     def worker_init_fn(worker_id):

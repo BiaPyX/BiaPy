@@ -1153,6 +1153,64 @@ def extract_3D_patch_with_overlap_and_padding_yield(
                         yield real_patch_in_data, total_vol
 
 
+def chunked_tile_grid(
+    patch_size: Sequence[int],
+    padding: Sequence[int],
+    patches_per_tile: Sequence[int],
+    data_shape_zyx: Optional[Sequence[int]] = None,
+) -> dict:
+    """
+    Compute the grid of tiles the post-processing of a "by chunks" inference works on.
+
+    A tile is a group of consecutive patches per axis, so tiles partition the patch grid and each
+    patch belongs to exactly one tile. The prediction of a tile is post-processed at once, with the
+    padding of its border patches as context, and the tile (without that padding) is written to the
+    output file.
+
+    Parameters
+    ----------
+    patch_size : tuple of int
+        ``DATA.PATCH_SIZE``, in ``(z, y, x[, c])`` order.
+
+    padding : tuple of int
+        ``DATA.TEST.PADDING``, in ``(z, y, x)`` order.
+
+    patches_per_tile : tuple of int
+        ``TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE``, in ``(z, y, x)`` order, i.e. the patches
+        grouped into a tile on each axis.
+
+    data_shape_zyx : tuple of int, optional
+        Shape of the data to process, in ``(z, y, x)`` order. Needed only for the number of patches
+        and tiles the data is divided into.
+
+    Returns
+    -------
+    dict
+        With the following keys:
+          * ``'step'``       : region written by each patch, i.e. ``patch_size - 2 * padding``.
+          * ``'patches_per_tile'``: patches grouped into a tile on each axis.
+          * ``'tile_step'``  : region written by each tile, i.e. ``step * patches_per_tile``.
+          * ``'patches'``    : number of patches per axis, if ``data_shape_zyx`` was given.
+          * ``'tiles'``      : number of tiles per axis, if ``data_shape_zyx`` was given.
+    """
+    step = tuple(int(patch_size[i]) - 2 * int(padding[i]) for i in range(3))
+    if any(s <= 0 for s in step):
+        raise ValueError(f"'DATA.TEST.PADDING' is too large for 'DATA.PATCH_SIZE': step {step} is not positive")
+
+    patches_per_tile = tuple(max(1, int(patches_per_tile[i])) for i in range(3))
+    grid = {
+        "step": step,
+        "patches_per_tile": patches_per_tile,
+        "tile_step": tuple(step[i] * patches_per_tile[i] for i in range(3)),
+    }
+
+    if data_shape_zyx is not None:
+        grid["patches"] = tuple(math.ceil(int(data_shape_zyx[i]) / step[i]) for i in range(3))
+        grid["tiles"] = tuple(math.ceil(grid["patches"][i] / patches_per_tile[i]) for i in range(3))
+
+    return grid
+
+
 def order_dimensions(
     data: Sequence[slice] | List[str | int] | Tuple[int, ...] | NDArray,
     input_order: str,

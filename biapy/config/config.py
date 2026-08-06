@@ -55,6 +55,10 @@ class Config:
         # Maximum number of CPUs to use. Set it to "-1" to not set a limit.
         _C.SYSTEM.NUM_CPUS = -1
         # Maximum number of workers to use. You can disable this option by setting 0. With a -1 the workers are calculated automatically.
+        # They are the processes that prepare the data (reading, cropping and normalizing it) in parallel with the GPU work, one
+        # set of them per process, i.e. per GPU. In the "by chunks" inference each of them fills one tile of the workflow process
+        # at a time, so they multiply the RAM the tiles take (see 'TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE'): lower this
+        # value, or raise it, to trade reading speed for the memory that bigger tiles need.
         _C.SYSTEM.NUM_WORKERS = -1
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
@@ -1917,10 +1921,18 @@ class Config:
         # Z slice index (exclusive) at which chunk processing ends. Use -1 (default) to process until the end.
         # The output Zarr is always the full data shape so multiple jobs can write concurrently.
         _C.TEST.BY_CHUNKS.Z_END = -1
+        # Whether to write the raw model predictions into a Zarr file. They are not needed to create the final output, as
+        # each tile is post-processed as soon as it is predicted, and they are heavy to store (e.g. 12 float32 channels
+        # per voxel for affinities), so they are only written on demand. Forced when the workflow process is disabled or
+        # set to 'entire_pred', when 'TEST.REUSE_PREDICTIONS' is enabled or when the raw prediction is the final output
+        # of the workflow (e.g. denoising).
+        _C.TEST.BY_CHUNKS.WRITE_RAW_PREDICTIONS = False
         # Phases to execute in this job. Allows splitting the full pipeline across multiple cluster jobs.
         # Available phases:
-        #   * 'prediction'         : run the model on each patch and write raw predictions to a Zarr file.
-        #   * 'instance_creation'  : run per-chunk watershed (instance segmentation, 'chunk_by_chunk' only).
+        #   * 'prediction'         : run the model on each patch. Post-processing runs on the fly unless this is the only
+        #     phase of the job, in which case the raw predictions are written to a Zarr file.
+        #   * 'instance_creation'  : run per-chunk watershed (instance segmentation, 'chunk_by_chunk' only). Runs within
+        #     'prediction' when both phases are selected, otherwise it reads the raw predictions Zarr.
         #   * 'instance_merging'   : resolve cross-chunk instance IDs (Passes B–E, instance segmentation only).
         # Example multi-job setup for a large volume:
         #   Job 1 — Z_START=0,   Z_END=500,  PHASES=["prediction", "instance_creation"]
@@ -1945,12 +1957,39 @@ class Config:
         #      memory to process the entire prediction image with 'entire_pred'.
         #    * 'entire_pred': the predicted image will be loaded in memory and processed entirely (be aware of your  memory budget)
         _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE = "chunk_by_chunk"
-        # Number of voxels added on each side of a chunk before running the per-chunk watershed (instance segmentation,
-        # 'chunk_by_chunk' mode only). A larger halo gives each chunk more context from its neighbours so seeds near
-        # boundaries are correctly connected, reducing jagged artefacts at chunk seams. Set this to at least the radius
-        # of your largest expected instance. Increasing this value raises memory usage proportionally.
-        # Use -1 (default) to let BiaPy compute it automatically as patch_size / 8.
-        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO = -1
+        # Patches, in (z,y,x) order, grouped into each tile of the workflow process ('chunk_by_chunk' mode only). A tile
+        # is post-processed at once, using the 'DATA.TEST.PADDING' of its border patches as context, so it covers
+        # PATCHES_PER_TILE * ('DATA.PATCH_SIZE' - 2 * 'DATA.TEST.PADDING') voxels per axis. Tiles divide the patches
+        # among them, so this does not change the number of patches passed through the model nor their overlap: larger
+        # tiles only mean fewer seams between them, and therefore fewer instances split across tiles that instance
+        # segmentation has to merge back. Raising it improves the result, and the limit is the RAM available.
+        #
+        # Each tile being filled holds the prediction of its region plus the padding around it, i.e.
+        #   (tile + 2 * padding voxels per axis) * model output channels * 4 bytes
+        # and post-processing one takes about two more tiles of working memory. Every one of the 'SYSTEM.NUM_GPUS'
+        # processes fills as many tiles at the same time as workers it has ('SYSTEM.NUM_WORKERS'), so a job needs about
+        #   NUM_GPUS * ((NUM_WORKERS + 2) * tile size + 3 GiB)
+        # where those 3 GiB are what BiaPy itself takes per GPU (model, CUDA context and the patches in flight).
+        #
+        # Measured on a (1024,1024,128) volume with 4 GPUs and 5 workers each, a patch of (128,128,128), a padding of
+        # (10,10,10) and 12 output channels (peak RAM of the whole job, and the instances split across tiles that the
+        # merging has to join back):
+        #   PATCHES_PER_TILE   tile           tile size   RAM        instances found
+        #   (1,1,1)            (108,108,108)     96 MiB   13.7 GiB   953
+        #   (2,2,2)            (216,216,216)    327 MiB   19.7 GiB   836
+        #   (3,3,3)            (324,324,324)    693 MiB   22.9 GiB   828
+        #
+        # Values to ask for in the same setup, but on a volume large enough for the tiles not to be cut by its borders:
+        #   RAM of the job   PATCHES_PER_TILE   tile           needs
+        #   100 GiB          (3,3,3)            (324,324,324)   63 GiB
+        #   300 GiB          (5,5,5)            (540,540,540)  232 GiB
+        #   500 GiB          (6,6,6)            (648,648,648)  385 GiB
+        #   700 GiB          (7,7,7)            (756,756,756)  597 GiB
+        #   1000 GiB         (8,8,8)            (864,864,864)  877 GiB
+        # Halve the values above if the model outputs twice the channels, and note that the tile size grows with the
+        # cube of this value when the three axes are raised together: raise only the axes that need it if the memory
+        # gets tight (e.g. (1,2,2) on anisotropic data, or when an axis is already covered by a single tile).
+        _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE = (1, 1, 1)
         # Minimum normalised IoU required to merge two instances across a chunk boundary
         # (instance segmentation, 'chunk_by_chunk' mode only). Must be in (0, 1].
         _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH = 0.3

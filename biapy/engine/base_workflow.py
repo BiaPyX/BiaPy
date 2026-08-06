@@ -99,6 +99,7 @@ from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import set_cellpose_diameters
 from biapy.data.norm import normalize_image
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
+from biapy.engine.chunked_tiles import ChunkedTileProcessor
 from biapy.data.dataset import PatchCoords
 from biapy.models.memory_bank import MemoryBank
 
@@ -404,7 +405,69 @@ class Base_Workflow(metaclass=ABCMeta):
             "out_dir": self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
             "dtype_str": self.dtype_str,
         }
-    
+
+        # Set to True by the workflows that can process each tile within the prediction loop, and to the
+        # phase of 'TEST.BY_CHUNKS.PHASES' that must be selected for that process to run, if any.
+        self.chunked_on_the_fly_process = False
+        self.chunked_process_phase = None
+        # Set to False by the workflows whose process does not write a file (e.g. detection, which saves
+        # the points of each patch into CSV files)
+        self.chunked_process_writes_output = True
+        # Description of the file created by that process. Set when the prediction loop runs.
+        self.chunked_output_info = {}
+        self.chunked_tiles = None
+
+    def _chunked_progress_message(self, progress: float, start_time: float, tiles_to_process: int) -> str:
+        """
+        Return the progress of this rank in the "by chunks" prediction loop.
+
+        Parameters
+        ----------
+        progress : float
+            Patches of this rank already predicted, between 0 and 1.
+
+        start_time : float
+            Time the loop started at.
+
+        tiles_to_process : int
+            Tiles this rank has to post-process.
+
+        Returns
+        -------
+        str
+            Message with the percentage done, the tiles written and the time left.
+        """
+        def as_time(seconds: float) -> str:
+            return time.strftime("%H:%M:%S", time.gmtime(max(0, seconds)))
+
+        elapsed = time.time() - start_time
+        remaining = (elapsed / progress) - elapsed if progress > 0 else 0
+
+        tiles = ""
+        if self.chunked_tiles:
+            tiles = f", {self.chunked_tiles.processed_tiles}/{tiles_to_process} tiles processed"
+
+        return (
+            f"[Rank {get_rank()} ({os.getpid()})] {progress * 100:.0f}% of its patches predicted{tiles}. "
+            f"Elapsed {as_time(elapsed)}, {as_time(remaining)} left"
+        )
+
+    def process_chunks_on_the_fly(self) -> bool:
+        """Whether each tile is post-processed within the prediction loop, instead of reading back the raw predictions."""
+        return bool(
+            self.chunked_on_the_fly_process
+            and not self.cfg.TEST.REUSE_PREDICTIONS
+            and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE
+            and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk"
+            and "prediction" in self.cfg.TEST.BY_CHUNKS.PHASES
+            and (self.chunked_process_phase is None or self.chunked_process_phase in self.cfg.TEST.BY_CHUNKS.PHASES)
+        )
+
+    def write_raw_chunked_predictions(self) -> bool:
+        """Whether the raw model predictions must be written into a Zarr file."""
+        return bool(self.cfg.TEST.BY_CHUNKS.WRITE_RAW_PREDICTIONS or not self.process_chunks_on_the_fly())
+
+
     def define_activations_and_channels(self):
         """
         Define the activations to be applied to the model output and the channels that the model will output.
@@ -2427,9 +2490,24 @@ class Base_Workflow(metaclass=ABCMeta):
                 tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
             )
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
-            samples_visited = {}
+
+            write_raw = self.write_raw_chunked_predictions()
+            process_on_the_fly = self.process_chunks_on_the_fly()
+            self.chunked_tiles = (
+                ChunkedTileProcessor(self, tgen)
+                if process_on_the_fly and self.chunked_process_writes_output
+                else None
+            )
+
+            # The tiles are distributed among the ranks, so each of them reports the progress of its own share
+            patches_to_process, tiles_to_process = tgen.rank_workload(
+                self.test_generator.num_workers, get_world_size(), get_rank()
+            )
+            progress_start, progress_reported = time.time(), 0.0
+
+            samples_visited = set()
             for obj_list in self.test_generator:
-                sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
+                sampler_ids, tile_info, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
 
                 if self.cfg.TEST.VERBOSE:
                     print(
@@ -2443,25 +2521,23 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 if self.separated_class_channel:
                     class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
-                    pred = np.concatenate( 
+                    pred = np.concatenate(
                         (
-                            pred[...,:-self.model_output_channels[class_idx]],  
+                            pred[...,:-self.model_output_channels[class_idx]],
                             np.expand_dims(np.argmax(pred[..., -self.model_output_channels[class_idx]:], axis=-1), axis=-1)
-                        ), axis=-1) 
-                
-                lbreaked = False
+                        ), axis=-1)
+
                 for i in range(pred.shape[0]):
-                    # Break the loop as those samples were created just to complete the last batch
-                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
-                        print(
-                            "[Rank {} ({})] Patch {} discarded".format(
-                                get_rank(),
-                                os.getpid(),
-                                sampler_ids[i],
+                    # Samples repeated to complete the last batch are predicted but not used
+                    if sampler_ids[i] in samples_visited:
+                        if self.cfg.TEST.VERBOSE:
+                            print(
+                                "[Rank {} ({})] Patch {} discarded as it was already processed".format(
+                                    get_rank(), os.getpid(), sampler_ids[i]
+                                )
                             )
-                        )
-                        lbreaked = True
-                        break
+                        continue
+                    samples_visited.add(sampler_ids[i])
 
                     single_pred = pred[i]
                     single_pred_pad = added_pad[i]
@@ -2470,25 +2546,26 @@ class Base_Workflow(metaclass=ABCMeta):
                         sampler_ids[i], single_pred, single_patch_in_data, single_pred_pad
                     )
 
-                    # Remove padding if added
-                    single_pred = single_pred[
-                        single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
-                        single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
-                        single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
-                    ]
-                    # Insert into the data
-                    tgen.insert_patch_in_file(single_pred, single_patch_in_data)
+                    if self.chunked_tiles:
+                        self.chunked_tiles.add_patch(single_pred, single_patch_in_data, tile_info[i])
 
-                    samples_visited[sampler_ids[i]] = True
+                    if write_raw:
+                        # Remove padding if added
+                        raw_pred = single_pred[
+                            single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
+                            single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
+                            single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
+                        ]
+                        # Insert into the data
+                        tgen.insert_patch_in_file(raw_pred, single_patch_in_data)
 
-                if lbreaked and sampler_ids[i] in samples_visited:
-                    print(
-                        "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
-                            get_rank(),
-                            os.getpid(),
-                        )
-                    )
-                    break
+                progress = len(samples_visited) / patches_to_process if patches_to_process else 1
+                if progress - progress_reported >= 0.05 or progress >= 1:
+                    progress_reported = progress
+                    print(self._chunked_progress_message(progress, progress_start, tiles_to_process))
+
+            if self.chunked_tiles:
+                self.chunked_tiles.flush_all()
 
             # Wait until all threads are done so the main thread can create the full size image
             if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
@@ -2501,7 +2578,7 @@ class Base_Workflow(metaclass=ABCMeta):
             tgen.close_open_files()
 
             # Only after everyone finished writing, optionally convert to TIF on rank0
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and write_raw:
                 if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
                     dist.barrier()
                 if is_main_process():
@@ -2543,7 +2620,9 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
+    def after_one_chunk_workflow_process(
+        self, chunks: List[NDArray], patch_in_data: List, added_pad: Optional[List] = None
+    ) -> Optional[List[NDArray]]:
         """
         Process a list of chunks during inference in "by chunks" setting. Each workflow should have
         its own implementation of this method.
@@ -2557,6 +2636,11 @@ class Base_Workflow(metaclass=ABCMeta):
         patch_in_data : List[PatchCoords]
             Spatial coordinates of each chunk in the full volume.
 
+        added_pad : List, optional
+            Context, in ``[[before, after], ...]`` per axis, that each chunk carries around the
+            coordinates given. It is removed from the returned chunks by the caller. ``None`` when the
+            chunks come from the raw predictions file, which carries no context.
+
         Returns
         -------
         chunks : Optional[List[NDArray]]
@@ -2569,6 +2653,14 @@ class Base_Workflow(metaclass=ABCMeta):
         Place any code that needs to be done after predicting all patches in "by chunks" setting.
         This function is called on all ranks.
         """
+        if self.process_chunks_on_the_fly():
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
+                if is_main_process() and self.chunked_tiles:
+                    self.chunked_tiles.save_as_tif()
+            return
+
         print("Processing generated predictions . . .")
 
         # Create the generator

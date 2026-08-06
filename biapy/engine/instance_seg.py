@@ -7,7 +7,6 @@ It handles data preparation, model setup, metrics, predictions, post-processing,
 and result saving for assigning unique IDs to each object in 2D and 3D images.
 """
 import os
-import math
 import torch
 import h5py
 import numpy as np
@@ -65,6 +64,7 @@ from biapy.utils.misc import (
 )
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 from biapy.data.data_3D_manipulation import (
+    chunked_tile_grid,
     read_chunked_data,
     read_chunked_nested_data,
     ensure_3d_shape,
@@ -187,6 +187,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = True
         self.load_Y_val = True
+
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            # Instances go to PER_IMAGE_INSTANCES (same as the non-chunked pipeline) and use uint64 to hold
+            # the globally-offset IDs
+            self.test_chunked_workflow_process_vars["out_dir"] = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES
+            self.test_chunked_workflow_process_vars["dtype_str"] = "uint64"
+            self.chunked_on_the_fly_process = True
+            self.chunked_process_phase = "instance_creation"
         if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT:
             self.test_gt_filenames = next(os_walk_clean(self.original_test_mask_path))[2]
             if len(self.test_gt_filenames) == 0:
@@ -739,27 +747,6 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     if metric_logger:
                         metric_logger.meters[list_names_to_use[i]].update(v)
         return out_metrics
-
-    def _effective_halo(self) -> tuple:
-        """Return per-axis halo sizes ``(hz, hy, hx)`` for chunk-boundary watershed.
-
-        When ``TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO`` is -1 the halo
-        is derived automatically as ``PATCH_SIZE[axis] // 8`` independently for
-        each axis.  A scalar non-negative value set by the user is broadcast to all
-        three axes.
-
-        Using per-axis values avoids over-extending the tiny Z axis (e.g. patch
-        Z=20 → hz=2) while keeping a generous halo in Y/X (e.g. patch 256 → h=32).
-        """
-        configured = self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_HALO
-        if configured != -1:
-            v = int(configured)
-            return (v, v, v)
-        patch_size = self.cfg.DATA.PATCH_SIZE  # (Z, Y, X[, C])
-        hz = max(1, int(patch_size[0]) // 8)
-        hy = max(1, int(patch_size[1]) // 8)
-        hx = max(1, int(patch_size[2]) // 8)
-        return (hz, hy, hx)
 
     def _create_instance_labels(self, pred: NDArray, save_dir: Optional[str] = None, verbose: bool = False):
         """
@@ -1933,7 +1920,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         For ``PROBLEM.INSTANCE_SEG.TYPE == "regular"`` and
         ``TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk"`` this runs five passes:
 
-        A. Per-chunk instance labelling via :meth:`after_one_chunk_workflow_process` (base-class loop).
+        A. Per-chunk instance labelling via :meth:`after_one_chunk_workflow_process`. It runs within the
+           prediction loop unless the raw predictions are being read back (base-class loop).
         B. Global-offset assignment — each chunk *k* adds ``k * MAX_INSTANCES_PER_CHUNK`` to every
            non-zero label so that IDs are unique across the whole volume.
         C. Boundary-edge extraction — for every pair of spatially adjacent chunks we read the
@@ -1945,22 +1933,15 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         """
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-                # Instances go to PER_IMAGE_INSTANCES (same as the non-chunked pipeline).
-                self.test_chunked_workflow_process_vars["out_dir"] = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES
-                # Use uint64 to hold large globally-offset IDs.
-                self.test_chunked_workflow_process_vars["dtype_str"] = "uint64"
-
                 phases = self.cfg.TEST.BY_CHUNKS.PHASES
-                run_pass_a = "instance_creation" in phases
+                pass_a_on_the_fly = self.process_chunks_on_the_fly()
+                run_pass_a = "instance_creation" in phases and not pass_a_on_the_fly
                 run_merging = "instance_merging" in phases
 
                 if not run_pass_a and not run_merging:
                     return
 
                 save_out_tif = self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF
-
-                self._halo = self._effective_halo()
-                print(f"[Rank {get_rank()} ({os.getpid()})] Effective halo: {self._halo}")
 
                 if run_pass_a:
                     # Temporarily suppress TIF creation inside the base-class pass.
@@ -1992,6 +1973,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     vols_per_z = tgen.vols_per_z
                     vols_per_y = tgen.vols_per_y
                     vols_per_x = tgen.vols_per_x
+                elif pass_a_on_the_fly:
+                    # ---- Pass A ran within the prediction loop: chunks are the tiles it wrote ----
+                    info = self.chunked_output_info
+                    zarr_path = info["zarr_path"]
+                    axes_order = info["axes_order"]
+                    z_dim, y_dim, x_dim = info["dims"]
+                    step_z, step_y, step_x = info["tile_step"]
+                    vols_per_z, vols_per_y, vols_per_x = info["tiles"]
                 else:
                     # ---- Skip Pass A: derive grid params from config + existing label Zarr ----
                     print(
@@ -2013,13 +2002,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     _existing = zarr.open(zarr_path, mode="r", zarr_format=3)
                     _, z_dim, _, y_dim, x_dim = order_dimensions(_existing.shape, axes_order)
                     assert isinstance(z_dim, int) and isinstance(y_dim, int) and isinstance(x_dim, int)
-                    patch_size = self.cfg.DATA.PATCH_SIZE
-                    step_z = int(patch_size[0])
-                    step_y = int(patch_size[1])
-                    step_x = int(patch_size[2])
-                    vols_per_z = math.ceil(z_dim / step_z)
-                    vols_per_y = math.ceil(y_dim / step_y)
-                    vols_per_x = math.ceil(x_dim / step_x)
+                    grid = chunked_tile_grid(
+                        self.cfg.DATA.PATCH_SIZE,
+                        self.cfg.DATA.TEST.PADDING,
+                        self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE,
+                        (z_dim, y_dim, x_dim),
+                    )
+                    step_z, step_y, step_x = grid["tile_step"]
+                    vols_per_z, vols_per_y, vols_per_x = grid["tiles"]
 
                 if not run_merging:
                     return
@@ -2298,7 +2288,9 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         else:  # synapses
             pass
 
-    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
+    def after_one_chunk_workflow_process(
+        self, chunks: List[NDArray], patch_in_data: List, added_pad: Optional[List] = None
+    ) -> Optional[List[NDArray]]:
         """
         Process a list of chunks during inference in "by chunks" setting. Each workflow should have
         its own implementation of this method.
@@ -2312,6 +2304,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         patch_in_data : List[PatchCoords]
             Spatial coordinates of each chunk in the full volume.
 
+        added_pad : List, optional
+            Context each chunk carries around the coordinates given. ``None`` when the chunks come
+            from the raw predictions file, in which case the context is read from it.
+
         Returns
         -------
         chunks : Optional[List[NDArray]]
@@ -2320,16 +2316,18 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             chunk_by_chunk = (self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk")
             result = []
-            for chunk, coords in zip(chunks, patch_in_data):
+            for i, (chunk, coords) in enumerate(zip(chunks, patch_in_data)):
 
-                if chunk_by_chunk:
-                    # Run watershed on a halo-extended region so seeds near chunk
-                    # boundaries have context from neighbouring chunks.  Only the
-                    # inner result is kept — no side zarr is needed.
-                    # This follows torch-em's predict_with_halo pattern: compute
-                    # with halo, write only the inner block.
+                if added_pad is not None:
+                    # The chunk already carries the context of its neighbours ('DATA.TEST.PADDING'), which
+                    # the caller removes from the labels returned
+                    labels = self._create_instance_labels(chunk)
+                elif chunk_by_chunk:
+                    # Run the watershed on a region extended with the context of the neighbouring chunks,
+                    # read from the raw predictions, so seeds near the chunk boundaries are connected. Only
+                    # the inner result is kept.
                     tgen = self.test_generator.dataset
-                    hz, hy, hx = self._halo
+                    hz, hy, hx = self.cfg.DATA.TEST.PADDING
                     z_dim, y_dim, x_dim = tgen.z_dim, tgen.y_dim, tgen.x_dim
 
                     z0_h = max(0, coords.z_start - hz)

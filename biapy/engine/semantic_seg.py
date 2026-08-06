@@ -93,6 +93,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             "out_dir": self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
             "dtype_str": "uint8" if not self.cfg.DATA.N_CLASSES > 255 else "uint16",
         }
+        self.chunked_on_the_fly_process = True
 
     def define_activations_and_channels(self):
         """
@@ -491,7 +492,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         """
         pass
 
-    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
+    def after_one_chunk_workflow_process(
+        self, chunks: List[NDArray], patch_in_data: List, added_pad: Optional[List] = None
+    ) -> Optional[List[NDArray]]:
         """
         Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
         its own implementation of this method.
@@ -501,6 +504,10 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         chunks : List[NDArray]
             List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
             ``(y, x, channels)`` for 2D.
+
+        added_pad : List, optional
+            Context each chunk carries around its coordinates. Not needed here, as the binarization is
+            done voxel by voxel, and it is removed from the returned chunks by the caller.
 
         Returns
         -------

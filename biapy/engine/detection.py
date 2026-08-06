@@ -100,6 +100,10 @@ class Detection_Workflow(Base_Workflow):
         self.is_y_mask = True
         self.load_Y_val = True
 
+        # Points are extracted, and saved as CSV files, right after each patch is predicted
+        self.chunked_on_the_fly_process = True
+        self.chunked_process_writes_output = False
+
         # Workflow specific test variables
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing["detection_post"] = True
@@ -951,10 +955,15 @@ class Detection_Workflow(Base_Workflow):
                 index=False,
             )
 
-    def after_one_chunk_workflow_process(self, chunks: List[NDArray], patch_in_data: List) -> Optional[List[NDArray]]:
+    def after_one_chunk_workflow_process(
+        self, chunks: List[NDArray], patch_in_data: List, added_pad: Optional[List] = None
+    ) -> Optional[List[NDArray]]:
         """
         Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
         its own implementation of this method.
+
+        Nothing is done here: the points of each patch are extracted, and saved into a CSV file, right
+        after the patch is predicted (see :meth:`after_one_chunk_raw_prediction`).
 
         Parameters
         ----------
@@ -962,12 +971,15 @@ class Detection_Workflow(Base_Workflow):
             List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
             ``(y, x, channels)`` for 2D.
 
+        added_pad : List, optional
+            Context each chunk carries around its coordinates.
+
         Returns
         -------
         chunks : Optional[List[NDArray]]
             Processed chunks.
         """
-        pass
+        return None
     
     def after_all_chunk_prediction_workflow_process(self):
         """
