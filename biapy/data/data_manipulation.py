@@ -47,6 +47,7 @@ Typical Workflow:
 import os
 import h5py
 import torch
+import torch.distributed as dist
 import tifffile
 import imageio
 import numpy as np
@@ -69,7 +70,7 @@ import nibabel as nib
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
 from biapy.data.norm import normalize_image, normalize_mask
-from biapy.utils.misc import is_main_process, os_walk_clean
+from biapy.utils.misc import is_main_process, os_walk_clean, get_rank, get_world_size, is_dist_avail_and_initialized
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
@@ -2412,6 +2413,55 @@ def samples_from_class_list(
     return BiaPyDataset(dataset_info=xdataset_info, sample_list=xsample_list)
 
 
+def _rank_local_indices(n: int) -> NDArray:
+    """
+    Split ``range(n)`` into contiguous chunks across distributed processes.
+
+    Mirrors the ``range(rank, N, world_size)`` work split used in
+    ``create_instance_channels`` so that, e.g., filtering samples is done once
+    across all ranks instead of redundantly by every rank.
+
+    Parameters
+    ----------
+    n : int
+        Total number of items to split.
+
+    Returns
+    -------
+    NDArray
+        Indices (into ``range(n)``) assigned to the current rank.
+    """
+    world_size = get_world_size()
+    if world_size <= 1:
+        return np.arange(n)
+    return np.array_split(np.arange(n), world_size)[get_rank()]
+
+
+def _gather_local_results(local_results: List) -> List:
+    """
+    Gather a per-rank list of results into a single combined list on every rank.
+
+    Used together with :func:`_rank_local_indices` so that, after each rank
+    processes only its share of the work, all ranks end up with the same
+    complete result (e.g. the full list of samples to keep after filtering).
+
+    Parameters
+    ----------
+    local_results : list
+        Results computed by the current rank for its assigned share of work.
+
+    Returns
+    -------
+    list
+        The concatenation of ``local_results`` from all ranks.
+    """
+    if not is_dist_avail_and_initialized() or get_world_size() <= 1:
+        return local_results
+    gathered: List[List] = [None] * get_world_size()  # type: ignore
+    dist.all_gather_object(gathered, local_results)
+    return [x for part in gathered for x in part]
+
+
 def filter_samples_by_properties(
     x_dataset: BiaPyDataset,
     is_3d: bool,
@@ -2565,8 +2615,11 @@ def filter_samples_by_properties(
 
     if not using_zarr and filter_by_entire_image:
         clean_by = "image"
-        samples_to_maintain = []
-        for n, image_path in tqdm(enumerate(images), total=len(images), disable=not is_main_process()):
+        local_indices = _rank_local_indices(len(images))
+        local_samples_to_maintain = []
+        local_discarded_paths = []
+        for n in tqdm(local_indices, total=len(local_indices), disable=not is_main_process()):
+            image_path = images[n]
             # Load X data
             img, _ = load_img_data(image_path, is_3d=is_3d)
 
@@ -2595,11 +2648,12 @@ def filter_samples_by_properties(
             )
 
             if not satisfy_conds:
-                samples_to_maintain.append(n)
+                local_samples_to_maintain.append(n)
                 if (
                     save_filtered_images
                     and save_filtered_images_dir
                     and save_not_filtered_images_count < save_filtered_images_num
+                    and is_main_process()
                 ):
                     save_tif(
                         np.expand_dims(img, 0),
@@ -2609,11 +2663,12 @@ def filter_samples_by_properties(
                     )
                     save_not_filtered_images_count += 1
             else:
-                print(f"Discarding file {image_path}")
+                local_discarded_paths.append(image_path)
                 if (
                     save_filtered_images
                     and save_filtered_images_dir
                     and save_filtered_images_count < save_filtered_images_num
+                    and is_main_process()
                 ):
                     save_tif(
                         np.expand_dims(img, 0),
@@ -2622,14 +2677,18 @@ def filter_samples_by_properties(
                         verbose=False,
                     )
                     save_filtered_images_count += 1
+
+        samples_to_maintain = [int(x) for x in _gather_local_results(local_samples_to_maintain)]
+        for image_path in _gather_local_results(local_discarded_paths):
+            print(f"Discarding file {image_path}")
     else:
         img_path, mask_path = "", ""
         clean_by = "sample"
-        samples_to_maintain = []
+        local_indices = _rank_local_indices(len(x_dataset.sample_list))
+        local_samples_to_maintain = []
         file, mfile, mask = None, None, None
-        for n, sample in tqdm(
-            enumerate(x_dataset.sample_list), total=len(x_dataset.sample_list), disable=not is_main_process()
-        ):
+        for n in tqdm(local_indices, total=len(local_indices), disable=not is_main_process()):
+            sample = x_dataset.sample_list[n]
             # Load X data
             filepath = x_dataset.dataset_info[sample.fid].path
             if img_path != filepath:
@@ -2676,7 +2735,7 @@ def filter_samples_by_properties(
                         norm_info = y_dataset.dataset_info[sample.fid]
                         ydata, _ = normalize_mask(ydata, norm_module=norm_info)
 
-                if save_filtered_images and save_filtered_images_dir:
+                if save_filtered_images and save_filtered_images_dir and is_main_process():
                     if "xdata_fil_example" in locals():
                         save_tif(
                             np.expand_dims(xdata_fil_example, 0),
@@ -2777,9 +2836,11 @@ def filter_samples_by_properties(
             )
 
             if not satisfy_conds:
-                samples_to_maintain.append(n)
+                local_samples_to_maintain.append(n)
                 if save_filtered_images and "xdata_fil_example" in locals():
                     xdata_fil_example[xdata_ordered_slices] = img
+
+        samples_to_maintain = [int(x) for x in _gather_local_results(local_samples_to_maintain)]
 
     if (
         save_filtered_images
