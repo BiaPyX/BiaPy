@@ -995,6 +995,43 @@ def affinity_channel_names(a_opts: Dict) -> List[str]:
     return names
 
 
+def affinity_offsets_from_opts(a_opts: Dict, ndim: int) -> List[Tuple[int, ...]]:
+    """
+    Build the per-channel offset list matching ``labels_into_channels``'s interleaved 'A' layout.
+
+    Shared by every consumer that turns predicted affinities back into instances (plain affinity
+    watershed, affinity agglomeration): ``biapy.engine.instance_seg`` and
+    ``biapy.engine.membrane_repair`` both call this with their own ``DATA_CHANNELS_EXTRA_OPTS[0]["A"]``.
+
+    Parameters
+    ----------
+    a_opts : dict
+        ``DATA_CHANNELS_EXTRA_OPTS[0]["A"]``, with ``z_affinities``/``y_affinities``/
+        ``x_affinities`` (paired by index).
+
+    ndim : int
+        Number of spatial dimensions (``2`` or ``3``).
+
+    Returns
+    -------
+    offsets : list of tuple of int
+        One offset per affinity channel, in the same order ``labels_into_channels`` writes them
+        (interleaved: all offsets of pair 0, then pair 1, ...).
+    """
+    y_list = list(a_opts.get("y_affinities", [1]))
+    x_list = list(a_opts.get("x_affinities", [1]))
+    if ndim == 3:
+        z_list = list(a_opts.get("z_affinities", [1]))
+        offsets = []
+        for z, y, x in zip(z_list, y_list, x_list):
+            offsets.extend([(z, 0, 0), (0, y, 0), (0, 0, x)])
+    else:
+        offsets = []
+        for y, x in zip(y_list, x_list):
+            offsets.extend([(y, 0), (0, x)])
+    return offsets
+
+
 def channel_physical_offsets(mode: List[str], channel_extra_opts: Dict = {}) -> Dict[str, int]:
     """
     Compute the physical start channel index of each instance-segmentation data channel.

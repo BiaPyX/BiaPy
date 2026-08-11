@@ -598,6 +598,58 @@ def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False) 
     return _single(thresh) if np.isscalar(thresh) else tuple(map(_single, thresh))
 
 
+def build_tp_fp_fn_color_map(
+    gt_labels: np.ndarray,
+    pred_labels: np.ndarray,
+    matched_pairs: Tuple[Tuple[int, int], ...],
+    matched_tps: Tuple[int, ...],
+) -> np.ndarray:
+    """
+    Build an RGB error map from a ``matching(..., report_matches=True)`` result:
+    TP=green, FP=blue, FN=red.
+
+    Each class is painted as a flat color directly onto ``pred_labels``/``gt_labels``
+    ids (TP and FP from ``pred_labels``, FN from ``gt_labels``), with TP painted
+    first and FN painted last. Because every pixel ends up hard-assigned to exactly
+    one of the three colors -- never the sum of two -- a region where a low-score
+    match leaves part of the GT uncovered and part of the prediction unmatched
+    renders as adjacent red/blue, not blended purple/magenta.
+
+    Parameters
+    ----------
+    gt_labels : np.ndarray
+        Ground truth label image (integer valued, background 0).
+    pred_labels : np.ndarray
+        Predicted label image (integer valued, background 0), same shape as `gt_labels`.
+    matched_pairs : tuple of (int, int)
+        ``(gt_id, pred_id)`` pairs, as returned in the ``matching()`` result.
+    matched_tps : tuple of int
+        Indices into `matched_pairs` that are true positives (score >= thresh), as
+        returned in the ``matching()`` result.
+
+    Returns
+    -------
+    np.ndarray
+        ``gt_labels.shape + (3,)`` uint8 RGB error map.
+    """
+    rgb = np.zeros(gt_labels.shape + (3,), dtype=np.uint8)
+
+    tp_gt_ids = {matched_pairs[i][0] for i in matched_tps}
+    tp_pred_ids = {matched_pairs[i][1] for i in matched_tps}
+
+    fp_ids = (set(np.unique(pred_labels).tolist()) - {0}) - tp_pred_ids
+    fn_ids = (set(np.unique(gt_labels).tolist()) - {0}) - tp_gt_ids
+
+    if tp_pred_ids:
+        rgb[np.isin(pred_labels, sorted(tp_pred_ids))] = (0, 255, 0)  # TP: green
+    if fp_ids:
+        rgb[np.isin(pred_labels, sorted(fp_ids))] = (0, 0, 255)  # FP: blue
+    if fn_ids:
+        rgb[np.isin(gt_labels, sorted(fn_ids))] = (255, 0, 0)  # FN: red, painted last
+
+    return rgb
+
+
 def wrapper_matching_dataset_lazy(stats_all, thresh, criterion="iou", by_image=False):
     """
     Aggregate matching statistics across multiple images in a dataset.

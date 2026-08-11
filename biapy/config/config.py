@@ -295,6 +295,9 @@ class Config:
         #   - "gradient-flow" to use gradient flow algorithm (Cellpose/Omnipose)
         #   - "stardist" to use stardist algorithm
         #   - "embeddings" to use embedding-based clustering algorithms
+        #   - "agglomeration" to oversegment predicted affinities and greedily merge fragments by
+        #     affinity (requires 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' == ['A']). See
+        #     'PROBLEM.INSTANCE_SEG.AGGLOMERATION' for its options.
         _C.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS = ""
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -344,6 +347,30 @@ class Config:
         # Whether to apply or not the watershed to create instances slice by slice in a 3D problem. This can solve instances invading
         # others if the objects in Z axis overlap too much.
         _C.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES = False
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.2.1.1 Affinity agglomeration options for instance segmentation
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'agglomeration' (requires
+        # 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' == ['A']): oversegment the predicted affinities into
+        # small fragments via watershed, then greedily merge fragment pairs by a quantile of their
+        # affinity histogram (accumulated across every configured offset) until the merge threshold is
+        # reached. See biapy/data/post_processing/affinity_agglomeration.py.
+        _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION = CN()
+        # Seed threshold for the initial oversegmented fragments (high, so fragments never straddle a
+        # real instance boundary).
+        _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.FRAGMENT_SEED_TH = 0.9
+        # Growth-mask threshold for those fragments (low, so they cover all foreground with no gaps).
+        _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.FRAGMENT_GROWTH_TH = 0.1
+        # Two fragments merge while their MERGE_QUANTILE-th percentile affinity (across every
+        # configured offset) is >= this value.
+        _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.MERGE_TH = 0.5
+        # Percentile (0-100) of each fragment pair's affinity histogram used as its merge score.
+        # 50 = median.
+        _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.MERGE_QUANTILE = 50.0
+        # Minimum supporting voxel-pairs an edge needs before it can trigger a merge. 1 effectively
+        # disables this.
+        _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.MIN_EDGE_VOXELS = 5
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.2.2 Stardist-like post-processing options for instance segmentation
@@ -610,7 +637,7 @@ class Config:
         # for a real use case and a more detailed description:
         #   - https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html
         _C.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER = False
-        # Activation function to be applied to the output channels of the model. It can be a string or a list of strings if 
+        # Activation function to be applied to the output channels of the model. It can be a string or a list of strings if
         # different activation functions are desired for different channels. Leave empty to use linear activation.
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT = []
 
@@ -1707,9 +1734,23 @@ class Config:
         #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
         #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
         #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
+        #   * Image to image, when PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True (output is affinities):
+        #       * "MEMBRANE_REPAIR_AFFINITY": weighted combination of up to 4 sub-losses; a weight of 0
+        #         skips that term entirely (LOSS.WEIGHTS = [w_bce, w_malis, w_cldice, w_svox]):
+        #           - weighted BCE on the affinity logits (foreground/background balanced).
+        #           - MALIS (constrained maximin-affinity loss). Ref: Turaga et al., "Maximin Affinity Learning
+        #             of Image Segmentation" (https://arxiv.org/abs/0911.5372)
+        #           - clDice + spurious-component penalty on a sigmoid-derived membrane probability. Ref: Shit
+        #             et al., "clDice - A Novel Topology-Preserving Loss Function for Tubular Structure
+        #             Segmentation" (https://arxiv.org/abs/2003.07311)
+        #           - Supervoxel-based structure-aware loss (critical-component-weighted BCE). Ref: Grim et
+        #             al., "Efficient Connectivity-Preserving Instance Segmentation with Supervoxel-Based Loss
+        #             Function" (https://arxiv.org/abs/2501.01022), adapted from
+        #             https://github.com/AllenNeuralDynamics/supervoxel-loss
         _C.LOSS.TYPE = ""
-        # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss. For example, in the case of "W_CE_DICE", the final loss will be: 
+        # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss. For example, in the case of "W_CE_DICE", the final loss will be:
         # LOSS.WEIGHTS[0] * CE + LOSS.WEIGHTS[1] * DICE. The length of the list must be equal to the number of losses that are combined.
+        # For "MEMBRANE_REPAIR_AFFINITY" it must have 4 entries: [w_bce, w_malis, w_cldice, w_svox].
         _C.LOSS.WEIGHTS = [1.0, 1.0]
         # To weight classes in an imbalanced dataset. Options available are:
         #   * 'none': no class rebalancing is applied

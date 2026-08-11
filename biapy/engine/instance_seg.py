@@ -35,12 +35,18 @@ from biapy.data.post_processing.post_processing import (
     extract_synful_synapses,
     connect_pre_post_synapse_points_by_distance,
 )
+from biapy.data.post_processing.affinity_agglomeration import watershed_and_agglomerate_affinities
 from biapy.data.post_processing.embedseg import Embedding_cluster
 from biapy.data.post_processing.tta import build_tta_spec, parse_model_output_channel_names
 from biapy.data.post_processing.polygon_nms import stardist_instances_from_prediction
 from biapy.data.post_processing.gradient_tracking import cellpose_flows_to_instances, omnipose_flows_to_instances
-from biapy.data.pre_processing import affinity_channel_names, create_instance_channels, set_embedseg_grid_size
-from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
+from biapy.data.pre_processing import (
+    affinity_channel_names,
+    affinity_offsets_from_opts,
+    create_instance_channels,
+    set_embedseg_grid_size,
+)
+from biapy.utils.matching import build_tp_fp_fn_color_map, matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
     instance_segmentation_loss,
@@ -842,6 +848,22 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 )
             if self.dims == 2:
                 pred_labels = np.expand_dims(pred_labels, 0)
+        elif self.cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "agglomeration":
+            agg = self.cfg.PROBLEM.INSTANCE_SEG.AGGLOMERATION
+            a_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("A", {})
+            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims)
+            pred_labels = watershed_and_agglomerate_affinities(
+                data=pred,
+                offsets=offsets,
+                fragment_seed_th=agg.FRAGMENT_SEED_TH,
+                fragment_growth_th=agg.FRAGMENT_GROWTH_TH,
+                merge_threshold=agg.MERGE_TH,
+                merge_quantile=agg.MERGE_QUANTILE,
+                min_edge_voxels=agg.MIN_EDGE_VOXELS,
+                resolution=self.resolution,
+                watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES,
+                verbose=verbose,
+            ).astype(np.uint32)
         else:
             pred_labels = watershed_by_channels(
                 data=pred,
@@ -1120,6 +1142,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 # TP and FN
                 gt_ids = r_stats["gt_ids"][1:]
                 matched_pairs = r_stats["matched_pairs"]
+                matched_tps = r_stats["matched_tps"]
                 gt_match = [x[0] for x in matched_pairs]
                 gt_unmatch = [x for x in gt_ids if x not in gt_match]
                 matched_scores = list(r_stats["matched_scores"]) + [0 for _ in gt_unmatch]
@@ -1164,27 +1187,13 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 print("DatasetMatching: {}".format(r_stats))
 
                 if colored_img_ths[i] != -1 and colored_img_ths[i] == thr:
-                    print("Creating the image with a summary of detected points and false positives with colors . . .")
-                    colored_result = np.zeros(pred_labels.shape + (3,), dtype=np.uint8)
-
-                    print("Painting TPs and FNs . . .")
-                    for j in tqdm(range(len(gt_match)), disable=not is_main_process()):
-                        color = (0, 255, 0) if tag[j] == "TP" else (255, 0, 0)  # Green or red
-                        colored_result[np.where(_Y == gt_match[j])] = color
-                    for j in tqdm(range(len(gt_unmatch)), disable=not is_main_process()):
-                        colored_result[np.where(_Y == gt_unmatch[j])] = (
-                            255,
-                            0,
-                            0,
-                        )  # Red
-
-                    print("Painting FPs . . .")
-                    for j in tqdm(range(len(fp_instances)), disable=not is_main_process()):
-                        colored_result[np.where(pred_labels == fp_instances[j])] = (
-                            0,
-                            0,
-                            255,
-                        )  # Blue
+                    print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
+                    colored_result = build_tp_fp_fn_color_map(
+                        gt_labels=_Y,
+                        pred_labels=pred_labels,
+                        matched_pairs=matched_pairs,
+                        matched_tps=matched_tps,
+                    )
 
                     if self.save_to_disk:
                         save_tif(
@@ -1416,6 +1425,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     # TP and FN
                     gt_ids = r_stats["gt_ids"][1:]
                     matched_pairs = r_stats["matched_pairs"]
+                    matched_tps = r_stats["matched_tps"]
                     gt_match = [x[0] for x in matched_pairs]
                     gt_unmatch = [x for x in gt_ids if x not in gt_match]
                     matched_scores = list(r_stats["matched_scores"]) + [0 for _ in gt_unmatch]
@@ -1460,29 +1470,13 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     print("DatasetMatching: {}".format(r_stats))
 
                     if colored_img_ths[i] != -1 and colored_img_ths[i] == thr:
-                        print(
-                            "Creating the image with a summary of detected points and false positives with colors . . ."
+                        print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
+                        colored_result = build_tp_fp_fn_color_map(
+                            gt_labels=_Y,
+                            pred_labels=pred_labels,
+                            matched_pairs=matched_pairs,
+                            matched_tps=matched_tps,
                         )
-                        colored_result = np.zeros(pred_labels.shape + (3,), dtype=np.uint8)
-
-                        print("Painting TPs and FNs . . .")
-                        for j in tqdm(range(len(gt_match)), disable=not is_main_process()):
-                            color = (0, 255, 0) if tag[j] == "TP" else (255, 0, 0)  # Green or red
-                            colored_result[np.where(_Y == gt_match[j])] = color
-                        for j in tqdm(range(len(gt_unmatch)), disable=not is_main_process()):
-                            colored_result[np.where(_Y == gt_unmatch[j])] = (
-                                255,
-                                0,
-                                0,
-                            )  # Red
-
-                        print("Painting FPs . . .")
-                        for j in tqdm(range(len(fp_instances)), disable=not is_main_process()):
-                            colored_result[np.where(pred_labels == fp_instances[j])] = (
-                                0,
-                                0,
-                                255,
-                            )  # Blue
 
                         if self.save_to_disk:
                             save_tif(

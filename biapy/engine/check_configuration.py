@@ -1592,7 +1592,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         except:
                             raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH' values can only be 'auto' or a float")
             else: # agglomeration
-                raise NotImplementedError("'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' == 'agglomeration' is not implemented yet")
+                _agg_chs = set(sorted_original_instance_channels) - {"I"}
+                assert _agg_chs == {"A"}, (
+                    "'A' channel must be the only one used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' "
+                    "is 'agglomeration'"
+                )
+                if cfg.PROBLEM.NDIM != "3D":
+                    raise ValueError("'A' channel can only be used in 3D segmentation")
               
             # 'We' and 'I' are added automatically, so the user provides no extra options for them.
             chs = [x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x not in ("We", "I")]
