@@ -44,7 +44,8 @@ from biapy.utils.util import (
     seg2aff_pni,
     seg_widen_border,
 )
-from biapy.utils.misc import is_main_process, get_rank, get_world_size, os_walk_clean
+import torch.distributed as dist
+from biapy.utils.misc import is_main_process, get_rank, get_world_size, os_walk_clean, is_dist_avail_and_initialized
 from biapy.data.data_3D_manipulation import (
     load_3D_efficient_files,
     load_img_part_from_efficient_file,
@@ -59,6 +60,8 @@ from biapy.data.data_manipulation import (
     load_data_from_dir,
     save_tif,
     decide_dtype,
+    _rank_local_indices,
+    _gather_local_results,
 )
 
 #########################
@@ -3592,11 +3595,15 @@ def calculate_volume_prob_map(
         Probability map(s) of all samples in ``Y.sample_list``.
     """
     print("Constructing the probability map . . .")
-    maps = []
-    diff_shape = False
-    first_shape = None
     Ylen = len(Y.sample_list)
-    for i in tqdm(range(Ylen), disable=not is_main_process()):
+    # Split the files across all distributed ranks (mirrors the range(rank, N, world_size)
+    # work split used in create_instance_channels) so each volume's map is computed once,
+    # not redundantly by every rank, then gathered back so every rank ends up with the full,
+    # correctly ordered set of maps.
+    local_indices = _rank_local_indices(Ylen)
+    local_results = []
+    for i in tqdm(local_indices, total=len(local_indices), disable=not is_main_process()):
+        i = int(i)
         if Y.sample_list[i].img_is_loaded():
             raw = Y.sample_list[i].img
         else:
@@ -3636,23 +3643,20 @@ def calculate_volume_prob_map(
         else:
             _map[..., 0] = _map[..., 0] / _map[..., 0].sum()
 
-        if first_shape is None:
-            first_shape = _map.shape
-        if first_shape != _map.shape:
-            diff_shape = True
-        maps.append(_map)
+        local_results.append((i, _map))
+
+    gathered = sorted(_gather_local_results(local_results), key=lambda x: x[0])
+    maps = [m for _, m in gathered]
+    diff_shape = any(m.shape != maps[0].shape for m in maps)
 
     if not diff_shape:
-        for i in range(len(maps)):
-            maps[i] = np.expand_dims(maps[i], 0)
-        maps = np.concatenate(maps)
+        maps = np.concatenate([np.expand_dims(m, 0) for m in maps])
 
-    if save_dir:
+    if save_dir and is_main_process():
         os.makedirs(save_dir, exist_ok=True)
         if not diff_shape:
             print("Saving the probability map in {}".format(save_dir))
             np.save(os.path.join(save_dir, "prob_map.npy"), maps)
-            return maps
         else:
             print(
                 "As the files loaded have different shapes, the probability map for each one will be stored"
@@ -3662,6 +3666,12 @@ def calculate_volume_prob_map(
             for i in range(Ylen):
                 f = os.path.join(save_dir, "prob_map" + str(i).zfill(d) + ".npy")
                 np.save(f, maps[i])
+
+    # Make sure every rank waits until the maps are fully persisted before any of them
+    # tries to read the cache directory back from disk.
+    if save_dir and is_dist_avail_and_initialized():
+        dist.barrier()
+
     return maps
 
 

@@ -2290,7 +2290,9 @@ class Config:
         _C.PATHS.CHECKPOINT = os.path.join(job_dir, "checkpoints")
         # Checkpoint file to load/store the model weights
         _C.PATHS.CHECKPOINT_FILE = ""
-        # Name of the folder to store the probability map to avoid recalculating it on every run
+        # Name of the folder to store the probability map to avoid recalculating it on every run.
+        # Overridden at runtime to "<DATA.TRAIN.GT_PATH>_prob_maps" (see create_train_val_augmentors),
+        # mirroring the DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR/DETECTION_MASK_DIR naming convention.
         _C.PATHS.PROB_MAP_DIR = os.path.join(job_dir, "prob_map")
         _C.PATHS.PROB_MAP_FILENAME = "prob_map.npy"
         # Watershed debugging folder

@@ -97,6 +97,12 @@ def create_train_val_augmentors(
     # Calculate the probability map per image
     prob_map = None
     if cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH:
+        # Co-locate the cache next to the GT data it was derived from, following the same
+        # "<GT dir>_<suffix>" naming convention as DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR and
+        # DATA.TRAIN.DETECTION_MASK_DIR. DATA.TRAIN.GT_PATH already points to the workflow's
+        # derived channel/mask directory by this point (e.g. instance seg, detection), or stays
+        # as the user-provided GT path for workflows that don't derive one (e.g. semantic seg).
+        cfg.PATHS.PROB_MAP_DIR = cfg.DATA.TRAIN.GT_PATH + "_prob_maps"
         if os.path.exists(cfg.PATHS.PROB_MAP_DIR):
             print("Loading probability map . . .")
             prob_map_file = os.path.join(cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME)
