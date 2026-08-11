@@ -1399,18 +1399,32 @@ class Base_Workflow(metaclass=ABCMeta):
                     class_start_idx = i
                     break
             
-            # --- PART A: Process standard channels (1-by-1) ---
-            for i in range(min(class_start_idx, tensor.shape[1])):
-                chunk = tensor[:, i:i+1, ...]
+            # --- PART A: Process standard channels ---
+            # "ce_softmax" channels (e.g. discretized 'Db' bins) are not tagged as "class" but
+            # still need a *joint* softmax over their whole group, not a per-channel one (softmax
+            # over a lone channel is a no-op that always evaluates to 1.0). So, unlike the other
+            # activations here, consecutive "ce_softmax" channels are grouped and processed together.
+            part_a_end = min(class_start_idx, tensor.shape[1])
+            i = 0
+            while i < part_a_end:
                 act_str = acts[i].lower()
-                
+
                 # Skip if linear, or if training and it's handled by the loss function
                 if act_str == "linear" or (training and act_str in ["ce_sigmoid", "ce_softmax"]):
-                    out_slices.append(chunk)
+                    out_slices.append(tensor[:, i : i + 1, ...])
+                    i += 1
+                elif act_str == "ce_softmax":
+                    j = i
+                    while j < part_a_end and acts[j].lower() == "ce_softmax":
+                        j += 1
+                    act_fn = get_activation("softmax")
+                    out_slices.append(act_fn(tensor[:, i:j, ...]))
+                    i = j
                 else:
                     clean_act = "sigmoid" if act_str == "ce_sigmoid" else act_str
                     act_fn = get_activation(clean_act)
-                    out_slices.append(act_fn(chunk))
+                    out_slices.append(act_fn(tensor[:, i : i + 1, ...]))
+                    i += 1
 
             # --- PART B: Process the entire "class" block (all at once) ---
             if class_start_idx < tensor.shape[1]:
