@@ -148,6 +148,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 elif "E_offset" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
                     inst_creation_process = "embeddings"
+                elif "A" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "agglomeration"])
+                    inst_creation_process = "agglomeration"
                 else:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
                     inst_creation_process = "watershed"

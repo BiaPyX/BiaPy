@@ -2,8 +2,11 @@
 Affinity-based region agglomeration.
 
 Turns predicted affinities into instances by oversegmenting into small fragments, then greedily
-merging fragment pairs by a quantile of their affinity histogram (accumulated across all offsets,
-not just the first short-range triple) until a merge threshold is reached.
+merging fragment pairs by a quantile of their affinity histogram until a merge threshold is
+reached. Matches waterz's (https://github.com/funkey/waterz) canonical behaviour: both the
+fragment-generating watershed and the merge-scoring region graph use only the first (z, y, x) (or
+(y, x) in 2D) short-range affinity triple -- any further, longer-range offsets are accepted (for
+shape validation) but never contribute to a merge decision.
 
 Public entry points:
 
@@ -92,9 +95,10 @@ def _fragment_adjacency_edges(
     """
     Build the fragment-adjacency graph's edge histograms from raw affinities.
 
-    For every offset/channel, finds voxel pairs that straddle two different (nonzero) fragments
-    and bins their affinity into a running histogram per unordered fragment-id pair, across all
-    offsets at once.
+    For every offset/channel given, finds voxel pairs that straddle two different (nonzero)
+    fragments and bins their affinity into a running histogram per unordered fragment-id pair,
+    across all given offsets at once. Generic over however many offsets/channels are passed in;
+    ``affinity_agglomeration`` is what restricts this to the short-range triple to match waterz.
 
     Parameters
     ----------
@@ -321,11 +325,13 @@ def affinity_agglomeration(
 
     affinities : NDArray
         ``(..., C)`` predicted affinities (post-sigmoid, ``[0, 1]``), ``C == len(offsets)``, spatial
-        shape matching ``fragments``.
+        shape matching ``fragments``. Only the first ``fragments.ndim`` channels (the short-range
+        ``(z, y, x)``/``(y, x)`` triple) are used for merge scoring, matching waterz; any further
+        channels are accepted (for the shape check below) but otherwise ignored.
 
     offsets : list of tuple of int
         One signed per-axis offset per affinity channel, e.g.
-        ``biapy.engine.membrane_repair._affinity_offsets``'s output.
+        ``biapy.data.pre_processing.affinity_offsets_from_opts``'s output.
 
     threshold : float, optional
         Minimum edge score (see ``quantile``) for two fragments to merge.
@@ -363,7 +369,11 @@ def affinity_agglomeration(
     if len(ids) <= 1:
         return fragments.astype(np.uint32)
 
-    edges = _fragment_adjacency_edges(fragments, affinities, offsets)
+    # Matches waterz's canonical region-graph extraction: edge scoring uses only the first
+    # short-range (z, y, x)/(y, x) triple, the same one the fragment-generating watershed already
+    # used -- any longer-range offsets are never read here.
+    ndim = fragments.ndim
+    edges = _fragment_adjacency_edges(fragments, affinities[..., :ndim], offsets[:ndim])
     uf = _greedy_merge(ids, edges, threshold, quantile=quantile, min_edge_voxels=min_edge_voxels, verbose=verbose)
 
     id_to_root = {i: uf.find(i) for i in ids}
@@ -397,8 +407,9 @@ def watershed_and_agglomerate_affinities(
     and ``fragment_growth_th`` low (fragments cover all foreground, no gaps). Only the first
     ``(z, y, x)`` affinity triple is used here.
 
-    Step 2 (``affinity_agglomeration``) merges those fragments using every offset in ``offsets``,
-    including long-range ones step 1 ignores.
+    Step 2 (``affinity_agglomeration``) merges those fragments using that same first ``(z, y, x)``
+    triple; any further, longer-range offsets in ``offsets`` are accepted but ignored by both steps,
+    matching waterz.
 
     Parameters
     ----------

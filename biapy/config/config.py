@@ -354,16 +354,19 @@ class Config:
         # Used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'agglomeration' (requires
         # 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' == ['A']): oversegment the predicted affinities into
         # small fragments via watershed, then greedily merge fragment pairs by a quantile of their
-        # affinity histogram (accumulated across every configured offset) until the merge threshold is
-        # reached. See biapy/data/post_processing/affinity_agglomeration.py.
+        # affinity histogram until the merge threshold is reached. Matches waterz's
+        # (https://github.com/funkey/waterz) canonical behaviour: only the first short-range
+        # (z, y, x)/(y, x) affinity triple is used, by both the fragment watershed and the merge
+        # scoring; any further, longer-range offsets are ignored. See
+        # biapy/data/post_processing/affinity_agglomeration.py.
         _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION = CN()
         # Seed threshold for the initial oversegmented fragments (high, so fragments never straddle a
         # real instance boundary).
         _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.FRAGMENT_SEED_TH = 0.9
         # Growth-mask threshold for those fragments (low, so they cover all foreground with no gaps).
         _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.FRAGMENT_GROWTH_TH = 0.1
-        # Two fragments merge while their MERGE_QUANTILE-th percentile affinity (across every
-        # configured offset) is >= this value.
+        # Two fragments merge while their MERGE_QUANTILE-th percentile affinity (short-range triple
+        # only, see above) is >= this value.
         _C.PROBLEM.INSTANCE_SEG.AGGLOMERATION.MERGE_TH = 0.5
         # Percentile (0-100) of each fragment pair's affinity histogram used as its merge score.
         # 50 = median.
