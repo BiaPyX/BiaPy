@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Any, Callable, Optional
 from numpy.typing import NDArray
 
 from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_to_shape
-from biapy.data.data_3D_manipulation import looks_like_hdf5
+from biapy.data.data_3D_manipulation import looks_like_hdf5, looks_like_precomputed
 from biapy.data.dataset import BiaPyDataset, DataSample
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
 
@@ -226,7 +226,11 @@ class test_pair_data_generator(Dataset):
                 load_meta=True,
             )
 
-        if looks_like_hdf5(self.X.dataset_info[sample.fid].path) or any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5"]):
+        if (
+            looks_like_hdf5(self.X.dataset_info[sample.fid].path)
+            or looks_like_precomputed(self.X.dataset_info[sample.fid].path)
+            or any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5"])
+        ):
             if not self.test_by_chunks:
                 raise ValueError(
                     "If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure " "its options."

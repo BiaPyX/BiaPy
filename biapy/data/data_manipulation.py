@@ -78,6 +78,7 @@ from biapy.data.data_3D_manipulation import (
     order_dimensions,
     ensure_3d_shape,
     looks_like_hdf5,
+    looks_like_precomputed,
 )
 
 
@@ -1006,76 +1007,99 @@ def load_and_prepare_test_data(
     if not os.path.exists(test_path):
         raise ValueError(f"{test_path} doesn't exist")
 
-    ids = next(os_walk_clean(test_path))[2]
-    if not multiple_raw_images or len(ids) > 0:
-        fids = next(os_walk_clean(test_path))[1]
-        if len(ids) == 0:
-            if len(fids) == 0:  # Trying Zarr
-                raise ValueError("No images found in dir {}".format(test_path))
-            test_filenames = fids
-        else:
-            test_filenames = ids
+    # A Neuroglancer precomputed volume (CloudVolume format) is itself a single chunked-data root
+    # (an 'info' file plus one subfolder per resolution), not a folder of separate samples, so it is
+    # treated as one sample directly instead of walking its internal layout like a folder of images.
+    if looks_like_precomputed(test_path):
+        test_filenames = [os.path.basename(os.path.normpath(test_path))]
+        dataset_info.append(DatasetFile(path=test_path))
+        sample_data = DataSample(fid=0, coords=None)
+        if test_zarr_data_information:
+            sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
+        sample_list.append(sample_data)
 
-        for i in range(len(test_filenames)):
-            dataset_info.append(DatasetFile(path=os.path.join(test_path, test_filenames[i])))
-            sample_data = DataSample(fid=i, coords=None)
-            if test_zarr_data_information:
-                sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
-            sample_list.append(sample_data)
-
-        # Extract a list of all gt images
         if test_mask_path:
-            y_dataset_info = []
-            y_sample_list = []
             if not os.path.exists(test_mask_path):
                 raise ValueError(f"{test_mask_path} doesn't exist")
-
-            ids = next(os_walk_clean(test_mask_path))[2]
-            fids = next(os_walk_clean(test_mask_path))[1]
+            y_dataset_info = [DatasetFile(path=test_mask_path)]
+            y_sample_data = DataSample(fid=0, coords=None)
+            if test_zarr_data_information:
+                if test_zarr_data_information["use_gt_path"]:
+                    y_sample_data.path_in_zarr = test_zarr_data_information["gt_path"]
+                else:
+                    y_sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
+            y_sample_list = [y_sample_data]
+    else:
+        ids = next(os_walk_clean(test_path))[2]
+        if not multiple_raw_images or len(ids) > 0:
+            fids = next(os_walk_clean(test_path))[1]
             if len(ids) == 0:
                 if len(fids) == 0:  # Trying Zarr
-                    raise ValueError("No images found in dir {}".format(test_mask_path))
-                selected_ids = fids
+                    raise ValueError("No images found in dir {}".format(test_path))
+                test_filenames = fids
             else:
-                selected_ids = ids
+                test_filenames = ids
 
-            for i in range(len(selected_ids)):
-                y_dataset_info.append(DatasetFile(path=os.path.join(test_mask_path, selected_ids[i])))
+            for i in range(len(test_filenames)):
+                dataset_info.append(DatasetFile(path=os.path.join(test_path, test_filenames[i])))
                 sample_data = DataSample(fid=i, coords=None)
                 if test_zarr_data_information:
-                    if test_zarr_data_information["use_gt_path"]:
-                        sample_data.path_in_zarr = test_zarr_data_information["gt_path"]
-                    else:
-                        sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
-                y_sample_list.append(sample_data)
-    else:
-        test_filenames = next(os_walk_clean(test_path))[1]
-        if len(test_filenames) == 0:
-            raise ValueError("No folders found in dir {}".format(test_path))
-        for folder in test_filenames:
-            sample_path = os.path.join(test_path, folder)
-            ids = next(os_walk_clean(sample_path))[2]
-            if len(ids) == 0:
-                raise ValueError("No images found in dir {}".format(sample_path))
-            for i in range(len(ids)):
-                dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                sample_list.append(DataSample(fid=i, coords=None))
+                    sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
+                sample_list.append(sample_data)
 
-        # Extract a list of all training gt images
-        if test_mask_path:
-            y_dataset_info = []
-            y_sample_list = []
-            fids = next(os_walk_clean(test_mask_path))[1]
-            if len(fids) == 0:
-                raise ValueError("No folders found in dir {}".format(test_mask_path))
-            for folder in fids:
-                sample_path = os.path.join(test_mask_path, folder)
+            # Extract a list of all gt images
+            if test_mask_path:
+                y_dataset_info = []
+                y_sample_list = []
+                if not os.path.exists(test_mask_path):
+                    raise ValueError(f"{test_mask_path} doesn't exist")
+
+                ids = next(os_walk_clean(test_mask_path))[2]
+                fids = next(os_walk_clean(test_mask_path))[1]
+                if len(ids) == 0:
+                    if len(fids) == 0:  # Trying Zarr
+                        raise ValueError("No images found in dir {}".format(test_mask_path))
+                    selected_ids = fids
+                else:
+                    selected_ids = ids
+
+                for i in range(len(selected_ids)):
+                    y_dataset_info.append(DatasetFile(path=os.path.join(test_mask_path, selected_ids[i])))
+                    sample_data = DataSample(fid=i, coords=None)
+                    if test_zarr_data_information:
+                        if test_zarr_data_information["use_gt_path"]:
+                            sample_data.path_in_zarr = test_zarr_data_information["gt_path"]
+                        else:
+                            sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
+                    y_sample_list.append(sample_data)
+        else:
+            test_filenames = next(os_walk_clean(test_path))[1]
+            if len(test_filenames) == 0:
+                raise ValueError("No folders found in dir {}".format(test_path))
+            for folder in test_filenames:
+                sample_path = os.path.join(test_path, folder)
                 ids = next(os_walk_clean(sample_path))[2]
                 if len(ids) == 0:
                     raise ValueError("No images found in dir {}".format(sample_path))
                 for i in range(len(ids)):
-                    y_dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                    y_sample_list.append(DataSample(fid=i, coords=None))
+                    dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
+                    sample_list.append(DataSample(fid=i, coords=None))
+
+            # Extract a list of all training gt images
+            if test_mask_path:
+                y_dataset_info = []
+                y_sample_list = []
+                fids = next(os_walk_clean(test_mask_path))[1]
+                if len(fids) == 0:
+                    raise ValueError("No folders found in dir {}".format(test_mask_path))
+                for folder in fids:
+                    sample_path = os.path.join(test_mask_path, folder)
+                    ids = next(os_walk_clean(sample_path))[2]
+                    if len(ids) == 0:
+                        raise ValueError("No images found in dir {}".format(sample_path))
+                    for i in range(len(ids)):
+                        y_dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
+                        y_sample_list.append(DataSample(fid=i, coords=None))
 
     X_test = BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
     if test_mask_path:
@@ -3451,7 +3475,7 @@ def load_img_data(
         Only returned when ``load_meta=True``. Metadata dict as described in
         :func:`imread`, or ``None`` when reading Zarr/HDF5 files.
     """
-    if looks_like_hdf5(path) or any(path.endswith(x) for x in [".zarr", "n5", ".n5"]):
+    if looks_like_hdf5(path) or looks_like_precomputed(path) or any(path.endswith(x) for x in [".zarr", "n5", ".n5"]):
         from biapy.data.data_3D_manipulation import (
             read_chunked_data,
             read_chunked_nested_data,

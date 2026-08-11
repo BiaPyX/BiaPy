@@ -76,10 +76,11 @@ from biapy.data.data_2D_manipulation import (
     merge_data_with_overlap,
 )
 from biapy.data.data_3D_manipulation import (
-    crop_3D_data_with_overlap, 
-    merge_3D_data_with_overlap, 
+    crop_3D_data_with_overlap,
+    merge_3D_data_with_overlap,
     order_dimensions,
     looks_like_hdf5,
+    looks_like_precomputed,
 )
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
@@ -1512,10 +1513,16 @@ class Base_Workflow(metaclass=ABCMeta):
             _, file_extension = os.path.splitext(self.current_sample["X_filename"])
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 by_chunks = True
-                if not looks_like_hdf5(self.current_sample["X_filename"]) and file_extension not in [".zarr", ".n5"]:
+                x_path = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
+                if (
+                    not looks_like_hdf5(self.current_sample["X_filename"])
+                    and file_extension not in [".zarr", ".n5"]
+                    and not looks_like_precomputed(x_path)
+                ):
                     print(
                         "WARNING: You are not using an image format that can extract patches without loading it entirely into memory. "
-                        "The image formats that support this are: '.hdf5', '.hdf', '.h5', '.zarr' and '.n5'. "
+                        "The image formats that support this are: '.hdf5', '.hdf', '.h5', '.zarr', '.n5' and Neuroglancer "
+                        "precomputed volumes (CloudVolume format). "
                     )
             else:
                 by_chunks = False
@@ -2505,6 +2512,14 @@ class Base_Workflow(metaclass=ABCMeta):
             )
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
 
+            # Same path 'ChunkedZarrWriter' (on-the-fly post-processing) and the raw-predictions
+            # writer (see 'after_all_chunk_prediction_workflow_process') both write to.
+            self.chunked_output_zarr_path = os.path.join(
+                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(tgen.filename)[0] + ".zarr"
+            )
+            if is_main_process():
+                print(f"Predictions for this sample will be stored in: {self.chunked_output_zarr_path}")
+
             write_raw = self.write_raw_chunked_predictions()
             process_on_the_fly = self.process_chunks_on_the_fly()
             self.chunked_tiles = (
@@ -2517,7 +2532,15 @@ class Base_Workflow(metaclass=ABCMeta):
             patches_to_process, tiles_to_process = tgen.rank_workload(
                 self.test_generator.num_workers, get_world_size(), get_rank()
             )
-            progress_start, progress_reported = time.time(), 0.0
+            progress_start, progress_reported, last_progress_print = time.time(), 0.0, time.time()
+            # Always print at least a starting line, regardless of how small this rank's share turns
+            # out to be (e.g. a narrow 'TEST.BY_CHUNKS.Z_START'/'Z_END' range combined with
+            # 'DATA.TEST.ROI_MASK' can leave very few patches, too few to ever cross the 5% steps
+            # the periodic message below is printed at).
+            print(
+                f"[Rank {get_rank()} ({os.getpid()})] Starting by-chunks prediction: "
+                f"{patches_to_process} patches ({tiles_to_process} tiles) assigned to this rank."
+            )
 
             samples_visited = set()
             for obj_list in self.test_generator:
@@ -2574,12 +2597,29 @@ class Base_Workflow(metaclass=ABCMeta):
                         tgen.insert_patch_in_file(raw_pred, single_patch_in_data)
 
                 progress = len(samples_visited) / patches_to_process if patches_to_process else 1
-                if progress - progress_reported >= 0.05 or progress >= 1:
+                now = time.time()
+                # Print on every 5% step, at completion, and at least once a minute regardless of
+                # percentage granularity -- so a 'tail -f' always has a fresh ETA to look at, even
+                # with few patches per rank or slow per-patch inference.
+                if progress - progress_reported >= 0.05 or progress >= 1 or now - last_progress_print >= 60:
                     progress_reported = progress
+                    last_progress_print = now
                     print(self._chunked_progress_message(progress, progress_start, tiles_to_process))
 
             if self.chunked_tiles:
                 self.chunked_tiles.flush_all()
+
+            # Always print a final line with the real, observed count, regardless of whether the
+            # periodic 5%-step message above ever fired (it relies on 'patches_to_process', an
+            # estimate computed up front by 'rank_workload', which is not guaranteed to line up
+            # exactly with the samples this rank actually visited).
+            tiles_msg = f", {self.chunked_tiles.processed_tiles}/{tiles_to_process} tiles processed" if self.chunked_tiles else ""
+            elapsed = time.time() - progress_start
+            print(
+                f"[Rank {get_rank()} ({os.getpid()})] Finished by-chunks prediction: "
+                f"{len(samples_visited)}/{patches_to_process} patches predicted{tiles_msg}. "
+                f"Elapsed {time.strftime('%H:%M:%S', time.gmtime(max(0, elapsed)))}"
+            )
 
             # Wait until all threads are done so the main thread can create the full size image
             if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():

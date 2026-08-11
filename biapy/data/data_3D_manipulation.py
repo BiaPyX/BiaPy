@@ -10,6 +10,7 @@ This module provides functions to process and manipulate 3D data volumes, includ
 from __future__ import annotations
 
 import os
+import json
 import math
 from typing import Any, List, Optional, Sequence, Tuple, Union
 import scipy.signal
@@ -21,6 +22,12 @@ try:
 except ImportError:
     z5py = None  # type: ignore[assignment]
     _Z5PY_AVAILABLE = False
+try:
+    import cloudvolume
+    _CLOUDVOLUME_AVAILABLE = True
+except ImportError:
+    cloudvolume = None  # type: ignore[assignment]
+    _CLOUDVOLUME_AVAILABLE = False
 import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
@@ -1616,6 +1623,8 @@ def read_chunked_data(
                 data = _first_array_in_group(fid)
             else:
                 data = fid
+        elif looks_like_precomputed(filename):
+            fid, data = read_precomputed(filename)
         else:
             raise ValueError(f"File extension {filename} not recognized")
 
@@ -1648,6 +1657,125 @@ def looks_like_hdf5(path: str) -> bool:
     if ext in (".gz", ".bz2", ".xz", ".zip") and base.endswith(exts):
         return True
     return False
+
+
+def looks_like_precomputed(path: str) -> bool:
+    """
+    Check if a given path is the root of a Neuroglancer precomputed volume (CloudVolume format).
+
+    Such a volume is a directory holding an ``info`` JSON file (describing its scales/resolutions)
+    plus one chunk subfolder per resolution, rather than a single Zarr/N5/HDF5 file. It is read
+    through the optional ``cloudvolume`` package, see :func:`read_precomputed`.
+
+    Parameters
+    ----------
+    path : str
+        The path to check.
+
+    Returns
+    -------
+    bool
+        True if ``path`` is a directory with a Neuroglancer precomputed ``info`` file, False otherwise.
+    """
+    if not os.path.isdir(path):
+        return False
+    info_path = os.path.join(path, "info")
+    if not os.path.isfile(info_path):
+        return False
+    try:
+        with open(info_path, "r") as f:
+            info = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(info, dict) and (info.get("@type") == "neuroglancer_multiscale_volume" or "scales" in info)
+
+
+class CloudVolumeArray:
+    """
+    Array-like adapter that exposes a local Neuroglancer precomputed volume, read through
+    CloudVolume, with the same indexing protocol :func:`extract_patch_from_efficient_file` uses
+    for Zarr/H5 test data: sliced with a tuple of ``slice`` objects in the axes order declared by
+    ``DATA.TEST.INPUT_IMG_AXES_ORDER``, which must be set to ``'XYZ'`` for this format (CloudVolume's
+    native axis order).
+
+    Always reads mip 0 (the finest resolution), matching that inference on this format is normally
+    run on the full-resolution raw data.
+
+    Parameters
+    ----------
+    path : str
+        Path to the local precomputed volume root (a directory with an ``info`` file).
+    """
+
+    def __init__(self, path: str):
+        if not _CLOUDVOLUME_AVAILABLE:
+            raise ImportError(
+                f"'{path}' is a Neuroglancer precomputed volume (CloudVolume format), but the optional "
+                "'cloudvolume' package is not installed. It is not a default BiaPy dependency, as it is "
+                "only needed to read this particular data format. Install it with: pip install cloud-volume"
+            )
+        print(f"Reading '{path}' as a Neuroglancer precomputed volume (CloudVolume format), mip 0.")
+        # Avoid an empty/invalid credential path making CloudVolume try to authenticate instead of
+        # just reading local/public data.
+        os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+        self._vol = cloudvolume.CloudVolume(
+            f"precomputed://file://{os.path.abspath(path)}",
+            mip=0,
+            use_https=True,
+            progress=False,
+            fill_missing=True,
+        )
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        """Shape in CloudVolume's native ``(x, y, z, c)`` order."""
+        return tuple(int(s) for s in self._vol.shape)
+
+    @property
+    def dtype(self):
+        """Data type of the volume."""
+        return self._vol.dtype
+
+    @property
+    def ndim(self) -> int:
+        """Number of dimensions (always 4: x, y, z, c)."""
+        return len(self.shape)
+
+    def __getitem__(self, key):
+        """Extract a block, indexed the same way as the underlying CloudVolume object."""
+        if isinstance(key, tuple):
+            # Coordinates coming from BiaPy's patch extraction can be numpy ints, which some
+            # CloudVolume versions are strict about in slice bounds.
+            key = tuple(
+                slice(
+                    int(s.start) if s.start is not None else None,
+                    int(s.stop) if s.stop is not None else None,
+                    s.step,
+                )
+                if isinstance(s, slice)
+                else s
+                for s in key
+            )
+        return np.asarray(self._vol[key])
+
+
+def read_precomputed(path: str) -> Tuple[None, CloudVolumeArray]:
+    """
+    Open a Neuroglancer precomputed volume (CloudVolume format) for chunked reading.
+
+    Parameters
+    ----------
+    path : str
+        Path to the local precomputed volume root (a directory with an ``info`` file).
+
+    Returns
+    -------
+    tuple
+        ``(None, CloudVolumeArray)``. The first value is ``None`` (no file handle to close, unlike
+        H5) so it plugs into the same ``(file, data)`` protocol as :func:`read_chunked_data`.
+    """
+    return None, CloudVolumeArray(path)
+
 
 def pick_chunks(shape: Tuple[int, ...], dtype: str, target_mb: float = 4.0) -> Tuple[int, ...]:
     """
