@@ -102,12 +102,12 @@ def create_train_val_augmentors(
         # DATA.TRAIN.DETECTION_MASK_DIR. DATA.TRAIN.GT_PATH already points to the workflow's
         # derived channel/mask directory by this point (e.g. instance seg, detection), or stays
         # as the user-provided GT path for workflows that don't derive one (e.g. semantic seg).
-        cfg.PATHS.PROB_MAP_DIR = cfg.DATA.TRAIN.GT_PATH + "_prob_maps"
-        if os.path.exists(cfg.PATHS.PROB_MAP_DIR):
+        prob_map_dir = cfg.DATA.TRAIN.GT_PATH + "_prob_maps"
+        if os.path.exists(prob_map_dir):
             print("Loading probability map . . .")
-            prob_map_file = os.path.join(cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME)
-            num_files = len(next(os_walk_clean(cfg.PATHS.PROB_MAP_DIR))[2])
-            prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
+            prob_map_file = os.path.join(prob_map_dir, cfg.PATHS.PROB_MAP_FILENAME)
+            num_files = len(next(os_walk_clean(prob_map_dir))[2])
+            prob_map = prob_map_dir if num_files > 1 else np.load(prob_map_file)
         else:
             assert Y_train
             prob_map = calculate_volume_prob_map(
@@ -115,7 +115,7 @@ def create_train_val_augmentors(
                 (cfg.PROBLEM.NDIM == "3D"),
                 cfg.DATA.TRAIN.W_FOREGROUND,
                 cfg.DATA.TRAIN.W_BACKGROUND,
-                save_dir=cfg.PATHS.PROB_MAP_DIR,
+                save_dir=prob_map_dir,
             )
 
     if cfg.PROBLEM.NDIM == "2D":
