@@ -884,6 +884,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 save_dir=save_dir,
                 watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES,
                 verbose=verbose,
+                db_discretize=(
+                    "Db" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+                    and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("Db", {}).get("val_type", "norm") == "discretize"
+                ),
             )
 
         if pred_labels.ndim == 2:

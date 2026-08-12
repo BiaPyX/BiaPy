@@ -137,6 +137,7 @@ def watershed_by_channels(
     watershed_by_2d_slices: bool=False,
     save_dir: Optional[str]=None,
     verbose: bool=True,
+    db_discretize: bool=False,
 ):
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation algorithm.
@@ -190,8 +191,15 @@ def watershed_by_channels(
 
     save_dir :  str, optional
         Directory to save watershed output into.
+
+    db_discretize : bool, optional
+        Whether ``'Db'`` is the discretized distance (11 softmax channels: background + 10 bins).
+        Collapses it to the argmax bin, normalized to ``[0, 1]``, before anything else.
     """
     assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
+
+    if db_discretize:
+        data = np.argmax(data, axis=-1, keepdims=True).astype(data.dtype) / 10.0
 
     # Define the custom order once
     CUSTOM_ORDER = {
