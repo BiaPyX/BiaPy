@@ -105,6 +105,30 @@ from biapy.data.dataset import PatchCoords
 from biapy.models.memory_bank import MemoryBank
 
 
+def _format_duration(seconds: float) -> str:
+    """
+    Format a duration in seconds as "HH:MM:SS", without wrapping past 24 hours.
+
+    ``time.strftime("%H:%M:%S", time.gmtime(seconds))`` silently wraps every 24h
+    (the hour field is 0-23), which makes a multi-day elapsed/remaining time look
+    like it reset to zero. This keeps the hour field growing unbounded instead.
+
+    Parameters
+    ----------
+    seconds : float
+        Duration in seconds.
+
+    Returns
+    -------
+    str
+        Duration formatted as "HH:MM:SS", with "HH" unbounded.
+    """
+    total_seconds = int(max(0, seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 class Base_Workflow(metaclass=ABCMeta):
     """
     Base workflow class. A new workflow should extend this class.
@@ -438,9 +462,6 @@ class Base_Workflow(metaclass=ABCMeta):
         str
             Message with the percentage done, the tiles written and the time left.
         """
-        def as_time(seconds: float) -> str:
-            return time.strftime("%H:%M:%S", time.gmtime(max(0, seconds)))
-
         elapsed = time.time() - start_time
         remaining = (elapsed / progress) - elapsed if progress > 0 else 0
 
@@ -450,7 +471,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         return (
             f"[Rank {get_rank()} ({os.getpid()})] {progress * 100:.0f}% of its patches predicted{tiles}. "
-            f"Elapsed {as_time(elapsed)}, {as_time(remaining)} left"
+            f"Elapsed {_format_duration(elapsed)}, {_format_duration(remaining)} left"
         )
 
     def process_chunks_on_the_fly(self) -> bool:
@@ -2618,7 +2639,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print(
                 f"[Rank {get_rank()} ({os.getpid()})] Finished by-chunks prediction: "
                 f"{len(samples_visited)}/{patches_to_process} patches predicted{tiles_msg}. "
-                f"Elapsed {time.strftime('%H:%M:%S', time.gmtime(max(0, elapsed)))}"
+                f"Elapsed {_format_duration(elapsed)}"
             )
 
             # Wait until all threads are done so the main thread can create the full size image
