@@ -46,12 +46,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import numpy as np
+import pandas as pd
 
 from scipy.optimize import linear_sum_assignment
 from collections import namedtuple
 from skimage.segmentation import relabel_sequential
 
 from typing import (
+    Optional,
     Tuple,
     Literal,
     Dict,
@@ -648,6 +650,83 @@ def build_tp_fp_fn_color_map(
         rgb[np.isin(gt_labels, sorted(fn_ids))] = (255, 0, 0)  # FN: red, painted last
 
     return rgb
+
+
+def build_tp_fp_fn_report(
+    gt_labels: np.ndarray,
+    pred_labels: np.ndarray,
+    r_stats: Dict,
+    build_color_map: bool = True,
+) -> Tuple[Optional[np.ndarray], pd.DataFrame, pd.DataFrame]:
+    """
+    Build the per-image TP/FP/FN error report from a ``matching(..., report_matches=True)`` result.
+
+    Bundles the two artifacts commonly derived from a single ``matching()`` stats dict --
+    the ``build_tp_fp_fn_color_map`` RGB error map and the GT-association/FP CSV tables --
+    into one call, so both are always computed from the same matched pairs and don't drift
+    apart across workflows.
+
+    Parameters
+    ----------
+    gt_labels : np.ndarray
+        Ground truth label image (integer valued, background 0).
+    pred_labels : np.ndarray
+        Predicted label image (integer valued, background 0), same shape as `gt_labels`.
+    r_stats : dict
+        A single-threshold result from ``matching(..., report_matches=True)``, i.e. one
+        element of its returned tuple. Must still contain ``thresh``, ``matched_pairs``,
+        ``matched_tps``, ``matched_scores``, ``pred_ids`` and ``gt_ids`` (as `matching`
+        first returns them, before any of those keys are popped for printing/logging).
+    build_color_map : bool, optional
+        Whether to build the RGB error map. Set to ``False`` to skip the (relatively
+        expensive) color map and only get the CSV tables back, e.g. when a caller only
+        wants the color map for a subset of the evaluated thresholds.
+
+    Returns
+    -------
+    colored_result : np.ndarray or None
+        ``gt_labels.shape + (3,)`` uint8 RGB error map (TP=green, FP=blue, FN=red), or
+        ``None`` if `build_color_map` is ``False``.
+    df_gt_assoc : pd.DataFrame
+        One row per GT instance, columns ``["gt_id", "pred_id", "iou", "tag"]``, where
+        ``tag`` is ``"TP"`` or ``"FN"`` and unmatched GT instances get ``pred_id=-1``.
+    df_fp : pd.DataFrame
+        One row per unmatched (or below-threshold) predicted instance, column ``["pred_id"]``.
+    """
+    thr = r_stats["thresh"]
+    matched_pairs = r_stats["matched_pairs"]
+    matched_tps = r_stats["matched_tps"]
+
+    colored_result = None
+    if build_color_map:
+        colored_result = build_tp_fp_fn_color_map(
+            gt_labels=gt_labels,
+            pred_labels=pred_labels,
+            matched_pairs=matched_pairs,
+            matched_tps=matched_tps,
+        )
+
+    # TP and FN
+    gt_ids = r_stats["gt_ids"][1:]
+    gt_match = [x[0] for x in matched_pairs]
+    gt_unmatch = [x for x in gt_ids if x not in gt_match]
+    matched_scores = list(r_stats["matched_scores"]) + [0 for _ in gt_unmatch]
+    pred_match = [x[1] for x in matched_pairs] + [-1 for _ in gt_unmatch]
+    tag = ["TP" if score >= thr else "FN" for score in matched_scores]
+
+    # FPs
+    pred_ids = r_stats["pred_ids"][1:]
+    fp_instances = [x for x in pred_ids if x not in pred_match]
+    fp_instances += [pred_id for score, pred_id in zip(matched_scores, pred_match) if score < thr]
+
+    df_gt_assoc = pd.DataFrame(
+        zip(gt_match + gt_unmatch, pred_match, matched_scores, tag),
+        columns=["gt_id", "pred_id", "iou", "tag"],
+    )
+    df_gt_assoc = df_gt_assoc.sort_values(by=["gt_id"])
+    df_fp = pd.DataFrame(zip(fp_instances), columns=["pred_id"])
+
+    return colored_result, df_gt_assoc, df_fp
 
 
 def wrapper_matching_dataset_lazy(stats_all, thresh, criterion="iou", by_image=False):

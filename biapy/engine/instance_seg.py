@@ -46,7 +46,7 @@ from biapy.data.pre_processing import (
     create_instance_channels,
     set_embedseg_grid_size,
 )
-from biapy.utils.matching import build_tp_fp_fn_color_map, matching, wrapper_matching_dataset_lazy
+from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
     instance_segmentation_loss,
@@ -1139,29 +1139,17 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 r_stats = results[i]
                 thr = r_stats["thresh"]
 
-                # TP and FN
-                gt_ids = r_stats["gt_ids"][1:]
-                matched_pairs = r_stats["matched_pairs"]
-                matched_tps = r_stats["matched_tps"]
-                gt_match = [x[0] for x in matched_pairs]
-                gt_unmatch = [x for x in gt_ids if x not in gt_match]
-                matched_scores = list(r_stats["matched_scores"]) + [0 for _ in gt_unmatch]
-                pred_match = [x[1] for x in matched_pairs] + [-1 for _ in gt_unmatch]
-                tag = ["TP" if score >= thr else "FN" for score in matched_scores]
-
-                # FPs
-                pred_ids = r_stats["pred_ids"][1:]
-                fp_instances = [x for x in pred_ids if x not in pred_match]
-                fp_instances += [pred_id for score, pred_id in zip(matched_scores, pred_match) if score < thr]
+                want_colored_img = colored_img_ths[i] != -1 and colored_img_ths[i] == thr
+                if want_colored_img:
+                    print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
+                colored_result, df, df_fp = build_tp_fp_fn_report(
+                    gt_labels=_Y,
+                    pred_labels=pred_labels,
+                    r_stats=r_stats,
+                    build_color_map=want_colored_img,
+                )
 
                 # Save csv files
-                df = pd.DataFrame(
-                    zip(gt_match + gt_unmatch, pred_match, matched_scores, tag),
-                    columns=["gt_id", "pred_id", "iou", "tag"],
-                )
-                df = df.sort_values(by=["gt_id"])
-                df_fp = pd.DataFrame(zip(fp_instances), columns=["pred_id"])
-
                 os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
                 if self.save_to_disk:
                     df.to_csv(
@@ -1186,15 +1174,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 del r_stats["gt_ids"]
                 print("DatasetMatching: {}".format(r_stats))
 
-                if colored_img_ths[i] != -1 and colored_img_ths[i] == thr:
-                    print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
-                    colored_result = build_tp_fp_fn_color_map(
-                        gt_labels=_Y,
-                        pred_labels=pred_labels,
-                        matched_pairs=matched_pairs,
-                        matched_tps=matched_tps,
-                    )
-
+                if want_colored_img:
                     if self.save_to_disk:
                         save_tif(
                             np.expand_dims(colored_result, 0),
@@ -1422,29 +1402,17 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     r_stats = results_post_proc[i]
                     thr = r_stats["thresh"]
 
-                    # TP and FN
-                    gt_ids = r_stats["gt_ids"][1:]
-                    matched_pairs = r_stats["matched_pairs"]
-                    matched_tps = r_stats["matched_tps"]
-                    gt_match = [x[0] for x in matched_pairs]
-                    gt_unmatch = [x for x in gt_ids if x not in gt_match]
-                    matched_scores = list(r_stats["matched_scores"]) + [0 for _ in gt_unmatch]
-                    pred_match = [x[1] for x in matched_pairs] + [-1 for _ in gt_unmatch]
-                    tag = ["TP" if score >= thr else "FN" for score in matched_scores]
-
-                    # FPs
-                    pred_ids = r_stats["pred_ids"][1:]
-                    fp_instances = [x for x in pred_ids if x not in pred_match]
-                    fp_instances += [pred_id for score, pred_id in zip(matched_scores, pred_match) if score < thr]
+                    want_colored_img = colored_img_ths[i] != -1 and colored_img_ths[i] == thr
+                    if want_colored_img:
+                        print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
+                    colored_result, df, df_fp = build_tp_fp_fn_report(
+                        gt_labels=_Y,
+                        pred_labels=pred_labels,
+                        r_stats=r_stats,
+                        build_color_map=want_colored_img,
+                    )
 
                     # Save csv files
-                    df = pd.DataFrame(
-                        zip(gt_match + gt_unmatch, pred_match, matched_scores, tag),
-                        columns=["gt_id", "pred_id", "iou", "tag"],
-                    )
-                    df = df.sort_values(by=["gt_id"])
-                    df_fp = pd.DataFrame(zip(fp_instances), columns=["pred_id"])
-
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
                     if self.save_to_disk:
                         df.to_csv(
@@ -1469,15 +1437,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     del r_stats["gt_ids"]
                     print("DatasetMatching: {}".format(r_stats))
 
-                    if colored_img_ths[i] != -1 and colored_img_ths[i] == thr:
-                        print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
-                        colored_result = build_tp_fp_fn_color_map(
-                            gt_labels=_Y,
-                            pred_labels=pred_labels,
-                            matched_pairs=matched_pairs,
-                            matched_tps=matched_tps,
-                        )
-
+                    if want_colored_img:
                         if self.save_to_disk:
                             save_tif(
                                 np.expand_dims(colored_result, 0),
