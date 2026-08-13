@@ -26,7 +26,7 @@ from scipy.ndimage import (
     find_objects,
     binary_dilation as binary_dilation_scipy
 )
-from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
+from skimage.morphology import disk, dilation, erosion, skeletonize
 from skimage.measure import label, regionprops_table
 from skimage.transform import resize
 from skimage.feature import canny
@@ -1319,9 +1319,9 @@ def labels_into_channels(
                 if not np.any(m):
                     continue
                 if dilate:
-                    m = binary_dilation(m.astype(np.uint8), footprint=dil_k).astype(np.uint8)
+                    m = dilation(m.astype(np.uint8), footprint=dil_k, mode="min").astype(np.uint8)
                 if erode:
-                    m = binary_erosion(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
+                    m = erosion(m.astype(np.uint8), footprint=er_k, mode="max").astype(np.uint8)
                 mask[m > 0] = lb
         new_mask[..., mode.index("F")] = mask
 
@@ -1351,9 +1351,9 @@ def labels_into_channels(
                 # As the background mask is going to be created using the instances,
                 # we need to invert the operations
                 if dilate:
-                    m = binary_erosion(m.astype(np.uint8), footprint=dil_k).astype(np.uint8)
+                    m = erosion(m.astype(np.uint8), footprint=dil_k, mode="max").astype(np.uint8)
                 if erode:
-                    m = binary_dilation(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
+                    m = dilation(m.astype(np.uint8), footprint=er_k, mode="min").astype(np.uint8)
                 mask[m > 0] = 1
         new_mask[..., mode.index("B")] = mask
 
@@ -1395,11 +1395,11 @@ def labels_into_channels(
         # Optional dilation (in pixels / voxels)
         if (isinstance(p_dil, int) and p_dil > 0) or (isinstance(p_dil, list) and any([x for x in p_dil if x > 0])):
             p_dil = [p_dil,]*p_out.ndim if isinstance(p_dil, int) else p_dil
-            p_out = binary_dilation(p_out, footprint=generate_ellipse_footprint(p_dil)).astype(np.uint8)
+            p_out = dilation(p_out, footprint=generate_ellipse_footprint(p_dil), mode="min").astype(np.uint8)
         # Optional erosion (in pixels / voxels)
         if (isinstance(p_ero, int) and p_ero > 0) or (isinstance(p_ero, list) and any([x for x in p_ero if x > 0])):
             p_ero = [p_ero,]*p_out.ndim if isinstance(p_ero, int) else p_ero
-            p_out = binary_erosion(p_out, footprint=generate_ellipse_footprint(p_ero)).astype(np.uint8)
+            p_out = erosion(p_out, footprint=generate_ellipse_footprint(p_ero), mode="max").astype(np.uint8)
 
         # Write the channel
         new_mask[..., mode.index("P")] = p_out
@@ -1411,12 +1411,12 @@ def labels_into_channels(
             # synthetic "dense" edges: dilate FG and XOR with FG to thicken borders on both sides
             fg = fg_mask
             if fg.ndim == 2:
-                rim = binary_dilation(fg, disk(1)).astype(np.uint8) ^ fg
+                rim = dilation(fg, disk(1), mode="min").astype(np.uint8) ^ fg
                 new_mask[..., mode.index("C")] = rim
             else:
                 out = np.zeros_like(fg)
                 for j in range(fg.shape[0]):
-                    out[j] = (binary_dilation(fg[j], disk(1)).astype(np.uint8) ^ fg[j])
+                    out[j] = (dilation(fg[j], disk(1), mode="min").astype(np.uint8) ^ fg[j])
                 new_mask[..., mode.index("C")] = out
         else:
             # valid skimage modes: inner|outer|thick|subpixel
