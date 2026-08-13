@@ -484,11 +484,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # P — point-like channel
             if "P" in chs:
                 if "P" in dst:
-                    assert [x for x in dst["P"].keys() if x not in ["type", "dilation", "erosion"]] == [], (
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'P' can only have 'type', 'dilation' and 'erosion' keys"
+                    assert [x for x in dst["P"].keys() if x not in ["type", "skeleton_mode", "dilation", "erosion"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'P' can only have 'type', 'skeleton_mode', "
+                        "'dilation' and 'erosion' keys"
+                    )
+                    assert dst["P"].get("skeleton_mode", "full") in ["full", "main"], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'P': 'skeleton_mode' must be one of "
+                        "['full', 'main']"
                     )
                 dst["P"] = {
                     "type": dst.get("P", {}).get("type", "centroid"),
+                    "skeleton_mode": dst.get("P", {}).get("skeleton_mode", "full"),
                     "dilation": dst.get("P", {}).get("dilation", 1),
                     "erosion": dst.get("P", {}).get("erosion", 0),
                 }

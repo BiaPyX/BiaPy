@@ -160,6 +160,12 @@ class Config:
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: 0
         #   - 'P' channel. Possible options:
         #       - 'type': str, specifies the reference used to define the channel. Options are 'centroid' or 'skeleton'. Default: 'centroid'
+        #       - 'skeleton_mode': str, only used when 'type' is 'skeleton'. Controls how much of the skeleton is kept:
+        #           - 'full': keep the whole skeleton, branching into every protrusion of the instance (default).
+        #           - 'main': prune it down to the main body only, i.e. the longest path through the skeleton (its
+        #             two farthest-apart points and the branch connecting them). Side branches coming from small
+        #             protrusions (e.g. dendritic spines) are discarded, so the channel marks just the main shaft.
+        #         Default: 'full'
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: 1
         #       - 'erosion': int or list of ints, specifies the erosion size applied to the channel. Useful for thinning skeletons,
         #          which are typically 2 pixels thick. Default: 0

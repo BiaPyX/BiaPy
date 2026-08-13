@@ -37,6 +37,8 @@ from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
 from typing import List, Optional, Dict, Tuple, Sequence, Union
 from scipy.spatial import cKDTree
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import shortest_path, connected_components
 from biapy.data.omnipose_core import omnipose_masks_to_flows
 
 from biapy.data.dataset import BiaPyDataset
@@ -1362,12 +1364,15 @@ def labels_into_channels(
         p_dil  = p_opts.get("dilation", 1)
         p_ero  = p_opts.get("erosion", 1)
 
+        p_skel_mode = p_opts.get("skeleton_mode", "full")
         p_out = np.zeros_like(fg_mask, dtype=np.uint8)
         if p_type == "skeleton":
             for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
                 slc = slice_from_props(props_tbl, i, vol.ndim)
                 sub = (vol[slc] == lb)
-                sk = skeletonize(sub)      
+                sk = skeletonize(sub)
+                if p_skel_mode == "main":
+                    sk = skeleton_main_branch(sk)
                 p_out[slc] += sk
         else:
             com_list = center_of_mass(fg_mask, labels=vol, index=instances)
@@ -1840,6 +1845,83 @@ def slice_from_props(props_tbl: pd.DataFrame | dict, i: int, ndim: int) -> tuple
         return (slice(z0, z1), slice(y0, y1), slice(x0, x1))
     else:
         raise ValueError("Only 2D or 3D volumes are supported.")
+
+def skeleton_main_branch(sk: NDArray) -> NDArray:
+    """
+    Prune a skeleton down to its longest path, discarding side branches.
+
+    ``skimage.morphology.skeletonize`` follows every protrusion of the input shape,
+    so a dendrite-like instance with spine bumps ends up with a skeleton branching
+    into each spine. This keeps only the "main body" of the skeleton: the two
+    farthest-apart pixels (found via a two-pass shortest-path search, the standard
+    way to get a tree's diameter) and the path connecting them, which follows the
+    main shaft rather than any of its protrusions.
+
+    Parameters
+    ----------
+    sk : ndarray of bool
+        Skeleton mask, as returned by ``skimage.morphology.skeletonize``. 2D or 3D.
+
+    Returns
+    -------
+    ndarray of bool
+        Same shape as ``sk``, with only the main-branch pixels set.
+    """
+    coords = np.argwhere(sk)
+    n = len(coords)
+    if n < 3:
+        return sk.copy()
+
+    tree = cKDTree(coords)
+    pairs = tree.query_pairs(r=np.sqrt(sk.ndim) + 1e-6, output_type="ndarray")
+    if len(pairs) == 0:
+        return sk.copy()
+
+    weights = np.linalg.norm(coords[pairs[:, 0]] - coords[pairs[:, 1]], axis=1)
+    graph = coo_matrix(
+        (
+            np.concatenate([weights, weights]),
+            (
+                np.concatenate([pairs[:, 0], pairs[:, 1]]),
+                np.concatenate([pairs[:, 1], pairs[:, 0]]),
+            ),
+        ),
+        shape=(n, n),
+    ).tocsr()
+
+    # Keep only the largest connected component (skeletonize can leave stray isolated
+    # pixels behind) so the shortest-path search below cannot land on an unreachable node.
+    n_components, comp_labels = connected_components(graph, directed=False)
+    if n_components > 1:
+        main_comp = np.argmax(np.bincount(comp_labels))
+        keep = np.flatnonzero(comp_labels == main_comp)
+        coords = coords[keep]
+        graph = graph[keep][:, keep]
+        if len(coords) < 3:
+            main = np.zeros_like(sk)
+            main[tuple(coords.T)] = True
+            return main
+
+    # Two-pass search for the tree's diameter: the farthest node from an arbitrary
+    # start, then the farthest node from there, are the two ends of the main branch.
+    dist_from_0 = shortest_path(graph, method="D", directed=False, indices=0)
+    end_a = int(np.argmax(dist_from_0))
+    dist_from_a, predecessors = shortest_path(
+        graph, method="D", directed=False, indices=end_a, return_predecessors=True
+    )
+    end_b = int(np.argmax(dist_from_a))
+
+    path_idx = [end_b]
+    while path_idx[-1] != end_a:
+        prev = predecessors[path_idx[-1]]
+        if prev < 0:
+            break
+        path_idx.append(prev)
+
+    main = np.zeros_like(sk)
+    main[tuple(coords[path_idx].T)] = True
+    return main
+
 
 def unet_border_weight_map(
     instances: np.ndarray,
