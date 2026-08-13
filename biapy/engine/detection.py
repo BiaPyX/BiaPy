@@ -24,10 +24,11 @@ from biapy.data.post_processing.post_processing import (
     measure_morphological_props_and_filter,
 )
 from biapy.utils.misc import (
-    is_main_process, 
-    is_dist_avail_and_initialized, 
-    to_pytorch_format, 
-    MetricLogger, 
+    is_main_process,
+    is_dist_avail_and_initialized,
+    to_pytorch_format,
+    crop_border_tensor,
+    MetricLogger,
     os_walk_clean
 )
 from biapy.engine.metrics import (
@@ -42,6 +43,34 @@ from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_3D_manipulation import order_dimensions, looks_like_hdf5
 from biapy.data.data_manipulation import save_tif, decide_dtype
 from biapy.data.dataset import PatchCoords
+
+
+def _bbox_from_border_crop(border: List[int], shape) -> List[List[int]]:
+    """
+    Build ``detection_metrics``'s ``bbox_to_consider`` (always ``[z, y, x]``, 3 entries) from
+    ``TEST.EVAL_BORDER_CROP``.
+
+    GT/predicted points here are always 3-tuples ``[z, y, x]`` (``pred`` carries a leading z=1 axis
+    even in 2D -- see ``detection_process``), while ``TEST.EVAL_BORDER_CROP`` follows
+    ``PROBLEM.NDIM``'s convention (``[y, x]`` for 2D) -- pad it with a leading 0 so indices line up
+    and z is never constrained in 2D.
+
+    Parameters
+    ----------
+    border : list of int
+        ``TEST.EVAL_BORDER_CROP``, i.e. ``[z, y, x]`` (3D) or ``[y, x]`` (2D).
+
+    shape : sequence of int, length 3
+        ``[z, y, x]`` extent of the image the points live in.
+
+    Returns
+    -------
+    list of [int, int]
+        ``[[z_min, z_max], [y_min, y_max], [x_min, x_max]]``, as ``detection_metrics`` expects.
+    """
+    if len(border) == 2:
+        border = [0] + list(border)
+    return [[b, max(shape[i] - b, 0)] for i, b in enumerate(border)]
 
 
 class Detection_Workflow(Base_Workflow):
@@ -306,6 +335,13 @@ class Detection_Workflow(Base_Workflow):
                 _targets = targets.clone()
             else:
                 _targets = targets
+
+        # Exclude the border region from the metric computation (see 'TEST.EVAL_BORDER_CROP').
+        # Train-time patches are small already and never carry this crop.
+        if not train and self.cfg.TEST.EVAL_BORDER_CROP:
+            border = list(self.cfg.TEST.EVAL_BORDER_CROP)
+            _output = crop_border_tensor(_output, border)
+            _targets = crop_border_tensor(_targets, border)
 
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
@@ -696,48 +732,8 @@ class Detection_Workflow(Base_Workflow):
                 gt_coordinates = patch_gt_coordinates.copy()
 
             roi_to_consider = []
-            if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    roi_to_consider = [
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                            max(
-                                pred_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                                0,
-                            ),
-                        ],
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                            max(
-                                pred_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                                0,
-                            ),
-                        ],
-                    ]
-                else:
-                    roi_to_consider = [
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                            max(
-                                pred_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                                0,
-                            ),
-                        ],
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                            max(
-                                pred_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                                0,
-                            ),
-                        ],
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
-                            max(
-                                pred_shape[2] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
-                                0,
-                            ),
-                        ],
-                    ]
+            if self.cfg.TEST.EVAL_BORDER_CROP:
+                roi_to_consider = _bbox_from_border_crop(list(self.cfg.TEST.EVAL_BORDER_CROP), pred_shape)
 
             # Calculate detection metrics
             fp, gt_assoc = None, None
@@ -1089,30 +1085,10 @@ class Detection_Workflow(Base_Workflow):
 
                 # Measure metrics
                 roi_to_consider = []
-                if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
-                    roi_to_consider = [
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                            max(
-                                self.parallel_data_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                                0,
-                            ),
-                        ],
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                            max(
-                                self.parallel_data_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                                0,
-                            ),
-                        ],
-                        [
-                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
-                            max(
-                                self.parallel_data_shape[2] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
-                                0,
-                            ),
-                        ],
-                    ]
+                if self.cfg.TEST.EVAL_BORDER_CROP:
+                    roi_to_consider = _bbox_from_border_crop(
+                        list(self.cfg.TEST.EVAL_BORDER_CROP), self.parallel_data_shape
+                    )
                 d_metrics, gt_assoc, fp = detection_metrics(
                     gt_coordinates,
                     pred_coordinates,

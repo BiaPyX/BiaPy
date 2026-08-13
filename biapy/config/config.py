@@ -645,6 +645,139 @@ class Config:
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT = []
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.6.1 Membrane repair sub-problem (IMAGE_TO_IMAGE)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Trains a dataset-agnostic network that repairs membrane-segmentation errors (gaps and
+        # spurious fragments) coming out of an upstream foundation-model + GMM pipeline. The network
+        # never sees the raw image: its input is derived, canonical representations of the GMM
+        # "membrane class" (and optionally other classes such as "mito"), and its output is affinities
+        # learned from GT instance labels. Uses a dedicated data generator
+        # (Membrane2DRepairDataGenerator/Membrane3DRepairDataGenerator) instead of the shared
+        # instance-seg/Cellpose/N2V generator.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR = CN()
+        # Master switch. When True, PROBLEM.TYPE == "IMAGE_TO_IMAGE" is routed through the dedicated
+        # membrane-repair data generator and Membrane_Repair_Workflow instead of the regular
+        # IMAGE_TO_IMAGE_Workflow path.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE = False
+        # Ordered list of the raw, on-disk input channels (already canonically resampled and stacked
+        # upstream). The first entry is always assumed to be the membrane class. E.g. ["membrane"] to
+        # start, or ["membrane", "mito"] once more GMM classes are ablated in. This list drives both
+        # which physical channel index each corruption augmentor reads/writes and how many raw
+        # channels the generator expects to load from disk.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane"]
+        # Ordered list of channels derived on the fly from SOURCE_CHANNELS and appended after them to
+        # build the final network input. Options:
+        #   - 'skeleton_dt': clamped Euclidean distance transform of the per-slice membrane skeleton.
+        #   - 'hessian_blob': Hessian-eigenvalue-based "dense blob" response (mito/synapse/vesicle cue).
+        #   - 'meijering': standardised multi-scale Meijering ridge filter.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS = ["skeleton_dt", "hessian_blob", "meijering"]
+        # Per-channel options for DERIVED_CHANNELS. Must be a list with a unique element: a dict of
+        # dicts, keyed by channel name. Possible options:
+        #   - 'skeleton_dt' channel. Possible options:
+        #       - 'clamp_px': int, clamp distance (in canonical pixels) applied to the DT. Default: 10
+        #       - 'per_slice': bool, whether to skeletonize/derive the DT per z-slice (2D skeleton in a
+        #         3D stack) rather than on the full 3D volume. Default: True
+        #   - 'hessian_blob' channel. Possible options:
+        #       - 'sigma_range': list of 2 floats, [min, max] Gaussian scales probed for the Hessian.
+        #         Default: [1.0, 3.0]
+        #   - 'meijering' channel. Possible options:
+        #       - 'sigma_range': list of 2 floats, [min, max] Gaussian scales probed for the ridge
+        #         filter. Default: [1.0, 4.0]
+        #       - 'standardize': bool, whether to z-score/percentile-normalize the response for
+        #         cross-dataset comparability. Default: True
+        # For example:
+        #  DERIVED_CHANNELS = ['skeleton_dt', 'hessian_blob']
+        #  DERIVED_CHANNELS_EXTRA_OPTS = [{'skeleton_dt': {'clamp_px': 8}, 'hessian_blob': {'sigma_range': [1.0, 2.5]}}]
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS_EXTRA_OPTS = [{}]
+
+        # Y-side: GT target channels, generated offline from the raw GT instance-label folder via the
+        # same 'labels_into_channels' machinery INSTANCE_SEG uses (see PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        # for the full list of channel letters), then regenerated online after each augmentation warp so
+        # directional channels never get corrupted by interpolation. Must include 'I' (the virtual raw
+        # instance-label channel), the regeneration source that is dropped before the batch reaches the
+        # model -- exactly as INSTANCE_SEG does for its own directional channels. 'A' (affinities) is the
+        # actual training target.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS = ["A", "I"]
+        # Same shape/semantics as PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS's 'A' entry:
+        # 'z_affinities'/'y_affinities'/'x_affinities' (paired-by-index neighbour offset lists) and
+        # 'widen_borders'. E.g. [{'A': {'z_affinities': [1], 'y_affinities': [1], 'x_affinities': [1]}}]
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS = [{}]
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.6.2 Membrane repair test-time post-processing (affinities -> instances)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS = CN()
+        # How to turn predicted affinities into instance labels at test time. Options:
+        #   - 'watershed': single marker-controlled watershed over the min of the first (z,y,x)
+        #     affinity triple (see watershed_by_channels's 'A'-only branch), Otsu-thresholded.
+        #   - 'agglomeration': oversegment into small fragments, then merge fragment pairs by a
+        #     quantile (MERGE_QUANTILE) of their affinity histogram until MERGE_TH is reached, using
+        #     only the first (z,y,x) short-range affinity triple (matches waterz -- see
+        #     biapy/data/post_processing/affinity_agglomeration.py).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD = "agglomeration"
+        # 'agglomeration' only: seed threshold for the initial oversegmented fragments (high, so
+        # fragments never straddle a real instance boundary).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.FRAGMENT_SEED_TH = 0.9
+        # 'agglomeration' only: growth-mask threshold for those fragments (low, so they cover all
+        # foreground with no gaps).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.FRAGMENT_GROWTH_TH = 0.1
+        # 'agglomeration' only: two fragments merge while their MERGE_QUANTILE-th percentile
+        # affinity (short-range triple only, see METHOD above) is >= this value.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.MERGE_TH = 0.5
+        # 'agglomeration' only: percentile (0-100) of each fragment pair's affinity histogram used
+        # as its merge score. 50 = median.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.MERGE_QUANTILE = 50.0
+        # 'agglomeration' only: minimum supporting voxel-pairs an edge needs before it can trigger a
+        # merge. 1 effectively disables this.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.MIN_EDGE_VOXELS = 5
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.6.3 Membrane repair corruption augmentors
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # These synthesize the upstream pipeline's failure modes directly on the membrane (and, where
+        # noted, mito) source channel(s), so the network learns the repair operation from corrupted ->
+        # clean pairs. Applied after the geometric warps, before the derived channels are computed.
+        # PROB is a per-z-slice probability, independently rolled for every slice (2D: probability of
+        # augmenting the whole image), not a single roll for the whole sample.
+        #
+        # Erases a segment of the membrane skeleton to synthesize a gap (merge/under-segmentation error).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.PROB = 0.5
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (3, 25)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.N_ITERATIONS = (1, 3)
+        # Paints a short spurious connecting line between two nearby points as fake membrane (split
+        # error at a multi-instance junction).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.PROB = 0.3
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.LENGTH_RANGE = (3, 15)
+        # Paints a small spurious island of membrane away from real membrane (split error inside an
+        # instance, e.g. a vesicle/artifact misread as membrane).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG.PROB = 0.3
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG.SIZE_RANGE = (2, 6)
+        # Erases membrane along a random stretch of the mito channel's boundary (mito-adjacent merge
+        # error). Automatically skipped whenever "mito" is not present in SOURCE_CHANNELS.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG.PROB = 0.3
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG.LENGTH_RANGE = (5, 20)
+        # Applies a small random dilation/erosion/spur injection to the membrane channel before the
+        # derived channels are computed, so the model doesn't over-trust exact skeleton geometry.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.PROB = 0.3
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.RADIUS_RANGE = (1, 2)
+        # Zeroes z-slices of each raw source channel (SOURCE_CHANNELS, e.g. membrane or mito)
+        # independently with probability PROB (see 'slice_dropout' in
+        # biapy/data/generators/membrane_augmentors.py).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.PROB = 0.3
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3. Dataset
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.DATA = CN()
@@ -668,7 +801,17 @@ class Config:
         # display filtered patches as black (all zero values) while retaining original patch values in non-filtered areas. 
         _C.DATA.SAVE_FILTERED_IMAGES = False
         # Number of filtered images to save. Only work when 'DATA.SAVE_FILTERED_IMAGES' is True
-        _C.DATA.SAVE_FILTERED_IMAGES_NUM = 3 
+        _C.DATA.SAVE_FILTERED_IMAGES_NUM = 3
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 3.0.1 Per-file resolution normalization (mixing datasets of different physical resolution)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.DATA.RESOLUTION_NORM = CN()
+        # Rescales each patch in-plane (Y,X) to TARGET_RESOLUTION, using a per-file resolution read
+        # from "resolution.json" in the parent of DATA.TRAIN.PATH/DATA.VAL.PATH.
+        _C.DATA.RESOLUTION_NORM.ENABLE = False
+        # Target (z,y,x) resolution; only y,x are used. Must be positive when ENABLE is True.
+        _C.DATA.RESOLUTION_NORM.TARGET_RESOLUTION = (-1.0, -1.0, -1.0)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3.1 Normalization options for the data
@@ -1533,10 +1676,20 @@ class Config:
         # 5.1.5 STUNet architecture options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL.STUNET = CN()
-        # Variant of the STUNet model. Options are: 'small', 'base', 'large'
+        # Variant of the STUNet model. Options are: 'small', 'base', 'large', 'custom'
         _C.MODEL.STUNET.VARIANT = 'base'
         # Whether to use a pretrained version of STUNet on ImageNet
         _C.MODEL.STUNET.PRETRAINED = False
+        # Residual blocks per stage. Only used when VARIANT = "custom"; length must equal len(DIMS).
+        _C.MODEL.STUNET.DEPTH = [1, 1, 1, 1, 1, 1]
+        # Channels per stage. Only used when VARIANT = "custom".
+        _C.MODEL.STUNET.DIMS = [32, 64, 128, 256, 512, 512]
+        # Per-stage pooling/stride, (Z,Y,X), one entry per downsampling step (len(DIMS)-1). Only used
+        # when VARIANT = "custom"; set anisotropic values (e.g. [1,2,2]) to avoid downsampling Z.
+        _C.MODEL.STUNET.POOL_OP_KERNEL_SIZES = [[2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [1, 1, 1]]
+        # Per-stage conv kernel size, (Z,Y,X), one entry per stage (len(DIMS)). Only used when VARIANT
+        # = "custom"; set anisotropic values (e.g. [1,3,3]) to avoid mixing information across Z.
+        _C.MODEL.STUNET.CONV_KERNEL_SIZES = [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]]
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.6 NafNet architecture options
@@ -1922,6 +2075,25 @@ class Config:
         #                     can also be selected:  "fid", "is", "lpips"
         _C.TEST.METRICS = []
 
+        # Number of pixels/voxels to exclude from each border when computing test/inference metrics,
+        # regardless of workflow. Order is: [z, y, x] (3D) and [y, x] (2D). For example, with an image
+        # of 10x100x200 to ignore the first/last Z slices and a 15-pixel border on Y/X, use [1, 15, 15].
+        # Predictions near the border are usually less reliable (the model has no context beyond the
+        # edge, and patch-merging seams concentrate there too), which can inflate errors that don't
+        # reflect the model's real performance. This never changes the predictions themselves (nor
+        # anything saved to disk) -- only the region considered when scoring each metric, so only the
+        # center of the image is evaluated:
+        #   * Semantic segmentation / voxel-level instance segmentation & membrane-repair metrics /
+        #     denoising / super-resolution / image-to-image / self-supervised: the border region of the
+        #     prediction and GT is excluded before computing pixel-wise metrics (IoU, MAE, MSE, SSIM,
+        #     PSNR, etc).
+        #   * Object-level instance segmentation & membrane-repair matching: the predicted/GT instance
+        #     label images are cropped by this amount before matching.
+        #   * Detection: points (predicted or GT) whose coordinates fall in the border region are
+        #     excluded from the precision/recall/F1 computation.
+        #   * Classification: not applicable (no spatial dimension to crop); must be left empty.
+        _C.TEST.EVAL_BORDER_CROP = []
+
         ### Instance segmentation
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = True
@@ -2070,11 +2242,6 @@ class Config:
         _C.TEST.DET_BLOB_LOG_NUM_SIGMA = 2
         # Maximum distance far away from a GT point to consider a point as a true positive
         _C.TEST.DET_TOLERANCE = 10
-        # To not take into account during detection metrics calculation to those points outside the bounding box defined with
-        # this variable. Order is: [z, y, x] (3D) and [y, x] (2D). For example, using an image of 10x100x200 to not take into
-        # account points on the first/last slices and with a border of 15 pixel for x and y axes, this variable could be defined
-        # as [1, 15, 15].
-        _C.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX = []
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 8.3 Post-processing options

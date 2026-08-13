@@ -495,26 +495,29 @@ def load_stunet_pretrained_encoder_from_ckpt(model: STUNet, checkpoint: Dict[str
     print("[STUNet] Pretrained encoder loaded")
 
 
-def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info=["F"], 
-                 explicit_activations: bool = False, head_activations: List[str] = ["ce_sigmoid"], deep_supervision: bool = True, 
-                 pretrained: Union[bool, str] = False, map_location: str = "cpu", return_one_tensor: bool = False) -> STUNet:
+def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info=["F"],
+                 explicit_activations: bool = False, head_activations: List[str] = ["ce_sigmoid"], deep_supervision: bool = True,
+                 pretrained: Union[bool, str] = False, map_location: str = "cpu", return_one_tensor: bool = False,
+                 depth: Optional[Sequence[int]] = None, dims: Optional[Sequence[int]] = None,
+                 pool_op_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
+                 conv_kernel_sizes: Optional[Sequence[Sequence[int]]] = None) -> STUNet:
     """
-    Build a STUNet model (small, base, large) with optional pretrained encoder loading.
+    Build a STUNet model (small, base, large, custom) with optional pretrained encoder loading.
 
     Parameters
     ----------
     variant : str
-        One of 'small', 'base', 'large'.
+        One of 'small', 'base', 'large', 'custom'.
     image_shape : Tuple[int, ...]
         Shape of the input image (including channels as last dimension).
     output_channels : List[int]
-        Number of output channels (one value for single-head, two for multi-head).  
+        Number of output channels (one value for single-head, two for multi-head).
     output_channel_info : list of str
         Information about the type of output channels. Possible values are:
         - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
         - "class": classification (e.g. for multi-task learning)
     explicit_activations : bool
-        Whether to apply explicit head_activations to outputs.    
+        Whether to apply explicit head_activations to outputs.
     head_activations : List[List[str]]
         Activation functions for outputs.
     deep_supervision : bool
@@ -526,32 +529,61 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
         Device to map the loaded checkpoint.
     return_one_tensor : bool
         If True, concatenates all outputs into a single tensor along the channel dimension.
+    depth : sequence of int, optional
+        Only used when ``variant == "custom"``. Number of residual blocks per stage, see ``STUNet``.
+    dims : sequence of int, optional
+        Only used when ``variant == "custom"``. Number of channels per stage, see ``STUNet``.
+    pool_op_kernel_sizes : sequence of sequence of int, optional
+        Only used when ``variant == "custom"``. Per-stage (potentially anisotropic) pooling/stride
+        sizes, one entry shorter than ``dims`` -- see ``STUNet``.
+    conv_kernel_sizes : sequence of sequence of int, optional
+        Only used when ``variant == "custom"``. Per-stage (potentially anisotropic) convolution
+        kernel sizes, same length as ``dims`` -- see ``STUNet``.
     """
     v = variant.lower()
     if v == "small":
         model = STUNet_small(
-            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info,
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
-            return_one_tensor=return_one_tensor,  
+            return_one_tensor=return_one_tensor,
         )
         default_key = "orgmim_cnn_small"
     elif v == "base":
         model = STUNet_base(
-            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info,
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
-            return_one_tensor=return_one_tensor,  
+            return_one_tensor=return_one_tensor,
         )
         default_key = "orgmim_cnn_base"
     elif v == "large":
         model = STUNet_large(
-            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info,
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
-            return_one_tensor=return_one_tensor, 
+            return_one_tensor=return_one_tensor,
         )
         default_key = "orgmim_cnn_large"
+    elif v == "custom":
+        if depth is None or dims is None or pool_op_kernel_sizes is None or conv_kernel_sizes is None:
+            raise ValueError(
+                "variant 'custom' requires 'depth', 'dims', 'pool_op_kernel_sizes' and 'conv_kernel_sizes' "
+                "to all be provided (see MODEL.STUNET.DEPTH / DIMS / POOL_OP_KERNEL_SIZES / CONV_KERNEL_SIZES)."
+            )
+        model = STUNet(
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info,
+            deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
+            return_one_tensor=return_one_tensor,
+            depth=depth, dims=dims, pool_op_kernel_sizes=pool_op_kernel_sizes, conv_kernel_sizes=conv_kernel_sizes,
+        )
+        if pretrained is True:
+            raise ValueError(
+                "'custom' STUNet variant has no default pretrained checkpoint (its architecture is "
+                "user-defined and generally won't match any of the small/base/large checkpoints' shapes). "
+                "Pass an explicit URL as 'pretrained' if you have a matching checkpoint, or set it to False."
+            )
+        default_key = None
     else:
-        raise ValueError("variant must be one of: small | base | large")
-    
+        raise ValueError("variant must be one of: small | base | large | custom")
+
     # --------------------------------------------------------------------------------------
     # Optional: OrgMIM-compatible pretrained encoder loading
     # --------------------------------------------------------------------------------------

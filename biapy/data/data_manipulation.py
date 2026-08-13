@@ -3865,6 +3865,51 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
         raise ValueError(m)
 
 
+def check_binary_masks(path: str, is_3d: bool = False, channel: Optional[int] = None):
+    """
+    Check that every image in the given path is strictly binary (only 0 and 1 values).
+
+    If the function gives no error one should assume that the images are binary.
+
+    Parameters
+    ----------
+    path : str
+        Path to the data to check.
+
+    is_3d : bool, optional
+        Whether if the expected image to read is 3D or not.
+
+    channel : int, optional
+        If set, only that channel (last axis) is checked instead of the whole image.
+    """
+    print("Checking that images in {} are binary (0/1 only) . . .".format(path))
+
+    ids = next(os_walk_clean(path))[2]
+    error = False
+    m = ""
+    for i in tqdm(range(len(ids))):
+        if looks_like_hdf5(ids[i]) or any(ids[i].endswith(x) for x in [".zarr", "n5", ".n5"]):
+            raise ValueError(
+                "Binary check with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
+            )
+        else:
+            img_path = os.path.join(path, ids[i])
+            img = read_img_as_ndarray(img_path, is_3d=is_3d)
+            data = img[..., channel] if channel is not None else img
+            values = np.unique(data)
+            if not np.all(np.isin(values, [0, 1])):
+                print("Error: given image ({}) is not binary. Values found: {}".format(img_path, values))
+                error = True
+
+    if error:
+        m += (
+            "Some images above contain values other than 0 and 1. This workflow expects a strictly binary "
+            "input (e.g. a hard membrane mask), not a soft/continuous class-probability map.\n"
+            "Correct the errors in the images above to continue"
+        )
+        raise ValueError(m)
+
+
 def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
     """
     Build an error message with the shape mismatch between two provided data ``X_data`` and ``Y_data``.

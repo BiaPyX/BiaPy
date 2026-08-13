@@ -98,6 +98,7 @@ from biapy.data.roi_mask import load_roi_mask
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import set_cellpose_diameters
+from biapy.data.pre_processing import set_file_resolutions
 from biapy.data.norm import normalize_image
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.engine.chunked_tiles import ChunkedTileProcessor
@@ -743,6 +744,10 @@ class Base_Workflow(metaclass=ABCMeta):
         # Attach the per-image Cellpose diameter to each GT DatasetFile so the train generator can
         # rescale each patch by DIAM_MEAN / diameter (mirroring Cellpose's diameter normalization).
         self.cellpose_diameter = set_cellpose_diameters(self.cfg, self.Y_train, self.Y_val)
+
+        # Attach the per-image physical resolution to each raw DatasetFile so the train generator can
+        # rescale each patch toward DATA.RESOLUTION_NORM.TARGET_RESOLUTION.
+        set_file_resolutions(self.cfg, self.X_train, self.X_val)
 
         # Ensure all the processes have read the data
         if is_dist_avail_and_initialized():

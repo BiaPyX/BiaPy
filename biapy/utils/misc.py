@@ -733,6 +733,74 @@ def to_numpy_format(x, axes_order_back):
     return x.permute(axes_order_back).cpu().numpy()
 
 
+def crop_border_numpy(arr: NDArray, border: List[int], has_channel_axis: bool = False) -> NDArray:
+    """
+    Crop ``border[i]`` pixels/voxels off both sides of each leading spatial axis of `arr`.
+
+    Shared implementation behind ``TEST.EVAL_BORDER_CROP``: excludes the border region from
+    metric computation (matching of instance-label images, semantic/voxel pixel metrics, etc.)
+    without touching the underlying prediction/GT arrays.
+
+    Parameters
+    ----------
+    arr : NDArray
+        Array whose leading axes are spatial (``(z, y, x, ...)`` or ``(y, x, ...)``), optionally
+        followed by a trailing channel axis left untouched.
+
+    border : list of int
+        Per-spatial-axis crop, applied symmetrically to both sides, e.g. ``[z, y, x]`` (3D) or
+        ``[y, x]`` (2D). Must match the number of spatial axes in `arr`.
+
+    has_channel_axis : bool, optional
+        Whether `arr`'s last axis is a channel axis to leave uncropped.
+
+    Returns
+    -------
+    NDArray
+        The cropped array (a view, not a copy).
+    """
+    spatial_ndim = arr.ndim - 1 if has_channel_axis else arr.ndim
+    assert len(border) == spatial_ndim, (
+        f"Border crop {border} does not match the {spatial_ndim} spatial axes of an array with shape {arr.shape}"
+    )
+    slices = tuple(slice(b, arr.shape[i] - b) if b > 0 else slice(None) for i, b in enumerate(border))
+    if has_channel_axis:
+        slices = slices + (slice(None),)
+    return arr[slices]
+
+
+def crop_border_tensor(tensor: torch.Tensor, border: List[int]) -> torch.Tensor:
+    """
+    Crop ``border[i]`` pixels/voxels off both sides of each spatial axis of a ``(N, C, ...)`` tensor.
+
+    Torch counterpart of ``crop_border_numpy`` for the ``(N, C, H, W)``/``(N, C, Z, Y, X)`` tensors
+    workflows use in ``metric_calculation`` (pixel-wise IoU/MAE/MSE/SSIM/PSNR/... metrics), backing
+    ``TEST.EVAL_BORDER_CROP``.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        Tensor with axes ``(N, C, y, x)`` (2D) or ``(N, C, z, y, x)`` (3D).
+
+    border : list of int
+        Per-spatial-axis crop, applied symmetrically to both sides, e.g. ``[z, y, x]`` (3D) or
+        ``[y, x]`` (2D). Must match the number of spatial axes (``tensor.ndim - 2``).
+
+    Returns
+    -------
+    torch.Tensor
+        The cropped tensor (a view, not a copy).
+    """
+    spatial_ndim = tensor.ndim - 2
+    assert len(border) == spatial_ndim, (
+        f"Border crop {border} does not match the {spatial_ndim} spatial axes of a tensor with shape {tuple(tensor.shape)}"
+    )
+    slices = (slice(None), slice(None)) + tuple(
+        slice(b, tensor.shape[2 + i] - b) if b > 0 else slice(None) for i, b in enumerate(border)
+    )
+    return tensor[slices]
+
+
 def time_text(t):
     """
     Format a time duration (in seconds) into a human-readable string.

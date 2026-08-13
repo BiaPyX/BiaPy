@@ -30,7 +30,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, MetricLogger
+from biapy.utils.misc import to_pytorch_format, crop_border_tensor, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
 from biapy.data.norm import undo_image_norm
@@ -293,6 +293,13 @@ class Super_resolution_Workflow(Base_Workflow):
                 _targets = targets.clone()
             else:
                 _targets = targets
+
+        # Exclude the border region from the metric computation (see 'TEST.EVAL_BORDER_CROP').
+        # Train-time patches are small already and never carry this crop.
+        if not train and self.cfg.TEST.EVAL_BORDER_CROP:
+            border = list(self.cfg.TEST.EVAL_BORDER_CROP)
+            _output = crop_border_tensor(_output, border)
+            _targets = crop_border_tensor(_targets, border)
 
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics

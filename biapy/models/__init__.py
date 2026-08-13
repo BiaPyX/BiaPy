@@ -261,6 +261,11 @@ def build_model(
             return_one_tensor=False,
             pretrained=stunet_pretrained,
         )
+        if str(cfg.MODEL.STUNET.VARIANT).lower() == "custom":
+            args["depth"] = cfg.MODEL.STUNET.DEPTH
+            args["dims"] = cfg.MODEL.STUNET.DIMS
+            args["pool_op_kernel_sizes"] = cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES
+            args["conv_kernel_sizes"] = cfg.MODEL.STUNET.CONV_KERNEL_SIZES
         model = build_stunet(**args) # type: ignore
     else:
         if modelname == "simple_cnn":

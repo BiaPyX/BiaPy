@@ -228,6 +228,11 @@ class DatasetFile:
         constructor argument; it is populated later by
         :func:`biapy.data.pre_processing.set_cellpose_diameters` and used to rescale patches during
         the Cellpose/Omnipose flow training.
+
+        The ``resolution`` attribute (physical voxel spacing, ``None`` by default) is likewise not a
+        constructor argument; it is populated later by
+        :func:`biapy.data.pre_processing.set_file_resolutions` from a user-provided per-file JSON, and
+        used to rescale patches in-plane during training when mixing datasets of different resolution.
         """
         self.path = path
         self.shape = shape
@@ -237,6 +242,9 @@ class DatasetFile:
         # when the instance channels are created. Used to rescale patches during training. None when
         # unknown (no rescale).
         self.diameter = None
+        # Physical (z, y, x) voxel spacing of this file, set from a user-provided "resolution.json".
+        # Used to rescale patches in-plane during training. None when unknown (no rescale).
+        self.resolution = None
         if input_axes is not None:
             self.input_axes = input_axes
         if parallel_data is not None:

@@ -387,6 +387,87 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
     return representative
 
 
+def load_resolution_stats(data_dir: str) -> Dict:
+    """
+    Load the per-file physical resolution JSON placed in the parent of ``data_dir``.
+
+    The JSON (``resolution.json``) is a flat, user-authored mapping of image basename ->
+    ``(z, y, x)`` resolution, used to mix datasets of different physical resolution in one
+    training run.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory the images are loaded from (e.g. ``DATA.TRAIN.PATH``). The JSON is looked up
+        in its parent.
+
+    Returns
+    -------
+    dict of str to tuple of float
+        Mapping of image basename -> ``(z, y, x)`` resolution. Empty if no JSON is found.
+    """
+    if not data_dir:
+        return {}
+    fp = os.path.join(os.path.dirname(os.path.normpath(data_dir)), "resolution.json")
+    if not os.path.isfile(fp):
+        return {}
+    with open(fp) as f:
+        data = json.load(f)
+    return {name: tuple(float(v) for v in res) for name, res in data.items()}
+
+
+def set_file_resolutions(cfg: CN, X_train, X_val=None) -> None:
+    """
+    Attach the per-image physical resolution to each raw ``DatasetFile``, read from
+    ``resolution.json`` (see :func:`load_resolution_stats`).
+
+    Lets the train generator rescale each patch in-plane (Y, X) toward
+    ``DATA.RESOLUTION_NORM.TARGET_RESOLUTION`` using the per-file resolution set here, mirroring
+    :func:`set_cellpose_diameters`. Files absent from the JSON are left with ``resolution=None``
+    (no rescale). No-op when ``DATA.RESOLUTION_NORM.ENABLE`` is False.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
+    X_train : BiaPyDataset
+        Training raw dataset whose ``DatasetFile`` entries get ``.resolution`` set (in place).
+    X_val : BiaPyDataset, optional
+        Validation raw dataset (same treatment). Falls back to the train JSON, matched by
+        basename, when it has no JSON of its own (e.g. validation split from train).
+    """
+    if not cfg.DATA.RESOLUTION_NORM.ENABLE:
+        return
+
+    def _attach(dataset, data_dir, res_map=None, fallback_map=None):
+        if dataset is None:
+            return {}
+        if res_map is None:
+            res_map = load_resolution_stats(data_dir)
+        used_fallback = False
+        if not res_map and fallback_map:
+            res_map = fallback_map
+            used_fallback = True
+        matched = 0
+        for dfile in dataset.dataset_info:
+            dfile.resolution = res_map.get(os.path.basename(dfile.path))
+            if dfile.resolution is not None:
+                matched += 1
+
+        if is_main_process():
+            n_files = len(dataset.dataset_info)
+            if used_fallback:
+                print(f"Resolution norm: matched {matched}/{n_files} file(s) from the train "
+                      "resolution.json (no split-specific JSON; validation split from train).")
+            else:
+                print(f"Resolution norm: matched {matched}/{n_files} file(s) from '{data_dir}'.")
+        return res_map
+
+    train_map = load_resolution_stats(cfg.DATA.TRAIN.PATH)
+    _attach(X_train, cfg.DATA.TRAIN.PATH, res_map=train_map)
+    _attach(X_val, cfg.DATA.VAL.PATH, fallback_map=train_map)
+
+
 def create_instance_channels(cfg: CN, data_type: str = "train"):
     """
     Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.

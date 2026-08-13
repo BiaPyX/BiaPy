@@ -22,6 +22,10 @@ from yacs.config import CfgNode as CN
 from biapy.data.pre_processing import calculate_volume_prob_map
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
 from biapy.data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
+from biapy.data.generators.membrane_repair_data_generator import (
+    Membrane2DRepairDataGenerator,
+    Membrane3DRepairDataGenerator,
+)
 from biapy.data.generators.single_data_2D_generator import Single2DImageDataGenerator
 from biapy.data.generators.single_data_3D_generator import Single3DImageDataGenerator
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
@@ -34,6 +38,53 @@ from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
 from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
+
+
+def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
+    """
+    Build the kwargs specific to ``Membrane2D/3DRepairDataGenerator`` from
+    ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR``. Shared by the train and val dict construction below.
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+
+    Returns
+    -------
+    kwargs : dict
+        Keyword arguments to merge into the generator constructor dict.
+    """
+    mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+    data_channels = list(mr.DATA_CHANNELS)
+    extra_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0])
+
+    def _aug_cfg(block, *range_keys):
+        d = {"enable": block.ENABLE, "prob": block.PROB}
+        for key in range_keys:
+            d[key] = tuple(getattr(block, key.upper()))
+        return d
+
+    return {
+        "instance_problem": True,
+        "data_channels": data_channels,
+        "channel_extra_opts": extra_opts,
+        "instance_channel": (
+            channel_physical_offsets(data_channels, extra_opts)["I"] if "I" in data_channels else None
+        ),
+        "source_channels": list(mr.SOURCE_CHANNELS),
+        "derived_channels": list(mr.DERIVED_CHANNELS),
+        "derived_channels_extra_opts": dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
+        "slice_dropout_aug": _aug_cfg(mr.SLICE_DROPOUT_AUG),
+        "gap_aug": _aug_cfg(mr.GAP_AUG, "length_range", "n_iterations"),
+        "bridge_aug": _aug_cfg(mr.BRIDGE_AUG, "length_range"),
+        "island_aug": _aug_cfg(mr.ISLAND_AUG, "size_range"),
+        "mito_border_erasure_aug": _aug_cfg(mr.MITO_BORDER_ERASURE_AUG, "length_range"),
+        "skeleton_perturb_aug": _aug_cfg(mr.SKELETON_PERTURB_AUG, "radius_range"),
+        # SOURCE_CHANNELS are binary class maps, not continuous intensity data.
+        "img_type": "mask",
+    }
+
 
 def create_train_val_augmentors(
     cfg: CN,
@@ -118,15 +169,20 @@ def create_train_val_augmentors(
                 save_dir=prob_map_dir,
             )
 
+    membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
     if cfg.PROBLEM.NDIM == "2D":
-        if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
+        if membrane_repair:
+            f_name = Membrane2DRepairDataGenerator
+        elif cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
             cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
         ):
             f_name = Single2DImageDataGenerator
         else:
             f_name = Pair2DImageDataGenerator
     else:
-        if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
+        if membrane_repair:
+            f_name = Membrane3DRepairDataGenerator
+        elif cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
             cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
         ):
             f_name = Single3DImageDataGenerator
@@ -300,6 +356,9 @@ def create_train_val_augmentors(
             salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE,
             resolution=cfg.DATA.TRAIN.RESOLUTION,
+            resolution_norm_target=(
+                cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION if cfg.DATA.RESOLUTION_NORM.ENABLE else None
+            ),
             random_crops_in_DA=cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
             prob_map=prob_map,
             n_classes=cfg.DATA.N_CLASSES,
@@ -336,6 +395,8 @@ def create_train_val_augmentors(
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
                 # Cellpose-style random scale jitter applied on top of the rescale during training.
                 dic["cellpose_scale_range"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_RANGE)
+        elif membrane_repair:
+            dic.update(_membrane_repair_generator_kwargs(cfg))
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -377,6 +438,9 @@ def create_train_val_augmentors(
             seed=cfg.SYSTEM.SEED,
             norm_module=norm_module,
             resolution=cfg.DATA.VAL.RESOLUTION,
+            resolution_norm_target=(
+                cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION if cfg.DATA.RESOLUTION_NORM.ENABLE else None
+            ),
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
             preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.VAL else None,
@@ -398,6 +462,8 @@ def create_train_val_augmentors(
                 # does on train and test, so val is scored at the scale the net trains at. Augmentation
                 # stays off (da=False); only this rescale is applied.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
+        elif membrane_repair:
+            dic.update(_membrane_repair_generator_kwargs(cfg))
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -606,13 +672,21 @@ def create_test_generator(
         gen_name = test_pair_data_generator
         dic["Y"] = Y_test
         dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
-        dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG"
+        _membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
+        dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG" or _membrane_repair
         # 'I' is in the test GT too and must be dropped before the GT is used for the metrics.
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             _test_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             dic["instance_channel"] = (
                 channel_physical_offsets(_test_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
                 if "I" in _test_channels else None
+            )
+        elif _membrane_repair:
+            _mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+            _test_channels = list(_mr.DATA_CHANNELS)
+            _extra_opts = dict(_mr.DATA_CHANNELS_EXTRA_OPTS[0])
+            dic["instance_channel"] = (
+                channel_physical_offsets(_test_channels, _extra_opts)["I"] if "I" in _test_channels else None
             )
         dic["ignore_index"] = cfg.LOSS.IGNORE_INDEX
         dic["n_classes"] = cfg.DATA.N_CLASSES

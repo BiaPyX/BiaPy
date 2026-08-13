@@ -55,6 +55,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         e_im: Optional[NDArray] = None,
         e_mask: Optional[NDArray] = None,
         diam_factor: float = 1.0,
+        resolution_norm_factor: float = 1.0,
     ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a probability.
@@ -78,6 +79,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             forwarded to the base :meth:`PairBaseDataGenerator.apply_transform`. ``1.0`` (default)
             disables it.
 
+        resolution_norm_factor : float, optional
+            Per-sample in-plane resolution normalization factor, forwarded to the base
+            :meth:`PairBaseDataGenerator.apply_transform`. ``1.0`` (default) disables it.
+
         Returns
         -------
         image : 4D Numpy array
@@ -95,7 +100,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             if e_mask is not None:
                 e_mask = e_mask[::-1, ...]
 
-        return super().apply_transform(image, mask, e_im, e_mask, diam_factor=diam_factor)
+        return super().apply_transform(
+            image, mask, e_im, e_mask,
+            diam_factor=diam_factor, resolution_norm_factor=resolution_norm_factor,
+        )
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
         """

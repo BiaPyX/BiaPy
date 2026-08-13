@@ -2305,6 +2305,7 @@ def affine_transform(
     angle: float = 0.0,
     mode: str = "reflect",
     mask_type: str = "mask",
+    img_type: str = "image",
     flow_heat: Optional[Dict] = None,
 ) -> Union[
     NDArray,
@@ -2316,10 +2317,10 @@ def affine_transform(
 
     The output keeps the original spatial shape: enlarging (``scale > 1``) centre-crops, shrinking
     (``scale < 1``) fills the border with ``mode``. The Y and X axes are scaled by ``scale_xy`` and
-    rotated by ``angle``; the Z axis (3D only) is scaled by ``scale_z`` and never rotated. ``img`` and
-    ``heat`` use linear interpolation, the binary ``mask`` nearest-neighbour. Flow vectors in ``heat``
-    are rotated and re-scaled for axis anisotropy (see :func:`rotate_flow_vectors` and
-    :func:`scale_flow_vectors`).
+    rotated by ``angle``; the Z axis (3D only) is scaled by ``scale_z`` and never rotated. ``heat``
+    always uses linear interpolation; ``img`` and ``mask`` use linear or nearest-neighbour depending
+    on ``img_type``/``mask_type``. Flow vectors in ``heat`` are rotated and re-scaled for axis
+    anisotropy (see :func:`rotate_flow_vectors` and :func:`scale_flow_vectors`).
 
     Parameters
     ----------
@@ -2347,6 +2348,11 @@ def affine_transform(
 
     mask_type : str, optional
         How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
+
+    img_type : str, optional
+        How to treat ``img`` during interpolation. Either as "image" (order 1, default) or "mask"
+        (order 0), for cases where ``img`` is itself a binary/label map (e.g. the membrane-repair
+        source channels) rather than continuous intensity data.
 
     flow_heat : dict, optional
         Mapping of flow components to their channel index inside ``heat`` (``{"vy": i, "vx": j,
@@ -2416,7 +2422,7 @@ def affine_transform(
         np.clip(out, arr_mins, arr_maxes, out=out)
         return out.astype(orig_dtype, copy=False)
 
-    img = _warp(img, 1)
+    img = _warp(img, 0 if img_type == "mask" else 1)
     if mask is not None:
         mask = _warp(mask, 0 if mask_type == "mask" else 1)
     if heat is not None:

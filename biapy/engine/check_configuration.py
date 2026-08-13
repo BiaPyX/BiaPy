@@ -52,7 +52,26 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if not cfg.TRAIN.ENABLE and not cfg.TEST.ENABLE:
         raise ValueError("At least one of 'TRAIN.ENABLE' or 'TEST.ENABLE' must be set to True")
-    
+
+    if cfg.TEST.ENABLE and len(cfg.TEST.EVAL_BORDER_CROP) > 0:
+        assert cfg.PROBLEM.TYPE != "CLASSIFICATION", (
+            "'TEST.EVAL_BORDER_CROP' is not applicable to 'CLASSIFICATION' (no spatial dimension "
+            "to crop); leave it empty"
+        )
+        assert all(isinstance(x, int) and x >= 0 for x in cfg.TEST.EVAL_BORDER_CROP), (
+            "'TEST.EVAL_BORDER_CROP' needs to be a list of non-negative integers"
+        )
+        assert len(cfg.TEST.EVAL_BORDER_CROP) == dim_count, (
+            "'TEST.EVAL_BORDER_CROP' needs to be of " f"{dim_count} dimension"
+        )
+
+    if cfg.DATA.RESOLUTION_NORM.ENABLE:
+        yx_target = cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION[-2:]
+        assert len(cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION) == 3 and all(v > 0 for v in yx_target), (
+            "'DATA.RESOLUTION_NORM.TARGET_RESOLUTION' must be a (z,y,x) tuple with positive y,x values "
+            "when 'DATA.RESOLUTION_NORM.ENABLE' is True"
+        )
+
     # Adjust overlap and padding in the default setting if it was not set
     opts = []
     if cfg.PROBLEM.NDIM == "3D":
@@ -1342,6 +1361,24 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
 
+    elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
+        loss = "MEMBRANE_REPAIR_AFFINITY" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss == "MEMBRANE_REPAIR_AFFINITY", (
+            "LOSS.TYPE must be 'MEMBRANE_REPAIR_AFFINITY' when "
+            "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True"
+        )
+        assert len(cfg.LOSS.WEIGHTS) == 4, (
+            "'LOSS.WEIGHTS' needs to be a list of four floats ([w_bce, w_malis, w_cldice, "
+            "w_svox]) when LOSS.TYPE is 'MEMBRANE_REPAIR_AFFINITY'"
+        )
+        assert any(w > 0 for w in cfg.LOSS.WEIGHTS), (
+            "'LOSS.WEIGHTS' must have at least one positive entry when LOSS.TYPE is "
+            "'MEMBRANE_REPAIR_AFFINITY'"
+        )
+        assert cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD in ["watershed", "agglomeration"], (
+            "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be 'watershed' or "
+            "'agglomeration'"
+        )
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
@@ -1495,6 +1532,41 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'deeplabv3_mobilenet_v3_large' model expects 3 channel data (RGB). "
                     f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}"
                 )
+    #### Instance refinement (used by INSTANCE_SEG and IMAGE_TO_IMAGE.MEMBRANE_REPAIR) ####
+    if cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
+        if len(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS) != len(
+            cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES
+        ):
+            raise ValueError(
+                "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS' and 'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' need to be of the same length. "
+                "For those operations that do not require a value, please set 'none' for them (e.g. 'remove_small_objects')."
+            )
+        for opt, value in zip(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS, cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES):
+            if opt not in ["dilation", "erosion", "fill_holes", "clear_border", "remove_small_objects", "remove_big_objects"]:
+                raise ValueError(
+                    "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS' can only contain the following operations: 'dilation', "
+                    "'erosion', 'fill_holes', 'clear_border', 'remove_small_objects', 'remove_big_objects'"
+                )
+            if (
+                opt in ["dilation", "erosion"]
+                and (
+                    (not isinstance(value, int) and not isinstance(value, list))
+                    or (isinstance(value, int) and value < 1)
+                    or (isinstance(value, list) and len(value) != dim_count)
+                    )
+            ):
+                raise ValueError(
+                    "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'dilation' and 'erosion' operations need to be an integer greater than 0 or a list of {} integers greater than 0".format(dim_count)
+                )
+            if opt in ["remove_small_objects", "remove_big_objects"] and (not isinstance(value, int) or value < 1):
+                raise ValueError(
+                    "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'remove_small_objects' and 'remove_big_objects' operations need to be an integer greater than 0"
+                )
+            if opt in ["fill_holes", "clear_border"] and value != "none":
+                raise ValueError(
+                    "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'fill_holes' and 'clear_border' operations need to be set to 'none'"
+                )
+
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
@@ -1751,41 +1823,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 # Corresponds to foreground weight, instance center offset, variance and seediness
                 opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS", [10,1,10,1]]) # Embedseg default weights
 
-        if cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
-            if len(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS) != len(
-                cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES
-            ):
-                raise ValueError(
-                    "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS' and 'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' need to be of the same length. "
-                    "For those operations that do not require a value, please set 'none' for them (e.g. 'remove_small_objects')."
-                )
-            for opt, value in zip(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS, cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES):
-                if opt not in ["dilation", "erosion", "fill_holes", "clear_border", "remove_small_objects", "remove_big_objects"]:
-                    raise ValueError(
-                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS' can only contain the following operations: 'dilation', "
-                        "'erosion', 'fill_holes', 'clear_border', 'remove_small_objects', 'remove_big_objects'"
-                    )
-                if (
-                    opt in ["dilation", "erosion"] 
-                    and (
-                        (not isinstance(value, int) and not isinstance(value, list)) 
-                        or (isinstance(value, int) and value < 1)
-                        or (isinstance(value, list) and len(value) != dim_count)
-                        )
-                ):
-                    raise ValueError(
-                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'dilation' and 'erosion' operations need to be an integer greater than 0 or a list of {} integers greater than 0".format(dim_count)
-                    )
-                if opt in ["remove_small_objects", "remove_big_objects"] and (not isinstance(value, int) or value < 1):
-                    raise ValueError(
-                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'remove_small_objects' and 'remove_big_objects' operations need to be an integer greater than 0"
-                    )
-                if opt in ["fill_holes", "clear_border"] and value != "none":
-                    raise ValueError(
-                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'fill_holes' and 'clear_border' operations need to be set to 'none'"
-                    )
-
-
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             if not any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["F", "B", "C", "M"]]):
                 raise ValueError(
@@ -1897,14 +1934,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("TorchVision model's for detection are only available for 2D images")
             if cfg.TRAIN.ENABLE:
                 raise NotImplementedError  # require bbox generator etc.
-
-        if cfg.TEST.ENABLE and len(cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX) > 0:
-            assert [x > 0 for x in cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX], (
-                "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be a list " "of positive integers"
-            )
-            assert len(cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX) == dim_count, (
-                "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be of " f"{dim_count} dimension"
-            )
 
         if cfg.DATA.N_CLASSES > 2 and len(cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS) != 2:
             raise ValueError("When 'DATA.N_CLASSES' > 2, 'PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS' needs to have two weights: one for the background "
@@ -3170,7 +3199,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.NDIM == "3D" and cfg.MODEL.HRNET.HEAD_TYPE == "OCR":
                 raise ValueError("'OCR' head is not available for 3D 'HRNET' models. Please choose another head type: 'ASPP', 'PSP' or 'FCN'")
         elif model_arch == "stunet":
-            assert cfg.MODEL.STUNET.VARIANT in ['small', 'base', 'large'], "'MODEL.STUNET.VARIANT' not in ['small', 'base', 'large']"
+            assert cfg.MODEL.STUNET.VARIANT in ['small', 'base', 'large', 'custom'], "'MODEL.STUNET.VARIANT' not in ['small', 'base', 'large', 'custom']"
+            if cfg.MODEL.STUNET.VARIANT == "custom":
+                n_stages = len(cfg.MODEL.STUNET.DIMS)
+                assert len(cfg.MODEL.STUNET.DEPTH) == n_stages, (
+                    f"'MODEL.STUNET.DEPTH' (length {len(cfg.MODEL.STUNET.DEPTH)}) must have the same length as "
+                    f"'MODEL.STUNET.DIMS' (length {n_stages})"
+                )
+                assert len(cfg.MODEL.STUNET.CONV_KERNEL_SIZES) == n_stages, (
+                    f"'MODEL.STUNET.CONV_KERNEL_SIZES' (length {len(cfg.MODEL.STUNET.CONV_KERNEL_SIZES)}) must have the "
+                    f"same length as 'MODEL.STUNET.DIMS' (length {n_stages})"
+                )
+                assert len(cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES) == n_stages - 1, (
+                    f"'MODEL.STUNET.POOL_OP_KERNEL_SIZES' (length {len(cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES)}) must be "
+                    f"one shorter than 'MODEL.STUNET.DIMS' (length {n_stages}), i.e. {n_stages - 1}"
+                )
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         file = get_checkpoint_path(cfg, jobname)
@@ -3618,6 +3661,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             old_cfg["TEST"]["FULL_IMG"] = full_image
         if "EVALUATE" in old_cfg["TEST"]:
             del old_cfg["TEST"]["EVALUATE"]
+        if "DET_IGNORE_POINTS_OUTSIDE_BOX" in old_cfg["TEST"]:
+            old_cfg["TEST"]["EVAL_BORDER_CROP"] = old_cfg["TEST"]["DET_IGNORE_POINTS_OUTSIDE_BOX"]
+            del old_cfg["TEST"]["DET_IGNORE_POINTS_OUTSIDE_BOX"]
         if "POST_PROCESSING" in old_cfg["TEST"]:
             if "YZ_FILTERING" in old_cfg["TEST"]["POST_PROCESSING"]:
                 del old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING"]

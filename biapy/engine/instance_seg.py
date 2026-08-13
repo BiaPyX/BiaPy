@@ -67,6 +67,8 @@ from biapy.utils.misc import (
     os_walk_clean,
     get_rank,
     get_world_size,
+    crop_border_numpy,
+    crop_border_tensor,
 )
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 from biapy.data.data_3D_manipulation import (
@@ -724,6 +726,13 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             else:
                 _targets = targets
 
+        # Exclude the border region from the metric computation (see 'TEST.EVAL_BORDER_CROP').
+        # Train-time patches are small already and never carry this crop.
+        if not train and self.cfg.TEST.EVAL_BORDER_CROP:
+            border = list(self.cfg.TEST.EVAL_BORDER_CROP)
+            _output = crop_border_tensor(_output, border)
+            _targets = crop_border_tensor(_targets, border)
+
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
@@ -947,6 +956,89 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         )
         return mapped[inv].reshape(patch.shape)
 
+    def _matching_stats_and_report(self, _Y: NDArray, pred_labels: NDArray, filenames: List[str], suffix: str = "") -> Tuple[Dict, ...]:
+        """
+        Compute per-threshold matching stats between `_Y` and `pred_labels`, save the GT-association/FP
+        CSVs and (for the configured thresholds) the TP/FP/FN color map, then return the stats.
+
+        Shared between the raw-prediction evaluation and the post-processing (instance refinement)
+        evaluation in ``instance_seg_process`` -- `suffix` (``""`` or ``"_post-proc"``) is what tells
+        their output files apart.
+
+        Parameters
+        ----------
+        _Y : NDArray
+            Ground truth instance label image.
+        pred_labels : NDArray
+            Predicted instance label image, same shape as `_Y`.
+        filenames : list of str
+            Predicted image's filenames (only the first entry is used, as elsewhere in this class).
+        suffix : str, optional
+            Inserted right before ``_th_{thr}`` in every saved filename, e.g. ``"_post-proc"``.
+
+        Returns
+        -------
+        tuple of dict
+            One ``matching()`` stats dict per threshold in ``cfg.TEST.MATCHING_STATS_THS``.
+        """
+        diff_ths_colored_img = abs(
+            len(self.cfg.TEST.MATCHING_STATS_THS_COLORED_IMG) - len(self.cfg.TEST.MATCHING_STATS_THS)
+        )
+        colored_img_ths = self.cfg.TEST.MATCHING_STATS_THS_COLORED_IMG + [-1] * diff_ths_colored_img
+
+        results = matching(_Y, pred_labels, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
+        for i in range(len(results)):
+            # Extract TPs, FPs and FNs from the resulting matching data structure
+            r_stats = results[i]
+            thr = r_stats["thresh"]
+
+            want_colored_img = colored_img_ths[i] != -1 and colored_img_ths[i] == thr
+            if want_colored_img:
+                print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
+            colored_result, df, df_fp = build_tp_fp_fn_report(
+                gt_labels=_Y,
+                pred_labels=pred_labels,
+                r_stats=r_stats,
+                build_color_map=want_colored_img,
+            )
+
+            # Save csv files
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
+            if self.save_to_disk:
+                df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                        os.path.splitext(filenames[0])[0] + f"{suffix}_th_{thr}_gt_assoc.csv",
+                    ),
+                    index=False,
+                )
+                df_fp.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                        os.path.splitext(filenames[0])[0] + f"{suffix}_th_{thr}_fp.csv",
+                    ),
+                    index=False,
+                )
+            del r_stats["matched_scores"]
+            del r_stats["matched_tps"]
+            del r_stats["matched_pairs"]
+            del r_stats["pred_ids"]
+            del r_stats["gt_ids"]
+            print("DatasetMatching: {}".format(r_stats))
+
+            if want_colored_img:
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(colored_result, 0),
+                        self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
+                        [os.path.splitext(filenames[0])[0] + f"{suffix}_th_{thr}.tif"],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
+                del colored_result
+
+        return results
+
     def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, calculate_metrics: bool = True):
         """
         Instance segmentation workflow engine for test/inference.
@@ -1132,62 +1224,18 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             if _Y.dtype == np.float64:
                 _Y = _Y.astype(np.uint64)
 
-            diff_ths_colored_img = abs(
-                len(self.cfg.TEST.MATCHING_STATS_THS_COLORED_IMG) - len(self.cfg.TEST.MATCHING_STATS_THS)
-            )
-            colored_img_ths = self.cfg.TEST.MATCHING_STATS_THS_COLORED_IMG + [-1] * diff_ths_colored_img
+            # 'pred_labels'/'_Y' are always (z, y, x) here (a leading z=1 axis is inserted for 2D
+            # above), while 'TEST.EVAL_BORDER_CROP' follows PROBLEM.NDIM's convention ([y, x] for
+            # 2D) -- pad it with a leading 0 so indices line up.
+            border_crop = list(self.cfg.TEST.EVAL_BORDER_CROP)
+            eval_border_crop = (([0] + border_crop) if self.cfg.PROBLEM.NDIM == "2D" else border_crop) if border_crop else []
 
-            results = matching(_Y, pred_labels, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
-            for i in range(len(results)):
-                # Extract TPs, FPs and FNs from the resulting matching data structure
-                r_stats = results[i]
-                thr = r_stats["thresh"]
+            eval_Y, eval_pred_labels = _Y, pred_labels
+            if eval_border_crop:
+                eval_Y = crop_border_numpy(_Y, eval_border_crop, has_channel_axis=False)
+                eval_pred_labels = crop_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
 
-                want_colored_img = colored_img_ths[i] != -1 and colored_img_ths[i] == thr
-                if want_colored_img:
-                    print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
-                colored_result, df, df_fp = build_tp_fp_fn_report(
-                    gt_labels=_Y,
-                    pred_labels=pred_labels,
-                    r_stats=r_stats,
-                    build_color_map=want_colored_img,
-                )
-
-                # Save csv files
-                os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
-                if self.save_to_disk:
-                    df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0] + "_th_{}_gt_assoc.csv".format(thr),
-                        ),
-                        index=False,
-                    )
-                if self.save_to_disk:
-                    df_fp.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0] + "_th_{}_fp.csv".format(thr),
-                        ),
-                        index=False,
-                    )
-                del r_stats["matched_scores"]
-                del r_stats["matched_tps"]
-                del r_stats["matched_pairs"]
-                del r_stats["pred_ids"]
-                del r_stats["gt_ids"]
-                print("DatasetMatching: {}".format(r_stats))
-
-                if want_colored_img:
-                    if self.save_to_disk:
-                        save_tif(
-                            np.expand_dims(colored_result, 0),
-                            self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                            [os.path.splitext(filenames[0])[0] + "_th_{}.tif".format(thr)],
-                            verbose=self.cfg.TEST.VERBOSE,
-                            meta=self.current_sample.get("img_meta"),
-                        )
-                    del colored_result
+            results = self._matching_stats_and_report(eval_Y, eval_pred_labels, filenames, suffix="")
 
         ###################
         # Post-processing #
@@ -1394,63 +1442,12 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     pred_labels = np.expand_dims(pred_labels, 0)
 
                 print("Calculating matching stats after post-processing . . .")
-                results_post_proc = matching(
-                    _Y,
-                    pred_labels,
-                    thresh=self.cfg.TEST.MATCHING_STATS_THS,
-                    report_matches=True,
+                eval_pred_labels_post = pred_labels
+                if eval_border_crop:
+                    eval_pred_labels_post = crop_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
+                results_post_proc = self._matching_stats_and_report(
+                    eval_Y, eval_pred_labels_post, filenames, suffix="_post-proc"
                 )
-
-                for i in range(len(results_post_proc)):
-                    # Extract TPs, FPs and FNs from the resulting matching data structure
-                    r_stats = results_post_proc[i]
-                    thr = r_stats["thresh"]
-
-                    want_colored_img = colored_img_ths[i] != -1 and colored_img_ths[i] == thr
-                    if want_colored_img:
-                        print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
-                    colored_result, df, df_fp = build_tp_fp_fn_report(
-                        gt_labels=_Y,
-                        pred_labels=pred_labels,
-                        r_stats=r_stats,
-                        build_color_map=want_colored_img,
-                    )
-
-                    # Save csv files
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
-                    if self.save_to_disk:
-                        df.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                                os.path.splitext(filenames[0])[0] + "_post-proc_th_{}_gt_assoc.csv".format(thr),
-                            ),
-                            index=False,
-                        )
-                    if self.save_to_disk:
-                        df_fp.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                                os.path.splitext(filenames[0])[0] + "_post-proc_th_{}_fp.csv".format(thr),
-                            ),
-                            index=False,
-                        )
-                    del r_stats["matched_scores"]
-                    del r_stats["matched_tps"]
-                    del r_stats["matched_pairs"]
-                    del r_stats["pred_ids"]
-                    del r_stats["gt_ids"]
-                    print("DatasetMatching: {}".format(r_stats))
-
-                    if want_colored_img:
-                        if self.save_to_disk:
-                            save_tif(
-                                np.expand_dims(colored_result, 0),
-                                self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                                [os.path.splitext(filenames[0])[0] + "_post-proc_th_{}.tif".format(thr)],
-                                verbose=self.cfg.TEST.VERBOSE,
-                                meta=self.current_sample.get("img_meta"),
-                            )
-                        del colored_result
 
         return results, results_post_proc, results_class, results_class_post_proc
 

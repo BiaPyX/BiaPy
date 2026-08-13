@@ -37,6 +37,7 @@ from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import (
     to_pytorch_format,
     to_numpy_format,
+    crop_border_tensor,
     is_main_process,
     is_dist_avail_and_initialized,
     MetricLogger,
@@ -327,6 +328,13 @@ class Self_supervised_Workflow(Base_Workflow):
                 _targets = targets.clone()
             else:
                 _targets = targets
+
+        # Exclude the border region from the metric computation (see 'TEST.EVAL_BORDER_CROP').
+        # Train-time patches are small already and never carry this crop.
+        if not train and self.cfg.TEST.EVAL_BORDER_CROP:
+            border = list(self.cfg.TEST.EVAL_BORDER_CROP)
+            _output = crop_border_tensor(_output, border)
+            _targets = crop_border_tensor(_targets, border)
 
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics

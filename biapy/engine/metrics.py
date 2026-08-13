@@ -246,6 +246,20 @@ def flow_target_scale(channel_extra_opts: Optional[Dict]) -> float:
     return 5.0 if gtype in ("cellpose", "omnipose") else 1.0
 
 
+# torch.unique's CUDA backend errors ("num_inp ... too big for CUB") above this many elements.
+_CUDA_UNIQUE_ELEMENT_LIMIT = 2**31 - 1
+
+
+def _call_metric_safely(metric_fn: nn.Module, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """Run ``metric_fn(pred, target)``, falling back to CPU if the CUDA unique-element limit would be hit."""
+    if pred.is_cuda and pred.numel() > _CUDA_UNIQUE_ELEMENT_LIMIT:
+        device = pred.device
+        val = metric_fn.cpu()(pred.cpu(), target.cpu())
+        metric_fn.to(device)
+        return val.to(device)
+    return metric_fn(pred, target)
+
+
 class multiple_metrics:
     """
     Compute multiple metrics for instance segmentation workflows.
@@ -397,7 +411,9 @@ class multiple_metrics:
 
                 # Measure metric
                 if self.metric_names[pred_ch_start] == "IoU (classes)":
-                    res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](_y_pred_class, _y_true[:, 1]))
+                    res_metrics[self.metric_names[pred_ch_start]].append(
+                        _call_metric_safely(self.metric_func[pred_ch_start], _y_pred_class, _y_true[:, 1])
+                    )
                 else:
                     y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
                     y_true_slice = _y_true[:, gt_ch_start:gt_ch_end].float()
@@ -406,7 +422,9 @@ class multiple_metrics:
                     if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
                         y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
                         y_true_slice = y_true_slice.float()
-                    res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](y_pred_slice, y_true_slice))
+                    res_metrics[self.metric_names[pred_ch_start]].append(
+                        _call_metric_safely(self.metric_func[pred_ch_start], y_pred_slice, y_true_slice)
+                    )
 
         # Mean of same metric values
         for key, value in res_metrics.items():
@@ -2807,5 +2825,180 @@ class CycleGanLoss(nn.Module):
         if torch.isnan(total_loss):
             print("Warning: NaN detected in discriminator loss. Returning zero loss.")
             total_loss = torch.tensor(0.0, requires_grad=True).to(self.device)
-        
+
         return total_loss
+
+
+class WeightedBCEAffinityLoss(nn.Module):
+    """Foreground/background-balanced BCE on affinity logits, via :func:`weight_binary_ratio`."""
+
+    def __init__(self):
+        """Initialize the weighted BCE affinity loss."""
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss(reduction="none")
+
+    def forward(self, pred_logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the weighted BCE loss.
+
+        Parameters
+        ----------
+        pred_logits : torch.Tensor
+            Raw (pre-sigmoid) affinity logits, ``(B, C, ...)``.
+
+        target : torch.Tensor
+            GT affinities (0/1), same shape as ``pred_logits``.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Scalar loss.
+        """
+        weight = weight_binary_ratio(target).float()
+        loss = self.bce(pred_logits.float(), target.float())
+        return (loss * weight).sum() / weight.sum().clamp_min(1.0)
+
+
+def _soft_erode(img: torch.Tensor) -> torch.Tensor:
+    """Morphological soft erosion (min-pool via ``-max_pool(-img)``), 2D or 3D."""
+    if img.dim() == 4:
+        p1 = -F.max_pool2d(-img, (3, 1), stride=1, padding=(1, 0))
+        p2 = -F.max_pool2d(-img, (1, 3), stride=1, padding=(0, 1))
+        return torch.min(p1, p2)
+    else:
+        p1 = -F.max_pool3d(-img, (3, 1, 1), stride=1, padding=(1, 0, 0))
+        p2 = -F.max_pool3d(-img, (1, 3, 1), stride=1, padding=(0, 1, 0))
+        p3 = -F.max_pool3d(-img, (1, 1, 3), stride=1, padding=(0, 0, 1))
+        return torch.min(torch.min(p1, p2), p3)
+
+
+def _soft_dilate(img: torch.Tensor) -> torch.Tensor:
+    """Morphological soft dilation (max-pool), 2D or 3D."""
+    if img.dim() == 4:
+        return F.max_pool2d(img, (3, 3), stride=1, padding=1)
+    else:
+        return F.max_pool3d(img, (3, 3, 3), stride=1, padding=1)
+
+
+def _soft_skeletonize(img: torch.Tensor, iters: int = 5) -> torch.Tensor:
+    """
+    Iterative soft skeletonization (Shit et al., clDice), 2D or 3D.
+
+    Parameters
+    ----------
+    img : torch.Tensor
+        Soft binary map, ``(B, 1, H, W)`` or ``(B, 1, D, H, W)``, values in ``[0, 1]``.
+
+    iters : int, optional
+        Number of soft-erosion iterations.
+
+    Returns
+    -------
+    skel : torch.Tensor
+        Soft skeleton, same shape as ``img``.
+    """
+    img1 = _soft_dilate(_soft_erode(img))
+    skel = F.relu(img - img1)
+    for _ in range(iters):
+        img = _soft_erode(img)
+        img1 = _soft_dilate(_soft_erode(img))
+        delta = F.relu(img - img1)
+        skel = skel + F.relu(delta - skel * delta)
+    return skel
+
+
+class CLDiceComponentPenaltyLoss(nn.Module):
+    """
+    clDice on a derived membrane probability, plus a spurious-component penalty.
+
+    - clDice (Shit et al., https://arxiv.org/abs/2003.07311): soft-skeleton topology-preserving
+      Dice between a "membrane probability" derived from the affinity logits
+      (``1 - mean(sigmoid(logits), channel)``) and the same quantity from the target affinities.
+    - Spurious-component penalty: connected components in the (detached, thresholded) predicted
+      membrane probability with no overlap in the thresholded target get their mean predicted
+      probability penalised toward 0.
+    """
+
+    def __init__(self, cl_iters: int = 5, smooth: float = 1.0, threshold: float = 0.5, component_weight: float = 1.0):
+        """
+        Initialize the clDice + spurious-component-penalty loss.
+
+        Parameters
+        ----------
+        cl_iters : int, optional
+            Soft-skeletonization iterations.
+
+        smooth : float, optional
+            clDice Laplace smoothing constant.
+
+        threshold : float, optional
+            Threshold used to binarize the (detached) membrane probability for the
+            connected-component analysis.
+
+        component_weight : float, optional
+            Weight applied to the spurious-component penalty term relative to clDice.
+        """
+        super().__init__()
+        self.cl_iters = cl_iters
+        self.smooth = smooth
+        self.threshold = threshold
+        self.component_weight = component_weight
+
+    def _membrane_prob(self, affinity_prob: torch.Tensor) -> torch.Tensor:
+        """Derive a single-channel membrane probability from multi-channel affinity probabilities."""
+        return 1.0 - affinity_prob.mean(dim=1, keepdim=True)
+
+    def _spurious_component_penalty(self, membrane_pred: torch.Tensor, membrane_true: torch.Tensor) -> torch.Tensor:
+        """Penalize the mean predicted probability inside predicted components with no GT overlap."""
+        import scipy.ndimage as ndi
+
+        pred_np = (membrane_pred.detach().cpu().numpy() > self.threshold)
+        true_np = (membrane_true.detach().cpu().numpy() > self.threshold)
+        penalty_weight = np.zeros_like(pred_np, dtype=np.float32)
+
+        for b in range(pred_np.shape[0]):
+            pred_bin = pred_np[b, 0]
+            true_bin = true_np[b, 0]
+            labeled, n = ndi.label(pred_bin)
+            if n == 0:
+                continue
+            for lbl in range(1, n + 1):
+                comp_mask = labeled == lbl
+                if not (comp_mask & true_bin).any():
+                    penalty_weight[b, 0][comp_mask] = 1.0
+
+        weight_t = torch.from_numpy(penalty_weight).to(membrane_pred.device, membrane_pred.dtype)
+        if weight_t.sum() == 0:
+            return torch.zeros((), device=membrane_pred.device, dtype=membrane_pred.dtype)
+        return (membrane_pred * weight_t).sum() / weight_t.sum().clamp_min(1.0)
+
+    def forward(self, pred_logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the clDice + spurious-component-penalty loss.
+
+        Parameters
+        ----------
+        pred_logits : torch.Tensor
+            Raw (pre-sigmoid) affinity logits, ``(B, C, H, W)`` or ``(B, C, D, H, W)``.
+
+        target : torch.Tensor
+            GT affinities (0/1), same shape as ``pred_logits``.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Scalar loss (clDice + ``component_weight`` * spurious-component penalty).
+        """
+        affinity_prob = torch.sigmoid(pred_logits)
+        membrane_pred = self._membrane_prob(affinity_prob)
+        membrane_true = self._membrane_prob(target.float())
+
+        skel_pred = _soft_skeletonize(membrane_pred, self.cl_iters)
+        skel_true = _soft_skeletonize(membrane_true, self.cl_iters)
+
+        tprec = (torch.sum(skel_pred * membrane_true) + self.smooth) / (torch.sum(skel_pred) + self.smooth)
+        tsens = (torch.sum(skel_true * membrane_pred) + self.smooth) / (torch.sum(skel_true) + self.smooth)
+        cl_dice = 1.0 - 2.0 * (tprec * tsens) / (tprec + tsens)
+
+        penalty = self._spurious_component_penalty(membrane_pred, membrane_true)
+        return cl_dice + self.component_weight * penalty
