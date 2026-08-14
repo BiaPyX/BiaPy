@@ -98,44 +98,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) > 0, "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' must be defined"
 
         channel_loss_set = False
-        # Define the custom order once
-        CUSTOM_ORDER = {
-            "F": 0, # Foreground
-            "F_pre": 1,  # Foreground for synapses (pre-synaptic sites)
-            "F_post": 2,  # Foreground for synapses (post-synaptic sites)
-            "B": 3, # Background
-            "C": 4, # contours
-            "Z": 5, # Horizontal distance
-            "V": 6, # Vertical distance
-            "H": 7, # Z distance
-            "Db": 8, # Distance (boundary)
-            "Dc": 9, # Distance (center/skeleton)
-            "Dn": 10, # Distance (neighbor)
-            "D": 11, # Distance (signed)
-            "T": 12, # Touching area
-            "A": 13,  # Affinities
-            "E": 14,  # Embeddings
-            "E_offset": 15,  # Embeddings (offsets)
-            "E_sigma": 16,  # Embeddings (sigma)
-            "E_seediness": 17,  # Embeddings (seediness)
-            "R": 18,  # Radial distances
-            "M": 19,  # Legacy mask (B + C)   
-        }
-
-        def get_sort_key(weights):
-            """Return a sort function based on given weights dict"""
-            def sort_key(item):
-                return (weights.get(item, 99), item)  # alphabetically for "rest"
-            return sort_key
-        custom_sort_key = get_sort_key(CUSTOM_ORDER)
 
         original_instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
-        sorted_original_instance_channels = sorted(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, key=custom_sort_key)
+        instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
 
         # Drop any pre-existing 'I' channel: it is re-derived and re-appended last below. This function is
         # idempotent (it may re-run on a cfg that already contains 'I', e.g. after loading a checkpoint),
         # and 'I' must stay the last channel so the generator can drop it without shifting another index.
-        sorted_original_instance_channels = [x for x in sorted_original_instance_channels if x != "I"]
+        instance_channels = [x for x in instance_channels if x != "I"]
 
         # 'I' never becomes an output channel, so it must not count towards the per-channel weights/losses.
         channels_provided = len([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x != "I"])
@@ -158,16 +128,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             inst_creation_process = cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
-                if "R" in sorted_original_instance_channels:
+                if "R" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
                     inst_creation_process = "stardist"
-                if "Gv" in sorted_original_instance_channels:
+                if "Gv" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "gradient-flow"])
                     inst_creation_process = "gradient-flow"
-                elif "E_offset" in sorted_original_instance_channels:
+                elif "E_offset" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
                     inst_creation_process = "embeddings"
-                elif "A" in sorted_original_instance_channels:
+                elif "A" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "agglomeration"])
                     inst_creation_process = "agglomeration"
                 else:
@@ -178,7 +148,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # 'BCM', 'BCD' and 'A'.
             seed_channels, seed_channels_thresh, growth_mask_channels, growth_mask_channel_ths = [], [], [], []
             topo_surface_ch = ""
-            if set(sorted_original_instance_channels) == {"C"}:
+            if set(instance_channels) == {"C"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["C"]
                     seed_channels_thresh = ["auto"]
@@ -187,7 +157,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["C"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F"}:
+            elif set(instance_channels) == {"F"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F"]
                     seed_channels_thresh = ["auto"]
@@ -196,7 +166,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "C"}:
+            elif set(instance_channels) == {"F", "C"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "C"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -205,7 +175,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "P"}:
+            elif set(instance_channels) == {"F", "P"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["P"]
                     seed_channels_thresh = ["auto"]
@@ -214,7 +184,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "D"}:
+            elif set(instance_channels) == {"F", "D"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "D"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -223,7 +193,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "Dc"}:
+            elif set(instance_channels) == {"F", "Dc"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "Dc"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -232,7 +202,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "Db"}:
+            elif set(instance_channels) == {"F", "Db"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "Db"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -241,7 +211,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "Dn"}:
+            elif set(instance_channels) == {"F", "Dn"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "Dn"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -250,7 +220,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "P"}:
+            elif set(instance_channels) == {"F", "P"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "P"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -259,7 +229,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "V", "H"}:
+            elif set(instance_channels) == {"F", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -268,7 +238,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"Db", "V", "H"}:
+            elif set(instance_channels) == {"Db", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Db", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -277,7 +247,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["Db"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"Dc", "V", "H"}:
+            elif set(instance_channels) == {"Dc", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Dc", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -286,7 +256,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["Dc"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"D", "V", "H"}:
+            elif set(instance_channels) == {"D", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["D", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -295,7 +265,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["D"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "C", "M"}:
+            elif set(instance_channels) == {"F", "C", "M"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "C"]
                     seed_channels_thresh = ["auto", "auto"]
@@ -304,7 +274,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]    
-            elif set(sorted_original_instance_channels) == {"F", "Z", "V", "H"}:
+            elif set(instance_channels) == {"F", "Z", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "Z", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto", "auto"]
@@ -313,7 +283,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"Db", "Z", "V", "H"}:
+            elif set(instance_channels) == {"Db", "Z", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Db", "Z", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto", "auto"]
@@ -322,7 +292,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["Db"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"Dc", "Z", "V", "H"}:
+            elif set(instance_channels) == {"Dc", "Z", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Dc", "Z", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto", "auto"]
@@ -331,7 +301,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["Dc"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"D", "Z", "V", "H"}:
+            elif set(instance_channels) == {"D", "Z", "V", "H"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["D", "Z", "V", "H"]
                     seed_channels_thresh = ["auto", "auto", "auto", "auto"]
@@ -340,7 +310,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["D"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "C", "Dc"}:
+            elif set(instance_channels) == {"F", "C", "Dc"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "C", "Dc"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -349,7 +319,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "C", "Db"}:
+            elif set(instance_channels) == {"F", "C", "Db"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "C", "Db"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -358,7 +328,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"F", "C", "D"}:
+            elif set(instance_channels) == {"F", "C", "D"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "C", "D"]
                     seed_channels_thresh = ["auto", "auto", "auto"]
@@ -367,7 +337,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"A"}:
+            elif set(instance_channels) == {"A"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["A"]
                     seed_channels_thresh = ["auto"]
@@ -376,7 +346,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["A"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"Dc"}:
+            elif set(instance_channels) == {"Dc"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Dc"]
                     seed_channels_thresh = ["auto"]
@@ -385,7 +355,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["Dc"]
                     growth_mask_channel_ths = ["auto"]
-            elif set(sorted_original_instance_channels) == {"Db", "R"}:
+            elif set(instance_channels) == {"Db", "R"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["A"]
                     seed_channels_thresh = ["auto"]
@@ -401,7 +371,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 # supervised, so it is not foreground-masked (unless the user sets mask_values explicitly).
                 if "mask_values" not in dst.get("Db", {}):
                     dst.setdefault("Db", {})["mask_values"] = False
-            elif set(sorted_original_instance_channels) == {"Db"}:
+            elif set(instance_channels) == {"Db"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["Db"]
                     seed_channels_thresh = ["auto"]
@@ -685,8 +655,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # Add extra weight map channel if requested
             assert cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS in ["unet-like", ""], "'PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS' not in ['unet-like', '']"
-            if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
-                sorted_original_instance_channels.append("We")
+            if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in instance_channels:
+                instance_channels.append("We")
 
             # Carry the raw instance labels as an 'I' channel whenever a geometry-derived target must be
             # recomputed from the augmented labels (see instance_channel_needs_regen): directional
@@ -694,15 +664,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # unnormalized Dc/Dn) channels are corrupted by warping. 'I' is appended last (dropped before
             # the model, carries no loss) so removing it shifts no other index.
             _extra_opts = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-            if any(instance_channel_needs_regen(ch, _extra_opts) for ch in sorted_original_instance_channels) \
-                    and "I" not in sorted_original_instance_channels:
-                sorted_original_instance_channels.append("I")
+            if any(instance_channel_needs_regen(ch, _extra_opts) for ch in instance_channels) \
+                    and "I" not in instance_channels:
+                instance_channels.append("I")
 
             # Create unique folder names for instance segmentation channel masks
             # depending on the channels and their options
             suffix = ""
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-            for ch in sorted_original_instance_channels:
+            for ch in instance_channels:
                 suffix += f"_{ch}"
                 for entry in dst.get(ch, {}):
                     eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
@@ -722,27 +692,27 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
             replace_channels = False
-            if sorted_original_instance_channels != original_instance_channels:
+            if instance_channels != original_instance_channels:
                 replace_channels = True
-                print("Reordered instance segmentation data channels. Before: ", original_instance_channels, " . After: ", sorted_original_instance_channels)
+                print("Updated instance segmentation data channels (added 'We'/'I'). Before: ", original_instance_channels, " . After: ", instance_channels)
             
-            if "E" in sorted_original_instance_channels and cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if "E" in instance_channels and cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
                 replace_channels = True
-                idx = sorted_original_instance_channels.index("E")
-                sorted_original_instance_channels[idx+1:idx+1] = ["E_offset", "E_sigma", "E_seediness"] 
-                sorted_original_instance_channels.remove("E")
+                idx = instance_channels.index("E")
+                instance_channels[idx+1:idx+1] = ["E_offset", "E_sigma", "E_seediness"] 
+                instance_channels.remove("E")
                 print("Expanded 'E' channel into 'E_offset', 'E_sigma' and 'E_seediness' channels.")
 
             if replace_channels:
-                opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", sorted_original_instance_channels])
+                opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", instance_channels])
             
-            if "Gv" in sorted_original_instance_channels:
+            if "Gv" in instance_channels:
                 gradient_type = dst.get("Gv", {}).get("gradient_type", "cellpose")
                 # The flow gradient strategy selects both the GT generation and the post-processing
                 # (Cellpose vs Omnipose). Omnipose reconstruction needs the predicted distance field, so a
                 # 'Db' channel built with val_type 'omnipose' must accompany omnipose flows.
                 if gradient_type == "omnipose":
-                    if "Db" not in sorted_original_instance_channels or dst.get("Db", {}).get("val_type") != "omnipose":
+                    if "Db" not in instance_channels or dst.get("Db", {}).get("val_type") != "omnipose":
                         raise ValueError(
                             "Omnipose flows (DATA_CHANNELS_EXTRA_OPTS[0]['Gv']['gradient_type'] == 'omnipose') require a "
                             "'Db' distance channel with DATA_CHANNELS_EXTRA_OPTS[0]['Db']['val_type'] == 'omnipose'."
@@ -787,7 +757,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # depending on the channels and their options
             suffix = ""
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-            for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post", "F_cleft", "Z"]]:
+            for ch in [x for x in instance_channels if x in ["F_pre", "F_post", "F_cleft", "Z"]]:
                 suffix += f"_{ch}" if ch != "Z" else "_ZVH"
                 for entry in dst.get(ch, {}):
                     # These do not affect the values in the channel masks so we ignore them for the unique folder name creation
@@ -811,20 +781,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         effective_channels_per_head = list(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
 
-        if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2 and len(sorted_original_instance_channels) > 1:
+        if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD and len(effective_channels_per_head) < 2 and len(instance_channels) > 1:
             raise ValueError(
                 f"'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True but "
                 f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has only {len(effective_channels_per_head)} "
                 f"entr{'y' if len(effective_channels_per_head) == 1 else 'ies'}, so no decoder separation can occur. "
                 f"Set 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' to a list with at least 2 entries whose values "
-                f"sum to the number of output channels ({len(sorted_original_instance_channels)} or more if any "
+                f"sum to the number of output channels ({len(instance_channels)} or more if any "
                 f"channel expands, e.g. 'R' into rays or 'E_*' into per-axis offsets/sigmas)."
             )
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
             if not channel_loss_set:
                 losses = []
-                for ch in sorted_original_instance_channels:
+                for ch in instance_channels:
                     if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post", "F_cleft"]:
                         losses.append("bce")
                     elif ch in ["Gv", "Gh", "Gz", "D"]:
@@ -843,7 +813,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if len(losses) > 0:
                     opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", losses])
         else:
-            assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x not in ("We", "I")]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+            assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in instance_channels if x not in ("We", "I")]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
             for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
                 assert loss in ["bce", "ce", "mse", "l1", "mae", "embedseg"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'embedseg']"
 
@@ -1615,7 +1585,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
                 assert "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'R' channel must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
                 # For now only allow Db and R channels ('I' is auto-added and dropped before the model).
-                _sd_chs = set(sorted_original_instance_channels) - {"I"}
+                _sd_chs = set(instance_channels) - {"I"}
                 assert _sd_chs == {"Db", "R"}, "'Db' and 'R' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "embeddings":
                 assert "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_sigma" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_seediness" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'E_offset', 'E_sigma' and 'E_seediness' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
@@ -1673,7 +1643,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         except:
                             raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH' values can only be 'auto' or a float")
             else: # agglomeration
-                _agg_chs = set(sorted_original_instance_channels) - {"I"}
+                _agg_chs = set(instance_channels) - {"I"}
                 assert _agg_chs == {"A"}, (
                     "'A' channel must be the only one used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' "
                     "is 'agglomeration'"
@@ -1798,13 +1768,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         else:  # synapses
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 assert x in ["F_pre", "F_post", "F_cleft", "Z", "V", "H"], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['F_pre', 'F_post', 'F_cleft', 'H', 'V', 'Z']"
-            if set(sorted_original_instance_channels) == {"F_pre", "F_post"}:
+            if set(instance_channels) == {"F_pre", "F_post"}:
                 assert cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["manual", "auto", "relative_by_patch", "relative"], "'PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE' must be one of ['manual', 'auto']"
-            elif set(sorted_original_instance_channels) == {"F_post", "Z", "V", "H"}:
+            elif set(instance_channels) == {"F_post", "Z", "V", "H"}:
                 pass
-            elif set(sorted_original_instance_channels) == {"F_cleft"}:
+            elif set(instance_channels) == {"F_cleft"}:
                 pass
-            elif set(sorted_original_instance_channels) == {"F_post"}:
+            elif set(instance_channels) == {"F_post"}:
                 pass
             else: 
                 raise ValueError("Synapse representation {} not supported".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS))

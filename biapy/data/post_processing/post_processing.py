@@ -205,6 +205,7 @@ def watershed_by_channels(
     CUSTOM_ORDER = {
         "F": 0, # Foreground
         "B": 1, # Background
+        "P": 2, # Central points
         "C": 3, # contours
         "H": 4, # Horizontal distance
         "V": 5, # Vertical distance
@@ -216,6 +217,13 @@ def watershed_by_channels(
         "T": 11, # Touching area
         "A": 12,  # Affinities
         "E": 13,  # Embeddings
+        "E_offset": 14,  # Embeddings (offsets)
+        "E_sigma": 15,  # Embeddings (sigma)
+        "E_seediness": 16,  # Embeddings (seediness)
+        "M": 17,  # Legacy mask (B + C)
+        "F_pre": 18,  # Foreground for synapses (pre-synaptic sites)
+        "F_post": 19,  # Foreground for synapses (post-synaptic sites)
+        "F_cleft": 20,  # Foreground for synapses (cleft)
         "R": 999,  # Radial distances
     }
 
@@ -228,8 +236,7 @@ def watershed_by_channels(
 
     # Sort the lists to have the ones that can define a good starting points for the seeds first.
     # 'channels' is NOT sorted: it names the columns of 'data', so it must keep the caller's order
-    # (which follows check_configuration's own ordering, e.g. 'V' before 'H') or every lookup below
-    # would read the wrong channel.
+    # or every lookup below would read the wrong channel.
     orig_order = seed_channels.copy()
     seed_channels = sorted(seed_channels, key=custom_sort_key)
     positions = [orig_order.index(item) for item in seed_channels]
