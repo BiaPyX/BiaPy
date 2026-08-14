@@ -11,6 +11,7 @@ on:
 jobs:
   run:
     runs-on: self-hosted
+    timeout-minutes: 720
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5

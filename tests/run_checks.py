@@ -891,7 +891,7 @@ all_test_info["Test14"] = {
             "ENABLE": True,
             "EPOCHS": 1,
             "PATIENCE": 1,
-            "BATCH_SIZE": 6
+            "BATCH_SIZE": 3
         },
         "MODEL": {
             "ARCHITECTURE": "rcan",
