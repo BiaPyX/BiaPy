@@ -69,6 +69,8 @@ from biapy.utils.util import (
     create_plots,
     check_downsample_division,
     get_cfg_key_value,
+    format_duration,
+    PhaseProgress,
 )
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import (
@@ -104,30 +106,6 @@ from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_
 from biapy.engine.chunked_tiles import ChunkedTileProcessor
 from biapy.data.dataset import PatchCoords
 from biapy.models.memory_bank import MemoryBank
-
-
-def _format_duration(seconds: float) -> str:
-    """
-    Format a duration in seconds as "HH:MM:SS", without wrapping past 24 hours.
-
-    ``time.strftime("%H:%M:%S", time.gmtime(seconds))`` silently wraps every 24h
-    (the hour field is 0-23), which makes a multi-day elapsed/remaining time look
-    like it reset to zero. This keeps the hour field growing unbounded instead.
-
-    Parameters
-    ----------
-    seconds : float
-        Duration in seconds.
-
-    Returns
-    -------
-    str
-        Duration formatted as "HH:MM:SS", with "HH" unbounded.
-    """
-    total_seconds = int(max(0, seconds))
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, secs = divmod(remainder, 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 class Base_Workflow(metaclass=ABCMeta):
@@ -472,7 +450,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         return (
             f"[Rank {get_rank()} ({os.getpid()})] {progress * 100:.0f}% of its patches predicted{tiles}. "
-            f"Elapsed {_format_duration(elapsed)}, {_format_duration(remaining)} left"
+            f"Elapsed {format_duration(elapsed)}, {format_duration(remaining)} left"
         )
 
     def process_chunks_on_the_fly(self) -> bool:
@@ -2644,7 +2622,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print(
                 f"[Rank {get_rank()} ({os.getpid()})] Finished by-chunks prediction: "
                 f"{len(samples_visited)}/{patches_to_process} patches predicted{tiles_msg}. "
-                f"Elapsed {_format_duration(elapsed)}"
+                f"Elapsed {format_duration(elapsed)}"
             )
 
             # Wait until all threads are done so the main thread can create the full size image
@@ -2741,8 +2719,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.chunked_tiles.save_as_tif()
             return
 
-        print("Processing generated predictions . . .")
-
         # Create the generator
         fpath = os.path.join(
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
@@ -2761,6 +2737,18 @@ class Base_Workflow(metaclass=ABCMeta):
             tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
         )
         self.parallel_data_shape = [z_dim, y_dim, x_dim]
+
+        # The DistributedSampler behind this generator (shuffle=False, drop_last=False) pads its
+        # indices to be evenly divisible, so every worker/rank gets exactly this many chunks.
+        workers = max(1, int(self.test_generator.num_workers))
+        replicas = workers * max(1, get_world_size())
+        rank_total = math.ceil(len(tgen) / replicas) if len(tgen) else 0
+        progress = PhaseProgress(rank_total)
+        print(
+            f"[Rank {get_rank()} ({os.getpid()})] Processing generated predictions: "
+            f"{rank_total}/{len(tgen)} chunks assigned to this rank . . ."
+        )
+
         samples_visited = {}
         for obj_list in self.test_generator:
             sampler_ids, chunks, patch_in_data = obj_list
@@ -2800,6 +2788,19 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                 )
                 break
+
+            if progress.should_print(len(samples_visited)):
+                print(
+                    progress.message(
+                        len(samples_visited), f"[Rank {get_rank()} ({os.getpid()})] Processing generated predictions:"
+                    )
+                )
+
+        print(
+            progress.message(
+                len(samples_visited), f"[Rank {get_rank()} ({os.getpid()})] Finished processing generated predictions:"
+            )
+        )
 
         # Wait until all threads are done so the main thread can create the full size image
         if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():

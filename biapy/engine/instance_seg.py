@@ -57,6 +57,7 @@ from biapy.engine.metrics import (
 )
 import zarr
 from biapy.engine.base_workflow import Base_Workflow
+from biapy.utils.util import PhaseProgress
 from biapy.engine.workflow_utils.cellpose import CellposeTestPhaseMixin
 from biapy.utils.misc import (
     is_main_process,
@@ -1995,10 +1996,17 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     f"{len(my_chunk_indices)}/{total_chunks} chunks . . ."
                 )
                 local_max_ids: Dict[int, int] = {}
-                for idx in my_chunk_indices:
+                b1_progress = PhaseProgress(len(my_chunk_indices))
+                for i, idx in enumerate(my_chunk_indices):
                     coords = _chunk_coords(idx)
                     patch = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
                     local_max_ids[idx] = int(patch.max())
+                    if b1_progress.should_print(i + 1):
+                        print(
+                            b1_progress.message(
+                                i + 1, f"[Rank {get_rank()} ({os.getpid()})] Pass B: collecting max IDs:"
+                            )
+                        )
 
                 # Gather max IDs from all ranks so every rank can compute prefix sums.
                 if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
@@ -2024,6 +2032,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     )
 
                 # ---- Pass B2: apply offsets (all ranks, disjoint) ----
+                b2_progress = PhaseProgress(len(my_chunk_indices))
                 for i, idx in enumerate(my_chunk_indices):
                     offset = np.uint64(chunk_offsets[idx])
                     if offset == 0:
@@ -2032,19 +2041,26 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                                 f"[Rank {get_rank()} ({os.getpid()})] Pass B: chunk {i+1}/{len(my_chunk_indices)} "
                                 f"(linear idx {idx}) no offset needed (first chunk)"
                             )
-                        continue
-                    coords = _chunk_coords(idx)
-                    patch = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
-                    nonzero = patch > 0
-                    patch[nonzero] = patch[nonzero].astype(np.uint64) + offset
-                    insert_patch_in_efficient_file(
-                        zarr_data, patch.astype(np.uint64), coords,
-                        axes_order, "ZYXC", mode="replace",
-                    )
-                    if self.cfg.TEST.VERBOSE:
+                    else:
+                        coords = _chunk_coords(idx)
+                        patch = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
+                        nonzero = patch > 0
+                        patch[nonzero] = patch[nonzero].astype(np.uint64) + offset
+                        insert_patch_in_efficient_file(
+                            zarr_data, patch.astype(np.uint64), coords,
+                            axes_order, "ZYXC", mode="replace",
+                        )
+                        if self.cfg.TEST.VERBOSE:
+                            print(
+                                f"[Rank {get_rank()} ({os.getpid()})] Pass B: chunk {i+1}/{len(my_chunk_indices)} "
+                                f"(linear idx {idx}, coords {coords}) offset by {offset}"
+                            )
+
+                    if b2_progress.should_print(i + 1):
                         print(
-                            f"[Rank {get_rank()} ({os.getpid()})] Pass B: chunk {i+1}/{len(my_chunk_indices)} "
-                            f"(linear idx {idx}, coords {coords}) offset by {offset}"
+                            b2_progress.message(
+                                i + 1, f"[Rank {get_rank()} ({os.getpid()})] Pass B: applying offsets:"
+                            )
                         )
 
                 if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
@@ -2080,7 +2096,15 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 from collections import Counter
                 local_edges: set = set()
 
-                for b in my_boundaries:
+                c_progress = PhaseProgress(len(my_boundaries))
+                for bi, b in enumerate(my_boundaries):
+                    if c_progress.should_print(bi + 1):
+                        print(
+                            c_progress.message(
+                                bi + 1, f"[Rank {get_rank()} ({os.getpid()})] Pass C: extracting boundary edges:"
+                            )
+                        )
+
                     zi, yi, xi, direction = b
                     z0_a = zi * step_z;  y0_a = yi * step_y;  x0_a = xi * step_x
                     z1_a = min(z0_a + step_z, z_dim)
@@ -2194,6 +2218,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         f"[Rank {get_rank()} ({os.getpid()})] Pass E: relabelling "
                         f"{len(my_chunk_indices)}/{total_chunks} chunks . . ."
                     )
+                    e_progress = PhaseProgress(len(my_chunk_indices))
                     for i, idx in enumerate(my_chunk_indices):
                         coords = _chunk_coords(idx)
                         patch  = extract_patch_from_efficient_file(zarr_data, coords, axes_order)
@@ -2206,6 +2231,12 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                             print(
                                 f"[Rank {get_rank()} ({os.getpid()})] Pass E: chunk {i+1}/{len(my_chunk_indices)} "
                                 f"(linear idx {idx}) relabelled."
+                            )
+                        if e_progress.should_print(i + 1):
+                            print(
+                                e_progress.message(
+                                    i + 1, f"[Rank {get_rank()} ({os.getpid()})] Pass E: relabelling:"
+                                )
                             )
                 else:
                     print(f"[Rank {get_rank()} ({os.getpid()})] Pass E: no cross-boundary merges needed, skipping relabelling.")

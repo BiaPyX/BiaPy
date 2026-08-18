@@ -19,6 +19,7 @@ It includes functionalities for:
 """
 import os
 import math
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.ndimage
@@ -32,6 +33,94 @@ import functools
 
 from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
+
+
+def format_duration(seconds: float) -> str:
+    """
+    Format a duration in seconds as "HH:MM:SS", without wrapping past 24 hours.
+
+    ``time.strftime("%H:%M:%S", time.gmtime(seconds))`` silently wraps every 24h
+    (the hour field is 0-23), which makes a multi-day elapsed/remaining time look
+    like it reset to zero. This keeps the hour field growing unbounded instead.
+
+    Parameters
+    ----------
+    seconds : float
+        Duration in seconds.
+
+    Returns
+    -------
+    str
+        Duration formatted as "HH:MM:SS", with "HH" unbounded.
+    """
+    total_seconds = int(max(0, seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+class PhaseProgress:
+    """
+    Track the progress of a long-running per-item loop (chunks, patches, boundary faces, ...) and
+    decide when to print a fresh "X% done, Y left" line.
+
+    Used to give every long "by chunks" phase (prediction, instance-label creation, global-ID
+    offsetting, boundary extraction, relabelling, ...) the same reporting cadence: every 5% step,
+    at completion, and at least once a minute regardless of step size -- so a 'tail -f' on the log
+    always has a fresh ETA to look at, even for slow phases or a rank with very few items.
+
+    Parameters
+    ----------
+    total : int
+        Total number of items this loop is expected to process (e.g. items assigned to this rank).
+    """
+
+    def __init__(self, total: int):
+        """Start tracking a loop of `total` items from the current time."""
+        self.total = total
+        self.start = time.time()
+        self._reported = 0.0
+        self._last_print = self.start
+
+    def should_print(self, done: int) -> bool:
+        """
+        Return whether a fresh progress line is due for `done` items completed so far.
+
+        Also records that a line was printed at this point, so consecutive calls only fire again
+        once another 5% step (or a minute) has passed.
+        """
+        progress = done / self.total if self.total else 1
+        now = time.time()
+        due = progress - self._reported >= 0.05 or progress >= 1 or now - self._last_print >= 60
+        if due:
+            self._reported = progress
+            self._last_print = now
+        return due
+
+    def message(self, done: int, prefix: str) -> str:
+        """
+        Build the progress line for `done` items completed so far, prefixed with `prefix`.
+
+        Parameters
+        ----------
+        done : int
+            Items completed so far.
+
+        prefix : str
+            Text to prepend to the line, e.g. ``"[Rank 0 (123)] Pass B: chunks offset"``.
+
+        Returns
+        -------
+        str
+            Line with the count, percentage, elapsed time and ETA.
+        """
+        progress = done / self.total if self.total else 1
+        elapsed = time.time() - self.start
+        remaining = (elapsed / progress) - elapsed if progress > 0 else 0
+        return (
+            f"{prefix} {done}/{self.total} ({progress * 100:.0f}%). "
+            f"Elapsed {format_duration(elapsed)}, {format_duration(remaining)} left"
+        )
 
 
 def create_plots(results, metrics, loss_names, job_id, chartOutDir):
