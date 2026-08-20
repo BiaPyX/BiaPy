@@ -75,19 +75,79 @@ def _geodesic_segment(binary_mask: NDArray, length_px: float) -> NDArray:
     return patch
 
 
+def _random_band_mask(
+    h: int,
+    w: int,
+    length_range: Tuple[float, float],
+    thickness_range: Tuple[float, float],
+) -> NDArray:
+    """
+    Boolean ``(h, w)`` mask of a straight band: a line segment at a random angle and random
+    position, at a random fraction of the image's border-to-border extent along that angle,
+    dilated to a random thickness.
+
+    A fraction of ``1.0`` reproduces the chord of the image along the sampled angle -- e.g. a
+    perfectly horizontal/vertical line spans the full width/height of the image; an oblique line
+    spans the (longer) corner-to-corner extent along its own angle.
+
+    Parameters
+    ----------
+    h, w : int
+        Height and width of the slice the band is drawn onto.
+
+    length_range : tuple of 2 floats
+        ``(min, max)`` fraction (``0``-``1``) of the image's border-to-border extent along the
+        sampled angle.
+
+    thickness_range : tuple of 2 floats
+        ``(min, max)`` thickness (in pixels) of the band.
+
+    Returns
+    -------
+    mask : 2D Numpy array of bool
+        ``(h, w)`` band mask.
+    """
+    theta = random.uniform(0, np.pi)
+    dy, dx = np.sin(theta), np.cos(theta)
+
+    eps = 1e-9
+    dist_y = (h / 2) / abs(dy) if abs(dy) > eps else np.inf
+    dist_x = (w / 2) / abs(dx) if abs(dx) > eps else np.inf
+    chord = 2 * min(dist_y, dist_x)
+
+    length = random.uniform(*length_range) * chord
+    cy, cx = random.uniform(0, h - 1), random.uniform(0, w - 1)
+    r0 = int(np.clip(cy - length / 2 * dy, 0, h - 1))
+    c0 = int(np.clip(cx - length / 2 * dx, 0, w - 1))
+    r1 = int(np.clip(cy + length / 2 * dy, 0, h - 1))
+    c1 = int(np.clip(cx + length / 2 * dx, 0, w - 1))
+
+    rr, cc = line(r0, c0, r1, c1)
+    mask = np.zeros((h, w), dtype=bool)
+    mask[rr, cc] = True
+
+    thickness = random.uniform(*thickness_range)
+    radius = max(0, int(round((thickness - 1) / 2)))
+    struct = np.ones((2 * radius + 1, 2 * radius + 1), dtype=bool)
+    return binary_dilation(mask, structure=struct)
+
+
 def synthetic_gap(
     image: NDArray,
     membrane_idx: int,
     ndim: int,
     prob: float = 0.5,
-    length_range: Tuple[float, float] = (3, 25),
-    n_iterations: Tuple[int, int] = (1, 3),
-    threshold: float = 0.5,
-    erase_radius: int = 1,
+    length_range: Tuple[float, float] = (0.1, 0.5),
+    thickness_range: Tuple[float, float] = (2, 8),
+    n_lines: Tuple[int, int] = (1, 3),
 ) -> NDArray:
     """
-    Erase one or more segments of the membrane skeleton to synthesize a merge/under-seg error, on
-    each z-slice independently with probability ``prob``.
+    Black out one or more straight bands across the membrane channel to synthesize a merge/
+    under-segmentation error affecting many membrane instances at once, on each z-slice
+    independently with probability ``prob``.
+
+    Each band is a line segment at a random angle and random position (see
+    ``_random_band_mask``), dilated to a random thickness.
 
     Parameters
     ----------
@@ -104,39 +164,29 @@ def synthetic_gap(
         Independent probability of augmenting each z-slice (2D: the whole image).
 
     length_range : tuple of 2 floats, optional
-        ``(min, max)`` geodesic length (in pixels) of each erased segment.
+        ``(min, max)`` fraction (``0``-``1``) of the image's border-to-border extent along the
+        band's angle. ``1.0`` reaches from one border to the other.
 
-    n_iterations : tuple of 2 ints, optional
-        ``(min, max)`` number of segments erased per augmented slice.
+    thickness_range : tuple of 2 floats, optional
+        ``(min, max)`` thickness (in pixels) of each band.
 
-    threshold : float, optional
-        Threshold applied before skeletonization.
-
-    erase_radius : int, optional
-        Dilation radius (pixels) applied to the erased segment, so it removes a plausible
-        membrane thickness rather than a single pixel line.
+    n_lines : tuple of 2 ints, optional
+        ``(min, max)`` number of bands drawn per augmented slice.
 
     Returns
     -------
     image : 3D/4D Numpy array
-        ``image`` with the gap(s) applied (copy).
+        ``image`` with the band(s) applied (copy).
     """
     out = image.copy()
-    struct = np.ones((2 * erase_radius + 1, 2 * erase_radius + 1), dtype=bool)
     for z, sub in _iter_prob_slices(out, ndim, prob):
-        membrane = sub[..., membrane_idx]
-        binary = membrane > threshold
-        skel = skeletonize(binary)
-        if not skel.any():
-            continue
-        erase = np.zeros_like(binary)
-        for _ in range(random.randint(*n_iterations)):
-            length = random.uniform(*length_range)
-            erase |= _geodesic_segment(skel, length)
-        if erase.any():
-            erase = binary_dilation(erase, structure=struct)
-            membrane = membrane.copy()
-            membrane[erase] = 0
+        h, w = sub.shape[:2]
+        mask = np.zeros((h, w), dtype=bool)
+        for _ in range(random.randint(*n_lines)):
+            mask |= _random_band_mask(h, w, length_range, thickness_range)
+        if mask.any():
+            membrane = sub[..., membrane_idx].copy()
+            membrane[mask] = 0
             sub[..., membrane_idx] = membrane
     return out
 

@@ -76,7 +76,7 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
         "derived_channels": list(mr.DERIVED_CHANNELS),
         "derived_channels_extra_opts": dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
         "slice_dropout_aug": _aug_cfg(mr.SLICE_DROPOUT_AUG),
-        "gap_aug": _aug_cfg(mr.GAP_AUG, "length_range", "n_iterations"),
+        "gap_aug": _aug_cfg(mr.GAP_AUG, "length_range", "thickness_range", "n_lines"),
         "bridge_aug": _aug_cfg(mr.BRIDGE_AUG, "length_range"),
         "island_aug": _aug_cfg(mr.ISLAND_AUG, "size_range"),
         "mito_border_erasure_aug": _aug_cfg(mr.MITO_BORDER_ERASURE_AUG, "length_range"),

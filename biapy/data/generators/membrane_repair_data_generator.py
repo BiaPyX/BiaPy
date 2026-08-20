@@ -192,8 +192,9 @@ class MembraneRepairGeneratorMixin:
                 self.membrane_idx,
                 self.ndim,
                 prob=float(self.gap_aug.get("prob", 0.5)),
-                length_range=tuple(self.gap_aug.get("length_range", (3, 25))),
-                n_iterations=tuple(self.gap_aug.get("n_iterations", (1, 3))),
+                length_range=tuple(self.gap_aug.get("length_range", (0.1, 0.5))),
+                thickness_range=tuple(self.gap_aug.get("thickness_range", (2, 8))),
+                n_lines=tuple(self.gap_aug.get("n_lines", (1, 3))),
             )
 
         if self.bridge_aug.get("enable") and self.da:

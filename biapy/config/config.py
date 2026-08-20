@@ -746,12 +746,17 @@ class Config:
         # PROB is a per-z-slice probability, independently rolled for every slice (2D: probability of
         # augmenting the whole image), not a single roll for the whole sample.
         #
-        # Erases a segment of the membrane skeleton to synthesize a gap (merge/under-segmentation error).
+        # Blacks out one or more straight bands across the membrane channel (random angle and
+        # position per band) to synthesize a gap (merge/under-segmentation error) that wipes out
+        # many membrane segments at once. LENGTH_RANGE is a fraction (0-1) of the image's
+        # border-to-border extent along the band's angle (1.0 reaches from one border to the
+        # other); THICKNESS_RANGE is in pixels; N_LINES is the number of bands per slice.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.ENABLE = False
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.PROB = 0.5
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (3, 25)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.N_ITERATIONS = (1, 3)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (0.1, 0.5)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.THICKNESS_RANGE = (2, 8)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.N_LINES = (1, 3)
         # Paints a short spurious connecting line between two nearby points as fake membrane (split
         # error at a multi-instance junction).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG = CN()
