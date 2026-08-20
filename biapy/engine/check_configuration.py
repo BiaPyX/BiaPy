@@ -2340,6 +2340,32 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     )
                 if not (0 < cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH <= 1):
                     raise ValueError("'TEST.BY_CHUNKS.WORKFLOW_PROCESS.INSTANCE_SEG_MERGE_IOU_TH' must be in (0, 1]")
+                # Tiles are groups of 'PATCHES_PER_TILE' consecutive patches, numbered on a grid anchored at
+                # Z=0 that is shared by every job (so that jobs splitting the same volume by 'Z_START'/'Z_END'
+                # agree on where each tile is). If a split point falls in the middle of a tile instead of on a
+                # tile boundary, that tile is a different, partial one in each of the two jobs: each considers
+                # its partial patch count "complete", post-processes it and writes it with the rest of the
+                # tile left as background, and the later job's write silently overwrites the earlier job's
+                # (Zarr writes replace the region, they do not merge). Requiring the split points to land on
+                # tile boundaries keeps every tile fully owned by exactly one job.
+                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk" and (
+                    cfg.TEST.BY_CHUNKS.Z_START != -1 or cfg.TEST.BY_CHUNKS.Z_END != -1
+                ):
+                    tile_step_z = (cfg.DATA.PATCH_SIZE[0] - 2 * cfg.DATA.TEST.PADDING[0]) * patches_per_tile[0]
+                    if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_START % tile_step_z != 0:
+                        raise ValueError(
+                            f"'TEST.BY_CHUNKS.Z_START' ({cfg.TEST.BY_CHUNKS.Z_START}) must be a multiple of the "
+                            f"tile size along Z ({tile_step_z} = (DATA.PATCH_SIZE[0] - 2*DATA.TEST.PADDING[0]) * "
+                            "PATCHES_PER_TILE[0]) or -1. Otherwise the tile straddling the split is written "
+                            "partially and independently by two jobs, and one write silently overwrites the other."
+                        )
+                    if cfg.TEST.BY_CHUNKS.Z_END != -1 and cfg.TEST.BY_CHUNKS.Z_END % tile_step_z != 0:
+                        raise ValueError(
+                            f"'TEST.BY_CHUNKS.Z_END' ({cfg.TEST.BY_CHUNKS.Z_END}) must be a multiple of the tile "
+                            f"size along Z ({tile_step_z} = (DATA.PATCH_SIZE[0] - 2*DATA.TEST.PADDING[0]) * "
+                            "PATCHES_PER_TILE[0]) or -1. Otherwise the tile straddling the split is written "
+                            "partially and independently by two jobs, and one write silently overwrites the other."
+                        )
             if cfg.TEST.BY_CHUNKS.Z_START != -1 and cfg.TEST.BY_CHUNKS.Z_START < 0:
                 raise ValueError("'TEST.BY_CHUNKS.Z_START' must be -1 (disabled) or a non-negative integer")
             if cfg.TEST.BY_CHUNKS.Z_END != -1 and cfg.TEST.BY_CHUNKS.Z_END <= 0:
