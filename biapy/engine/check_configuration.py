@@ -1355,6 +1355,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be 'watershed' or "
             "'agglomeration'"
         )
+
+        # Carry the raw instance labels as an 'I' channel whenever a geometry-derived target (e.g. 'A',
+        # the affinities) must be recomputed from the augmented labels instead of warped -- same mechanism
+        # and same reasoning as INSTANCE_SEG's own 'I' auto-add above.
+        mr_channels = list(cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS)
+        _mr_extra_opts = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS[0]
+        if any(instance_channel_needs_regen(ch, _mr_extra_opts) for ch in mr_channels) and "I" not in mr_channels:
+            mr_channels.append("I")
+            opts.extend(["PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS", mr_channels])
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
