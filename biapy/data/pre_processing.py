@@ -1229,13 +1229,9 @@ def labels_into_channels(
     elif "Db" in mode:
         dtype = np.uint8 if channel_extra_opts.get("Db", {}).get("val_type", "norm") == "discretize" else np.float32
     elif "E_offset" in mode:
-        dtype = instance_labels.dtype
-        # Ensure that no floating-point dtype is used for the embeddings. 
-        # This allows the normalization module to correctly recognize them 
-        # as integer or binary channels, ensuring that the subsequent 
-        # data augmentation processes the samples as intended.
-        if np.issubdtype(dtype, np.floating):
-            dtype = decide_dtype(instance_labels.max())
+        # Fixed dtype so every sample gets the same one, regardless of the source label file's own
+        # dtype/instance count (per-file dtypes broke torch.stack in collate on mixed batches).
+        dtype = np.uint16
     else:
         dtype = np.uint8
         

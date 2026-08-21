@@ -1310,7 +1310,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = torch.from_numpy(img.astype(np.float32))
         else:
             img = torch.from_numpy(img.copy())
-        mask = torch.from_numpy(mask.copy())
+        # Mask channels can come from different source dtypes across samples (e.g. mixed uint8/uint16
+        # label files); collate's torch.stack cannot promote across those, so unify here.
+        if mask.dtype == np.uint16:
+            mask = torch.from_numpy(mask.astype(np.float32))
+        else:
+            mask = torch.from_numpy(mask.copy())
 
         # Hand the global RNG back as we found it (see the seeding note at the top).
         if _rng_state is not None:
