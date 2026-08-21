@@ -2305,7 +2305,7 @@ def affine_transform(
     angle: float = 0.0,
     mode: str = "reflect",
     mask_type: str = "mask",
-    img_type: str = "image",
+    img_type: Union[str, List[str]] = "image",
     flow_heat: Optional[Dict] = None,
 ) -> Union[
     NDArray,
@@ -2318,9 +2318,10 @@ def affine_transform(
     The output keeps the original spatial shape: enlarging (``scale > 1``) centre-crops, shrinking
     (``scale < 1``) fills the border with ``mode``. The Y and X axes are scaled by ``scale_xy`` and
     rotated by ``angle``; the Z axis (3D only) is scaled by ``scale_z`` and never rotated. ``heat``
-    always uses linear interpolation; ``img`` and ``mask`` use linear or nearest-neighbour depending
-    on ``img_type``/``mask_type``. Flow vectors in ``heat`` are rotated and re-scaled for axis
-    anisotropy (see :func:`rotate_flow_vectors` and :func:`scale_flow_vectors`).
+    always uses linear interpolation; ``mask``/``img`` use linear or nearest-neighbour depending on
+    ``mask_type``/``img_type`` (``img_type`` may also be given per-channel). Flow vectors in
+    ``heat`` are rotated and re-scaled for axis anisotropy (see :func:`rotate_flow_vectors` and
+    :func:`scale_flow_vectors`).
 
     Parameters
     ----------
@@ -2349,10 +2350,11 @@ def affine_transform(
     mask_type : str, optional
         How to treat the mask during interpolation. Either as "mask" (order 0) or "image" (order 1).
 
-    img_type : str, optional
-        How to treat ``img`` during interpolation. Either as "image" (order 1, default) or "mask"
-        (order 0), for cases where ``img`` is itself a binary/label map (e.g. the membrane-repair
-        source channels) rather than continuous intensity data.
+    img_type : str or list of str, optional
+        How to treat ``img`` during interpolation. Either "image" (order 1, default) or "mask"
+        (order 0, for a binary/label channel). A single string applies to every channel uniformly.
+        A list gives one type per channel (``len(img_type) == img.shape[-1]``), for an ``img`` that
+        mixes binary and continuous channels.
 
     flow_heat : dict, optional
         Mapping of flow components to their channel index inside ``heat`` (``{"vy": i, "vx": j,
@@ -2401,28 +2403,37 @@ def affine_transform(
     center = (np.asarray(spatial_shape, dtype=np.float64) - 1.0) / 2.0
     offset = center - matrix @ center
 
-    def _warp(arr: NDArray, order: int) -> NDArray:
+    def _warp(arr: NDArray, order: Union[int, List[int]]) -> NDArray:
         orig_dtype = arr.dtype
         arr_mins = np.min(arr, axis=tuple(range(ndim)))
         arr_maxes = np.max(arr, axis=tuple(range(ndim)))
         a = arr.astype(np.float32, copy=False)
         out = np.empty(arr.shape, dtype=np.float32)
+        orders = order if isinstance(order, list) else [order] * arr.shape[-1]
+        assert len(orders) == arr.shape[-1], (
+            f"Per-channel interpolation order has {len(orders)} entries but the array has "
+            f"{arr.shape[-1]} channels"
+        )
         for ch in range(arr.shape[-1]):
+            ch_order = orders[ch]
             out[..., ch] = affine_transform_scipy(
                 a[..., ch],
                 matrix,
                 offset=offset,
-                order=order,
+                order=ch_order,
                 mode=_mode,
                 cval=0.0,
-                prefilter=(order > 1),
+                prefilter=(ch_order > 1),
             )
         if np.issubdtype(orig_dtype, np.floating):
             return out.astype(orig_dtype, copy=False)
         np.clip(out, arr_mins, arr_maxes, out=out)
         return out.astype(orig_dtype, copy=False)
 
-    img = _warp(img, 0 if img_type == "mask" else 1)
+    img_orders = (
+        [0 if t == "mask" else 1 for t in img_type] if isinstance(img_type, list) else (0 if img_type == "mask" else 1)
+    )
+    img = _warp(img, img_orders)
     if mask is not None:
         mask = _warp(mask, 0 if mask_type == "mask" else 1)
     if heat is not None:

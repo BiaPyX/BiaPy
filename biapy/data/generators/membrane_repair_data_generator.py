@@ -4,13 +4,14 @@ Dedicated data generator for the membrane-repair problem (PROBLEM.IMAGE_TO_IMAGE
 Reuses ``PairBaseDataGenerator.apply_transform`` (geometric warps, content augmentors, and online
 regeneration of the GT affinity ('A') channel from the warped instance-label ('I') channel) via
 ``super().apply_transform(...)``, and adds on top: the membrane corruption augmentors
-(``biapy.data.generators.membrane_augmentors``) and the derived-channel expansion
-(``biapy.data.membrane_channels``).
+(``biapy.data.generators.membrane_augmentors``) and the derived-channel computation
+(``biapy.data.membrane_channels``) that replaces ``SOURCE_CHANNELS`` with ``DERIVED_CHANNELS``.
 
 The raw on-disk X file only has ``len(SOURCE_CHANNELS)`` channels; ``DATA.PATCH_SIZE`` reflects
-that. Derived channels are computed here, in memory, from the (possibly corrupted) source
-channels -- recomputed every call, never written to disk. This mixin is the one place X's width
-actually changes: it loads/augments at the raw width and returns the model's expected width.
+that. ``SOURCE_CHANNELS`` are warped/corruption-augmented like any other X data, then replaced --
+not appended to -- by the channels derived from them, recomputed every call (never cached to
+disk). This mixin is the one place X's width changes: raw ``SOURCE_CHANNELS`` width in, derived-
+only width out.
 """
 import random
 from typing import Dict, List, Tuple
@@ -23,11 +24,10 @@ from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerato
 from biapy.data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
 from biapy.data.membrane_channels import derive_membrane_input_channels, source_channel_offsets
 from biapy.data.generators.membrane_augmentors import (
-    mito_border_erasure,
+    artifact_corruption,
     skeleton_perturbation,
     slice_dropout,
     spurious_bridge,
-    spurious_island,
     synthetic_gap,
 )
 
@@ -46,8 +46,7 @@ class MembraneRepairGeneratorMixin:
         slice_dropout_aug: Dict = {},
         gap_aug: Dict = {},
         bridge_aug: Dict = {},
-        island_aug: Dict = {},
-        mito_border_erasure_aug: Dict = {},
+        artifact_aug: Dict = {},
         skeleton_perturb_aug: Dict = {},
         **kwargs,
     ):
@@ -71,11 +70,10 @@ class MembraneRepairGeneratorMixin:
             zeroed with probability ``"prob"``; derived channels are never touched (see
             ``slice_dropout`` in ``biapy.data.generators.membrane_augmentors``).
 
-        gap_aug, bridge_aug, island_aug, mito_border_erasure_aug, skeleton_perturb_aug : dict, optional
+        gap_aug, bridge_aug, artifact_aug, skeleton_perturb_aug : dict, optional
             Corruption-augmentor configs, each with an ``"enable"`` bool, a ``"prob"`` float and
             augmentor-specific range keys (see ``biapy.data.generators.membrane_augmentors``).
-            ``mito_border_erasure_aug`` is silently inert whenever ``"mito"`` is not in
-            ``source_channels``, regardless of ``"enable"``.
+            ``artifact_aug``'s blob artifact affects every channel, not just the membrane channel.
 
         **kwargs : dict
             Forwarded to ``Pair2DImageDataGenerator``/``Pair3DImageDataGenerator``. Must include
@@ -96,13 +94,11 @@ class MembraneRepairGeneratorMixin:
         self.slice_dropout_aug = dict(slice_dropout_aug)
         self.gap_aug = dict(gap_aug)
         self.bridge_aug = dict(bridge_aug)
-        self.island_aug = dict(island_aug)
-        self.mito_border_erasure_aug = dict(mito_border_erasure_aug)
+        self.artifact_aug = dict(artifact_aug)
         self.skeleton_perturb_aug = dict(skeleton_perturb_aug)
 
         self.channel_offsets = source_channel_offsets(self.source_channels, self.derived_channels)
         self.membrane_idx = self.channel_offsets[self.source_channels[0]]
-        self.mito_idx = self.channel_offsets.get("mito")
         self.droppable_channel_idxs = tuple(self.channel_offsets[name] for name in self.source_channels)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -152,7 +148,7 @@ class MembraneRepairGeneratorMixin:
         """
         Apply the shared geometric/content augmentations and GT affinity regeneration (inherited,
         see the module docstring), then the membrane-repair-specific corruption augmentors,
-        channel dropout and derived-channel expansion, in that order.
+        channel dropout and derived-channel computation, in that order.
 
         Parameters
         ----------
@@ -176,7 +172,8 @@ class MembraneRepairGeneratorMixin:
         Returns
         -------
         image : 3D/4D Numpy array
-            Expanded to ``len(SOURCE_CHANNELS) + len(DERIVED_CHANNELS)`` channels.
+            Replaced by ``len(DERIVED_CHANNELS)`` channels (the ``SOURCE_CHANNELS`` used to compute
+            them are dropped, not appended to).
 
         mask : 3D/4D Numpy array
             GT channel stack, warped and with 'A' regenerated (unchanged shape).
@@ -192,8 +189,8 @@ class MembraneRepairGeneratorMixin:
                 self.membrane_idx,
                 self.ndim,
                 prob=float(self.gap_aug.get("prob", 0.5)),
-                length_range=tuple(self.gap_aug.get("length_range", (0.1, 0.5))),
-                thickness_range=tuple(self.gap_aug.get("thickness_range", (2, 8))),
+                length_range=tuple(self.gap_aug.get("length_range", (0.3, 1.0))),
+                thickness_range=tuple(self.gap_aug.get("thickness_range", (4, 9))),
                 n_lines=tuple(self.gap_aug.get("n_lines", (1, 3))),
             )
 
@@ -203,28 +200,21 @@ class MembraneRepairGeneratorMixin:
                 self.membrane_idx,
                 self.ndim,
                 prob=float(self.bridge_aug.get("prob", 0.3)),
-                length_range=tuple(self.bridge_aug.get("length_range", (3, 15))),
+                length_range=tuple(self.bridge_aug.get("length_range", (0.3, 1.0))),
+                thickness_range=tuple(self.bridge_aug.get("thickness_range", (4, 9))),
+                n_lines=tuple(self.bridge_aug.get("n_lines", (1, 3))),
             )
 
-        if self.island_aug.get("enable") and self.da:
-            image = spurious_island(
+        if self.artifact_aug.get("enable") and self.da:
+            image = artifact_corruption(
                 image,
                 self.membrane_idx,
                 self.ndim,
-                prob=float(self.island_aug.get("prob", 0.3)),
-                size_range=tuple(self.island_aug.get("size_range", (2, 6))),
-            )
-
-        # Silently inert (not just probability-gated) whenever "mito" isn't a configured source
-        # channel, for graceful degradation across ablations.
-        if self.mito_idx is not None and self.mito_border_erasure_aug.get("enable") and self.da:
-            image = mito_border_erasure(
-                image,
-                self.membrane_idx,
-                self.mito_idx,
-                self.ndim,
-                prob=float(self.mito_border_erasure_aug.get("prob", 0.3)),
-                length_range=tuple(self.mito_border_erasure_aug.get("length_range", (5, 20))),
+                prob=float(self.artifact_aug.get("prob", 0.1)),
+                band_prob=float(self.artifact_aug.get("band_prob", 0.5)),
+                band_thickness_range=tuple(self.artifact_aug.get("band_thickness_range", (50, 70))),
+                blob_size_range=tuple(self.artifact_aug.get("blob_size_range", (0.1, 0.3))),
+                blob_n_range=tuple(self.artifact_aug.get("blob_n_range", (1, 3))),
             )
 
         if self.skeleton_perturb_aug.get("enable") and self.da:
@@ -243,7 +233,7 @@ class MembraneRepairGeneratorMixin:
                 image, self.droppable_channel_idxs, float(self.slice_dropout_aug.get("prob", 0.3)), self.ndim
             )
 
-        # Derive appends the derived channels, expanding it to the model's full input width.
+        # Derive replaces the source channels with the derived channels -- the model's actual input.
         # self.resolution is stored (x, y, z) (see PairBaseDataGenerator.__init__'s reordering), but
         # derive_membrane_input_channels expects (z, y, x) -- reverse it back.
         image = derive_membrane_input_channels(

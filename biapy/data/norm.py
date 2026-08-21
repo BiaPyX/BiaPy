@@ -35,6 +35,12 @@ torch_numpy_dtype_dict = {
 
 from biapy.data.dataset import DatasetFile
 
+def _is_binary_channel(data: NDArray | torch.Tensor) -> bool:
+    """Whether ``data`` only contains values in ``{0, 1}``."""
+    if isinstance(data, torch.Tensor):
+        return bool(((data == 0) | (data == 1)).all())
+    return bool(np.all((data == 0) | (data == 1)))
+
 def normalize_image(
     img: NDArray | torch.Tensor,
     norm_module: Dict,
@@ -417,8 +423,8 @@ def percentile_clip(
         Upper bound value to use for clipping. If None, `per_upper_bound` should be provided.
 
     apply_norm : bool
-        Whether to apply the percentile clipping or just compute the lower and upper bound values. If False, 
-        the function will return the original data and the computed lower and upper bound values without 
+        Whether to apply the percentile clipping or just compute the lower and upper bound values. If False,
+        the function will return the original data and the computed lower and upper bound values without
         applying the clipping.
 
     Returns
@@ -432,6 +438,10 @@ def percentile_clip(
     x_uprs : float
         Upper bound used for clipping.
     """
+    # Binary channels are never clipped: a percentile could fall strictly between 0 and 1.
+    if _is_binary_channel(data):
+        return data, 0.0, 1.0
+
     if per_lower_bound is None or per_lower_bound == -1:
         assert lower_bound_val is not None, "If 'per_lower_bound' is not provided, 'lower_bound_val' should be provided"
         assert isinstance(lower_bound_val, (int, float)), "'lower_bound_val' should be a single float value"
@@ -541,9 +551,8 @@ def norm_range01(
     if max_val_to_div is None and min_val_to_div is not None:
         raise ValueError("If 'min_val_to_div' is provided, 'max_val_to_div' should also be provided")
 
-    # If the data is already in the range [0, 1], we will not apply the normalization and we will return the original data 
-    # and the values used to do the normalization as 1 and 0 respectively to be able to undo the normalization correctly if needed
-    if data.min() == 0 and data.max() == 1:
+    # Binary channels are never normalized -- return unchanged, no-op undo values.
+    if _is_binary_channel(data):
         return data, 1.0, 0.0
 
     # Changing dtype to floating tensor
@@ -622,6 +631,10 @@ def zero_mean_unit_variance_normalization(
     else:
         if not isinstance(data, np.floating):
             data = data.astype(np.float32)
+
+    # Binary channels are never normalized -- return unchanged, no-op undo values.
+    if _is_binary_channel(data):
+        return data, 0.0, 1.0
 
     _mean = data.mean() if mean is None else mean
     _std = data.std() if std is None else std

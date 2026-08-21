@@ -1,20 +1,15 @@
 """
 Derived input channels for the membrane-repair problem (PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR).
 
-Given the raw, on-disk "source" class channels (a binary membrane mask and, optionally, further
-GMM classes such as "mito"), this module computes the canonical, dataset-agnostic channels the
-repair network actually consumes:
+SOURCE_CHANNELS (binary membrane/GMM-class maps, plus optionally "raw") are never fed to the
+model directly -- only these derived channels are:
 
-- A clamped Euclidean distance transform of the per-slice membrane skeleton (``skeleton_dt``),
-  which is dense (unlike the ~99%-zero skeleton itself) and thickness-/staining-independent.
-- A Hessian-eigenvalue-based "blobness" response (``hessian_blob``), which separates laminar
-  membrane (one dominant curvature) from dense blob-like structures (mito/synapse/vesicles),
-  independent of any GMM cluster-identity alignment.
-- A standardised, multi-scale Meijering ridge response (``meijering``), a complementary ridge cue.
+- ``skeleton_dt``: clamped EDT of the per-slice membrane skeleton.
+- ``hessian_blob``: Hessian-eigenvalue "blobness" response.
+- ``meijering``: standardised, multi-scale Meijering ridge response.
 
-All channels are derived from the class maps only -- never from the raw image -- and are always
-recomputed from the (possibly augmented/corrupted) source channels rather than warped directly,
-so a geometric transform or a corruption augmentor can never leave a stale derived field behind.
+``skeleton_dt``/``hessian_blob`` are derived from the membrane channel. ``meijering`` is derived
+from "raw" instead (must be present in SOURCE_CHANNELS, see ``derive_membrane_input_channels``).
 """
 from typing import Dict, List, Sequence, Tuple
 
@@ -188,15 +183,14 @@ def meijering_ridge(
     """
     Standardised, multi-scale Meijering ridge response.
 
-    Helps discriminate laminar membrane from solid artifacts; computed per z-slice in 3D. Does not
-    help with blob-shaped structures (synapses), so it complements rather than replaces
-    ``hessian_blobness``.
+    Computed per z-slice in 3D. Must be run on the raw intensity image, not the binary membrane
+    mask (which would just reproduce the mask's own information).
 
     Parameters
     ----------
     channel_map : 2D/3D Numpy array
-        Class map to probe (typically the membrane channel), ``(y, x)`` in 2D or ``(z, y, x)``
-        in 3D.
+        Raw intensity image, ``(y, x)`` in 2D or ``(z, y, x)`` in 3D. Must NOT be the binary
+        membrane mask.
 
     sigma_range : tuple of 2 floats, optional
         ``(min, max)`` Gaussian scales probed for the ridge filter.
@@ -220,7 +214,7 @@ def meijering_ridge(
     response = np.zeros(channel_map.shape, dtype=np.float32)
 
     for z, sub in _iter_slices(channel_map, ndim, per_slice=True):
-        ridge = meijering(sub, sigmas=sigmas, black_ridges=False)
+        ridge = meijering(sub, sigmas=sigmas, black_ridges=True)
         if z is None:
             response = ridge.astype(np.float32)
         else:
@@ -231,23 +225,17 @@ def meijering_ridge(
     return response.astype(np.float32)
 
 
-_DERIVED_CHANNEL_FNS = {
-    "skeleton_dt": clamped_skeleton_dt,
-    "hessian_blob": hessian_blobness,
-    "meijering": meijering_ridge,
-}
-
-
 def source_channel_offsets(source_channels: List[str], derived_channels: List[str]) -> Dict[str, int]:
     """
-    Map every source and derived channel name to its physical index in the assembled X stack.
-
-    The assembled stack is always ``[*source_channels, *derived_channels]``.
+    Map channel names to indices. Only the ``source_channels`` entries are physically meaningful
+    (used by corruption augmentors on the pre-derivation working array); ``derived_channels``
+    entries are just offset by ``len(source_channels)`` for a collision-free namespace, since
+    source and derived channels never coexist in the same array.
 
     Parameters
     ----------
     source_channels : list of str
-        Ordered raw, on-disk channel names (e.g. ``["membrane"]`` or ``["membrane", "mito"]``).
+        Ordered raw, on-disk channel names (e.g. ``["membrane"]`` or ``["membrane", "raw"]``).
 
     derived_channels : list of str
         Ordered derived channel names (e.g. ``["skeleton_dt", "hessian_blob", "meijering"]``).
@@ -255,7 +243,7 @@ def source_channel_offsets(source_channels: List[str], derived_channels: List[st
     Returns
     -------
     offsets : dict of str to int
-        Channel name -> physical index in the assembled ``[*source, *derived]`` stack.
+        Channel name -> index.
     """
     offsets = {}
     for i, name in enumerate(source_channels):
@@ -275,20 +263,21 @@ def derive_membrane_input_channels(
     resolution: Sequence[float] = (1.0, 1.0, 1.0),
 ) -> NDArray:
     """
-    Assemble the full network input by appending derived channels to the raw source channels.
+    Compute the network input (DERIVED_CHANNELS only) from the raw source channels.
 
     Parameters
     ----------
     source_stack : 3D/4D Numpy array
-        Raw source channels, ``(y, x, len(source_channels))`` in 2D or
-        ``(z, y, x, len(source_channels))`` in 3D. Channel 0 is always the binary membrane mask.
+        Raw source channels (already warped/augmented), ``(y, x, len(source_channels))`` in 2D or
+        ``(z, y, x, len(source_channels))`` in 3D. Channel 0 is the binary membrane mask.
 
     source_channels : list of str
         Ordered raw channel names, matching ``source_stack``'s channel axis.
 
     derived_channels : list of str
-        Ordered derived channel names to compute and append (see ``_DERIVED_CHANNEL_FNS`` for
-        the supported options: ``"skeleton_dt"``, ``"hessian_blob"``, ``"meijering"``).
+        Ordered derived channel names to compute. Must be non-empty. Supported: ``"skeleton_dt"``,
+        ``"hessian_blob"`` (from the membrane channel), ``"meijering"`` (from ``"raw"``, which must
+        then be present in ``source_channels``).
 
     derived_channels_extra_opts : dict of str to dict
         Per-channel options, e.g. ``{"skeleton_dt": {"clamp_px": 10}}``.
@@ -302,26 +291,34 @@ def derive_membrane_input_channels(
     Returns
     -------
     stack : 3D/4D Numpy array of float32
-        ``source_stack`` with ``len(derived_channels)`` extra channels appended, i.e.
-        ``(..., len(source_channels) + len(derived_channels))``.
+        ``(..., len(derived_channels))``. Does NOT include ``source_channels``.
     """
     assert source_stack.shape[-1] == len(source_channels), (
         f"source_stack has {source_stack.shape[-1]} channels but {len(source_channels)} "
         f"source_channels were given"
     )
+    if not derived_channels:
+        raise ValueError("DERIVED_CHANNELS is empty -- at least one derived channel is required.")
     membrane = source_stack[..., 0]
+    raw_idx = source_channels.index("raw") if "raw" in source_channels else None
 
     derived = []
     for name in derived_channels:
         opts = dict(derived_channels_extra_opts.get(name, {}))
         if name == "skeleton_dt":
             chan = clamped_skeleton_dt(membrane, ndim=ndim, resolution=resolution, **opts)
-        elif name in ("hessian_blob", "meijering"):
-            chan = _DERIVED_CHANNEL_FNS[name](membrane, ndim=ndim, **opts)
+        elif name == "hessian_blob":
+            chan = hessian_blobness(membrane, ndim=ndim, **opts)
+        elif name == "meijering":
+            if raw_idx is None:
+                raise ValueError(
+                    "'meijering' is in DERIVED_CHANNELS but SOURCE_CHANNELS has no 'raw' entry "
+                    f"(SOURCE_CHANNELS={source_channels})."
+                )
+            raw = source_stack[..., raw_idx]
+            chan = meijering_ridge(raw, ndim=ndim, **opts)
         else:
             raise ValueError(f"Unknown derived channel '{name}'")
         derived.append(np.expand_dims(chan.astype(np.float32), -1))
 
-    if not derived:
-        return source_stack.astype(np.float32)
-    return np.concatenate([source_stack.astype(np.float32)] + derived, axis=-1)
+    return np.concatenate(derived, axis=-1)

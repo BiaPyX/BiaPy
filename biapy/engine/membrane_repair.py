@@ -10,12 +10,12 @@ upstream foundation-model + GMM pipeline. This module holds:
 
   X is *not* prepared offline, unlike Y: the derived channels (skeleton-DT/Hessian/Meijering) must
   be recomputed after every corruption augmentor runs anyway. ``DATA.PATCH_SIZE`` stays
-  ``len(SOURCE_CHANNELS)`` (the raw on-disk channel count); the model's expanded input width
-  (``len(SOURCE_CHANNELS) + len(DERIVED_CHANNELS)``) is presented to the model builder only for
-  the duration of ``prepare_model``.
+  ``len(SOURCE_CHANNELS)``; the model's actual input width (``len(DERIVED_CHANNELS)`` --
+  ``SOURCE_CHANNELS`` are never fed to the model, see ``biapy.data.membrane_channels``) is
+  presented to the model builder only for the duration of ``prepare_model``.
 - ``Membrane_Repair_Workflow``: the workflow subclass wiring the membrane-repair loss options,
-  running the Y preparation step above, presenting the expanded input width to the model builder,
-  and fixing up ``process_test_sample`` for affinity output.
+  running the Y preparation step above, presenting the derived-only input width to the model
+  builder, and fixing up ``process_test_sample`` for affinity output.
 """
 import os
 from typing import Dict, List, Tuple
@@ -181,8 +181,8 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
       before cropping/prediction.
     - GT preparation: Y is a GT instance-label volume expanded into affinity (+ raw-label
       regeneration source) channels before training (see ``prepare_membrane_repair_gt``).
-    - Model input width: ``SOURCE_CHANNELS + DERIVED_CHANNELS``, while ``DATA.PATCH_SIZE`` only
-      has ``SOURCE_CHANNELS`` -- see ``prepare_model``.
+    - Model input width: ``DERIVED_CHANNELS`` only, while ``DATA.PATCH_SIZE`` reflects
+      ``SOURCE_CHANNELS`` -- see ``prepare_model``.
     """
 
     def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
@@ -228,20 +228,23 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
     @staticmethod
     def _validate_membrane_repair_channel_counts(cfg):
         """
-        Validate (never rewrite) ``DATA.PATCH_SIZE``'s channel count against
-        ``len(SOURCE_CHANNELS)`` -- the raw, on-disk channel count; derived channels are computed
-        in memory, never written to disk. ``staticmethod`` since it must run before
-        ``Base_Workflow.__init__``.
+        Validate ``DATA.PATCH_SIZE`` against ``len(SOURCE_CHANNELS)``, and fail fast if
+        ``DERIVED_CHANNELS`` is empty or ``"meijering"`` is requested without a ``"raw"`` source
+        channel. ``staticmethod`` since it must run before ``Base_Workflow.__init__``.
         """
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+        if not mr.DERIVED_CHANNELS:
+            raise ValueError("PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS is empty.")
         expected = len(mr.SOURCE_CHANNELS)
         if cfg.DATA.PATCH_SIZE[-1] != expected:
             raise ValueError(
                 f"DATA.PATCH_SIZE's channel count ({cfg.DATA.PATCH_SIZE[-1]}) must equal "
-                f"len(SOURCE_CHANNELS) = {expected} (SOURCE_CHANNELS={list(mr.SOURCE_CHANNELS)}) "
-                "-- the raw, on-disk channel count you provide. The derived channels "
-                f"({list(mr.DERIVED_CHANNELS)}) are computed in memory and are not part of what "
-                "you configure DATA.PATCH_SIZE with."
+                f"len(SOURCE_CHANNELS) = {expected} (SOURCE_CHANNELS={list(mr.SOURCE_CHANNELS)})."
+            )
+        if "meijering" in mr.DERIVED_CHANNELS and "raw" not in mr.SOURCE_CHANNELS:
+            raise ValueError(
+                "DERIVED_CHANNELS includes 'meijering' but SOURCE_CHANNELS "
+                f"({list(mr.SOURCE_CHANNELS)}) has no 'raw' entry."
             )
 
     @staticmethod
@@ -315,18 +318,13 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
     def prepare_model(self):
         """
-        Present the model builder with the expanded input width, then restore ``DATA.PATCH_SIZE``.
-
-        ``build_model`` reads ``cfg.DATA.PATCH_SIZE[-1]`` to size the model's input layer and needs
-        the real network width (``SOURCE_CHANNELS + DERIVED_CHANNELS``), but every other part of
-        BiaPy must keep seeing the raw ``SOURCE_CHANNELS`` count that matches what's on disk. So
-        ``cfg.DATA.PATCH_SIZE`` is mutated only for the duration of ``Base_Workflow.prepare_model()``,
-        then restored.
+        Present the model builder with the derived-only input width (``len(DERIVED_CHANNELS)``),
+        then restore ``DATA.PATCH_SIZE`` to the raw ``SOURCE_CHANNELS`` count.
         """
         cfg = self.cfg
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
         raw_patch = tuple(cfg.DATA.PATCH_SIZE)
-        expanded_patch = raw_patch[:-1] + (len(mr.SOURCE_CHANNELS) + len(mr.DERIVED_CHANNELS),)
+        expanded_patch = raw_patch[:-1] + (len(mr.DERIVED_CHANNELS),)
 
         was_frozen = cfg.is_frozen()
         cfg.defrost()
@@ -484,9 +482,8 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
     def prepare_bmz_data(self, img: NDArray):
         """
-        Expand ``img``'s raw ``SOURCE_CHANNELS`` width to the model's full input width before
-        ``Base_Workflow.prepare_bmz_data``'s BMZ-export bookkeeping calls the model directly,
-        bypassing ``process_test_sample`` (and its own X-derivation) entirely.
+        Replace ``img``'s raw ``SOURCE_CHANNELS`` width with the model's derived-only input width
+        before ``Base_Workflow.prepare_bmz_data`` calls the model directly.
 
         Parameters
         ----------
@@ -514,14 +511,10 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
     def process_test_sample(self):
         """
-        Expand X to the model's input width, then delegate crop/predict/merge to
-        ``Image_to_Image_Workflow.process_test_sample`` with ``DATA.PATCH_SIZE`` and the
-        undo-normalization step both temporarily adjusted for the duration of that call.
-
-        ``test_pair_data_generator`` loads only the raw ``SOURCE_CHANNELS``-width X, so the loaded
-        image is expanded here before any patch cropping, and ``DATA.PATCH_SIZE`` is temporarily
-        widened to match for the duration of the ``super()`` call (same scoped-swap as
-        ``prepare_model``).
+        Replace X's raw ``SOURCE_CHANNELS`` width with the model's derived-only input width, then
+        delegate crop/predict/merge to ``Image_to_Image_Workflow.process_test_sample`` with
+        ``DATA.PATCH_SIZE`` and the undo-normalization step both temporarily adjusted (same
+        scoped-swap as ``prepare_model``).
 
         The undo-normalization step is neutralized with a temporary identity norm dict
         (``max_val_to_div=1, min_val_to_div=0, orig_dtype="float32"``), reducing
@@ -583,7 +576,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
             self.current_sample["X"] = np.expand_dims(expanded, 0)
 
             raw_patch = tuple(cfg.DATA.PATCH_SIZE)
-            expanded_patch = raw_patch[:-1] + (len(mr.SOURCE_CHANNELS) + len(mr.DERIVED_CHANNELS),)
+            expanded_patch = raw_patch[:-1] + (len(mr.DERIVED_CHANNELS),)
             was_frozen = cfg.is_frozen()
             cfg.defrost()
             cfg.DATA.PATCH_SIZE = expanded_patch

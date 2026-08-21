@@ -59,10 +59,12 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
     data_channels = list(mr.DATA_CHANNELS)
     extra_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0])
 
-    def _aug_cfg(block, *range_keys):
+    def _aug_cfg(block, *range_keys, scalar_keys=()):
         d = {"enable": block.ENABLE, "prob": block.PROB}
         for key in range_keys:
             d[key] = tuple(getattr(block, key.upper()))
+        for key in scalar_keys:
+            d[key] = getattr(block, key.upper())
         return d
 
     return {
@@ -77,12 +79,14 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
         "derived_channels_extra_opts": dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
         "slice_dropout_aug": _aug_cfg(mr.SLICE_DROPOUT_AUG),
         "gap_aug": _aug_cfg(mr.GAP_AUG, "length_range", "thickness_range", "n_lines"),
-        "bridge_aug": _aug_cfg(mr.BRIDGE_AUG, "length_range"),
-        "island_aug": _aug_cfg(mr.ISLAND_AUG, "size_range"),
-        "mito_border_erasure_aug": _aug_cfg(mr.MITO_BORDER_ERASURE_AUG, "length_range"),
+        "bridge_aug": _aug_cfg(mr.BRIDGE_AUG, "length_range", "thickness_range", "n_lines"),
+        "artifact_aug": _aug_cfg(
+            mr.ARTIFACT_AUG, "band_thickness_range", "blob_size_range", "blob_n_range",
+            scalar_keys=("band_prob",),
+        ),
         "skeleton_perturb_aug": _aug_cfg(mr.SKELETON_PERTURB_AUG, "radius_range"),
-        # SOURCE_CHANNELS are binary class maps, not continuous intensity data.
-        "img_type": "mask",
+        # Per-channel warp interpolation: nearest-neighbour for binary channels, linear for "raw".
+        "img_type": ["image" if ch == "raw" else "mask" for ch in mr.SOURCE_CHANNELS],
     }
 
 

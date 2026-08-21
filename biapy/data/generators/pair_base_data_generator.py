@@ -13,6 +13,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Union,
 )
 import warnings
 import numpy as np
@@ -372,11 +373,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         disables it. Like the Cellpose rescale, this is a domain normalization, not augmentation, so
         it also applies on validation.
 
-    img_type : str, optional
-        How ``X`` is interpolated by any in-plane scale/rotation warp (zoom, the Cellpose rescale,
-        the resolution normalization above). Either "image" (default, linear) for continuous
-        intensity data, or "mask" (nearest-neighbour, no anti-aliasing) when ``X`` is itself a
-        binary/label map, e.g. the membrane-repair source channels.
+    img_type : str or list of str, optional
+        How ``X`` is interpolated by any in-plane scale/rotation warp. Either "image" (default,
+        linear) or "mask" (nearest-neighbour) when ``X`` is itself binary/label data. A single
+        string applies to every channel uniformly; a list gives one type per channel.
 
     random_crop_scale : tuple of ints, optional
         Scale factor the mask used in super-resolution workflow. E.g. ``(2,2)``.
@@ -496,7 +496,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         cellpose_diam_mean: float = 0.0,
         cellpose_scale_range: float = 0.5,
         resolution_norm_target: Optional[Sequence[float]] = None,
-        img_type: str = "image",
+        img_type: Union[str, List[str]] = "image",
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
         preprocess_f=None,
@@ -589,6 +589,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             tuple(float(v) for v in resolution_norm_target) if resolution_norm_target else None
         )
         self.do_resolution_norm = self.resolution_norm_target is not None
+        if isinstance(img_type, list) and len(img_type) != shape[-1]:
+            raise ValueError(
+                f"'img_type' was given as a per-channel list of length {len(img_type)} but the "
+                f"generator's channel count (DATA.PATCH_SIZE[-1]) is {shape[-1]} -- they must match."
+            )
         self.img_type = img_type
         self.shape = shape
         # Padding mode of the affine augmentations, also used by ``load_sample``, so it must be set

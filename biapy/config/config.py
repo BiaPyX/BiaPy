@@ -654,28 +654,29 @@ class Config:
         # 2.6.1 Membrane repair sub-problem (IMAGE_TO_IMAGE)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Trains a dataset-agnostic network that repairs membrane-segmentation errors (gaps and
-        # spurious fragments) coming out of an upstream foundation-model + GMM pipeline. The network
-        # never sees the raw image: its input is derived, canonical representations of the GMM
-        # "membrane class" (and optionally other classes such as "mito"), and its output is affinities
-        # learned from GT instance labels. Uses a dedicated data generator
-        # (Membrane2DRepairDataGenerator/Membrane3DRepairDataGenerator) instead of the shared
-        # instance-seg/Cellpose/N2V generator.
+        # spurious fragments) coming out of an upstream foundation-model + GMM pipeline. Model input
+        # is EXCLUSIVELY DERIVED_CHANNELS, computed from SOURCE_CHANNELS (never fed to the model
+        # directly). Output is affinities learned from GT instance labels. Uses a dedicated data
+        # generator (Membrane2DRepairDataGenerator/Membrane3DRepairDataGenerator) instead of the
+        # shared instance-seg/Cellpose/N2V generator.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR = CN()
         # Master switch. When True, PROBLEM.TYPE == "IMAGE_TO_IMAGE" is routed through the dedicated
         # membrane-repair data generator and Membrane_Repair_Workflow instead of the regular
         # IMAGE_TO_IMAGE_Workflow path.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE = False
-        # Ordered list of the raw, on-disk input channels (already canonically resampled and stacked
-        # upstream). The first entry is always assumed to be the membrane class. E.g. ["membrane"] to
-        # start, or ["membrane", "mito"] once more GMM classes are ablated in. This list drives both
-        # which physical channel index each corruption augmentor reads/writes and how many raw
-        # channels the generator expects to load from disk.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane"]
-        # Ordered list of channels derived on the fly from SOURCE_CHANNELS and appended after them to
-        # build the final network input. Options:
+        # Ordered list of the raw, on-disk input channels. Never fed to the model directly -- only
+        # used to compute DERIVED_CHANNELS (see below). First entry is always the membrane class.
+        # E.g. ["membrane"] or ["membrane", "raw"] ("raw" required whenever 'meijering' is in
+        # DERIVED_CHANNELS; may appear at any position).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane", "raw"]
+        # Ordered list of channels derived on the fly from SOURCE_CHANNELS -- the model's actual
+        # input; must be non-empty. Options:
         #   - 'skeleton_dt': clamped Euclidean distance transform of the per-slice membrane skeleton.
+        #     Derived from the membrane channel (SOURCE_CHANNELS[0]).
         #   - 'hessian_blob': Hessian-eigenvalue-based "dense blob" response (mito/synapse/vesicle cue).
-        #   - 'meijering': standardised multi-scale Meijering ridge filter.
+        #     Derived from the membrane channel (SOURCE_CHANNELS[0]).
+        #   - 'meijering': standardised multi-scale Meijering ridge filter. Derived from 'raw'
+        #     (required in SOURCE_CHANNELS).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS = ["skeleton_dt", "hessian_blob", "meijering"]
         # Per-channel options for DERIVED_CHANNELS. Must be a list with a unique element: a dict of
         # dicts, keyed by channel name. Possible options:
@@ -740,48 +741,46 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.6.3 Membrane repair corruption augmentors
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # These synthesize the upstream pipeline's failure modes directly on the membrane (and, where
-        # noted, mito) source channel(s), so the network learns the repair operation from corrupted ->
-        # clean pairs. Applied after the geometric warps, before the derived channels are computed.
+        # These synthesize the upstream pipeline's failure modes directly on the membrane source
+        # channel, so the network learns the repair operation from corrupted -> clean pairs.
+        # Applied after the geometric warps, before the derived channels are computed.
         # PROB is a per-z-slice probability, independently rolled for every slice (2D: probability of
         # augmenting the whole image), not a single roll for the whole sample.
         #
-        # Blacks out one or more straight bands across the membrane channel (random angle and
-        # position per band) to synthesize a gap (merge/under-segmentation error) that wipes out
-        # many membrane segments at once. LENGTH_RANGE is a fraction (0-1) of the image's
-        # border-to-border extent along the band's angle (1.0 reaches from one border to the
-        # other); THICKNESS_RANGE is in pixels; N_LINES is the number of bands per slice.
+        # Blacks out random bands across the membrane channel (merge error). LENGTH_RANGE: fraction
+        # (0-1) of border-to-border extent (1.0 = full). THICKNESS_RANGE: pixels. N_LINES: bands
+        # per slice.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.ENABLE = False
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.PROB = 0.5
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (0.1, 0.5)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.THICKNESS_RANGE = (2, 8)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (0.3, 1.0)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.THICKNESS_RANGE = (4, 9)
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.N_LINES = (1, 3)
-        # Paints a short spurious connecting line between two nearby points as fake membrane (split
-        # error at a multi-instance junction).
+        # Inverse of GAP_AUG: paints bands instead of erasing (split error). Same options.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.ENABLE = False
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.LENGTH_RANGE = (3, 15)
-        # Paints a small spurious island of membrane away from real membrane (split error inside an
-        # instance, e.g. a vesicle/artifact misread as membrane).
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ISLAND_AUG.SIZE_RANGE = (2, 6)
-        # Erases membrane along a random stretch of the mito channel's boundary (mito-adjacent merge
-        # error). Automatically skipped whenever "mito" is not present in SOURCE_CHANNELS.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MITO_BORDER_ERASURE_AUG.LENGTH_RANGE = (5, 20)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.LENGTH_RANGE = (0.3, 1.0)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.THICKNESS_RANGE = (4, 9)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.N_LINES = (1, 3)
+        # Heavy acquisition artifact. With probability BAND_PROB: a border-to-border band
+        # (BAND_THICKNESS_RANGE px) -- membrane channel set to 1 inside it, every other channel
+        # blacked out; rest of the image untouched. Otherwise: BLOB_N_RANGE ink-blot blobs
+        # (BLOB_SIZE_RANGE radius, fraction of min(h, w)) blacked out in every channel.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.PROB = 0.1
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BAND_PROB = 0.5
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BAND_THICKNESS_RANGE = (50, 70)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BLOB_SIZE_RANGE = (0.1, 0.3)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BLOB_N_RANGE = (1, 3)
         # Applies a small random dilation/erosion/spur injection to the membrane channel before the
         # derived channels are computed, so the model doesn't over-trust exact skeleton geometry.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.ENABLE = False
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.PROB = 0.3
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.RADIUS_RANGE = (1, 2)
-        # Zeroes z-slices of each raw source channel (SOURCE_CHANNELS, e.g. membrane or mito)
+        # Zeroes z-slices of each raw source channel (SOURCE_CHANNELS, e.g. membrane or raw)
         # independently with probability PROB (see 'slice_dropout' in
         # biapy/data/generators/membrane_augmentors.py).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG = CN()
