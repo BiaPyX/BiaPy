@@ -1083,7 +1083,10 @@ def load_and_prepare_test_data(
                     raise ValueError("No images found in dir {}".format(sample_path))
                 for i in range(len(ids)):
                     dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                    sample_list.append(DataSample(fid=i, coords=None))
+                    # 'fid' indexes into 'dataset_info', which grows across all folders, so it must
+                    # be the cumulative index (len(dataset_info) - 1), not the per-folder local 'i' -
+                    # otherwise every folder after the first points its samples at the wrong file.
+                    sample_list.append(DataSample(fid=len(dataset_info) - 1, coords=None))
 
             # Extract a list of all training gt images
             if test_mask_path:
@@ -1099,7 +1102,11 @@ def load_and_prepare_test_data(
                         raise ValueError("No images found in dir {}".format(sample_path))
                     for i in range(len(ids)):
                         y_dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                        y_sample_list.append(DataSample(fid=i, coords=None))
+                        # Same fix as above: use the cumulative index into 'y_dataset_info', not the
+                        # per-folder local 'i' (which, since each GT folder holds exactly one file,
+                        # would otherwise stay 0 forever and make every sample point at the first
+                        # study's ground truth).
+                        y_sample_list.append(DataSample(fid=len(y_dataset_info) - 1, coords=None))
 
     X_test = BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
     if test_mask_path:

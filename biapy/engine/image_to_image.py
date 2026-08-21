@@ -19,7 +19,13 @@ import copy
 
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.misc import to_pytorch_format, crop_border_tensor, MetricLogger
+from biapy.utils.misc import (
+    to_pytorch_format,
+    crop_border_tensor,
+    MetricLogger,
+    is_dist_avail_and_initialized,
+    get_world_size,
+)
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
@@ -79,6 +85,16 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         self.norm_module["target_type"] = "image"
         self.test_norm_module["target_type"] = "image"
+
+        # Per-study balanced validation metrics (see '_val_batch_group_ids' / '_grouped_metric_update'
+        # in 'metric_calculation' below). Only relevant when MULTIPLE_RAW_ONE_TARGET_LOADER is on, where
+        # each validation "sample" is one of several raw/out-of-focus versions of the same study.
+        self.multiple_raw_one_target = bool(cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER)
+        self._val_study_group_ids = None
+        self._val_study_cursor = 0
+        self._val_study_metric_sums = {}
+        self._val_study_metric_counts = {}
+        self._warned_balance_by_study_dist = False
 
     def define_activations_and_channels(self):
         """
@@ -306,6 +322,15 @@ class Image_to_Image_Workflow(Base_Workflow):
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
         list_names_to_use_lower = [x.lower() for x in list_names_to_use]
 
+        # Per-study balanced validation metrics: with MULTIPLE_RAW_ONE_TARGET_LOADER, each validation
+        # "sample" batch item is one of several raw/out-of-focus versions of the same study, and studies
+        # can hold anywhere from 1 to dozens of raw versions. A flat mean over samples would let studies
+        # with many raw versions dominate the epoch metric, so instead we average within each study first
+        # and then across studies. See '_val_batch_group_ids' / '_grouped_metric_update' below.
+        balance_by_study, group_ids_this_batch = self._val_batch_group_ids(
+            metric_logger=metric_logger, batch_size=_output.shape[0]
+        )
+
         # First metrics that do not require normalization, e.g. MAE and MSE
         metrics_without_norm = ["mae", "mse"] if train else ["mae", "mse", "ssim"]
         not_norm_metrics_pos = [
@@ -317,17 +342,20 @@ class Image_to_Image_Workflow(Base_Workflow):
             for i, metric in enumerate(not_norm_metrics):
                 m_name = not_norm_metrics_names[i]
                 m_name_real = list_names_to_use[not_norm_metrics_pos[i]]
-                if m_name in ["mse", "mae", "ssim"]:
-                    val = metric(_output.contiguous(), _targets.contiguous())
-                else:
+                if m_name not in ["mse", "mae", "ssim"]:
                     raise NotImplementedError
 
-                if m_name in ["mse", "mae", "ssim", "psnr"]:
+                if balance_by_study and m_name in ("mse", "mae"):
+                    val = self._grouped_metric_update(
+                        metric, m_name_real, _output, _targets, group_ids_this_batch, metric_logger
+                    )
+                else:
+                    val = metric(_output.contiguous(), _targets.contiguous())
                     val = val.item() if not torch.isnan(val) else 0  # type: ignore
-                    out_metrics[m_name_real] = val
+                    if metric_logger:
+                        metric_logger.meters[m_name_real].update(val)
 
-                if metric_logger:
-                    metric_logger.meters[m_name_real].update(val)
+                out_metrics[m_name_real] = val
 
         # Ensure values between 0 and 1 in training. For test it is  not done as the values are calculated
         # with the original test image values and the unnormalized prediction
@@ -351,14 +379,41 @@ class Image_to_Image_Workflow(Base_Workflow):
                 m_name = norm_metrics_names[i]
                 m_name_real = list_names_to_use[norm_metrics_pos[i]]
                 if m_name == "ssim":
-                    val = metric(_output, _targets)
-                elif m_name == "psnr":
-                    if train:
-                        # Set values to be between 0-255 range so PSNR value its more meaningful
-                        val = metric(_output * 255, _targets * 255)
+                    if balance_by_study:
+                        val = self._grouped_metric_update(
+                            metric, m_name_real, _output, _targets, group_ids_this_batch, metric_logger
+                        )
                     else:
-                        # In test the values against the original values are calculated
                         val = metric(_output, _targets)
+                        val = val.item() if not torch.isnan(val) else 0  # type: ignore
+                        if metric_logger:
+                            metric_logger.meters[m_name_real].update(val)
+                    out_metrics[m_name_real] = val
+                elif m_name == "psnr":
+                    if balance_by_study:
+                        # Set values to be between 0-255 range so PSNR value its more meaningful, same as
+                        # the non-balanced 'train' branch below (balancing only ever runs during the
+                        # per-epoch val loop, which always computes metrics with 'train' semantics).
+                        val = self._grouped_metric_update(
+                            metric,
+                            m_name_real,
+                            _output,
+                            _targets,
+                            group_ids_this_batch,
+                            metric_logger,
+                            scale=255.0 if train else 1.0,
+                        )
+                    else:
+                        if train:
+                            # Set values to be between 0-255 range so PSNR value its more meaningful
+                            val = metric(_output * 255, _targets * 255)
+                        else:
+                            # In test the values against the original values are calculated
+                            val = metric(_output, _targets)
+                        val = val.item() if not torch.isnan(val) else 0  # type: ignore
+                        if metric_logger:
+                            metric_logger.meters[m_name_real].update(val)
+                    out_metrics[m_name_real] = val
                 elif m_name in ["is", "lpips", "fid"]:
                     # As these metrics are going to be calculated at the end we can modify _output and _targets
                     assert isinstance(_output, torch.Tensor) and isinstance(
@@ -379,14 +434,155 @@ class Image_to_Image_Workflow(Base_Workflow):
                 else:
                     raise NotImplementedError
 
-                if m_name in ["mse", "mae", "ssim", "psnr"]:
-                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
-                    out_metrics[m_name_real] = val
-
-                if metric_logger:
-                    metric_logger.meters[m_name_real].update(val)
-
         return out_metrics
+
+    def _val_batch_group_ids(self, metric_logger: Optional[MetricLogger], batch_size: int):
+        """
+        Work out whether the current batch's metrics should be balanced per study, and, if so, the
+        study id (``gt_associated_id``) of each sample in the batch, in batch order.
+
+        Balancing is only attempted for the per-epoch validation loop, identified via
+        ``self.in_val_epoch`` (set by :func:`~biapy.engine.base_workflow.Base_Workflow` around its call
+        to ``train_engine.evaluate()``) - both the training and validation loops call
+        ``metric_calculation`` the exact same way otherwise (same ``metric_logger``, ``train=True`` by
+        omission), so ``train_one_epoch`` calls are correctly left alone. It also requires
+        ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be enabled, and falls back to the
+        flat per-image average under distributed evaluation with more than one process, since each rank
+        would otherwise only see a non-contiguous shard of the study order.
+
+        Parameters
+        ----------
+        metric_logger : MetricLogger, optional
+            The logger passed to ``metric_calculation``; used only to tell whether this call is inside
+            a batched, per-epoch loop at all (test-time calls never pass one).
+
+        batch_size : int
+            Number of samples in the current batch (``output.shape[0]``).
+
+        Returns
+        -------
+        balance_by_study : bool
+            Whether grouped, per-study balancing should be used for this call.
+
+        group_ids : list of int or None
+            Study id for each sample in the batch, in order. ``None`` when ``balance_by_study`` is False.
+        """
+        if not self.in_val_epoch or metric_logger is None or not self.multiple_raw_one_target:
+            return False, None
+        if getattr(self, "X_val", None) is None or not hasattr(self.X_val, "sample_list"):
+            return False, None
+        if is_dist_avail_and_initialized() and get_world_size() > 1:
+            if not self._warned_balance_by_study_dist:
+                print(
+                    "WARNING: per-study balanced validation metrics are not supported under distributed "
+                    "evaluation (more than one process); falling back to the flat per-image average."
+                )
+                self._warned_balance_by_study_dist = True
+            return False, None
+
+        if self._val_study_group_ids is None:
+            gids = []
+            for i, sample in enumerate(self.X_val.sample_list):
+                gid = sample.get_gt_associated_id()
+                gids.append(gid if gid is not None else i)
+            self._val_study_group_ids = gids
+
+        total = len(self._val_study_group_ids)
+        if self._val_study_cursor >= total:
+            # Starting a new validation epoch: forget the previous one's partial accumulators.
+            self._val_study_cursor = 0
+            self._val_study_metric_sums = {}
+            self._val_study_metric_counts = {}
+
+        start = self._val_study_cursor
+        end = min(start + batch_size, total)
+        group_ids = self._val_study_group_ids[start:end]
+        self._val_study_cursor = end
+
+        if len(group_ids) != batch_size:
+            # Out of sync with the val dataset order (e.g. an unexpected sampler) - bail out rather
+            # than risk grouping samples under the wrong study.
+            return False, None
+
+        return True, group_ids
+
+    def _grouped_metric_update(
+        self,
+        metric,
+        m_name_real: str,
+        output: torch.Tensor,
+        targets: torch.Tensor,
+        group_ids: list,
+        metric_logger: Optional[MetricLogger],
+        scale: float = 1.0,
+    ) -> float:
+        """
+        Compute ``metric`` per sample, accumulate it under its study id, and, once the validation epoch
+        is complete, fold every study's average into a single balanced mean (mean over studies of the
+        mean over that study's raw/out-of-focus versions) written directly into ``metric_logger`` so
+        ``evaluate()``'s returned ``global_avg`` reports the balanced value instead of a flat per-image
+        one.
+
+        Parameters
+        ----------
+        metric : torchmetrics.Metric
+            Metric to evaluate. Called once per sample (forward() returns a value scoped to just that
+            call's input, so per-sample calls do not leak into each other).
+
+        m_name_real : str
+            Metric name as registered in ``metric_logger.meters``.
+
+        output, targets : torch.Tensor
+            Batch tensors, shape ``(B, C, ...)``.
+
+        group_ids : list of int
+            Study id for each sample in the batch, in order (from :func:`_val_batch_group_ids`).
+
+        metric_logger : MetricLogger
+            Logger to update.
+
+        scale : float, optional
+            Multiplier applied to both ``output`` and ``targets`` before computing the metric (used to
+            reproduce PSNR's 0-255 rescale).
+
+        Returns
+        -------
+        float
+            The last per-sample value computed in this call (matches the previous per-batch return
+            convention closely enough for the ``out_metrics`` dict, which isn't read for validation).
+        """
+        sums = self._val_study_metric_sums.setdefault(m_name_real, {})
+        counts = self._val_study_metric_counts.setdefault(m_name_real, {})
+
+        last_val = 0.0
+        for b, gid in enumerate(group_ids):
+            pred_b = output[b : b + 1]
+            targ_b = targets[b : b + 1]
+            if scale != 1.0:
+                pred_b = pred_b * scale
+                targ_b = targ_b * scale
+            v = metric(pred_b.contiguous(), targ_b.contiguous())
+            v = v.item() if not torch.isnan(v) else 0.0
+            sums[gid] = sums.get(gid, 0.0) + v
+            counts[gid] = counts.get(gid, 0) + 1
+            last_val = v
+
+        if self._val_study_cursor >= len(self._val_study_group_ids):
+            # Last batch of the epoch: every study has now contributed at least one value, so finalize
+            # the balanced mean and overwrite the meter with it directly.
+            study_means = [sums[g] / counts[g] for g in sums]
+            balanced = float(np.mean(study_means)) if study_means else 0.0
+            meter = metric_logger.meters[m_name_real]
+            meter.total = balanced
+            meter.count = 1
+            meter.deque.clear()
+            meter.deque.append(balanced)
+            return balanced
+        else:
+            # Mid-epoch: keep the meter alive with a plain running value for the progress printout;
+            # it will be overwritten with the balanced value on the epoch's last batch.
+            metric_logger.meters[m_name_real].update(last_val)
+            return last_val
 
     def process_test_sample(self):
         """Process a sample in the inference phase."""

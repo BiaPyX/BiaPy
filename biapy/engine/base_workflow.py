@@ -201,6 +201,11 @@ class Base_Workflow(metaclass=ABCMeta):
         self.all_pred = []
         self.all_gt = []
 
+        # True only while the per-epoch validation loop (train_engine.evaluate()) is running, so that
+        # workflow-specific metric_calculation() overrides can tell a validation call apart from a
+        # training call - both call it identically (metric_logger set, train=True by omission).
+        self.in_val_epoch = False
+
         # In-memory prediction controls (see BiaPy.predict): gate disk writes and collect
         # the produced arrays in self._predictions (tagged with a "raw"/"post" role).
         self.save_to_disk = True
@@ -1104,19 +1109,23 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Validation
             if self.val_generator:
-                test_stats = evaluate(
-                    self.cfg,
-                    model=self.model,
-                    model_call_func=self.model_call_func,
-                    loss_function=self.loss,
-                    metric_function=self.metric_calculation,
-                    prepare_targets=self.prepare_targets,
-                    epoch=epoch,
-                    data_loader=self.val_generator,
-                    lr_scheduler=self.lr_scheduler,
-                    memory_bank=self.memory_bank,
-                    loss_names=self.loss_names,
-                )
+                self.in_val_epoch = True
+                try:
+                    test_stats = evaluate(
+                        self.cfg,
+                        model=self.model,
+                        model_call_func=self.model_call_func,
+                        loss_function=self.loss,
+                        metric_function=self.metric_calculation,
+                        prepare_targets=self.prepare_targets,
+                        epoch=epoch,
+                        data_loader=self.val_generator,
+                        lr_scheduler=self.lr_scheduler,
+                        memory_bank=self.memory_bank,
+                        loss_names=self.loss_names,
+                    )
+                finally:
+                    self.in_val_epoch = False
 
                 # Save checkpoint is val loss improved
                 if test_stats["loss"] < self.val_best_loss:
