@@ -1275,14 +1275,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             opts.extend(["TEST.METRICS", metric_default_list])
 
         assert len(cfg.TRAIN.METRICS) == 0 or all(
-            [True if x.lower() in ["psnr", "mae", "mse", "ssim"] else False for x in cfg.TRAIN.METRICS]
-        ), f"'TRAIN.METRICS' options are ['psnr', 'mae', 'mse', 'ssim'] in {cfg.PROBLEM.TYPE} workflow"
+            [True if x.lower() in ["psnr", "mae", "mse", "ssim", "pcc"] else False for x in cfg.TRAIN.METRICS]
+        ), f"'TRAIN.METRICS' options are ['psnr', 'mae', 'mse', 'ssim', 'pcc'] in {cfg.PROBLEM.TYPE} workflow"
         assert len(cfg.TEST.METRICS) == 0 or all(
             [
-                True if x.lower() in ["psnr", "mae", "mse", "ssim", "fid", "is", "lpips"] else False
+                True if x.lower() in ["psnr", "mae", "mse", "ssim", "fid", "is", "lpips", "pcc"] else False
                 for x in cfg.TEST.METRICS
             ]
-        ), f"'TEST.METRICS' options are ['psnr', 'mae', 'mse', 'ssim', 'fid', 'is', 'lpips'] in {cfg.PROBLEM.TYPE} workflow"
+        ), f"'TEST.METRICS' options are ['psnr', 'mae', 'mse', 'ssim', 'fid', 'is', 'lpips', 'pcc'] in {cfg.PROBLEM.TYPE} workflow"
 
         if any([True for x in cfg.TEST.METRICS if x.lower() in ["is", "fid", "lpips"]]):
             if cfg.PROBLEM.NDIM == "3D":
@@ -1367,7 +1367,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
-        "IMAGE_TO_IMAGE",
     ]:
         loss = "MAE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss in [
@@ -1377,6 +1376,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "W_MAE_SSIM",
             "W_MSE_SSIM",
         ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM', 'W_MAE_SSIM', 'W_MSE_SSIM']"
+        if loss in ["W_MAE_SSIM", "W_MSE_SSIM"]:
+            assert (
+                len(cfg.LOSS.WEIGHTS) == 2
+            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
+            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
+    elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
+        loss = "MAE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss in [
+            "MAE",
+            "MSE",
+            "SSIM",
+            "W_MAE_SSIM",
+            "W_MSE_SSIM",
+            "CYCLEGAN",
+        ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM', 'W_MAE_SSIM', 'W_MSE_SSIM', 'CYCLEGAN']"
         if loss in ["W_MAE_SSIM", "W_MSE_SSIM"]:
             assert (
                 len(cfg.LOSS.WEIGHTS) == 2
@@ -2544,6 +2558,32 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if not check_value(cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, value_range=(0, 100)):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
 
+    if cfg.DATA.NORMALIZATION.TARGET.ENABLE:
+        target_type = (
+            cfg.DATA.NORMALIZATION.TARGET.TYPE if cfg.DATA.NORMALIZATION.TARGET.TYPE != "" else cfg.DATA.NORMALIZATION.TYPE
+        )
+        assert target_type == "zero_mean_unit_variance", (
+            "'DATA.NORMALIZATION.TARGET' only supports 'zero_mean_unit_variance' (via "
+            "'DATA.NORMALIZATION.TARGET.TYPE' or the inherited 'DATA.NORMALIZATION.TYPE'), got "
+            f"'{target_type}'"
+        )
+        if cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL[0] == -1:
+            raise ValueError(
+                "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed "
+                "values when 'DATA.NORMALIZATION.TARGET.ENABLE' is True. A per-image adaptive mean/std "
+                "computed from the ground truth cannot be recovered at test time without the ground truth "
+                "itself, which defeats the purpose of this section - compute fixed values once from the "
+                "training set's target images and set them here."
+            )
+        if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
+            if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE[0] == -1:
+                raise ValueError(
+                    "'DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE'/'UPPER_VALUE' must be set to fixed "
+                    "values when 'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' is True - only fixed clip "
+                    "values are supported here, as percentiles would need to be computed from the ground "
+                    "truth, which is not available at test time."
+                )
+
     ### Model ###
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
         assert model_arch in [
@@ -3011,13 +3051,24 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "hrnet",
                 "stunet",
+                "nafnet",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet']"
                 )
             # Not allowed archs
             if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
                 raise ValueError("'wdsr' architecture is not available for 3D 'IMAGE_TO_IMAGE'")
+            if model_arch == "nafnet":
+                assert cfg.MODEL.NAFNET.GENERATOR_BACKBONE in [
+                    "nafnet",
+                    "stunet",
+                ], "MODEL.NAFNET.GENERATOR_BACKBONE not in ['nafnet', 'stunet']"
+                if cfg.PROBLEM.NDIM == "3D":
+                    raise ValueError(
+                        "'nafnet' architecture is not available for 3D 'IMAGE_TO_IMAGE' (its PatchGAN "
+                        "discriminator is 2D-only)"
+                    )
         elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED":
             if model_arch not in [
                 "unet",
@@ -3224,6 +3275,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 assert len(cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES) == n_stages - 1, (
                     f"'MODEL.STUNET.POOL_OP_KERNEL_SIZES' (length {len(cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES)}) must be "
                     f"one shorter than 'MODEL.STUNET.DIMS' (length {n_stages}), i.e. {n_stages - 1}"
+                )
+                assert all(len(k) == dim_count for k in cfg.MODEL.STUNET.CONV_KERNEL_SIZES), (
+                    f"Each entry in 'MODEL.STUNET.CONV_KERNEL_SIZES' must have {dim_count} values "
+                    f"(one per spatial dimension) when PROBLEM.NDIM == '{cfg.PROBLEM.NDIM}'"
+                )
+                assert all(len(k) == dim_count for k in cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES), (
+                    f"Each entry in 'MODEL.STUNET.POOL_OP_KERNEL_SIZES' must have {dim_count} values "
+                    f"(one per spatial dimension) when PROBLEM.NDIM == '{cfg.PROBLEM.NDIM}'"
                 )
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:

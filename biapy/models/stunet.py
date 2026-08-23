@@ -12,7 +12,8 @@ Origin:
 - Adapted from OrgMIM: https://github.com/yanchaoz/OrgMIM
 
 Notes:
-- This is a 3D network (Conv3d). If you need 2D, the same pattern can be ported.
+- Supports both 2D (Conv2d/InstanceNorm2d) and 3D (Conv3d/InstanceNorm3d), selected from
+  the number of dimensions in ``image_shape`` (see ``STUNet.ndim``).
 - By default, forward() returns a list with a single element: [full_res_logits].
   If deep supervision is enabled (deep_supervision=True),
   it returns a tuple like nnU-Net: (full_res, upscaled_aux1, upscaled_aux2, ...)
@@ -32,8 +33,9 @@ class BasicResBlock(nn.Module):
     """
     Residual block used by OrgMIM's STUNet.
 
-    conv3d -> instancenorm -> leakyrelu -> conv3d -> instancenorm -> residual add -> leakyrelu
-    Optionally uses a 1x1 conv on the skip path to match channels/stride.
+    conv -> instancenorm -> leakyrelu -> conv -> instancenorm -> residual add -> leakyrelu
+    Optionally uses a 1x1 conv on the skip path to match channels/stride. Runs as Conv2d/
+    InstanceNorm2d or Conv3d/InstanceNorm3d depending on ``ndim``.
     """
     def __init__(
         self,
@@ -43,20 +45,24 @@ class BasicResBlock(nn.Module):
         padding: Union[int, Sequence[int]] = 1,
         stride: Union[int, Sequence[int]] = 1,
         use_1x1conv: bool = False,
+        ndim: int = 3,
     ):
         super().__init__()
-        self.conv1 = nn.Conv3d(
+        conv_op = nn.Conv3d if ndim == 3 else nn.Conv2d
+        norm_op = nn.InstanceNorm3d if ndim == 3 else nn.InstanceNorm2d
+
+        self.conv1 = conv_op(
             input_channels, output_channels,
             kernel_size=kernel_size, stride=stride, padding=padding
         )
-        self.norm1 = nn.InstanceNorm3d(output_channels, affine=True)
+        self.norm1 = norm_op(output_channels, affine=True)
         self.act1 = nn.LeakyReLU(inplace=True)
 
-        self.conv2 = nn.Conv3d(output_channels, output_channels, kernel_size=kernel_size, padding=padding)
-        self.norm2 = nn.InstanceNorm3d(output_channels, affine=True)
+        self.conv2 = conv_op(output_channels, output_channels, kernel_size=kernel_size, padding=padding)
+        self.norm2 = norm_op(output_channels, affine=True)
         self.act2 = nn.LeakyReLU(inplace=True)
 
-        self.conv3 = nn.Conv3d(input_channels, output_channels, kernel_size=1, stride=stride) if use_1x1conv else None
+        self.conv3 = conv_op(input_channels, output_channels, kernel_size=1, stride=stride) if use_1x1conv else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.conv1(x)
@@ -70,7 +76,7 @@ class BasicResBlock(nn.Module):
 
 class Upsample_Layer_nearest(nn.Module):
     """
-    Nearest-neighbor upsampling followed by 1x1x1 conv to set channel count.
+    Nearest-neighbor upsampling followed by a 1x1(x1) conv to set channel count.
     """
     def __init__(
         self,
@@ -78,9 +84,11 @@ class Upsample_Layer_nearest(nn.Module):
         output_channels: int,
         pool_op_kernel_size: Sequence[int],
         mode: str = "nearest",
+        ndim: int = 3,
     ):
         super().__init__()
-        self.conv = nn.Conv3d(input_channels, output_channels, kernel_size=1)
+        conv_op = nn.Conv3d if ndim == 3 else nn.Conv2d
+        self.conv = conv_op(input_channels, output_channels, kernel_size=1)
         self.pool_op_kernel_size = tuple(int(i) for i in pool_op_kernel_size)
         self.mode = mode
 
@@ -102,8 +110,8 @@ def _elementwise_prod(kernels: Sequence[Sequence[int]]) -> List[int]:
 
 class STUNet(nn.Module):
     """
-    OrgMIM STUNet segmentation model (3D). 
-    Reference: https://github.com/yanchaoz/OrgMIM 
+    OrgMIM STUNet segmentation model (2D or 3D, inferred from ``image_shape``).
+    Reference: https://github.com/yanchaoz/OrgMIM
 
     Parameters
     ----------
@@ -233,9 +241,12 @@ class STUNet(nn.Module):
         self.conv_blocks_context = nn.ModuleList()
 
         stage0 = nn.Sequential(
-            BasicResBlock(self.input_channels, dims[0], self.conv_kernel_sizes[0], self.conv_pad_sizes[0], use_1x1conv=True),
+            BasicResBlock(
+                self.input_channels, dims[0], self.conv_kernel_sizes[0], self.conv_pad_sizes[0],
+                use_1x1conv=True, ndim=self.ndim,
+            ),
             *[
-                BasicResBlock(dims[0], dims[0], self.conv_kernel_sizes[0], self.conv_pad_sizes[0])
+                BasicResBlock(dims[0], dims[0], self.conv_kernel_sizes[0], self.conv_pad_sizes[0], ndim=self.ndim)
                 for _ in range(depth[0] - 1)
             ],
         )
@@ -250,9 +261,10 @@ class STUNet(nn.Module):
                     self.conv_pad_sizes[d],
                     stride=self.pool_op_kernel_sizes[d - 1],
                     use_1x1conv=True,
+                    ndim=self.ndim,
                 ),
                 *[
-                    BasicResBlock(dims[d], dims[d], self.conv_kernel_sizes[d], self.conv_pad_sizes[d])
+                    BasicResBlock(dims[d], dims[d], self.conv_kernel_sizes[d], self.conv_pad_sizes[d], ndim=self.ndim)
                     for _ in range(depth[d] - 1)
                 ],
             )
@@ -263,7 +275,9 @@ class STUNet(nn.Module):
         # -----------------------------------------
         self.upsample_layers = nn.ModuleList()
         for u in range(num_pool):
-            upsample_layer = Upsample_Layer_nearest(dims[-1 - u], dims[-2 - u], self.pool_op_kernel_sizes[-1 - u])
+            upsample_layer = Upsample_Layer_nearest(
+                dims[-1 - u], dims[-2 - u], self.pool_op_kernel_sizes[-1 - u], ndim=self.ndim
+            )
             self.upsample_layers.append(upsample_layer)
 
         # -----------------------------------------
@@ -278,6 +292,7 @@ class STUNet(nn.Module):
                     self.conv_kernel_sizes[-2 - u],
                     self.conv_pad_sizes[-2 - u],
                     use_1x1conv=True,
+                    ndim=self.ndim,
                 ),
                 *[
                     BasicResBlock(
@@ -285,6 +300,7 @@ class STUNet(nn.Module):
                         dims[-2 - u],
                         self.conv_kernel_sizes[-2 - u],
                         self.conv_pad_sizes[-2 - u],
+                        ndim=self.ndim,
                     )
                     for _ in range(depth[-2 - u] - 1)
                 ],
@@ -297,10 +313,10 @@ class STUNet(nn.Module):
         self.seg_outputs = nn.ModuleList()
         if self._deep_supervision:
             for ds in range(len(self.conv_blocks_localization)):
-                self.seg_outputs.append(nn.Conv3d(dims[-2 - ds], output_channels[0], kernel_size=1, padding="same"))
+                self.seg_outputs.append(self.conv_op(dims[-2 - ds], output_channels[0], kernel_size=1, padding="same"))
         else:
             # Only create the final resolution head
-            self.seg_outputs.append(nn.Conv3d(dims[0], output_channels[0], kernel_size=1, padding="same"))
+            self.seg_outputs.append(self.conv_op(dims[0], output_channels[0], kernel_size=1, padding="same"))
 
         # Deep supervision upscalers (OrgMIM uses identity lambdas)
         self.upscale_logits_ops = nn.ModuleList([nn.Identity() for _ in range(num_pool - 1)])
@@ -308,7 +324,7 @@ class STUNet(nn.Module):
         # To store which head corresponds to which output channel in the multi-head scenario
         self.heads = nn.Sequential()
         for i, out_ch in enumerate(output_channels):
-            self.heads.append(nn.Conv3d(output_channels[0], out_ch, kernel_size=1, padding="same"))
+            self.heads.append(self.conv_op(output_channels[0], out_ch, kernel_size=1, padding="same"))
 
         init_weights(self)
 
@@ -402,22 +418,22 @@ class STUNet(nn.Module):
 # Convenience presets (same as OrgMIM)
 # --------------------------------------------------------------------------------------
 
-def _common_kernels():
-    conv_kernel_sizes = [[3, 3, 3]] * 6
-    pool_op_kernel_sizes = [
-        [2, 2, 2],
-        [2, 2, 2],
-        [2, 2, 2],
-        [2, 2, 2],
-        [1, 1, 1],
-    ]
+def _common_kernels(ndim: int = 3):
+    """Default conv/pool kernel sizes for the small/base/large presets, sized for ``ndim``."""
+    spatial_dims = 3 if ndim == 3 else 2
+    conv_kernel_sizes = [[3] * spatial_dims] * 6
+    pool_op_kernel_sizes = [[2] * spatial_dims] * 4 + [[1] * spatial_dims]
     return conv_kernel_sizes, pool_op_kernel_sizes
 
 
-def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
-                deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [], 
+def _ndim_from_image_shape(image_shape: Tuple[int, ...]) -> int:
+    return 3 if len(image_shape) == 4 else 2
+
+
+def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"],
+                deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [],
                 return_one_tensor: bool = False) -> STUNet:
-    conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
+    conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels(_ndim_from_image_shape(image_shape))
     return STUNet(
         image_shape=image_shape,
         output_channels=output_channels,
@@ -432,10 +448,10 @@ def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: L
         return_one_tensor=return_one_tensor,
     )
 
-def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
-                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [], 
+def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"],
+                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [],
                  return_one_tensor: bool = False) -> STUNet:
-    conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
+    conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels(_ndim_from_image_shape(image_shape))
     return STUNet(
         image_shape=image_shape,
         output_channels=output_channels,
@@ -447,14 +463,14 @@ def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: 
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
         deep_supervision=deep_supervision,
-        return_one_tensor=return_one_tensor,  
+        return_one_tensor=return_one_tensor,
     )
 
 
-def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
-                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [], 
+def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"],
+                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [],
                  return_one_tensor: bool = False) -> STUNet:
-    conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
+    conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels(_ndim_from_image_shape(image_shape))
     return STUNet(
         image_shape=image_shape,
         output_channels=output_channels,
@@ -466,7 +482,7 @@ def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: 
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
         deep_supervision=deep_supervision,
-        return_one_tensor=return_one_tensor,  
+        return_one_tensor=return_one_tensor,
     )
 
 def download_pretrained_ckpt(url: str, map_location: str = "cpu") -> Dict[str, Any]:

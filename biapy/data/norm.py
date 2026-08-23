@@ -215,8 +215,83 @@ def normalize_image(
         img = img.astype(torch_numpy_dtype_dict[norm_module["out_dtype"]][1])
     else:
         img = img.to(torch_numpy_dtype_dict[norm_module["out_dtype"]][0])
-        
+
     return img, new_norm_info
+
+def resolve_fixed_norm_info(
+    norm_module: Dict,
+    num_channels: int,
+    orig_dtype: str = "uint16",
+) -> Dict:
+    """
+    Build a ``norm_info`` dict (the kind ``normalize_image`` returns) from fixed config values only, no
+    image needed. Used for ``DATA.NORMALIZATION.TARGET`` so predictions can be un-normalized at test time
+    without a ground truth. Only ``'zero_mean_unit_variance'`` is supported.
+
+    Parameters
+    ----------
+    norm_module : dict
+        Normalization config with fixed (non -1) ``mean``/``std``, and, if ``percentile_clip`` is True,
+        fixed ``lower_bound_val``/``upper_bound_val``.
+
+    num_channels : int
+        Number of channels to resolve ``per_channel_info`` for.
+
+    orig_dtype : str, optional
+        Dtype tag stored in the returned ``norm_info``. Defaults to ``'uint16'``.
+
+    Returns
+    -------
+    dict
+        ``norm_info`` dict, usable with ``undo_image_norm``.
+    """
+    assert norm_module["type"] == "zero_mean_unit_variance", (
+        "'resolve_fixed_norm_info' only supports 'zero_mean_unit_variance' normalization, got "
+        f"'{norm_module['type']}'. Add support there first if you need a fixed-value 'div'/'scale_range' target."
+    )
+
+    mean_cfg = norm_module.get("mean", [-1.0])
+    std_cfg = norm_module.get("std", [-1.0])
+    assert mean_cfg[0] != -1 and std_cfg[0] != -1, (
+        "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed values "
+        "(not left at -1) when 'DATA.NORMALIZATION.TARGET.ENABLE' is True: a per-image adaptive mean/std "
+        "computed from the ground truth cannot be recovered at test time without the ground truth."
+    )
+    means = mean_cfg if len(mean_cfg) > 1 else [float(mean_cfg[0])] * num_channels
+    stds = std_cfg if len(std_cfg) > 1 else [float(std_cfg[0])] * num_channels
+    assert len(means) == num_channels and len(stds) == num_channels, (
+        "'MEAN_VAL'/'STD_VAL' must have either one value (applied to every channel) or exactly "
+        f"'num_channels' ({num_channels}) values."
+    )
+
+    percentile_clip = bool(norm_module.get("percentile_clip", False))
+    lows = highs = None
+    if percentile_clip:
+        lower_cfg = norm_module.get("lower_bound_val", [-1.0])
+        upper_cfg = norm_module.get("upper_bound_val", [-1.0])
+        assert lower_cfg[0] != -1 and upper_cfg[0] != -1, (
+            "'DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE'/'UPPER_VALUE' must be set to fixed values "
+            "when 'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' is True: adaptive percentiles need real "
+            "data, which is not available for the ground truth at test time."
+        )
+        lows = lower_cfg if len(lower_cfg) > 1 else [float(lower_cfg[0])] * num_channels
+        highs = upper_cfg if len(upper_cfg) > 1 else [float(upper_cfg[0])] * num_channels
+
+    norm_info = {
+        "type": norm_module["type"],
+        "percentile_clip": percentile_clip,
+        "orig_dtype": orig_dtype,
+        "out_dtype": norm_module.get("out_dtype", "float32"),
+        "per_channel_info": {},
+    }
+    for c in range(num_channels):
+        entry = {"mean": means[c], "std": stds[c]}
+        if percentile_clip:
+            entry["lower_bound_val"] = lows[c]
+            entry["upper_bound_val"] = highs[c]
+        norm_info["per_channel_info"][str(c)] = entry
+
+    return norm_info
 
 def normalize_mask(
     mask: NDArray | torch.Tensor,
@@ -760,6 +835,20 @@ def undo_zero_mean_unit_variance_normalization(
         data = (data * std) + mean
     else:
         data = (data * torch.tensor(std, device=data.device)) + torch.tensor(mean, device=data.device)
+
+    # Clip back to the percentile-clip range, mirroring 'undo_norm_range01' for 'div'/'scale_range'.
+    if norm_info.get("percentile_clip", False):
+        lower_bound_val = [norm_info["per_channel_info"][str(c)].get("lower_bound_val", None) for c in range(data.shape[-1])]
+        upper_bound_val = [norm_info["per_channel_info"][str(c)].get("upper_bound_val", None) for c in range(data.shape[-1])]
+        if all(v is not None for v in lower_bound_val) and all(v is not None for v in upper_bound_val):
+            if isinstance(data, np.ndarray):
+                data = np.clip(data, np.array(lower_bound_val), np.array(upper_bound_val))
+            else:
+                data = torch.clamp(
+                    data,
+                    torch.tensor(lower_bound_val, device=data.device),
+                    torch.tensor(upper_bound_val, device=data.device),
+                )
 
     # Prevent values go outside expected range
     if "float" not in str(norm_info["orig_dtype"]):

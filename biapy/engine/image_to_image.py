@@ -8,7 +8,7 @@ data loading, model setup, predictions, and result saving for 2D and 3D images.
 """
 import torch
 import numpy as np
-from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
+from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError, PearsonCorrCoef
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
@@ -17,7 +17,7 @@ from typing import Dict, Optional
 from numpy.typing import NDArray
 import copy
 
-from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
+from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation, CycleGanLoss
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
     to_pytorch_format,
@@ -35,7 +35,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
-from biapy.data.norm import undo_image_norm
+from biapy.data.norm import undo_image_norm, resolve_fixed_norm_info
 
 class Image_to_Image_Workflow(Base_Workflow):
     """
@@ -85,6 +85,10 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         self.norm_module["target_type"] = "image"
         self.test_norm_module["target_type"] = "image"
+        if self.norm_module.get("target_norm_override") is not None:
+            self.norm_module["target_norm_override"]["target_type"] = "image"
+        if self.test_norm_module.get("target_norm_override") is not None:
+            self.test_norm_module["target_norm_override"]["target_type"] = "image"
 
         # Per-study balanced validation metrics (see '_val_batch_group_ids' / '_grouped_metric_update'
         # in 'metric_calculation' below). Only relevant when MULTIPLE_RAW_ONE_TARGET_LOADER is on, where
@@ -95,6 +99,9 @@ class Image_to_Image_Workflow(Base_Workflow):
         self._val_study_metric_sums = {}
         self._val_study_metric_counts = {}
         self._warned_balance_by_study_dist = False
+        # Lazily-resolved fixed norm_info used to un-normalize predictions at test time when
+        # 'DATA.NORMALIZATION.TARGET' is enabled (see 'process_test_sample').
+        self._resolved_target_norm_info = None
 
     def define_activations_and_channels(self):
         """
@@ -202,6 +209,10 @@ class Image_to_Image_Workflow(Base_Workflow):
                 )
                 self.train_metric_names.append("LPIPS")
                 self.train_metric_best.append("min")
+            elif metric == "pcc":
+                self.train_metrics.append(PearsonCorrCoef().to(self.device))
+                self.train_metric_names.append("PCC")
+                self.train_metric_best.append("max")
 
         self.test_metrics = []
         self.test_metric_names = []
@@ -229,6 +240,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                     LearnedPerceptualImagePatchSimilarity(net_type="squeeze", normalize=True).to(self.test_device)
                 )
                 self.test_metric_names.append("LPIPS")
+            elif metric == "pcc":
+                self.test_metrics.append(PearsonCorrCoef().to(self.test_device))
+                self.test_metric_names.append("PCC")
 
         if self.cfg.LOSS.TYPE == "MSE":
             self.loss = loss_encapsulation(torch.nn.MSELoss().to(self.device))
@@ -250,8 +264,22 @@ class Image_to_Image_Workflow(Base_Workflow):
                 w_mse=self.cfg.LOSS.WEIGHTS[0],
                 w_ssim=self.cfg.LOSS.WEIGHTS[1],
             )
+        elif self.cfg.LOSS.TYPE == "CYCLEGAN":
+            self.cyclegan_loss = CycleGanLoss(cfg=self.cfg, device=self.device)
+            self.loss = self.GAN_loss_wrapper
+            if "loss_discriminator" not in self.loss_names:
+                self.loss_names.append("loss_discriminator")
 
         super().define_metrics()
+
+    def GAN_loss_wrapper(self, output, targets):
+        """Mirrors ``Denoising_Workflow.NAFNetGan_loss_wrapper`` for the image-to-image workflow."""
+        if isinstance(output, dict):
+            pred = output["pred"]
+        else:
+            pred = output
+        loss_g, loss_d = self.model_without_ddp.forward_loss(pred, targets, self.cyclegan_loss)
+        return {"losses": [loss_g, loss_d]}
 
     def metric_calculation(
         self,
@@ -434,6 +462,23 @@ class Image_to_Image_Workflow(Base_Workflow):
                 else:
                     raise NotImplementedError
 
+        # Pearson Correlation Coefficient. Always computed per sample (never as one batch-pooled flatten,
+        # which would correlate pixels across unrelated images) - see '_per_sample_metric_mean'.
+        pcc_pos = [i for i, x in enumerate(list_names_to_use_lower) if x == "pcc"]
+        with torch.no_grad():
+            for i in pcc_pos:
+                metric = list_to_use[i]
+                m_name_real = list_names_to_use[i]
+                if balance_by_study:
+                    val = self._grouped_metric_update(
+                        metric, m_name_real, _output, _targets, group_ids_this_batch, metric_logger, flatten=True
+                    )
+                else:
+                    val = self._per_sample_metric_mean(metric, _output, _targets)
+                    if metric_logger:
+                        metric_logger.meters[m_name_real].update(val)
+                out_metrics[m_name_real] = val
+
         return out_metrics
 
     def _val_batch_group_ids(self, metric_logger: Optional[MetricLogger], batch_size: int):
@@ -515,6 +560,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         group_ids: list,
         metric_logger: Optional[MetricLogger],
         scale: float = 1.0,
+        flatten: bool = False,
     ) -> float:
         """
         Compute ``metric`` per sample, accumulate it under its study id, and, once the validation epoch
@@ -545,6 +591,10 @@ class Image_to_Image_Workflow(Base_Workflow):
             Multiplier applied to both ``output`` and ``targets`` before computing the metric (used to
             reproduce PSNR's 0-255 rescale).
 
+        flatten : bool, optional
+            Flatten each sample to a 1D vector before calling ``metric`` (needed for
+            ``PearsonCorrCoef``, which expects paired 1D observations rather than a spatial tensor).
+
         Returns
         -------
         float
@@ -561,7 +611,10 @@ class Image_to_Image_Workflow(Base_Workflow):
             if scale != 1.0:
                 pred_b = pred_b * scale
                 targ_b = targ_b * scale
-            v = metric(pred_b.contiguous(), targ_b.contiguous())
+            if flatten:
+                v = metric(pred_b.reshape(-1), targ_b.reshape(-1))
+            else:
+                v = metric(pred_b.contiguous(), targ_b.contiguous())
             v = v.item() if not torch.isnan(v) else 0.0
             sums[gid] = sums.get(gid, 0.0) + v
             counts[gid] = counts.get(gid, 0) + 1
@@ -583,6 +636,33 @@ class Image_to_Image_Workflow(Base_Workflow):
             # it will be overwritten with the balanced value on the epoch's last batch.
             metric_logger.meters[m_name_real].update(last_val)
             return last_val
+
+    @staticmethod
+    def _per_sample_metric_mean(metric, output: torch.Tensor, targets: torch.Tensor) -> float:
+        """
+        Compute ``metric`` on each sample separately (flattened to 1D) and return the plain mean across
+        the batch. Used for PCC, whose value over a whole batch flattened together would correlate
+        pixels across unrelated images instead of within each image, so it must never be computed as one
+        batch-pooled call the way MAE/MSE/SSIM/PSNR are.
+
+        Parameters
+        ----------
+        metric : torchmetrics.Metric
+            Metric to evaluate (e.g. ``PearsonCorrCoef``).
+
+        output, targets : torch.Tensor
+            Batch tensors, shape ``(B, C, ...)``.
+
+        Returns
+        -------
+        float
+            Mean of the per-sample values.
+        """
+        vals = []
+        for b in range(output.shape[0]):
+            v = metric(output[b : b + 1].reshape(-1), targets[b : b + 1].reshape(-1))
+            vals.append(v.item() if not torch.isnan(v) else 0.0)
+        return float(np.mean(vals)) if vals else 0.0
 
     def process_test_sample(self):
         """Process a sample in the inference phase."""
@@ -715,10 +795,20 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        adjusted_norm = copy.deepcopy(self.current_sample["X_norm"])
-        if self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS != len(self.current_sample["X_norm"]["per_channel_info"]):
-            for i in range(len(self.current_sample["X_norm"]["per_channel_info"]), self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS):
-                adjusted_norm["per_channel_info"][str(i)] = copy.deepcopy(self.current_sample["X_norm"]["per_channel_info"]["0"])
+        target_norm_override = self.test_norm_module.get("target_norm_override")
+        if target_norm_override is not None:
+            if getattr(self, "_resolved_target_norm_info", None) is None:
+                self._resolved_target_norm_info = resolve_fixed_norm_info(
+                    target_norm_override,
+                    self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS,
+                    orig_dtype=self.current_sample["X_norm"]["orig_dtype"],
+                )
+            adjusted_norm = self._resolved_target_norm_info
+        else:
+            adjusted_norm = copy.deepcopy(self.current_sample["X_norm"])
+            if self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS != len(self.current_sample["X_norm"]["per_channel_info"]):
+                for i in range(len(self.current_sample["X_norm"]["per_channel_info"]), self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS):
+                    adjusted_norm["per_channel_info"][str(i)] = copy.deepcopy(self.current_sample["X_norm"]["per_channel_info"]["0"])
 
         pred = undo_image_norm(pred, adjusted_norm)
         assert isinstance(pred, np.ndarray)

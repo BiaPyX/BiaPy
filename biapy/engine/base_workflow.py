@@ -384,6 +384,26 @@ class Base_Workflow(metaclass=ABCMeta):
             "upper_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
             "mean": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
             "std": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
+            # None (default) => target normalized like the input, as before. See DATA.NORMALIZATION.TARGET.
+            "target_norm_override": (
+                {
+                    "type": (
+                        cfg.DATA.NORMALIZATION.TARGET.TYPE
+                        if cfg.DATA.NORMALIZATION.TARGET.TYPE != ""
+                        else cfg.DATA.NORMALIZATION.TYPE
+                    ),
+                    "target_type": "mask",
+                    "out_dtype": "float32",
+                    "norm_target": False,
+                    "percentile_clip": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE,
+                    "lower_bound_val": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE,
+                    "upper_bound_val": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE,
+                    "mean": cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
+                    "std": cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL,
+                }
+                if cfg.DATA.NORMALIZATION.TARGET.ENABLE
+                else None
+            ),
         }
         print("Normalization module created with the following configuration:")
         for key, val in self.norm_module.items():

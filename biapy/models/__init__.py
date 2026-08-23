@@ -89,6 +89,10 @@ def build_model(
 
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     network_stride = None
+    # Extra files/classes for 'extract_model' when the model is composed across more than one
+    # file (e.g. NAFNet's GAN wrapper around a swapped-in STUNet generator).
+    extra_model_files: List[str] = []
+    extra_dependencies: List[Any] = []
 
     # Put again the specific model name
     if "hrnet" in cfg.MODEL.ARCHITECTURE.lower():
@@ -415,22 +419,66 @@ def build_model(
             model = MaskedAutoencoderViT(**args)  # type: ignore
             callable_model = MaskedAutoencoderViT  # type: ignore
         elif modelname == "nafnet":
-            args = dict(
-                img_channel=cfg.DATA.PATCH_SIZE[-1],
-                width=cfg.MODEL.NAFNET.WIDTH,
-                middle_blk_num=cfg.MODEL.NAFNET.MIDDLE_BLK_NUM,
-                enc_blk_nums=cfg.MODEL.NAFNET.ENC_BLK_NUMS,
-                dec_blk_nums=cfg.MODEL.NAFNET.DEC_BLK_NUMS,
-                drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0],
-                dw_expand=cfg.MODEL.NAFNET.DW_EXPAND,
-                ffn_expand=cfg.MODEL.NAFNET.FFN_EXPAND,
-                discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,
-                patchgan_base_filters=cfg.MODEL.NAFNET.PATCHGAN.BASE_FILTERS,
-                out_channels=sum(output_channels),
-                head_activations=head_activations,
-            )
-            callable_model = NAFNet   # type: ignore
-            model = callable_model(**args)  # type: ignore
+            if str(cfg.MODEL.NAFNET.GENERATOR_BACKBONE).lower() == "stunet":
+                # Aliased: an unaliased import here would make 'build_stunet' local to the whole
+                # 'build_model' function, shadowing the global the plain "stunet" branch relies on.
+                from biapy.models.stunet import build_stunet as _build_stunet_backbone
+                from biapy.models.gan_wrapper import GANGeneratorWrapper as _GANGeneratorWrapper
+
+                extra_model_files.append(os.path.abspath(import_module("biapy.models.gan_wrapper").__file__))
+                extra_model_files.append(os.path.abspath(import_module("biapy.models.stunet").__file__))
+
+                stunet_pretrained = cfg.MODEL.STUNET.PRETRAINED
+                if stunet_pretrained and cfg.MODEL.LOAD_CHECKPOINT:
+                    print(
+                        "Skipping the download of STUNet's pretrained weights, as 'MODEL.LOAD_CHECKPOINT' is enabled "
+                        "and the checkpoint loaded afterwards would replace them"
+                    )
+                    stunet_pretrained = False
+                stunet_args = dict(
+                    image_shape=cfg.DATA.PATCH_SIZE,
+                    output_channels=output_channels,
+                    variant=cfg.MODEL.STUNET.VARIANT,
+                    deep_supervision=False,
+                    explicit_activations=False,
+                    head_activations=head_activations,
+                    output_channel_info=output_channel_info,
+                    return_one_tensor=False,
+                    pretrained=stunet_pretrained,
+                )
+                if str(cfg.MODEL.STUNET.VARIANT).lower() == "custom":
+                    stunet_args["depth"] = cfg.MODEL.STUNET.DEPTH
+                    stunet_args["dims"] = cfg.MODEL.STUNET.DIMS
+                    stunet_args["pool_op_kernel_sizes"] = cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES
+                    stunet_args["conv_kernel_sizes"] = cfg.MODEL.STUNET.CONV_KERNEL_SIZES
+                generator = _build_stunet_backbone(**stunet_args)  # type: ignore
+                extra_dependencies.append(type(generator))
+
+                callable_model = _GANGeneratorWrapper  # type: ignore
+                args = dict(
+                    generator=generator,
+                    discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,
+                    patchgan_base_filters=cfg.MODEL.NAFNET.PATCHGAN.BASE_FILTERS,
+                    out_channels=sum(output_channels),
+                )
+                model = callable_model(**args)  # type: ignore
+            else:
+                args = dict(
+                    img_channel=cfg.DATA.PATCH_SIZE[-1],
+                    width=cfg.MODEL.NAFNET.WIDTH,
+                    middle_blk_num=cfg.MODEL.NAFNET.MIDDLE_BLK_NUM,
+                    enc_blk_nums=cfg.MODEL.NAFNET.ENC_BLK_NUMS,
+                    dec_blk_nums=cfg.MODEL.NAFNET.DEC_BLK_NUMS,
+                    drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0],
+                    dw_expand=cfg.MODEL.NAFNET.DW_EXPAND,
+                    ffn_expand=cfg.MODEL.NAFNET.FFN_EXPAND,
+                    discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,
+                    patchgan_base_filters=cfg.MODEL.NAFNET.PATCHGAN.BASE_FILTERS,
+                    out_channels=sum(output_channels),
+                    head_activations=head_activations,
+                )
+                callable_model = NAFNet   # type: ignore
+                model = callable_model(**args)  # type: ignore
 
     # Initialize the ViT backbone with pretrained weights, if requested. It is done here, and not
     # within the models, so the architectures stay self-contained (e.g. when they are exported to
@@ -476,8 +524,12 @@ def build_model(
     # Queue for recursive dependency tracing
     dependency_queue = deque()
     dependency_queue.append(callable_model)
+    for dep in extra_dependencies:
+        dependency_queue.append(dep)
 
-    collected_sources, all_import_lines, scanned_files = extract_model(dependency_queue, model_file)
+    collected_sources, all_import_lines, scanned_files = extract_model(
+        dependency_queue, [model_file] + extra_model_files
+    )
     all_import_lines = merge_import_lines(all_import_lines)
 
     # Special handling for instance segmentation models with sigma outputs
@@ -561,7 +613,9 @@ def init_embedding_output(model: nn.Module, n_sigma: int = 2, output_channel_inf
         sigma_conv.weight[sigma_offset : sigma_offset + n_sigma].fill_(0)
         sigma_conv.bias[sigma_offset : sigma_offset + n_sigma].fill_(1)
 
-def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
+def extract_model(
+    dependency_queue: deque, model_file: str | List[str]
+) -> Tuple[Dict[str, str], set, List[str]]:
     """
     Extract the source code of the model and its dependencies, ensuring
     dependencies are ordered before the definition that uses them.
@@ -571,8 +625,8 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
     dependency_queue : deque
         Queue of model dependencies to be processed.
 
-    model_file : str
-        Path to the main model file.
+    model_file : str or list of str
+        Path to the main model file, or a list of files for a model composed across several files.
 
     Returns
     -------
@@ -591,7 +645,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
     collected_sources: Dict[str, str] = {}
     all_import_lines = set()
     scanned_files = []
-    queue = [model_file]
+    queue = list(model_file) if isinstance(model_file, (list, tuple)) else [model_file]
 
     # {name: source_code} for all class/function/constant definitions
     name_to_source: Dict[str, str] = {}

@@ -688,7 +688,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     1 for k in range(self.instance_channel) if per[k]["type"] not in ("no_bin", "flow")
                 )
         else:
-            self.mask_norm = self.norm_module
+            self.mask_norm = self.norm_module.get("target_norm_override") or self.norm_module
 
         _, mask = self.load_sample(0)
         self.Y_channels = mask.shape[-1]
@@ -1166,7 +1166,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if xnorm_info is None:
                 xnorm_info = self.norm_module
             img, _ = normalize_image(img, norm_module=xnorm_info)
-            ynorm = self.Y.dataset_info[sample.fid].norm_info if self.norm_module["norm_target"] else self.mask_norm
+            ynorm = self.Y.dataset_info[msample.fid].norm_info if self.norm_module["norm_target"] else self.mask_norm
             mask, _ = normalize_mask(mask, norm_module=ynorm)
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
 

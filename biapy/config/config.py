@@ -848,6 +848,25 @@ class Config:
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
+        # Target/GT-specific normalization (image-to-image style targets only). Off by default = fully
+        # retrocompatible (target normalized like the input, as before). When enabled, the target is
+        # normalized with its own FIXED type/mean/std/clip below, and predictions are un-normalized with
+        # those same fixed values at test time instead of the input's - needed because the input's stats
+        # are computable at test time (the input always exists) but the target's are not.
+        _C.DATA.NORMALIZATION.TARGET = CN()
+        _C.DATA.NORMALIZATION.TARGET.ENABLE = False
+        # '' reuses 'DATA.NORMALIZATION.TYPE'. Only 'zero_mean_unit_variance' is supported here.
+        _C.DATA.NORMALIZATION.TARGET.TYPE = ""
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP = CN()
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE = False
+        # Fixed clip values only (no percentiles - those would need the target image at test time).
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE = [-1.0]
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE = [-1.0]
+        _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR = CN()
+        # Required (not -1) when 'DATA.NORMALIZATION.TARGET.ENABLE' is True.
+        _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
+        _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3.2 Training data options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1723,6 +1742,10 @@ class Config:
         _C.MODEL.NAFNET.PATCHGAN = CN()
         # Number of initial convolutional filters in the first layer of the discriminator.
         _C.MODEL.NAFNET.PATCHGAN.BASE_FILTERS = 64
+        # Generator backbone used inside the NAFNet GAN pipeline. 'nafnet' (default) uses NAFNet's own
+        # NAFBlock encoder/decoder as the generator. 'stunet' swaps in STUNet (configured via
+        # MODEL.STUNET) as the generator instead.
+        _C.MODEL.NAFNET.GENERATOR_BACKBONE = "nafnet"
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.7 Checkpoint options
@@ -1980,10 +2003,10 @@ class Config:
         #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS).
         #   * Detection: 'iou' (called also Jaccard index)
         #   * Denoising: 'mae', 'mse'
-        #   * Super-resolution: "psnr", "mae", "mse", "ssim"
-        #   * Self-supervision: "psnr", "mae", "mse", "ssim"
+        #   * Super-resolution: "psnr", "mae", "mse", "ssim", "pcc"
+        #   * Self-supervision: "psnr", "mae", "mse", "ssim", "pcc"
         #   * Classification: 'accuracy', 'top-5-accuracy'
-        #   * Image to image: "psnr", "mae", "mse", "ssim"
+        #   * Image to image: "psnr", "mae", "mse", "ssim", "pcc"
         _C.TRAIN.METRICS = []
         
         # Gradient clipping max norm applied per optimizer. 0 = disabled.
@@ -2076,12 +2099,12 @@ class Config:
         #                            Instance metrics will be always calculated.
         #   * Detection: 'iou' (called also Jaccard index)
         #   * Denoising: 'mae', 'mse'
-        #   * Super-resolution: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these
+        #   * Super-resolution: "psnr", "mae", "mse", "ssim", "pcc". Additionally, if only if PROBLEM.NDIM == '2D', these
         #                       can also be selected:  "fid", "is", "lpips"
-        #   * Self-supervision: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these
+        #   * Self-supervision: "psnr", "mae", "mse", "ssim", "pcc". Additionally, if only if PROBLEM.NDIM == '2D', these
         #                       can also be selected:  "fid", "is", "lpips"
         #   * Classification: 'accuracy'. Always calculated: Confusion matrix
-        #   * Image to image: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these
+        #   * Image to image: "psnr", "mae", "mse", "ssim", "pcc". Additionally, if only if PROBLEM.NDIM == '2D', these
         #                     can also be selected:  "fid", "is", "lpips"
         _C.TEST.METRICS = []
 
