@@ -8,8 +8,9 @@ model directly -- only these derived channels are:
 - ``hessian_blob``: Hessian-eigenvalue "blobness" response.
 - ``meijering``: standardised, multi-scale Meijering ridge response.
 
-``skeleton_dt``/``hessian_blob`` are derived from the membrane channel. ``meijering`` is derived
-from "raw" instead (must be present in SOURCE_CHANNELS, see ``derive_membrane_input_channels``).
+Channels are resolved by name, not position: ``skeleton_dt``/``hessian_blob`` need "membrane" in
+SOURCE_CHANNELS, ``meijering`` needs "raw". SOURCE_CHANNELS may be e.g. ``["membrane"]``,
+``["raw"]``, ``["membrane", "raw"]`` or ``["raw", "membrane"]``.
 """
 from typing import Dict, List, Sequence, Tuple
 
@@ -269,15 +270,16 @@ def derive_membrane_input_channels(
     ----------
     source_stack : 3D/4D Numpy array
         Raw source channels (already warped/augmented), ``(y, x, len(source_channels))`` in 2D or
-        ``(z, y, x, len(source_channels))`` in 3D. Channel 0 is the binary membrane mask.
+        ``(z, y, x, len(source_channels))`` in 3D.
 
     source_channels : list of str
-        Ordered raw channel names, matching ``source_stack``'s channel axis.
+        Ordered raw channel names, matching ``source_stack``'s channel axis. Channels are looked
+        up by name ("membrane", "raw"), not position.
 
     derived_channels : list of str
         Ordered derived channel names to compute. Must be non-empty. Supported: ``"skeleton_dt"``,
-        ``"hessian_blob"`` (from the membrane channel), ``"meijering"`` (from ``"raw"``, which must
-        then be present in ``source_channels``).
+        ``"hessian_blob"`` (from ``"membrane"``, which must be present in ``source_channels``),
+        ``"meijering"`` (from ``"raw"``, which must then be present in ``source_channels``).
 
     derived_channels_extra_opts : dict of str to dict
         Per-channel options, e.g. ``{"skeleton_dt": {"clamp_px": 10}}``.
@@ -299,16 +301,26 @@ def derive_membrane_input_channels(
     )
     if not derived_channels:
         raise ValueError("DERIVED_CHANNELS is empty -- at least one derived channel is required.")
-    membrane = source_stack[..., 0]
+    membrane_idx = source_channels.index("membrane") if "membrane" in source_channels else None
     raw_idx = source_channels.index("raw") if "raw" in source_channels else None
 
     derived = []
     for name in derived_channels:
         opts = dict(derived_channels_extra_opts.get(name, {}))
         if name == "skeleton_dt":
-            chan = clamped_skeleton_dt(membrane, ndim=ndim, resolution=resolution, **opts)
+            if membrane_idx is None:
+                raise ValueError(
+                    "'skeleton_dt' is in DERIVED_CHANNELS but SOURCE_CHANNELS has no 'membrane' "
+                    f"entry (SOURCE_CHANNELS={source_channels})."
+                )
+            chan = clamped_skeleton_dt(source_stack[..., membrane_idx], ndim=ndim, resolution=resolution, **opts)
         elif name == "hessian_blob":
-            chan = hessian_blobness(membrane, ndim=ndim, **opts)
+            if membrane_idx is None:
+                raise ValueError(
+                    "'hessian_blob' is in DERIVED_CHANNELS but SOURCE_CHANNELS has no 'membrane' "
+                    f"entry (SOURCE_CHANNELS={source_channels})."
+                )
+            chan = hessian_blobness(source_stack[..., membrane_idx], ndim=ndim, **opts)
         elif name == "meijering":
             if raw_idx is None:
                 raise ValueError(

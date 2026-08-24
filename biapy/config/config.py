@@ -665,16 +665,17 @@ class Config:
         # IMAGE_TO_IMAGE_Workflow path.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE = False
         # Ordered list of the raw, on-disk input channels. Never fed to the model directly -- only
-        # used to compute DERIVED_CHANNELS (see below). First entry is always the membrane class.
-        # E.g. ["membrane"] or ["membrane", "raw"] ("raw" required whenever 'meijering' is in
-        # DERIVED_CHANNELS; may appear at any position).
+        # used to compute DERIVED_CHANNELS (see below). Channels are resolved by name, not
+        # position, so any order/subset works, e.g. ["membrane"], ["raw"], ["membrane", "raw"] or
+        # ["raw", "membrane"] ("raw" required whenever 'meijering' is in DERIVED_CHANNELS;
+        # "membrane" required whenever 'skeleton_dt'/'hessian_blob' are).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane", "raw"]
         # Ordered list of channels derived on the fly from SOURCE_CHANNELS -- the model's actual
         # input; must be non-empty. Options:
         #   - 'skeleton_dt': clamped Euclidean distance transform of the per-slice membrane skeleton.
-        #     Derived from the membrane channel (SOURCE_CHANNELS[0]).
+        #     Derived from 'membrane' (required in SOURCE_CHANNELS).
         #   - 'hessian_blob': Hessian-eigenvalue-based "dense blob" response (mito/synapse/vesicle cue).
-        #     Derived from the membrane channel (SOURCE_CHANNELS[0]).
+        #     Derived from 'membrane' (required in SOURCE_CHANNELS).
         #   - 'meijering': standardised multi-scale Meijering ridge filter. Derived from 'raw'
         #     (required in SOURCE_CHANNELS).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS = ["skeleton_dt", "hessian_blob", "meijering"]

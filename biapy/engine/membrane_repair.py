@@ -211,13 +211,17 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
         self._prepare_membrane_repair_gt()
 
-        # SOURCE_CHANNELS[0] (membrane) must be a binary mask.
-        if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
-            check_binary_masks(cfg.DATA.TRAIN.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=0)
-            if not cfg.DATA.VAL.FROM_TRAIN:
-                check_binary_masks(cfg.DATA.VAL.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=0)
-        if cfg.TEST.ENABLE and cfg.DATA.TEST.CHECK_DATA:
-            check_binary_masks(cfg.DATA.TEST.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=0)
+        # "membrane", if present in SOURCE_CHANNELS, must be a binary mask; no "membrane" entry
+        # (raw-only baseline) means there's nothing to check.
+        source_channels = list(cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS)
+        membrane_idx = source_channels.index("membrane") if "membrane" in source_channels else None
+        if membrane_idx is not None:
+            if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
+                check_binary_masks(cfg.DATA.TRAIN.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
+                if not cfg.DATA.VAL.FROM_TRAIN:
+                    check_binary_masks(cfg.DATA.VAL.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
+            if cfg.TEST.ENABLE and cfg.DATA.TEST.CHECK_DATA:
+                check_binary_masks(cfg.DATA.TEST.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
 
         self.cfg.freeze()
         self.mask_path = self.cfg.DATA.TRAIN.GT_PATH
@@ -229,8 +233,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
     def _validate_membrane_repair_channel_counts(cfg):
         """
         Validate ``DATA.PATCH_SIZE`` against ``len(SOURCE_CHANNELS)``, and fail fast if
-        ``DERIVED_CHANNELS`` is empty or ``"meijering"`` is requested without a ``"raw"`` source
-        channel. ``staticmethod`` since it must run before ``Base_Workflow.__init__``.
+        ``DERIVED_CHANNELS`` is empty or requests a channel whose required SOURCE_CHANNELS entry
+        ("raw" for "meijering", "membrane" for "skeleton_dt"/"hessian_blob") is missing.
+        ``staticmethod`` since it must run before ``Base_Workflow.__init__``.
         """
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
         if not mr.DERIVED_CHANNELS:
@@ -245,6 +250,14 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
             raise ValueError(
                 "DERIVED_CHANNELS includes 'meijering' but SOURCE_CHANNELS "
                 f"({list(mr.SOURCE_CHANNELS)}) has no 'raw' entry."
+            )
+        if (
+            any(ch in mr.DERIVED_CHANNELS for ch in ("skeleton_dt", "hessian_blob"))
+            and "membrane" not in mr.SOURCE_CHANNELS
+        ):
+            raise ValueError(
+                "DERIVED_CHANNELS includes 'skeleton_dt'/'hessian_blob' but SOURCE_CHANNELS "
+                f"({list(mr.SOURCE_CHANNELS)}) has no 'membrane' entry."
             )
 
     @staticmethod

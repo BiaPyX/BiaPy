@@ -56,7 +56,8 @@ class MembraneRepairGeneratorMixin:
         Parameters
         ----------
         source_channels : list of str, optional
-            Ordered raw, on-disk input channel names. Channel 0 is always the membrane class.
+            Ordered raw, on-disk input channel names, e.g. ``["membrane"]``, ``["raw"]``,
+            ``["membrane", "raw"]`` or ``["raw", "membrane"]``. Resolved by name, not position.
 
         derived_channels : list of str, optional
             Ordered derived channel names appended after ``source_channels`` to build the
@@ -98,8 +99,19 @@ class MembraneRepairGeneratorMixin:
         self.skeleton_perturb_aug = dict(skeleton_perturb_aug)
 
         self.channel_offsets = source_channel_offsets(self.source_channels, self.derived_channels)
-        self.membrane_idx = self.channel_offsets[self.source_channels[0]]
+        self.membrane_idx = self.channel_offsets.get("membrane")
         self.droppable_channel_idxs = tuple(self.channel_offsets[name] for name in self.source_channels)
+
+        # The corruption augmentors below all paint into the membrane channel; without one
+        # (raw-only SOURCE_CHANNELS) they have nothing to corrupt.
+        for name, aug in (
+            ("gap_aug", self.gap_aug),
+            ("bridge_aug", self.bridge_aug),
+            ("artifact_aug", self.artifact_aug),
+            ("skeleton_perturb_aug", self.skeleton_perturb_aug),
+        ):
+            if aug.get("enable") and self.membrane_idx is None:
+                raise ValueError(f"{name} requires 'membrane' in SOURCE_CHANNELS.")
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
