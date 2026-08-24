@@ -2265,7 +2265,7 @@ def samples_from_image_list_multiple_raw_one_gt(
                 raise ValueError(
                     f"All images must be within the same data range. However, the current image (with a "
                     f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {raw_sample_data_range_expected}) in the folder. Current image: {gt_sample_path}"
+                    f"of {raw_sample_data_range_expected}) in the folder. Current image: {raw_sample_path}"
                 )
 
             original_data_shape = raw_sample.shape
