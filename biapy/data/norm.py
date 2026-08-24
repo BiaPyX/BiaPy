@@ -630,6 +630,15 @@ def norm_range01(
     if _is_binary_channel(data):
         return data, 1.0, 0.0
 
+    # Capture this before the cast below, which would otherwise erase it: an originally-integer
+    # array (uint8/uint16) is raw pixel data and must always be divided by 255/65535 below, even
+    # if a particular dim sample happens to have a low max. Only a source that was *already*
+    # floating-point can plausibly be pre-normalized data.
+    orig_was_integer = (
+        (isinstance(data, torch.Tensor) and not torch.is_floating_point(data))
+        or (isinstance(data, np.ndarray) and np.issubdtype(data.dtype, np.integer))
+    )
+
     # Changing dtype to floating tensor
     if isinstance(data, torch.Tensor):
         if not torch.is_floating_point(data):
@@ -644,11 +653,18 @@ def norm_range01(
         _max_val_to_div = float(max_val_to_div)
         _min_val_to_div = float(min_val_to_div)
     else:
-        if div_using_max_and_scale: 
+        if div_using_max_and_scale:
             _max_val_to_div = float(data.max())
             _min_val_to_div = float(data.min())
         else:
-            _max_val_to_div = 65535 if data.max() > 255 else 255
+            data_max = float(data.max())
+            if not orig_was_integer and data_max <= 1.0:
+                # Source is a float image already normalized/scaled to [0, 1] (e.g. data saved
+                # pre-normalized). Dividing it again by 255/65535 would needlessly compress it
+                # toward zero instead of leaving it as-is.
+                _max_val_to_div = 1.0
+            else:
+                _max_val_to_div = 65535 if data_max > 255 else 255
             _min_val_to_div = 0
 
     if apply_norm:

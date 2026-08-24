@@ -180,7 +180,11 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.train_metric_best = []
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric == "psnr":
-                self.train_metrics.append(PeakSignalNoiseRatio(data_range=(0, 255)).to(self.device))
+                # No fixed 'data_range': it must reflect the *actual* range the normalized data
+                # lands in, which depends on the source dtype/scale and isn't always [0, 1] or
+                # [0, 255] (see 'metric_calculation'). Letting torchmetrics infer it per call from
+                # the real target range keeps this consistent with the test-time PSNR metric below.
+                self.train_metrics.append(PeakSignalNoiseRatio().to(self.device))
                 self.train_metric_names.append("PSNR")
                 self.train_metric_best.append("max")
             elif metric == "mse":
@@ -418,10 +422,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                             metric_logger.meters[m_name_real].update(val)
                     out_metrics[m_name_real] = val
                 elif m_name == "psnr":
+                    # 'metric' was built with the same 'data_range' as the normalized data (see
+                    # 'define_metrics'), so no rescale is needed here. Rescaling by a hardcoded 255
+                    # assumed normalized data always came from an 8-bit image, which silently inflated
+                    # PSNR by up to ~48 dB whenever that wasn't true (e.g. sources already in [0,1]).
                     if balance_by_study:
-                        # Set values to be between 0-255 range so PSNR value its more meaningful, same as
-                        # the non-balanced 'train' branch below (balancing only ever runs during the
-                        # per-epoch val loop, which always computes metrics with 'train' semantics).
                         val = self._grouped_metric_update(
                             metric,
                             m_name_real,
@@ -429,15 +434,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                             _targets,
                             group_ids_this_batch,
                             metric_logger,
-                            scale=255.0 if train else 1.0,
                         )
                     else:
-                        if train:
-                            # Set values to be between 0-255 range so PSNR value its more meaningful
-                            val = metric(_output * 255, _targets * 255)
-                        else:
-                            # In test the values against the original values are calculated
-                            val = metric(_output, _targets)
+                        val = metric(_output, _targets)
                         val = val.item() if not torch.isnan(val) else 0  # type: ignore
                         if metric_logger:
                             metric_logger.meters[m_name_real].update(val)

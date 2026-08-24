@@ -176,7 +176,11 @@ class Self_supervised_Workflow(Base_Workflow):
         self.train_metric_best = []
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric == "psnr":
-                self.train_metrics.append(PeakSignalNoiseRatio(data_range=(0, 255)).to(self.device))
+                # No fixed 'data_range': it must reflect the *actual* range the normalized data
+                # lands in, which depends on the source dtype/scale and isn't always [0, 1] or
+                # [0, 255] (see 'metric_calculation'). Letting torchmetrics infer it per call from
+                # the real target range keeps this consistent with the test-time PSNR metric below.
+                self.train_metrics.append(PeakSignalNoiseRatio().to(self.device))
                 self.train_metric_names.append("PSNR")
                 self.train_metric_best.append("max")
             elif metric == "mse":
@@ -390,12 +394,11 @@ class Self_supervised_Workflow(Base_Workflow):
                 if m_name == "ssim":
                     val = metric(_output, _targets)
                 elif m_name == "psnr":
-                    if train:
-                        # Set values to be between 0-255 range so PSNR value its more meaningful
-                        val = metric(_output * 255, _targets * 255)
-                    else:
-                        # In test the values against the original values are calculated
-                        val = metric(_output, _targets)
+                    # 'metric' was built with the same 'data_range' as the normalized data (see
+                    # 'define_metrics'), so no rescale is needed here. Rescaling by a hardcoded 255
+                    # assumed normalized data always came from an 8-bit image, which silently inflated
+                    # PSNR by up to ~48 dB whenever that wasn't true (e.g. sources already in [0,1]).
+                    val = metric(_output, _targets)
                 elif m_name in ["is", "lpips", "fid"]:
                     # As these metrics are going to be calculated at the end we can modify _output and _targets
                     assert isinstance(_output, torch.Tensor) and isinstance(
