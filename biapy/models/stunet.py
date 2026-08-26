@@ -212,7 +212,7 @@ class STUNet(nn.Module):
             # self.dropout = nn.Dropout2d
             # mpool = (2, 2)
 
-        self.final_nonlin = lambda x: x  # logits
+        self.final_nonlin = nn.Identity()  # logits
         self._deep_supervision = bool(deep_supervision)
         self.upscale_logits = False
 
