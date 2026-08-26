@@ -1415,7 +1415,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
         if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
             raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
-    if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+    if cfg.LOSS.IGNORE_INDEX != -1 and cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
