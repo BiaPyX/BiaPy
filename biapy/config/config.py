@@ -1966,16 +1966,32 @@ class Config:
         # Fine-grained GAN composition. Set any weight to 0.0 to disable that term.
         # Used when LOSS.TYPE == "CYCLEGAN".
         _C.LOSS.CYCLEGAN = CN()
-        # Weight for adversarial BCE term.
+        # GAN loss type: "bce" (label smoothing) or "hinge".
+        _C.LOSS.CYCLEGAN.GAN_TYPE = "bce"
+        # Weight for adversarial BCE/hinge term.
         _C.LOSS.CYCLEGAN.LAMBDA_GAN = 1.0
         # Weight for L1 reconstruction term.
         _C.LOSS.CYCLEGAN.LAMBDA_RECON = 10.0
+        # Weight for Charbonnier (robust L1) reconstruction term.
+        _C.LOSS.CYCLEGAN.LAMBDA_CHARB = 0.0
         # Weight for MSE reconstruction term.
         _C.LOSS.CYCLEGAN.DELTA_MSE = 0.0
         # Weight for VGG perceptual term.
         _C.LOSS.CYCLEGAN.ALPHA_PERCEPTUAL = 0.0
+        # Weight for LPIPS perceptual term.
+        _C.LOSS.CYCLEGAN.LAMBDA_LPIPS = 0.0
         # Weight for SSIM term.
         _C.LOSS.CYCLEGAN.GAMMA_SSIM = 1.0
+        # Weight for Laplacian edge loss term.
+        _C.LOSS.CYCLEGAN.LAMBDA_LAP = 0.0
+        # Weight for edge loss term (adds to LAMBDA_LAP internally).
+        _C.LOSS.CYCLEGAN.LAMBDA_EDGE = 0.0
+        # Weight for FFT high-frequency loss term.
+        _C.LOSS.CYCLEGAN.LAMBDA_FFT = 0.0
+        # Weight for RFFT L1 loss term.
+        _C.LOSS.CYCLEGAN.LAMBDA_RFFT = 0.0
+        # R1 gradient penalty coefficient (0.0 to disable).
+        _C.LOSS.CYCLEGAN.R1_GAMMA = 0.0
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 7. Training phase options
@@ -2053,6 +2069,11 @@ class Config:
         #
         # Epochs to do the warming up.
         _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS = -1
+        # Alternative to warm up: instead of ramping TRAIN.LR up from 0, hold it constant for the
+        # first (1 - COSINE_DECAY_FRACTION) fraction of TRAIN.EPOCHS, then cosine-decay it over the
+        # final fraction ("delayed cosine decay"). Set to a value in (0, 1] to enable; -1 (default)
+        # disables it, keeping the linear warmup above.
+        _C.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION = -1.0
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 8. Test/inference phase options

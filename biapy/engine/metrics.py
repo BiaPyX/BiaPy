@@ -14,7 +14,7 @@ from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import precision_score, recall_score, f1_score
 from torchmetrics import JaccardIndex
-from torchmetrics.image import StructuralSimilarityIndexMeasure
+from torchmetrics.image import StructuralSimilarityIndexMeasure, LearnedPerceptualImagePatchSimilarity
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
@@ -2608,6 +2608,146 @@ class SpatialEmbLoss(nn.Module):
             "metrics": {"IoU": (iou / B).item()}  # single host sync per batch
         }
 
+def charbonnier_loss(pred, target, eps=1e-3):
+    """Charbonnier (robust L1) loss.
+
+    A smooth approximation of L1 loss that is differentiable everywhere.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted tensor.
+    target : torch.Tensor
+        Target tensor.
+    eps : float
+        Numerical stability constant.
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar loss value.
+    """
+    diff = (pred - target).to(torch.float32)
+    return torch.mean(torch.sqrt(diff * diff + eps**2))
+
+
+def laplacian_loss(pred, target):
+    """Laplacian edge-preserving loss.
+
+    Computes L1 distance between Laplacian-filtered prediction and target,
+    emphasizing edge and high-frequency structure.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted image tensor ``(B, C, H, W)`` or ``(B, C, D, H, W)``.
+    target : torch.Tensor
+        Target image tensor of same shape as ``pred``.
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar loss value.
+    """
+    ndim = pred.dim() - 2
+    channels = pred.shape[1]
+
+    if ndim == 3:
+        # 3D Laplacian kernel: center -6, 6-neighbors are 1, others 0
+        kernel = torch.tensor([
+            [[0., 0., 0.], [0., 1., 0.], [0., 0., 0.]],
+            [[0., 1., 0.], [1., -6., 1.], [0., 1., 0.]],
+            [[0., 0., 0.], [0., 1., 0.], [0., 0., 0.]]
+        ], device=pred.device, dtype=pred.dtype).unsqueeze(0).unsqueeze(0)
+        kernel = kernel.repeat(channels, 1, 1, 1, 1)
+        p = F.conv3d(pred, kernel, padding=1, groups=channels)
+        t = F.conv3d(target, kernel, padding=1, groups=channels)
+    else:
+        # 2D Laplacian kernel: center -4, 4-neighbors are 1, others 0
+        kernel = torch.tensor([[0., 1., 0.], [1., -4., 1.], [0., 1., 0.]],
+                              device=pred.device, dtype=pred.dtype).unsqueeze(0).unsqueeze(0)
+        kernel = kernel.repeat(channels, 1, 1, 1)
+        p = F.conv2d(pred, kernel, padding=1, groups=channels)
+        t = F.conv2d(target, kernel, padding=1, groups=channels)
+
+    return F.l1_loss(p, t)
+
+
+def fft_highfreq_loss(pred, target, eps=1e-6):
+    """Frequency-domain loss emphasizing high-frequency details.
+
+    Applies a radial distance mask to FFT magnitudes so that higher
+    spatial frequencies contribute more to the loss.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted image tensor ``(B, 1, H, W)`` or ``(B, 1, D, H, W)``.
+    target : torch.Tensor
+        Target image tensor same shape as ``pred``.
+    eps : float
+        Numerical stability constant.
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar loss value.
+    """
+    p = pred[:, 0].float()
+    t = target[:, 0].float()
+
+    if p.dim() == 4: # 3D batch: (B, D, H, W)
+        B, D, H, W = p.shape
+        mag_p = torch.abs(torch.fft.fftshift(torch.fft.fftn(p, dim=(-3, -2, -1))))
+        mag_t = torch.abs(torch.fft.fftshift(torch.fft.fftn(t, dim=(-3, -2, -1))))
+        mag_p = torch.clamp(mag_p, min=eps)
+        mag_t = torch.clamp(mag_t, min=eps)
+
+        zz = torch.arange(D, device=p.device) - D / 2
+        yy = torch.arange(H, device=p.device) - H / 2
+        xx = torch.arange(W, device=p.device) - W / 2
+        Z, Y, X = torch.meshgrid(zz, yy, xx, indexing='ij')
+        dist = torch.sqrt(X**2 + Y**2 + Z**2)
+        mask = dist / (dist.max() + 1e-9)
+        mask = mask.unsqueeze(0)
+    else: # 2D batch: (B, H, W)
+        mag_p = torch.abs(torch.fft.fftshift(torch.fft.fft2(p)))
+        mag_t = torch.abs(torch.fft.fftshift(torch.fft.fft2(t)))
+        mag_p = torch.clamp(mag_p, min=eps)
+        mag_t = torch.clamp(mag_t, min=eps)
+
+        B, H, W = mag_p.shape
+        yy = torch.arange(H, device=p.device) - H / 2
+        xx = torch.arange(W, device=p.device) - W / 2
+        Y, X = torch.meshgrid(yy, xx, indexing='ij')
+        dist = torch.sqrt(X**2 + Y**2)
+        mask = dist / (dist.max() + 1e-9)
+        mask = mask.unsqueeze(0)
+
+    return F.l1_loss(mask * mag_p, mask * mag_t)
+
+
+def normalize_to_minus_one_one(x: torch.Tensor) -> torch.Tensor:
+    """Min-max normalize a tensor to the range [-1, 1].
+
+    Used to bring arbitrary-range inputs (e.g. [0, 1] scale-range output)
+    into the [-1, 1] domain expected by perceptual losses (VGG, LPIPS, SSIM).
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input tensor of any range.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor rescaled to [-1, 1].
+    """
+    x_min = x.min()
+    x_max = x.max()
+    return ((x - x_min) / (x_max - x_min + 1e-9)) * 2 - 1
+
+
 class VGG(nn.Module):
     """Perceptual loss based on VGG16 feature activations.
 
@@ -2644,8 +2784,26 @@ class VGG(nn.Module):
         for param in self.vgg.parameters():
             param.requires_grad = False
         self.loss = nn.L1Loss()
-        self.preprocess = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    
+        self.register_buffer(
+            "imagenet_mean",
+            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device)
+        )
+        self.register_buffer(
+            "imagenet_std",
+            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(device)
+        )
+
+    def _prep(self, x):
+        """Pre-process a tensor for VGG: normalize to [-1,1], expand to 3ch, then ImageNet stats."""
+        # 1. Min-max normalize to [-1, 1] (matches updated original)
+        x = normalize_to_minus_one_one(x)
+        # 2. Expand grayscale to 3 channels
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+        # 3. Convert [-1, 1] → [0, 1], then apply ImageNet normalization
+        x = (x + 1.0) / 2.0
+        return (x - self.imagenet_mean) / self.imagenet_std
+
     def forward(self, pred, target):
         """Compute perceptual distance between prediction and target.
 
@@ -2672,15 +2830,8 @@ class VGG(nn.Module):
             pred = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
             target = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
 
-        # 2D behavior remains identical
-        if pred.shape[1] == 1:
-            pred = pred.repeat(1, 3, 1, 1)
-            target = target.repeat(1, 3, 1, 1)
-            
-        pred = self.preprocess(pred)
-        target = self.preprocess(target)
-        pred_vgg = self.vgg(pred)
-        target_vgg = self.vgg(target)
+        pred_vgg = self.vgg(self._prep(pred))
+        target_vgg = self.vgg(self._prep(target))
         return self.loss(pred_vgg, target_vgg)
 
 class CycleGanLoss(nn.Module):
@@ -2730,19 +2881,33 @@ class CycleGanLoss(nn.Module):
         self.w_vgg = cfg.LOSS.CYCLEGAN.ALPHA_PERCEPTUAL
         self.w_ssim = cfg.LOSS.CYCLEGAN.GAMMA_SSIM
         self.w_mse = cfg.LOSS.CYCLEGAN.DELTA_MSE
+        self.w_charb = cfg.LOSS.CYCLEGAN.LAMBDA_CHARB
+        self.w_lap = cfg.LOSS.CYCLEGAN.LAMBDA_LAP
+        self.w_edge = cfg.LOSS.CYCLEGAN.LAMBDA_EDGE
+        self.w_fft = cfg.LOSS.CYCLEGAN.LAMBDA_FFT
+        self.w_rfft = cfg.LOSS.CYCLEGAN.LAMBDA_RFFT
+        self.w_lpips = cfg.LOSS.CYCLEGAN.LAMBDA_LPIPS
+        self.r1_gamma = cfg.LOSS.CYCLEGAN.R1_GAMMA
+        self.gan_type = cfg.LOSS.CYCLEGAN.GAN_TYPE
 
-        # Dont load the vgg if not       
+        # Dont load the vgg if not needed
         if self.w_vgg > 0:
             self.vgg = VGG(device)
         if self.w_ssim > 0:
-            self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
-            
+            # data_range=2.0 because inputs are normalized to [-1, 1] before SSIM
+            self.ssim = StructuralSimilarityIndexMeasure(data_range=2.0).to(device)
+        if self.w_lpips > 0:
+            self.lpips = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=False).eval().to(device)
+            for param in self.lpips.parameters():
+                param.requires_grad = False
+
         # Standard lightweight losses are always initialized
         self.l1 = nn.L1Loss()
         self.mse = nn.MSELoss()
-        self.bce = nn.BCEWithLogitsLoss() 
+        self.bce = nn.BCEWithLogitsLoss()
+        self.step_count = 0
 
-    def forward_generator(self, pred, target, d_fake):
+    def forward_generator(self, pred, target, d_fake, noisy_input=None):
         """Compute weighted generator loss.
 
         Parameters
@@ -2753,6 +2918,9 @@ class CycleGanLoss(nn.Module):
             Ground-truth target. If dict, reads ``target['pred']``.
         d_fake : torch.Tensor
             Discriminator logits for generated samples.
+        noisy_input : torch.Tensor, optional
+            The original noisy/degraded input fed to the generator.
+            When provided, its statistics are printed in debug logs.
 
         Returns
         -------
@@ -2763,46 +2931,110 @@ class CycleGanLoss(nn.Module):
         if isinstance(pred, dict): pred = pred["pred"]
         if isinstance(target, dict): target = target["pred"]
 
-        # NaN Band-aid
         pred = torch.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=-1.0)
         target = torch.nan_to_num(target, nan=0.0, posinf=1.0, neginf=-1.0)
 
+        self.step_count += 1
+        self._last_noisy_input = noisy_input  # store for debug
         total_loss = torch.tensor(0.0, device=self.device)
-        
-        # 2. Dynamically build the loss based on config weights
+        loss_dict = {}
+
         if self.w_l1 > 0:
-            total_loss += self.w_l1 * self.l1(pred, target)
-            
+            val = self.l1(pred, target)
+            total_loss += self.w_l1 * val
+            loss_dict["L1"] = val.item()
+
+        if self.w_charb > 0:
+            val = charbonnier_loss(pred, target)
+            total_loss += self.w_charb * val
+            loss_dict["Charbonnier"] = val.item()
+
         if self.w_mse > 0:
-            total_loss += self.w_mse * self.mse(pred, target)
-            
+            val = self.mse(pred, target)
+            total_loss += self.w_mse * val
+            loss_dict["MSE"] = val.item()
+
         if self.w_vgg > 0:
-            total_loss += self.w_vgg * self.vgg(pred, target)
-            
+            val = self.vgg(pred, target)
+            total_loss += self.w_vgg * val
+            loss_dict["VGG"] = val.item()
+
+        if self.w_lpips > 0:
+            val = self._lpips_loss(pred, target)
+            total_loss += self.w_lpips * val
+            loss_dict["LPIPS"] = val.item()
+
         if self.w_ssim > 0:
-            # SSIM requires 4D tensors. Safely route 3D to 2D slices.
+            pred_ssim_norm = normalize_to_minus_one_one(pred)
+            target_ssim_norm = normalize_to_minus_one_one(target)
             if pred.dim() == 5:
                 B, C, D, H, W = pred.shape
-                pred_ssim = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-                target_ssim = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-                total_loss += self.w_ssim * (1.0 - self.ssim(pred_ssim, target_ssim))
-            else:
-                total_loss += self.w_ssim * (1.0 - self.ssim(pred, target))
-                
-        if self.w_gan > 0:
-            total_loss += self.w_gan * self.bce(d_fake, torch.ones_like(d_fake))
+                pred_ssim_norm = pred_ssim_norm.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+                target_ssim_norm = target_ssim_norm.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+            val = (1.0 - self.ssim(pred_ssim_norm, target_ssim_norm))
+            total_loss += self.w_ssim * val
+            loss_dict["SSIM"] = val.item()
 
-        # NaN Safety Check
+        total_lap_w = self.w_lap + self.w_edge
+        if total_lap_w > 0:
+            val = laplacian_loss(pred, target)
+            total_loss += total_lap_w * val
+            loss_dict["Laplacian"] = val.item()
+
+        if self.w_fft > 0:
+            val = fft_highfreq_loss(pred, target)
+            total_loss += self.w_fft * val
+            loss_dict["FFT"] = val.item()
+
+        if self.w_rfft > 0:
+            if pred.dim() == 5:
+                fft_pred = torch.fft.rfftn(normalize_to_minus_one_one(pred[:, 0].float()), dim=(-3, -2, -1))
+                fft_target = torch.fft.rfftn(normalize_to_minus_one_one(target[:, 0].float()), dim=(-3, -2, -1))
+            else:
+                fft_pred = torch.fft.rfft2(normalize_to_minus_one_one(pred[:, 0, :, :].float()))
+                fft_target = torch.fft.rfft2(normalize_to_minus_one_one(target[:, 0, :, :].float()))
+            val = F.l1_loss(torch.abs(fft_pred), torch.abs(fft_target))
+            total_loss += self.w_rfft * val
+            loss_dict["RFFT"] = val.item()
+
+        if self.w_gan > 0:
+            if self.gan_type == "hinge":
+                val = F.softplus(-d_fake).mean()
+            else:
+                val = self.bce(d_fake, torch.ones_like(d_fake))
+            total_loss += self.w_gan * val
+            loss_dict["GAN_G"] = val.item()
+
+        if self.step_count % 50 == 1:
+            print(f"[DEBUG G Loss Step {self.step_count}] total_loss: {total_loss.item():.4f}")
+            for name, val in loss_dict.items():
+                if name == "GAN_G":
+                    weight = self.w_gan
+                elif name == "Laplacian":
+                    weight = total_lap_w
+                elif name == "Charbonnier":
+                    weight = self.w_charb
+                else:
+                    weight = getattr(self, f"w_{name.lower()}", 0.0)
+                print(f"  - {name} (weight {weight}): {val:.4f} (weighted: {weight * val:.4f})")
+            # --- INPUT stats (noisy image fed to generator) ---
+            noisy = getattr(self, '_last_noisy_input', None)
+            if noisy is not None:
+                print(f"  - INPUT  range: [{noisy.min().item():.4f}, {noisy.max().item():.4f}] (mean: {noisy.mean().item():.4f}, std: {noisy.std().item():.4f})")
+            print(f"  - pred   range: [{pred.min().item():.4f}, {pred.max().item():.4f}] (mean: {pred.mean().item():.4f})")
+            print(f"  - target range: [{target.min().item():.4f}, {target.max().item():.4f}] (mean: {target.mean().item():.4f})")
+
         if torch.isnan(total_loss):
             print("Warning: NaN detected in generator loss. Returning zero loss.")
             total_loss = torch.tensor(0.0, requires_grad=True).to(self.device)
 
         return total_loss
 
-    def forward_discriminator(self, d_real, d_fake):
+    def forward_discriminator(self, d_real, d_fake, real_images=None):
         """Compute discriminator adversarial loss.
 
-        Uses BCE with one-sided label smoothing for real logits.
+        Uses BCE with one-sided label smoothing for real logits (or hinge loss,
+        depending on ``LOSS.CYCLEGAN.GAN_TYPE``).
 
         Parameters
         ----------
@@ -2810,23 +3042,110 @@ class CycleGanLoss(nn.Module):
             Discriminator logits for real samples.
         d_fake : torch.Tensor
             Discriminator logits for generated samples.
+        real_images : torch.Tensor, optional
+            Real image batch for R1 gradient penalty computation.
 
         Returns
         -------
         torch.Tensor
             Scalar discriminator loss.
         """
-        # Calculate Adversarial Loss for Discriminator
-        real_loss = self.bce(d_real, torch.full_like(d_real, 0.9)) # Label smoothing (0.9 instead of 1.0)
-        fake_loss = self.bce(d_fake, torch.zeros_like(d_fake))
-        total_loss = (real_loss + fake_loss) / 2.0
-        
-        # NaN Safety Check
+        loss_dict = {}
+        if self.gan_type == "hinge":
+            loss_real = torch.mean(F.relu(1.0 - d_real))
+            loss_fake = torch.mean(F.relu(1.0 + d_fake))
+            total_loss = 0.5 * (loss_real + loss_fake)
+            loss_dict["D_real"] = loss_real.item()
+            loss_dict["D_fake"] = loss_fake.item()
+        else:
+            real_loss = self.bce(d_real, torch.full_like(d_real, 0.9))  # Label smoothing (0.9 instead of 1.0)
+            fake_loss = self.bce(d_fake, torch.zeros_like(d_fake))
+            total_loss = (real_loss + fake_loss) / 2.0
+            loss_dict["D_real"] = real_loss.item()
+            loss_dict["D_fake"] = fake_loss.item()
+
+        if real_images is not None and self.r1_gamma > 0:
+            penalty = self.calculate_r1_penalty(d_real, real_images)
+            total_loss = total_loss + penalty
+            loss_dict["R1_penalty"] = penalty.item()
+
+        if self.step_count % 50 == 1:
+            print(f"[DEBUG D Loss Step {self.step_count}] total_loss: {total_loss.item():.4f}")
+            print(f"  - D_real: {loss_dict['D_real']:.4f}")
+            print(f"  - D_fake: {loss_dict['D_fake']:.4f}")
+            if "R1_penalty" in loss_dict:
+                print(f"  - R1 (gamma {self.r1_gamma}): {loss_dict['R1_penalty']:.4f}")
+            d_real_mean = d_real.mean().item()
+            d_fake_mean = d_fake.mean().item()
+            print(f"  - d_real range: [{d_real.min().item():.4f}, {d_real.max().item():.4f}] (mean: {d_real_mean:.4f})")
+            print(f"  - d_fake range: [{d_fake.min().item():.4f}, {d_fake.max().item():.4f}] (mean: {d_fake_mean:.4f})")
+            # --- Saturation alarm ---
+            margin = abs(d_real_mean) + abs(d_fake_mean)
+            if margin > 10.0:
+                print(f"  WARNING: SATURATION ALARM: D margin={margin:.1f} (real={d_real_mean:.1f}, fake={d_fake_mean:.1f}). Discriminator may have collapsed.")
+
         if torch.isnan(total_loss):
             print("Warning: NaN detected in discriminator loss. Returning zero loss.")
             total_loss = torch.tensor(0.0, requires_grad=True).to(self.device)
 
         return total_loss
+
+    def _lpips_loss(self, pred, target):
+        """Compute LPIPS perceptual loss with automatic normalization.
+
+        LPIPS expects input in [-1, 1]. Input tensors are re-normalized
+        from their current range.
+
+        Parameters
+        ----------
+        pred : torch.Tensor
+            Predicted image tensor ``(B, C, H, W)`` or ``(B, C, D, H, W)``.
+        target : torch.Tensor
+            Target image tensor with same shape as ``pred``.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar LPIPS loss.
+        """
+        pred = normalize_to_minus_one_one(pred)
+        target = normalize_to_minus_one_one(target)
+        if pred.dim() == 5:
+            B, C, D, H, W = pred.shape
+            pred = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+            target = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+        if pred.shape[1] == 1:
+            pred = pred.repeat(1, 3, 1, 1)
+            target = target.repeat(1, 3, 1, 1)
+        return self.lpips(pred, target).mean()
+
+    def calculate_r1_penalty(self, d_real_logits, real_images):
+        """Compute R1 gradient penalty for the discriminator.
+
+        Encourages discriminator smoothness around the real data manifold.
+        Requires ``real_images`` to be passed through with ``requires_grad=True``
+        by the caller (see :meth:`forward_discriminator`).
+
+        Parameters
+        ----------
+        d_real_logits : torch.Tensor
+            Discriminator logits for real samples.
+        real_images : torch.Tensor
+            Real image batch.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar R1 penalty (0.0 if disabled).
+        """
+        if self.r1_gamma <= 0 or not d_real_logits.requires_grad:
+            return torch.tensor(0.0, device=self.device)
+        grads = torch.autograd.grad(
+            outputs=d_real_logits.sum(), inputs=real_images,
+            create_graph=True, retain_graph=True, only_inputs=True
+        )[0]
+        penalty = (grads.view(grads.size(0), -1).pow(2).sum(1)).mean()
+        return 0.5 * self.r1_gamma * penalty
 
 
 class WeightedBCEAffinityLoss(nn.Module):
