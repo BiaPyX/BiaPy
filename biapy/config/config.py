@@ -2067,12 +2067,13 @@ class Config:
         # 2) after this will began the decay of the learning rate value using the cosine function.
         # Find a detailed explanation in: https://scorrea92.medium.com/cosine-learning-rate-decay-e8b50aa455b
         #
-        # Epochs to do the warming up.
+        # Epochs to do the warming up. -1/0 disables the ramp.
         _C.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS = -1
-        # Alternative to warm up: instead of ramping TRAIN.LR up from 0, hold it constant for the
-        # first (1 - COSINE_DECAY_FRACTION) fraction of TRAIN.EPOCHS, then cosine-decay it over the
-        # final fraction ("delayed cosine decay"). Set to a value in (0, 1] to enable; -1 (default)
-        # disables it, keeping the linear warmup above.
+        # Delays when decay starts: after warm up (if any), TRAIN.LR is held constant until
+        # (1 - COSINE_DECAY_FRACTION) fraction of TRAIN.EPOCHS have passed, then cosine-decayed
+        # over the final fraction ("delayed cosine decay"). Combinable with the warm up above
+        # (ramp, then hold, then decay). Set to a value in (0, 1] to enable; -1 (default) disables
+        # it, so decay starts right after warm up as usual.
         _C.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION = -1.0
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

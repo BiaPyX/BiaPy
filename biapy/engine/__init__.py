@@ -81,22 +81,23 @@ def prepare_optimizer(
                     min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR[i],
                 )
             elif cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
-                # COSINE_DECAY_FRACTION > 0 selects the "delayed" variant: hold LR flat instead
-                # of ramping up from 0, then decay over the final fraction of epochs.
+                # WARMUP_COSINE_DECAY_EPOCHS ramps LR up from 0 (0/-1 = no ramp).
+                # COSINE_DECAY_FRACTION > 0 delays decay to start over the final fraction of
+                # epochs instead of right after warmup (LR is held flat in between).
+                # The two are combinable: ramp, then hold, then decay.
+                warmup_epochs = max(cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS, 0)
                 if cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION > 0:
-                    warmup_epochs = round(
+                    decay_start_epoch = round(
                         cfg.TRAIN.EPOCHS * (1.0 - cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION)
                     )
-                    hold_lr = True
                 else:
-                    warmup_epochs = cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS
-                    hold_lr = False
+                    decay_start_epoch = warmup_epochs
                 lr_scheduler = WarmUpCosineDecayScheduler(
                     lr=cfg.TRAIN.LR[i],
                     min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR[i],
                     warmup_epochs=warmup_epochs,
+                    decay_start_epoch=decay_start_epoch,
                     epochs=cfg.TRAIN.EPOCHS,
-                    hold_lr=hold_lr,
                 )
             elif cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
                 lr_scheduler = OneCycleLR(

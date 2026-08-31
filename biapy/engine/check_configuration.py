@@ -3405,6 +3405,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION > 0:
                 if cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION > 1.0:
                     raise ValueError("'TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION' must be in (0, 1]")
+                decay_start_epoch = round(cfg.TRAIN.EPOCHS * (1.0 - cfg.TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION))
+                if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS > decay_start_epoch:
+                    raise ValueError(
+                        "'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' must end before decay starts "
+                        "('TRAIN.EPOCHS' * (1 - 'TRAIN.LR_SCHEDULER.COSINE_DECAY_FRACTION'))"
+                    )
             elif cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS == -1:
                 raise ValueError(
                     "'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is "
