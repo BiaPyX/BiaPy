@@ -7,7 +7,6 @@ and memory bank operations for contrastive/self-supervised learning.
 """
 import torch
 import math
-import sys
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 from typing import Callable, Optional
@@ -155,11 +154,17 @@ def train_one_epoch(
             losses = [result]
             precalculated_metrics = {}
 
+        # A single bad batch (e.g. a momentary GAN instability) shouldn't kill an otherwise
+        # multi-day job: skip it -- like the reference NAFNet-GAN training loop this workflow's
+        # loss was adapted from does -- rather than aborting the whole run.
+        skip_batch = False
         for l_val in losses:
             loss_value = l_val.item()
             if not math.isfinite(loss_value):
-                print("Loss is {}, stopping training".format(loss_value))
-                sys.exit(1)
+                print(f"Non-finite loss ({loss_value}) at epoch {epoch + 1} step {step}; skipping this batch.")
+                skip_batch = True
+        if skip_batch:
+            continue
 
         # Calculate the metrics
         if not precalculated_metrics:
@@ -171,13 +176,20 @@ def train_one_epoch(
         # Forward pass scaling the loss
         for i, loss_tensor in enumerate(losses):
             loss_tensor.backward()
-            if cfg.TRAIN.GRADIENT_CLIP_NORM > 0:
-                params = [p for group in optimizer[i].param_groups for p in group["params"]]
-                clip_grad_norm_(params, max_norm=cfg.TRAIN.GRADIENT_CLIP_NORM)
-            optimizer[i].step()
-            if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-                lr_scheduler[i].step()
-            optimizer[i].zero_grad() 
+            params = [p for group in optimizer[i].param_groups for p in group["params"]]
+            # A finite loss doesn't guarantee a finite gradient (e.g. a sqrt/log/division term
+            # evaluated right at its singularity): check before stepping, same safety net
+            # GradScaler.step() gives AMP-based training loops for free.
+            grad_is_finite = all(p.grad is None or torch.isfinite(p.grad).all() for p in params)
+            if grad_is_finite:
+                if cfg.TRAIN.GRADIENT_CLIP_NORM > 0:
+                    clip_grad_norm_(params, max_norm=cfg.TRAIN.GRADIENT_CLIP_NORM)
+                optimizer[i].step()
+                if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+                    lr_scheduler[i].step()
+            else:
+                print(f"Non-finite gradient for optimizer {i} at epoch {epoch + 1} step {step}; skipping this update.")
+            optimizer[i].zero_grad()
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
@@ -297,11 +309,16 @@ def evaluate(
             losses = [result]
             precalculated_metrics = {}
 
+        # Same reasoning as the training loop: a single bad validation image (e.g. hitting the
+        # model mid-instability) shouldn't kill the job -- skip it from the averaged stats instead.
+        skip_batch = False
         for l_val in losses:
             loss_value = l_val.item()
             if not math.isfinite(loss_value):
-                print("Loss is {}, stopping training".format(loss_value))
-                sys.exit(1)
+                print(f"Non-finite validation loss ({loss_value}); skipping this batch.")
+                skip_batch = True
+        if skip_batch:
+            continue
 
         # Calculate the metrics
         if precalculated_metrics:

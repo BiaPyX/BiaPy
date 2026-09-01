@@ -57,6 +57,23 @@ class GANGeneratorWrapper(nn.Module):
         pred = self.generator(inp)
         if isinstance(pred, dict):
             pred = pred["pred"]
+        # Bound the output with a real saturating activation, not a hard clamp: the wrapped
+        # backbone (e.g. STUNet) has no output activation of its own, so `pred` is otherwise
+        # unbounded. A straight-through clamp on the output (constant gradient=1 regardless of
+        # distance from [0, 1]) fixes getting permanently stuck outside range, but not a *different*
+        # failure: once a pixel saturates, nothing discourages the pre-activation logit from
+        # drifting arbitrarily far past the boundary, since the clamped output can't get any "more
+        # correct" -- observed as MAE/MSE climbing for many epochs with the loss itself looking
+        # healthy. Sigmoid's gradient shrinks as it saturates, giving a genuine brake on that drift
+        # -- but plain sigmoid's own gradient underflows to exact float32 zero once the logit's
+        # magnitude reaches ~20 (verified), reproducing the same dead zone a hard clamp caused,
+        # just requiring a larger excursion to trigger. Straight-through clamp the *logit* (not the
+        # final output) to a range where sigmoid's gradient is still meaningfully nonzero (at +/-15,
+        # ~3.6e-7) before applying it, so the two mechanisms cover each other: guaranteed nonzero
+        # gradient always (from the logit clamp) and a properly bounded, braking output always
+        # (from sigmoid).
+        logit = pred + (torch.clamp(pred, -15.0, 15.0) - pred).detach()
+        pred = torch.sigmoid(logit)
 
         if self.discriminator is not None:
             return {"pred": pred}
@@ -67,7 +84,8 @@ class GANGeneratorWrapper(nn.Module):
         if self.discriminator is None:
             return None
 
-        fake_img = torch.clamp(pred, 0, 1)
+        # `pred` is already bounded to (0, 1) by forward()'s sigmoid.
+        fake_img = pred
 
         for p in self.discriminator.parameters():
             p.requires_grad_(False)
@@ -76,8 +94,11 @@ class GANGeneratorWrapper(nn.Module):
         for p in self.discriminator.parameters():
             p.requires_grad_(True)
 
-        d_real = self.discriminator(targets)
+        # Grad-tracking leaf so loss_fn can compute the R1 penalty (d(d_real)/d(real_img)) when
+        # LOSS.CYCLEGAN.R1_GAMMA > 0; a no-op otherwise (forward_discriminator skips it when disabled).
+        real_img = targets.detach().requires_grad_(True)
+        d_real = self.discriminator(real_img)
         d_fake = self.discriminator(fake_img.detach())
-        loss_d = loss_fn.forward_discriminator(d_real, d_fake)
+        loss_d = loss_fn.forward_discriminator(d_real, d_fake, real_images=real_img)
 
         return (loss_g, loss_d)

@@ -374,6 +374,16 @@ class NAFNet(nn.Module):
         x = x + skip
 
         pred = self.output_activation(x[:, :, :H, :W])
+        if self.discriminator is not None and isinstance(self.output_activation, nn.Identity):
+            # Bound the output with a real saturating activation instead of the unsafe "linear"
+            # default: see GANGeneratorWrapper.forward() for why a hard clamp on an unbounded
+            # output isn't enough, and why plain sigmoid isn't either (its own gradient underflows
+            # to exact float32 zero once the logit's magnitude reaches ~20). Straight-through clamp
+            # the logit to [-15, 15] (sigmoid's gradient there is still ~3.6e-7, never exact zero)
+            # before applying sigmoid. Only overrides the default -- an explicit head activation
+            # (MODEL...OUTPUT_CHANNEL_ACT) is respected as-is.
+            logit = pred + (torch.clamp(pred, -15.0, 15.0) - pred).detach()
+            pred = torch.sigmoid(logit)
 
         if self.discriminator is not None:
             return {"pred": pred}
@@ -401,7 +411,13 @@ class NAFNet(nn.Module):
         if self.discriminator is None:
             return None
 
-        fake_img = torch.clamp(pred, 0, 1)
+        # forward() already bounds pred to (0, 1) via sigmoid unless the user explicitly chose a
+        # different (possibly unbounded, e.g. "softplus"/"relu") head activation. Straight-through
+        # clamp as a defense-in-depth for that case: identical forward values to a hard clamp, but
+        # gradient flows through as if unclamped (d(fake_img)/d(pred) == 1 everywhere) -- a plain
+        # `torch.clamp` has exactly zero gradient outside [0, 1], which is fatal if pred is ever
+        # actually unbounded, since every loss term below is computed on `fake_img`.
+        fake_img = pred + (torch.clamp(pred, 0, 1) - pred).detach()
 
         for p in self.discriminator.parameters():
             p.requires_grad_(False)
@@ -410,9 +426,12 @@ class NAFNet(nn.Module):
         for p in self.discriminator.parameters():
             p.requires_grad_(True)
 
-        d_real = self.discriminator(targets)
+        # Grad-tracking leaf so loss_fn can compute the R1 penalty (d(d_real)/d(real_img)) when
+        # LOSS.CYCLEGAN.R1_GAMMA > 0; a no-op otherwise (forward_discriminator skips it when disabled).
+        real_img = targets.detach().requires_grad_(True)
+        d_real = self.discriminator(real_img)
         d_fake = self.discriminator(fake_img.detach())
-        loss_d = loss_fn.forward_discriminator(d_real, d_fake)
+        loss_d = loss_fn.forward_discriminator(d_real, d_fake, real_images=real_img)
 
         return (loss_g, loss_d)
 
