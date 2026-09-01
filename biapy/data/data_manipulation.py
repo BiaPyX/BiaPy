@@ -1792,7 +1792,8 @@ def samples_from_image_list(
     dataset_info = []
     channel_expected = -1
     data_range_expected = -1
-    for i in range(len(list_of_data)):
+    local_indices = _rank_local_indices(len(list_of_data))
+    for i in tqdm(local_indices, total=len(local_indices), disable=not is_main_process()):
         # Read image
         img_path = os.path.join(data_path, list_of_data[i])
         img, _ = load_img_data(img_path, is_3d=is_3d)
@@ -1875,6 +1876,9 @@ def samples_from_image_list(
                 coords=crop_coords[j] if crop_coords else None,  # type: ignore
             )
             sample_list.append(data_sample)
+
+    dataset_info = _gather_local_results(dataset_info)
+    sample_list = _gather_local_results(sample_list)
 
     return BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
 
@@ -2129,7 +2133,9 @@ def samples_from_image_list_multiple_raw_one_gt(
     raw_sample_channel_expected = -1
     raw_sample_data_range_expected = -1
     cont = 0
-    for id_ in tqdm(data_gt_path, total=len(data_gt_path), disable=not is_main_process()):
+    local_gt_indices = _rank_local_indices(len(data_gt_path))
+    local_data_gt_path = [data_gt_path[k] for k in local_gt_indices]
+    for id_ in tqdm(local_data_gt_path, total=len(local_data_gt_path), disable=not is_main_process()):
         # Read image
         gt_id = next(os_walk_clean(os.path.join(gt_path, id_)))[2][0]
         gt_sample_path = os.path.join(gt_path, id_, gt_id)
@@ -2301,6 +2307,28 @@ def samples_from_image_list_multiple_raw_one_gt(
                 sample_list.append(data_sample)
 
         cont += gt_tot_samples_to_insert
+
+    gathered = _gather_local_results([(dataset_info, sample_list, gt_dataset_info, gt_sample_list)])
+    dataset_info, sample_list, gt_dataset_info, gt_sample_list = [], [], [], []
+    dataset_info_offset = 0
+    gt_dataset_info_offset = 0
+    gt_sample_list_offset = 0
+    for rank_dataset_info, rank_sample_list, rank_gt_dataset_info, rank_gt_sample_list in gathered:
+        for ds in rank_gt_sample_list:
+            ds.fid += gt_dataset_info_offset
+        for ds in rank_sample_list:
+            ds.fid += dataset_info_offset
+            if ds.get_gt_associated_id() is not None:
+                ds.gt_associated_id += gt_sample_list_offset
+
+        dataset_info.extend(rank_dataset_info)
+        sample_list.extend(rank_sample_list)
+        gt_dataset_info.extend(rank_gt_dataset_info)
+        gt_sample_list.extend(rank_gt_sample_list)
+
+        dataset_info_offset += len(rank_dataset_info)
+        gt_dataset_info_offset += len(rank_gt_dataset_info)
+        gt_sample_list_offset += len(rank_gt_sample_list)
 
     return (
         BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list),
