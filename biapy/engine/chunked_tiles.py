@@ -35,8 +35,8 @@ class ChunkedTileProcessor:
         self.workflow = workflow
         self.cfg = workflow.cfg
         self.tgen = tgen
-        self.padding = tuple(int(x) for x in self.cfg.DATA.TEST.PADDING)
-        self.dims = (int(tgen.z_dim), int(tgen.y_dim), int(tgen.x_dim))
+        self.padding = tgen._scale_zyx(tuple(int(x) for x in self.cfg.DATA.TEST.PADDING))
+        self.dims = (int(tgen.z_dim_out), int(tgen.y_dim_out), int(tgen.x_dim_out))
         self.open_tiles: Dict[int, Dict] = {}
         self.processed_tiles = 0
 
@@ -44,18 +44,17 @@ class ChunkedTileProcessor:
         self.writer = ChunkedZarrWriter(
             out_dir=out_vars["out_dir"],
             filename=tgen.filename,
-            data_shape=tgen.X_parallel_data.shape,
+            data_shape=tgen.data_shape_for_output(),
             data_axes_order=tgen.out_data_order,
             dtype_str=out_vars["dtype_str"],
-            write_tile_zyx=tgen.tile_step,
+            write_tile_zyx=tgen.tile_step_out,
         )
 
-        # Consumed by the workflow steps that run after the prediction (e.g. instance merging)
         workflow.chunked_output_info = {
             "zarr_path": self.writer.path,
             "axes_order": tgen.out_data_order,
             "dims": self.dims,
-            "tile_step": tuple(int(x) for x in tgen.tile_step),
+            "tile_step": tuple(int(x) for x in tgen.tile_step_out),
             "tiles": (int(tgen.tiles_per_z), int(tgen.tiles_per_y), int(tgen.tiles_per_x)),
         }
 

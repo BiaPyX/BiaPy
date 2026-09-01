@@ -811,6 +811,7 @@ def create_chunked_test_generator(
         roi_mask_path=cfg.DATA.TEST.ROI_MASK.PATH if cfg.DATA.TEST.ROI_MASK.ENABLE else "",
         roi_mask_axes_order=cfg.DATA.TEST.ROI_MASK.AXES_ORDER,
         patches_per_tile=cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE,
+        zoom_factor=cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR if cfg.DATA.PREPROCESS.ZOOM.ENABLE else None,
     )
 
     # ---- Choose num_workers for this DataLoader ----

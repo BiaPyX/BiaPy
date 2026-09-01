@@ -14,7 +14,8 @@ import math
 import zarr
 import numpy as np
 import time
-from typing import Tuple, Optional, Dict, List, Callable 
+from scipy.ndimage import zoom as ndi_zoom
+from typing import Tuple, Optional, Dict, List, Callable, Sequence
 from numpy.typing import NDArray
 from tqdm import tqdm
 
@@ -95,6 +96,11 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     preprocess_cfg : dict, optional
         Configuration of the preprocessing.
+
+    zoom_factor : sequence of float, optional
+        Per-axis zoom factor (``DATA.PREPROCESS.ZOOM.ZOOM_FACTOR``) matching ``input_axes``, applied to
+        each patch with ``scipy.ndimage.zoom`` before it is fed to the model. Useful when the input data
+        has a different resolution than the one used in training. ``None`` (the default) disables it.
     """
 
     def __init__(
@@ -121,6 +127,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         roi_mask_path: str = "",
         roi_mask_axes_order: str = "",
         patches_per_tile: Tuple[int, int, int] = (1, 1, 1),
+        zoom_factor: Optional[Sequence[float]] = None,
     ):
         """
         Initialize the chunked_test_pair_data_generator.
@@ -172,8 +179,16 @@ class chunked_test_pair_data_generator(IterableDataset):
             Order of the axes of the ROI mask. Defaults to the axes order of the image.
         patches_per_tile : tuple of int, optional
             Patches grouped into each workflow process tile, on each axis.
+        zoom_factor : sequence of float, optional
+            Per-axis zoom factor matching ``input_axes``, applied to each patch before inference.
         """
         super(chunked_test_pair_data_generator).__init__()
+        self.zoom_enable = zoom_factor is not None
+        self.zoom_zyxc = (
+            tuple(order_dimensions(tuple(zoom_factor), input_order=input_axes, output_order="ZYXC", default_value=1))
+            if self.zoom_enable
+            else (1, 1, 1, 1)
+        )
         self.sample_to_process = sample_to_process
         self.X_parallel_data = sample_to_process["X"]
         self.X_parallel_file = (
@@ -285,6 +300,9 @@ class chunked_test_pair_data_generator(IterableDataset):
         self.step_x = self.crop_shape[2] - (self.padding[2] * 2)
         self.vols_per_x = math.ceil(self.x_dim / self.step_x)
 
+        self.z_dim_out, self.y_dim_out, self.x_dim_out = self._scale_zyx((self.z_dim, self.y_dim, self.x_dim))
+        self.step_z_out, self.step_y_out, self.step_x_out = self._scale_zyx((self.step_z, self.step_y, self.step_x))
+
         # Clamp Z range to valid chunk indices
         effective_z_start = 0 if z_start == -1 else z_start
         effective_z_end = self.z_dim if z_end == -1 else z_end
@@ -336,6 +354,7 @@ class chunked_test_pair_data_generator(IterableDataset):
             self.step_y * self.patches_per_tile[1],
             self.step_x * self.patches_per_tile[2],
         )
+        self.tile_step_out = self._scale_zyx(self.tile_step)
         self.tiles_per_z = math.ceil(self.vols_per_z / self.patches_per_tile[0])
         self.tiles_per_y = math.ceil(self.vols_per_y / self.patches_per_tile[1])
         self.tiles_per_x = math.ceil(self.vols_per_x / self.patches_per_tile[2])
@@ -372,9 +391,43 @@ class chunked_test_pair_data_generator(IterableDataset):
                 ""
             )
 
+    def _scale_zyx(self, values: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        """Scale a ``(z, y, x)`` tuple from input-data to output-data resolution via ``zoom_factor``."""
+        if not self.zoom_enable:
+            return values
+        return tuple(int(round(v * f)) for v, f in zip(values, self.zoom_zyxc[:3]))
+
+    def _to_output_coords(self, coords: PatchCoords) -> PatchCoords:
+        """Scale a :class:`PatchCoords`, given in input-data resolution, to the output-data one."""
+        if not self.zoom_enable:
+            return coords
+        zz, zy, zx = self.zoom_zyxc[:3]
+        return PatchCoords(
+            z_start=int(round(coords.z_start * zz)),
+            z_end=int(round(coords.z_end * zz)),
+            y_start=int(round(coords.y_start * zy)),
+            y_end=int(round(coords.y_end * zy)),
+            x_start=int(round(coords.x_start * zx)),
+            x_end=int(round(coords.x_end * zx)),
+        )
+
+    def data_shape_for_output(self) -> Tuple[int, ...]:
+        """
+        Return ``X_parallel_data``'s shape with its Z/Y/X dimensions scaled to the output resolution.
+
+        Matches ``DATA.PREPROCESS.ZOOM.ZOOM_FACTOR`` when enabled; identical to the input shape otherwise.
+        """
+        shape = list(self.X_parallel_data.shape)
+        for axis_char, out_dim in zip("ZYX", (self.z_dim_out, self.y_dim_out, self.x_dim_out)):
+            if axis_char in self.input_axes:
+                shape[self.input_axes.index(axis_char)] = out_dim
+        return tuple(int(v) for v in shape)
+
     def tile_coords(self, tile_id: int) -> PatchCoords:
         """
         Return the coordinates of the region a tile is responsible for, i.e. without the padding.
+
+        Coordinates are given in output-data resolution (see :meth:`_to_output_coords`).
 
         Parameters
         ----------
@@ -391,13 +444,15 @@ class chunked_test_pair_data_generator(IterableDataset):
         z0 = int(z) * self.tile_step[0]
         y0 = int(y) * self.tile_step[1]
         x0 = int(x) * self.tile_step[2]
-        return PatchCoords(
-            z_start=z0,
-            z_end=min(z0 + self.tile_step[0], self.z_dim),
-            y_start=y0,
-            y_end=min(y0 + self.tile_step[1], self.y_dim),
-            x_start=x0,
-            x_end=min(x0 + self.tile_step[2], self.x_dim),
+        return self._to_output_coords(
+            PatchCoords(
+                z_start=z0,
+                z_end=min(z0 + self.tile_step[0], self.z_dim),
+                y_start=y0,
+                y_end=min(y0 + self.tile_step[1], self.y_dim),
+                x_start=x0,
+                x_end=min(x0 + self.tile_step[2], self.x_dim),
+            )
         )
 
     def rank_workload(self, num_workers: int, world_size: int, rank: int) -> Tuple[int, int]:
@@ -572,6 +627,13 @@ class chunked_test_pair_data_generator(IterableDataset):
                 if data.shape[-1] == 1:
                     data = np.repeat(data, 3, axis=-1)
 
+        if self.zoom_enable:
+            data = ndi_zoom(data, self.zoom_zyxc, order=0, mode="nearest")
+            pad_to_add = [
+                [int(round(side * self.zoom_zyxc[axis])) for side in sides]
+                for axis, sides in enumerate(pad_to_add)
+            ]
+
         return data, pad_to_add
 
     def __iter__(self):
@@ -694,15 +756,14 @@ class chunked_test_pair_data_generator(IterableDataset):
                 )
                 assert isinstance(mask, np.ndarray)
 
-            yield vol_id, tile_info, img, mask, real_patch_in_data, added_pad, xnorm_info
+            yield vol_id, tile_info, img, mask, self._to_output_coords(real_patch_in_data), added_pad, xnorm_info
 
     def _shared_zarr_path(self) -> str:
         base = os.path.splitext(self.filename)[0]
         return os.path.join(self.out_dir, f"{base}.zarr")
 
     def _compute_out_shape(self, patch: NDArray) -> Tuple[int, ...]:
-        # Channel dimension should be equal to the number of channel of the prediction
-        out_shape = list(self.X_parallel_data.shape)
+        out_shape = list(self.data_shape_for_output())
 
         if "C" not in self.input_axes:
             out_shape = list(out_shape) + [patch.shape[-1]]
@@ -729,11 +790,10 @@ class chunked_test_pair_data_generator(IterableDataset):
         tuple of int
             Chunk shape for the output data.
         """
-        # The output tile size (after removing padding) is the "step" size
         write_tile_zyxc = (
-            self.step_z,  # crop_shape[0] - 2*padding[0]
-            self.step_y,  # crop_shape[1] - 2*padding[1]
-            self.step_x,  # crop_shape[2] - 2*padding[2]
+            self.step_z_out,
+            self.step_y_out,
+            self.step_x_out,
             patch.shape[-1],
         )
 
