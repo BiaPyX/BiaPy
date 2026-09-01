@@ -2133,9 +2133,27 @@ def samples_from_image_list_multiple_raw_one_gt(
     raw_sample_channel_expected = -1
     raw_sample_data_range_expected = -1
     cont = 0
-    local_gt_indices = _rank_local_indices(len(data_gt_path))
+
+    # Balance ranks by number of raw images per id (a plain contiguous split can leave one rank
+    # with mostly single-raw-image ids and another with mostly many-raw-image ids).
+    raw_counts = []
+    for id_ in data_gt_path:
+        associated_raw_image_dir = os.path.join(data_path, id_)
+        if not os.path.exists(associated_raw_image_dir):
+            raise ValueError(f"Folder {associated_raw_image_dir} with multiple raw images not found.")
+        raw_counts.append(1 + len(next(os_walk_clean(associated_raw_image_dir))[2]))
+    local_gt_indices = _balanced_rank_indices(raw_counts)
     local_data_gt_path = [data_gt_path[k] for k in local_gt_indices]
+
+    # Per-id counts, in local processing order, used to relocate each id's samples back to its
+    # original global position when the per-rank results are merged below.
+    per_id_gt_count = []
+    per_id_raw_file_count = []
+    per_id_raw_sample_count = []
     for id_ in tqdm(local_data_gt_path, total=len(local_data_gt_path), disable=not is_main_process()):
+        _gt_sample_list_before = len(gt_sample_list)
+        _dataset_info_before = len(dataset_info)
+        _sample_list_before = len(sample_list)
         # Read image
         gt_id = next(os_walk_clean(os.path.join(gt_path, id_)))[2][0]
         gt_sample_path = os.path.join(gt_path, id_, gt_id)
@@ -2308,27 +2326,61 @@ def samples_from_image_list_multiple_raw_one_gt(
 
         cont += gt_tot_samples_to_insert
 
-    gathered = _gather_local_results([(dataset_info, sample_list, gt_dataset_info, gt_sample_list)])
+        per_id_gt_count.append(len(gt_sample_list) - _gt_sample_list_before)
+        per_id_raw_file_count.append(len(dataset_info) - _dataset_info_before)
+        per_id_raw_sample_count.append(len(sample_list) - _sample_list_before)
+
+    gathered = _gather_local_results(
+        [(
+            local_gt_indices, dataset_info, sample_list, gt_dataset_info, gt_sample_list,
+            per_id_gt_count, per_id_raw_file_count, per_id_raw_sample_count,
+        )]
+    )
+
+    # Because ranks were assigned ids by load-balancing rather than by contiguous slice, results
+    # are stitched back together in original global id order below, so the final dataset order
+    # (and hence e.g. any seeded train/val split done downstream) does not depend on world size.
+    owner = [None] * len(data_gt_path)
+    prefix_starts = []
+    for rank_i, (glob_ids, _, _, _, _, gt_counts, raw_file_counts, raw_sample_counts) in enumerate(gathered):
+        for local_j, g in enumerate(glob_ids):
+            owner[g] = (rank_i, local_j)
+        prefix_starts.append(
+            (
+                np.concatenate(([0], np.cumsum(gt_counts))),
+                np.concatenate(([0], np.cumsum(raw_file_counts))),
+                np.concatenate(([0], np.cumsum(raw_sample_counts))),
+            )
+        )
+
     dataset_info, sample_list, gt_dataset_info, gt_sample_list = [], [], [], []
     dataset_info_offset = 0
     gt_dataset_info_offset = 0
     gt_sample_list_offset = 0
-    for rank_dataset_info, rank_sample_list, rank_gt_dataset_info, rank_gt_sample_list in gathered:
-        for ds in rank_gt_sample_list:
-            ds.fid += gt_dataset_info_offset
-        for ds in rank_sample_list:
-            ds.fid += dataset_info_offset
+    for g in range(len(data_gt_path)):
+        assert owner[g] is not None
+        rank_i, local_j = owner[g]
+        _, rank_dataset_info, rank_sample_list, rank_gt_dataset_info, rank_gt_sample_list, *_ = gathered[rank_i]
+        gt_starts, raw_file_starts, raw_sample_starts = prefix_starts[rank_i]
+        gstart, gend = gt_starts[local_j], gt_starts[local_j + 1]
+        rfstart, rfend = raw_file_starts[local_j], raw_file_starts[local_j + 1]
+        rsstart, rsend = raw_sample_starts[local_j], raw_sample_starts[local_j + 1]
+
+        for ds in rank_gt_sample_list[gstart:gend]:
+            ds.fid = gt_dataset_info_offset + (ds.fid - local_j)
+            gt_sample_list.append(ds)
+        for ds in rank_sample_list[rsstart:rsend]:
+            ds.fid = dataset_info_offset + (ds.fid - rfstart)
             if ds.get_gt_associated_id() is not None:
-                ds.gt_associated_id += gt_sample_list_offset
+                ds.gt_associated_id = gt_sample_list_offset + (ds.gt_associated_id - gstart)
+            sample_list.append(ds)
 
-        dataset_info.extend(rank_dataset_info)
-        sample_list.extend(rank_sample_list)
-        gt_dataset_info.extend(rank_gt_dataset_info)
-        gt_sample_list.extend(rank_gt_sample_list)
+        gt_dataset_info.extend(rank_gt_dataset_info[local_j : local_j + 1])
+        dataset_info.extend(rank_dataset_info[rfstart:rfend])
 
-        dataset_info_offset += len(rank_dataset_info)
-        gt_dataset_info_offset += len(rank_gt_dataset_info)
-        gt_sample_list_offset += len(rank_gt_sample_list)
+        gt_dataset_info_offset += 1
+        dataset_info_offset += rfend - rfstart
+        gt_sample_list_offset += gend - gstart
 
     return (
         BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list),
@@ -2494,6 +2546,40 @@ def _rank_local_indices(n: int) -> NDArray:
     if world_size <= 1:
         return np.arange(n)
     return np.array_split(np.arange(n), world_size)[get_rank()]
+
+
+def _balanced_rank_indices(costs: List[int]) -> NDArray:
+    """
+    Assign ``range(len(costs))`` to ranks so each rank's summed cost is balanced.
+
+    Unlike :func:`_rank_local_indices`, items are not split into contiguous chunks:
+    a greedy longest-processing-time-first assignment (each item, largest cost
+    first, goes to the currently least-loaded rank) is used instead. This matters
+    when items have very uneven cost, e.g. gt samples with a variable number of
+    associated raw images: a contiguous split can leave one rank with mostly
+    single-raw-image samples and another with mostly many-raw-image samples.
+
+    Parameters
+    ----------
+    costs : list of int
+        Relative cost of each item (e.g. number of raw images to load for it).
+
+    Returns
+    -------
+    NDArray
+        Indices (into ``range(len(costs))``) assigned to the current rank, sorted.
+    """
+    world_size = get_world_size()
+    if world_size <= 1:
+        return np.arange(len(costs))
+    order = sorted(range(len(costs)), key=lambda i: costs[i], reverse=True)
+    loads = [0] * world_size
+    assignment: List[List[int]] = [[] for _ in range(world_size)]
+    for idx in order:
+        r = min(range(world_size), key=lambda k: loads[k])
+        assignment[r].append(idx)
+        loads[r] += costs[idx]
+    return np.array(sorted(assignment[get_rank()]))
 
 
 def _gather_local_results(local_results: List) -> List:
