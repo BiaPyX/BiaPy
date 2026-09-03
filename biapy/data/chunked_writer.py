@@ -112,9 +112,16 @@ class ChunkedZarrWriter:
             except Exception as e:
                 last_err = e
                 try:
-                    self.data = zarr.open(self.path, mode="r+", zarr_format=3)
+                    existing = zarr.open(self.path, mode="r+", zarr_format=3)
+                    if tuple(existing.shape) != tuple(out_shape):
+                        raise RuntimeError(
+                            f"Existing Zarr at {self.path} has shape {existing.shape}, but this run expects "
+                            f"{out_shape}. It is likely left over from a previous run with a different "
+                            "'DATA.PATCH_SIZE' or 'DATA.PREPROCESS.ZOOM.ZOOM_FACTOR'. Remove it and re-run."
+                        )
+                    self.data = existing
                     return
-                except Exception:
+                except FileNotFoundError:
                     # Possibly metadata not fully written yet by the creator
                     time.sleep(0.05)
 

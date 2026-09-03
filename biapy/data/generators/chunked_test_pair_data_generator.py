@@ -850,10 +850,17 @@ class chunked_test_pair_data_generator(IterableDataset):
                 last_err = e
                 # If it already exists (or creation raced), open read/write
                 try:
-                    self.out_data = zarr.open(out_path, mode="r+", zarr_format=3)
+                    existing = zarr.open(out_path, mode="r+", zarr_format=3)
+                    if tuple(existing.shape) != tuple(out_shape):
+                        raise RuntimeError(
+                            f"Existing Zarr at {out_path} has shape {existing.shape}, but this run expects "
+                            f"{out_shape}. It is likely left over from a previous run with a different "
+                            "'DATA.PATCH_SIZE' or 'DATA.PREPROCESS.ZOOM.ZOOM_FACTOR'. Remove it and re-run."
+                        )
+                    self.out_data = existing
                     self.out_file = out_path
                     return
-                except Exception:
+                except FileNotFoundError:
                     # Possibly metadata not fully written yet by creator
                     time.sleep(0.05)
 
