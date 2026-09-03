@@ -10,6 +10,7 @@ from skimage.morphology import skeletonize
 
 # Make the BiaPy package importable (this script lives in biapy/utils/scripts/)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+from biapy.utils.misc import crop_border_numpy
 
 # Regular image extensions supported for both predictions and ground truth
 IMAGE_EXTENSIONS = (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp", ".gif")
@@ -27,6 +28,13 @@ def parse_args():
                         help="Voxel spacing used to weight skeleton edge lengths when computing "
                              "ERL. Give one value per data dimension (e.g. 'z y x' for 3D data, "
                              "'y x' for 2D data). Default: 1 1 1")
+    parser.add_argument("--border-crop", type=int, nargs="+", default=None,
+                        help="Pixels/voxels to crop off both sides of each dimension before "
+                             "computing metrics, matching BiaPy's 'TEST.EVAL_BORDER_CROP' (e.g. "
+                             "'5 15 15' for 'z y x' on 3D data). Use the same value the "
+                             "predictions were generated with, so border regions excluded from "
+                             "BiaPy's own evaluation are excluded here too. Give one value per "
+                             "data dimension. Default: no cropping.")
     parser.add_argument("--skip-erl", action="store_true",
                         help="Skip ERL computation. Skeletonizing every ground truth object can "
                              "be slow on large volumes with many objects.")
@@ -126,43 +134,80 @@ def compute_erl(gt_skeleton_graphs, pred):
     return erl, total_length, total_score, per_object
 
 
-def evaluate_dataset(input_dir, gt_dir, spacing=(1.0, 1.0, 1.0), skip_erl=False, verbose=False):
+def evaluate_dataset(input_dir, gt_dir, spacing=(1.0, 1.0, 1.0), skip_erl=False, verbose=False,
+                      border_crop=None):
     """
     Compute VOI, Adapted Rand error and (optionally) ERL for every prediction
-    in `input_dir` against its matching (same base name) ground truth in
-    `gt_dir`. Returns (per_file_results, dataset_erl) where per_file_results
-    is a list of per-file metric dicts and dataset_erl is the skeleton-length
-    -weighted ERL over the whole dataset (None if skip_erl).
+    in `input_dir` against its corresponding ground truth in `gt_dir`.
+    Predictions and ground truth files are matched by the base name of the
+    prediction being (or starting with) the base name of a ground truth file
+    (e.g. prediction 'CREMI_A_membranes.tif' matches ground truth
+    'CREMI_A.tif'); if that fails to resolve unambiguously, files are instead
+    paired positionally after sorting each directory, which requires both
+    directories to contain the same number of images.
+
+    If `border_crop` is given, it is cropped off both sides of every spatial
+    dimension of both images before computing metrics, matching BiaPy's own
+    'TEST.EVAL_BORDER_CROP'. VOI and Adapted Rand error are computed only on
+    voxels where both the prediction and the ground truth carry a real label
+    (background/label 0 is excluded on both sides, the same convention BiaPy
+    uses for instance matching in `biapy.utils.matching`) so that unlabeled
+    background in the prediction is not scored as one giant merged object.
+
+    Returns (per_file_results, dataset_erl) where per_file_results is a list
+    of per-file metric dicts and dataset_erl is the skeleton-length-weighted
+    ERL over the whole dataset (None if skip_erl).
     """
-    gt_by_stem = {os.path.splitext(f)[0]: f for f in list_images(gt_dir)}
+    gt_files = list_images(gt_dir)
     ids = list_images(input_dir)
+
+    gt_by_stem = {os.path.splitext(f)[0]: f for f in gt_files}
+
+    def find_gt_match(pred_name):
+        stem = os.path.splitext(pred_name)[0]
+        if stem in gt_by_stem:
+            return gt_by_stem[stem]
+        candidates = [gt_stem for gt_stem in gt_by_stem if stem.startswith(gt_stem)]
+        if len(candidates) == 1:
+            return gt_by_stem[candidates[0]]
+        return None
+
+    matches = [find_gt_match(id_) for id_ in ids]
+    if None in matches:
+        if len(ids) != len(gt_files):
+            unmatched = [id_ for id_, m in zip(ids, matches) if m is None]
+            raise FileNotFoundError(
+                "Could not match {} prediction(s) ({}) to a ground truth image in {}, and "
+                "positional pairing is not possible because {} has {} prediction(s) but {} "
+                "has {} ground truth image(s).".format(
+                    len(unmatched), ", ".join(unmatched), gt_dir, input_dir, len(ids), gt_dir, len(gt_files)))
+        matches = gt_files
 
     per_file_results = []
     erl_total_length = 0.0
     erl_total_score = 0.0
 
-    for id_ in ids:
-        stem = os.path.splitext(id_)[0]
-        if stem not in gt_by_stem:
-            raise FileNotFoundError(
-                "No ground truth image matching prediction '{}' was found in {} "
-                "(looked for base name '{}').".format(id_, gt_dir, stem))
-
+    for id_, gt_name in zip(ids, matches):
         pred = imread(os.path.join(input_dir, id_)).astype(np.int64)
-        gt = imread(os.path.join(gt_dir, gt_by_stem[stem])).astype(np.int64)
+        gt = imread(os.path.join(gt_dir, gt_name)).astype(np.int64)
 
         print(" ")
         print("#######################################")
         print("Analizing file {} (GT: {})".format(
-            os.path.join(input_dir, id_), os.path.join(gt_dir, gt_by_stem[stem])))
+            os.path.join(input_dir, id_), os.path.join(gt_dir, gt_name)))
 
         if len(spacing) != gt.ndim:
             raise ValueError(
                 "spacing has {} values but data is {}D ({}). Provide one value per dimension.".format(
                     len(spacing), gt.ndim, id_))
 
-        voi_split, voi_merge = variation_of_information(gt, pred)
-        are, prec, rec = adapted_rand_error(gt, pred)
+        if border_crop:
+            gt = crop_border_numpy(gt, list(border_crop))
+            pred = crop_border_numpy(pred, list(border_crop))
+
+        fg_mask = (gt != 0) & (pred != 0)
+        voi_split, voi_merge = variation_of_information(gt[fg_mask], pred[fg_mask])
+        are, prec, rec = adapted_rand_error(gt[fg_mask], pred[fg_mask])
 
         result = {
             "file": id_,
@@ -172,7 +217,7 @@ def evaluate_dataset(input_dir, gt_dir, spacing=(1.0, 1.0, 1.0), skip_erl=False,
             "are": are,
             "are_precision": prec,
             "are_recall": rec,
-            "n_voxels": gt.size,
+            "n_voxels": int(fg_mask.sum()),
         }
 
         if not skip_erl:
@@ -250,7 +295,8 @@ def print_summary(per_file_results, dataset_erl, skip_erl=False):
 def main():
     args = parse_args()
     per_file_results, dataset_erl = evaluate_dataset(
-        args.input_dir, args.gt_dir, spacing=args.spacing, skip_erl=args.skip_erl, verbose=args.verbose)
+        args.input_dir, args.gt_dir, spacing=args.spacing, skip_erl=args.skip_erl, verbose=args.verbose,
+        border_crop=args.border_crop)
     print_summary(per_file_results, dataset_erl, skip_erl=args.skip_erl)
 
 
