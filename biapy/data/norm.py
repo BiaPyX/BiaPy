@@ -226,13 +226,13 @@ def resolve_fixed_norm_info(
     """
     Build a ``norm_info`` dict (the kind ``normalize_image`` returns) from fixed config values only, no
     image needed. Used for ``DATA.NORMALIZATION.TARGET`` so predictions can be un-normalized at test time
-    without a ground truth. Only ``'zero_mean_unit_variance'`` is supported.
+    without a ground truth.
 
     Parameters
     ----------
     norm_module : dict
-        Normalization config with fixed (non -1) ``mean``/``std``, and, if ``percentile_clip`` is True,
-        fixed ``lower_bound_val``/``upper_bound_val``.
+        Normalization config with fixed (non -1) ``mean``/``std`` (``zero_mean_unit_variance``) or fixed
+        ``lower_bound_val``/``upper_bound_val`` (``scale_range``/``div``, ``percentile_clip`` required True).
 
     num_channels : int
         Number of channels to resolve ``per_channel_info`` for.
@@ -245,23 +245,8 @@ def resolve_fixed_norm_info(
     dict
         ``norm_info`` dict, usable with ``undo_image_norm``.
     """
-    assert norm_module["type"] == "zero_mean_unit_variance", (
-        "'resolve_fixed_norm_info' only supports 'zero_mean_unit_variance' normalization, got "
-        f"'{norm_module['type']}'. Add support there first if you need a fixed-value 'div'/'scale_range' target."
-    )
-
-    mean_cfg = norm_module.get("mean", [-1.0])
-    std_cfg = norm_module.get("std", [-1.0])
-    assert mean_cfg[0] != -1 and std_cfg[0] != -1, (
-        "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed values "
-        "(not left at -1) when 'DATA.NORMALIZATION.TARGET.ENABLE' is True: a per-image adaptive mean/std "
-        "computed from the ground truth cannot be recovered at test time without the ground truth."
-    )
-    means = mean_cfg if len(mean_cfg) > 1 else [float(mean_cfg[0])] * num_channels
-    stds = std_cfg if len(std_cfg) > 1 else [float(std_cfg[0])] * num_channels
-    assert len(means) == num_channels and len(stds) == num_channels, (
-        "'MEAN_VAL'/'STD_VAL' must have either one value (applied to every channel) or exactly "
-        f"'num_channels' ({num_channels}) values."
+    assert norm_module["type"] in ("zero_mean_unit_variance", "scale_range", "div"), (
+        f"'resolve_fixed_norm_info' does not support normalization type '{norm_module['type']}'."
     )
 
     percentile_clip = bool(norm_module.get("percentile_clip", False))
@@ -284,12 +269,42 @@ def resolve_fixed_norm_info(
         "out_dtype": norm_module.get("out_dtype", "float32"),
         "per_channel_info": {},
     }
-    for c in range(num_channels):
-        entry = {"mean": means[c], "std": stds[c]}
-        if percentile_clip:
-            entry["lower_bound_val"] = lows[c]
-            entry["upper_bound_val"] = highs[c]
-        norm_info["per_channel_info"][str(c)] = entry
+
+    if norm_module["type"] == "zero_mean_unit_variance":
+        mean_cfg = norm_module.get("mean", [-1.0])
+        std_cfg = norm_module.get("std", [-1.0])
+        assert mean_cfg[0] != -1 and std_cfg[0] != -1, (
+            "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed values "
+            "(not left at -1) when 'DATA.NORMALIZATION.TARGET.ENABLE' is True: a per-image adaptive mean/std "
+            "computed from the ground truth cannot be recovered at test time without the ground truth."
+        )
+        means = mean_cfg if len(mean_cfg) > 1 else [float(mean_cfg[0])] * num_channels
+        stds = std_cfg if len(std_cfg) > 1 else [float(std_cfg[0])] * num_channels
+        assert len(means) == num_channels and len(stds) == num_channels, (
+            "'MEAN_VAL'/'STD_VAL' must have either one value (applied to every channel) or exactly "
+            f"'num_channels' ({num_channels}) values."
+        )
+        for c in range(num_channels):
+            entry = {"mean": means[c], "std": stds[c]}
+            if percentile_clip:
+                entry["lower_bound_val"] = lows[c]
+                entry["upper_bound_val"] = highs[c]
+            norm_info["per_channel_info"][str(c)] = entry
+    else:  # 'scale_range' / 'div'
+        assert percentile_clip, (
+            "'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' must be True with fixed "
+            "'LOWER_VALUE'/'UPPER_VALUE' when 'DATA.NORMALIZATION.TARGET.TYPE' is 'scale_range'/'div': "
+            "those fixed bounds double as the fixed 'min_val_to_div'/'max_val_to_div' used to undo the "
+            "0-1 scaling at test time, since an adaptive per-image min/max cannot be recovered from the "
+            "ground truth at test time."
+        )
+        for c in range(num_channels):
+            norm_info["per_channel_info"][str(c)] = {
+                "lower_bound_val": lows[c],
+                "upper_bound_val": highs[c],
+                "min_val_to_div": lows[c],
+                "max_val_to_div": highs[c],
+            }
 
     return norm_info
 
@@ -808,11 +823,12 @@ def undo_norm_range01(
 
     max_val_to_div = [norm_info["per_channel_info"][str(c)].get("max_val_to_div", None) for c in range(data.shape[-1])]
     min_val_to_div = [norm_info["per_channel_info"][str(c)].get("min_val_to_div", None) for c in range(data.shape[-1])]
+    scale = [max_val_to_div[c] - min_val_to_div[c] for c in range(data.shape[-1])]
 
     if isinstance(data, np.ndarray):
-        return (data * max_val_to_div) + min_val_to_div
+        return (data * scale) + min_val_to_div
     else:
-        return (data * torch.tensor(max_val_to_div, device=data.device)) + torch.tensor(min_val_to_div, device=data.device)
+        return (data * torch.tensor(scale, device=data.device)) + torch.tensor(min_val_to_div, device=data.device)
 
 def undo_zero_mean_unit_variance_normalization(
     data: NDArray | torch.Tensor,

@@ -1916,7 +1916,6 @@ all_test_info["Test32"] = {
         "MODEL": {
             "ARCHITECTURE": "nafnet",
             "NAFNET": {
-                "WIDTH": 16,
                 "MIDDLE_BLK_NUM": 12,
                 "ENC_BLK_NUMS": [2, 2, 4, 8],
                 "DEC_BLK_NUMS": [2, 2, 2, 2],

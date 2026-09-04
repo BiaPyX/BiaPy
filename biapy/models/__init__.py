@@ -458,6 +458,7 @@ def build_model(
                 args = dict(
                     generator=generator,
                     discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,
+                    ndim=ndim,
                     patchgan_base_filters=cfg.MODEL.NAFNET.PATCHGAN.BASE_FILTERS,
                     out_channels=sum(output_channels),
                 )
@@ -465,11 +466,17 @@ def build_model(
             else:
                 args = dict(
                     img_channel=cfg.DATA.PATCH_SIZE[-1],
-                    width=cfg.MODEL.NAFNET.WIDTH,
+                    ndim=ndim,
+                    feature_maps=cfg.MODEL.FEATURE_MAPS,
+                    drop_values=cfg.MODEL.DROPOUT_VALUES,
+                    k_size=cfg.MODEL.KERNEL_SIZE,
+                    z_down=cfg.MODEL.Z_DOWN,
+                    yx_down=cfg.MODEL.YX_DOWN,
+                    isotropy=cfg.MODEL.ISOTROPY,
+                    larger_io=cfg.MODEL.LARGER_IO,
                     middle_blk_num=cfg.MODEL.NAFNET.MIDDLE_BLK_NUM,
                     enc_blk_nums=cfg.MODEL.NAFNET.ENC_BLK_NUMS,
                     dec_blk_nums=cfg.MODEL.NAFNET.DEC_BLK_NUMS,
-                    drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0],
                     dw_expand=cfg.MODEL.NAFNET.DW_EXPAND,
                     ffn_expand=cfg.MODEL.NAFNET.FFN_EXPAND,
                     discriminator_arch=cfg.MODEL.NAFNET.ARCHITECTURE_D,

@@ -1725,8 +1725,6 @@ class Config:
         # 5.1.6 NafNet architecture options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL.NAFNET = CN()
-        # Base number of channels (width) used in the first layer and base levels.
-        _C.MODEL.NAFNET.WIDTH = 16
         # Number of NAFBlocks stacked at the bottleneck (deepest level).
         _C.MODEL.NAFNET.MIDDLE_BLK_NUM = 12
         # Number of NAFBlocks assigned to each downsampling level of the encoder.
@@ -1891,57 +1889,26 @@ class Config:
         # 6. Loss definition options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.LOSS = CN()
-        # Loss type, different options depending on the workflow. If empty the default loss on each case will be set:
-        #   * Semantic segmentation:
-        #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-        #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
-        #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
-        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
-        #     It can be also set manually with PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES. 
-        #   * Detection: CE always used. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-        #   * Denoising:
-        #       * "MAE": mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE" (default): mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
-        #   * Super-resolution:
-        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
-        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
-        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
-        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
-        #   * Self-supervision:
-        #       These losses can only be set when PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "crappify". Otherwise it will be automatically set to MSE when
-        #       PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "masking".
-        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
-        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
-        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
-        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
-        #   * Classification:
-        #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-        #   * Image to image:
-        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
-        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
-        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
-        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
-        #   * Image to image, when PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True (output is affinities):
-        #       * "MEMBRANE_REPAIR_AFFINITY": weighted combination of up to 4 sub-losses; a weight of 0
-        #         skips that term entirely (LOSS.WEIGHTS = [w_bce, w_malis, w_cldice, w_svox]):
-        #           - weighted BCE on the affinity logits (foreground/background balanced).
-        #           - MALIS (constrained maximin-affinity loss). Ref: Turaga et al., "Maximin Affinity Learning
-        #             of Image Segmentation" (https://arxiv.org/abs/0911.5372)
-        #           - clDice + spurious-component penalty on a sigmoid-derived membrane probability. Ref: Shit
-        #             et al., "clDice - A Novel Topology-Preserving Loss Function for Tubular Structure
-        #             Segmentation" (https://arxiv.org/abs/2003.07311)
-        #           - Supervoxel-based structure-aware loss (critical-component-weighted BCE). Ref: Grim et
-        #             al., "Efficient Connectivity-Preserving Instance Segmentation with Supervoxel-Based Loss
-        #             Function" (https://arxiv.org/abs/2501.01022), adapted from
-        #             https://github.com/AllenNeuralDynamics/supervoxel-loss
-        _C.LOSS.TYPE = ""
-        # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss. For example, in the case of "W_CE_DICE", the final loss will be:
-        # LOSS.WEIGHTS[0] * CE + LOSS.WEIGHTS[1] * DICE. The length of the list must be equal to the number of losses that are combined.
-        # For "MEMBRANE_REPAIR_AFFINITY" it must have 4 entries: [w_bce, w_malis, w_cldice, w_svox].
-        _C.LOSS.WEIGHTS = [1.0, 1.0]
+        # List of individually-weighted loss names to sum:
+        #   sum(LOSS.WEIGHTS[i] * loss_i(pred, target) for i, loss_i in enumerate(LOSS.TYPE))
+        # 'LOSS.WEIGHTS' must be the same length. Empty -> per-workflow default (see each
+        # workflow's 'define_metrics'). Old single-string combos (e.g. "W_MAE_SSIM") still work,
+        # auto-converted in check_configuration.py. Valid names per workflow:
+        #   * Semantic segmentation: "CE" (default), "DICE", or ["DICE", "CE"] together (fused
+        #     CE+Dice, not decomposed).
+        #   * Instance segmentation: set via PROBLEM.INSTANCE_SEG.DATA_CHANNELS(_LOSSES).
+        #   * Detection: always CE. Classification: always "CE".
+        #   * Continuous-image (DENOISING, SUPER_RESOLUTION, SELF_SUPERVISED, IMAGE_TO_IMAGE):
+        #     "MAE" (default), "MSE", "PCC", "CHARBONNIER", "VGG", "LPIPS", "SSIM", "LAPLACIAN",
+        #     "FFT", "RFFT" -- see 'continuous_image_loss_registry' in metrics.py. DENOISING only
+        #     supports a single ["MSE"] or ["BCE"]/["HINGE"], never a multi-term mix.
+        #   * IMAGE_TO_IMAGE/DENOISING also accept "BCE" or "HINGE" (adversarial term, mutually
+        #     exclusive, needs a discriminator; knobs under LOSS.GAN below).
+        #   * IMAGE_TO_IMAGE with PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: "BCE", "MALIS",
+        #     "CLDICE", "SVOX" (at least one positive weight).
+        _C.LOSS.TYPE = []
+        # Same length as LOSS.TYPE. Unlike the old "W_*" strings, weights don't need to sum to 1.
+        _C.LOSS.WEIGHTS = []
         # To weight classes in an imbalanced dataset. Options available are:
         #   * 'none': no class rebalancing is applied
         #   * 'manual': the weights provided in LOSS.CLASS_WEIGHTS are used to weight each class. This is valid for semantic segmentation, instance segmentation (when instance+classes are predicted) 
@@ -1963,35 +1930,14 @@ class Config:
         _C.LOSS.CONTRAST.PROJ_DIM = 256
         _C.LOSS.CONTRAST.PIXEL_UPD_FREQ = 10
 
-        # Fine-grained GAN composition. Set any weight to 0.0 to disable that term.
-        # Used when LOSS.TYPE == "CYCLEGAN".
-        _C.LOSS.CYCLEGAN = CN()
-        # GAN loss type: "bce" (label smoothing) or "hinge".
-        _C.LOSS.CYCLEGAN.GAN_TYPE = "bce"
-        # Weight for adversarial BCE/hinge term.
-        _C.LOSS.CYCLEGAN.LAMBDA_GAN = 1.0
-        # Weight for L1 reconstruction term.
-        _C.LOSS.CYCLEGAN.LAMBDA_RECON = 10.0
-        # Weight for Charbonnier (robust L1) reconstruction term.
-        _C.LOSS.CYCLEGAN.LAMBDA_CHARB = 0.0
-        # Weight for MSE reconstruction term.
-        _C.LOSS.CYCLEGAN.DELTA_MSE = 0.0
-        # Weight for VGG perceptual term.
-        _C.LOSS.CYCLEGAN.ALPHA_PERCEPTUAL = 0.0
-        # Weight for LPIPS perceptual term.
-        _C.LOSS.CYCLEGAN.LAMBDA_LPIPS = 0.0
-        # Weight for SSIM term.
-        _C.LOSS.CYCLEGAN.GAMMA_SSIM = 1.0
-        # Weight for Laplacian edge loss term.
-        _C.LOSS.CYCLEGAN.LAMBDA_LAP = 0.0
-        # Weight for edge loss term (adds to LAMBDA_LAP internally).
-        _C.LOSS.CYCLEGAN.LAMBDA_EDGE = 0.0
-        # Weight for FFT high-frequency loss term.
-        _C.LOSS.CYCLEGAN.LAMBDA_FFT = 0.0
-        # Weight for RFFT L1 loss term.
-        _C.LOSS.CYCLEGAN.LAMBDA_RFFT = 0.0
+        # Adversarial-term knobs beyond its weight/formula (those live in LOSS.TYPE/LOSS.WEIGHTS,
+        # picking "BCE" or "HINGE"). Used only when one of those is present.
+        _C.LOSS.GAN = CN()
         # R1 gradient penalty coefficient (0.0 to disable).
-        _C.LOSS.CYCLEGAN.R1_GAMMA = 0.0
+        _C.LOSS.GAN.R1_GAMMA = 0.0
+        # If True, scale the adversarial weight by the VQGAN adaptive weight (recon/adv
+        # gradient-norm ratio) instead of using it as a fixed scalar.
+        _C.LOSS.GAN.ADAPTIVE_GAN_WEIGHT = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 7. Training phase options

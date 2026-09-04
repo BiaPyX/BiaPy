@@ -45,7 +45,7 @@ from biapy.utils.misc import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks
-from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
+from biapy.engine.metrics import loss_encapsulation, continuous_image_loss_registry, resolve_weighted_composite_loss
 from biapy.data.norm import undo_image_norm
 
 class Self_supervised_Workflow(Base_Workflow):
@@ -241,26 +241,11 @@ class Self_supervised_Workflow(Base_Workflow):
             print("Overriding 'LOSS.TYPE' to set it to MSE loss (masking patches)")
             self.loss = self.MaskedAutoencoderViT_loss_wrapper
         else:
-            if self.cfg.LOSS.TYPE == "MSE":
-                self.loss = loss_encapsulation(torch.nn.MSELoss().to(self.device))
-            elif self.cfg.LOSS.TYPE == "MAE":
-                self.loss = loss_encapsulation(torch.nn.L1Loss().to(self.device))
-            elif self.cfg.LOSS.TYPE == "SSIM":
-                self.loss = SSIM_loss(data_range=data_range, device=self.device)
-            elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
-                self.loss = W_MAE_SSIM_loss(
-                    data_range=data_range,
-                    device=self.device,
-                    w_mae=self.cfg.LOSS.WEIGHTS[0],
-                    w_ssim=self.cfg.LOSS.WEIGHTS[1],
-                )
-            elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
-                self.loss = W_MSE_SSIM_loss(
-                    data_range=data_range,
-                    device=self.device,
-                    w_mse=self.cfg.LOSS.WEIGHTS[0],
-                    w_ssim=self.cfg.LOSS.WEIGHTS[1],
-                )
+            registry = continuous_image_loss_registry(self.device)
+            composite = resolve_weighted_composite_loss(
+                self.cfg.LOSS.TYPE, self.cfg.LOSS.WEIGHTS, registry, "SELF_SUPERVISED"
+            )
+            self.loss = loss_encapsulation(composite)
 
         super().define_metrics()
 

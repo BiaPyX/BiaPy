@@ -32,7 +32,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, crop_border_tensor, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
+from biapy.engine.metrics import loss_encapsulation, continuous_image_loss_registry, resolve_weighted_composite_loss
 from biapy.data.norm import undo_image_norm
 
 class Super_resolution_Workflow(Base_Workflow):
@@ -218,26 +218,13 @@ class Super_resolution_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("LPIPS")
 
-            if self.cfg.LOSS.TYPE == "MSE":
-                self.loss = loss_encapsulation(torch.nn.MSELoss().to(self.device))
-            elif self.cfg.LOSS.TYPE == "MAE":
-                self.loss = loss_encapsulation(torch.nn.L1Loss().to(self.device))
-            elif self.cfg.LOSS.TYPE == "SSIM":
-                self.loss = SSIM_loss(data_range=data_range, device=self.device)
-            elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
-                self.loss = W_MAE_SSIM_loss(
-                    data_range=data_range,
-                    device=self.device,
-                    w_mae=self.cfg.LOSS.WEIGHTS[0],
-                    w_ssim=self.cfg.LOSS.WEIGHTS[1],
-                )
-            elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
-                self.loss = W_MSE_SSIM_loss(
-                    data_range=data_range,
-                    device=self.device,
-                    w_mse=self.cfg.LOSS.WEIGHTS[0],
-                    w_ssim=self.cfg.LOSS.WEIGHTS[1],
-                )
+        # (moved out of the TEST.METRICS loop above -- it doesn't depend on the loop variable, and
+        # being nested inside it meant the loss was never set at all when TEST.METRICS was empty)
+        registry = continuous_image_loss_registry(self.device)
+        composite = resolve_weighted_composite_loss(
+            self.cfg.LOSS.TYPE, self.cfg.LOSS.WEIGHTS, registry, "SUPER_RESOLUTION"
+        )
+        self.loss = loss_encapsulation(composite)
 
         super().define_metrics()
 

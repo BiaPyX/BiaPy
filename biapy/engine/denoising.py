@@ -79,10 +79,12 @@ class Denoising_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
+        loss_type_upper = [str(n).upper() for n in self.cfg.LOSS.TYPE]
+        uses_gan = "BCE" in loss_type_upper or "HINGE" in loss_type_upper
         self.norm_module["target_type"] = "image"
-        self.norm_module["norm_target"] = bool(self.cfg.LOSS.TYPE == "CYCLEGAN")
+        self.norm_module["norm_target"] = uses_gan
         self.test_norm_module["target_type"] = "image"
-        self.test_norm_module["norm_target"] = bool(self.cfg.LOSS.TYPE == "CYCLEGAN")
+        self.test_norm_module["norm_target"] = uses_gan
 
     def define_activations_and_channels(self):
         """
@@ -177,14 +179,15 @@ class Denoising_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("MAE")
 
-        # print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
-        if self.cfg.LOSS.TYPE == "MSE":
-            self.loss = loss_encapsulation(n2v_loss_mse)
-        elif self.cfg.LOSS.TYPE == "CYCLEGAN":
+        # 'BCE'/'HINGE' in LOSS.TYPE selects the adversarial path; otherwise a single N2V masked MSE.
+        loss_names_upper = [str(n).upper() for n in self.cfg.LOSS.TYPE]
+        if "BCE" in loss_names_upper or "HINGE" in loss_names_upper:
             self.cyclegan_loss = CycleGanLoss(cfg=self.cfg, device=self.device)
             self.loss = self.NAFNetGan_loss_wrapper
             if "loss_discriminator" not in self.loss_names:
                 self.loss_names.append("loss_discriminator")
+        elif loss_names_upper == ["MSE"]:
+            self.loss = loss_encapsulation(n2v_loss_mse)
 
         super().define_metrics()
 

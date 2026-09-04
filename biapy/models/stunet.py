@@ -413,6 +413,10 @@ class STUNet(nn.Module):
                     return out_dict["pred"]
             return out_dict
 
+    def last_layer(self) -> torch.nn.Parameter:
+        """Weight of the true final conv (pre output-activation), for VQGAN-style adaptive GAN weighting."""
+        return self.heads[-1].weight
+
 
 # --------------------------------------------------------------------------------------
 # Convenience presets (same as OrgMIM)

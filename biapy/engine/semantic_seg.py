@@ -190,18 +190,14 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("IoU")
 
-        if self.cfg.LOSS.TYPE == "CE":
-            semantic_loss = CrossEntropyLoss_wrapper(
-                num_classes=self.cfg.DATA.N_CLASSES,
-                ndim=self.dims,
-                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                device=self.device,
-            )
-        elif self.cfg.LOSS.TYPE == "DICE":
-            semantic_loss = DiceLoss()
-        elif self.cfg.LOSS.TYPE == "W_CE_DICE":
+        names = [str(n).upper() for n in self.cfg.LOSS.TYPE]
+        weights = list(self.cfg.LOSS.WEIGHTS)
+        assert len(names) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(names)} vs {len(weights)}"
+        )
+        by_name = dict(zip(names, weights))
+        if set(names) == {"DICE", "CE"}:
+            # Fused DiceCELoss, not decomposed: shares softmax/rebalancing/ignore_index across both terms.
             semantic_loss = DiceCELoss(
                 num_classes=self.cfg.DATA.N_CLASSES,
                 ndim=self.dims,
@@ -211,9 +207,25 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                w_dice=self.cfg.LOSS.WEIGHTS[0],
-                w_ce=self.cfg.LOSS.WEIGHTS[1],
+                w_dice=by_name["DICE"],
+                w_ce=by_name["CE"],
                 device=self.device,
+            )
+        elif names == ["CE"]:
+            semantic_loss = CrossEntropyLoss_wrapper(
+                num_classes=self.cfg.DATA.N_CLASSES,
+                ndim=self.dims,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                device=self.device,
+            )
+        elif names == ["DICE"]:
+            semantic_loss = DiceLoss()
+        else:
+            raise ValueError(
+                f"LOSS.TYPE {self.cfg.LOSS.TYPE} not supported for SEMANTIC_SEG; options: ['CE'], "
+                "['DICE'], or ['DICE', 'CE'] together"
             )
 
         if self.cfg.LOSS.CONTRAST.ENABLE: 

@@ -17,7 +17,12 @@ from typing import Dict, Optional
 from numpy.typing import NDArray
 import copy
 
-from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation, CycleGanLoss
+from biapy.engine.metrics import (
+    loss_encapsulation,
+    CycleGanLoss,
+    continuous_image_loss_registry,
+    resolve_weighted_composite_loss,
+)
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
     to_pytorch_format,
@@ -248,31 +253,19 @@ class Image_to_Image_Workflow(Base_Workflow):
                 self.test_metrics.append(PearsonCorrCoef().to(self.test_device))
                 self.test_metric_names.append("PCC")
 
-        if self.cfg.LOSS.TYPE == "MSE":
-            self.loss = loss_encapsulation(torch.nn.MSELoss().to(self.device))
-        elif self.cfg.LOSS.TYPE == "MAE":
-            self.loss = loss_encapsulation(torch.nn.L1Loss().to(self.device))
-        elif self.cfg.LOSS.TYPE == "SSIM":
-            self.loss = SSIM_loss(data_range=data_range, device=self.device)
-        elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
-            self.loss = W_MAE_SSIM_loss(
-                data_range=data_range,
-                device=self.device,
-                w_mae=self.cfg.LOSS.WEIGHTS[0],
-                w_ssim=self.cfg.LOSS.WEIGHTS[1],
-            )
-        elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
-            self.loss = W_MSE_SSIM_loss(
-                data_range=data_range,
-                device=self.device,
-                w_mse=self.cfg.LOSS.WEIGHTS[0],
-                w_ssim=self.cfg.LOSS.WEIGHTS[1],
-            )
-        elif self.cfg.LOSS.TYPE == "CYCLEGAN":
+        # 'BCE'/'HINGE' in LOSS.TYPE selects the adversarial path (via CycleGanLoss/forward_loss).
+        loss_names_upper = [str(n).upper() for n in self.cfg.LOSS.TYPE]
+        if "BCE" in loss_names_upper or "HINGE" in loss_names_upper:
             self.cyclegan_loss = CycleGanLoss(cfg=self.cfg, device=self.device)
             self.loss = self.GAN_loss_wrapper
             if "loss_discriminator" not in self.loss_names:
                 self.loss_names.append("loss_discriminator")
+        elif loss_names_upper:
+            registry = continuous_image_loss_registry(self.device)
+            composite = resolve_weighted_composite_loss(
+                self.cfg.LOSS.TYPE, self.cfg.LOSS.WEIGHTS, registry, "IMAGE_TO_IMAGE"
+            )
+            self.loss = loss_encapsulation(composite)
 
         super().define_metrics()
 
@@ -446,6 +439,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                     assert isinstance(_output, torch.Tensor) and isinstance(
                         _targets, torch.Tensor
                     ), "'is', 'lpips', 'fid' inputs are expected to be tensors"
+                    # These wrap 2D-only networks (LPIPS/Inception): fold Z into the batch dim.
+                    if _output.dim() == 5:
+                        B, C, D, H, W = _output.shape
+                        _output = _output.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+                        _targets = _targets.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
                     if _output.shape[1] == 1:
                         _output = torch.cat([_output, _output, _output], dim=1)
                     if _targets.shape[1] == 1:

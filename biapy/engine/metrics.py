@@ -2608,6 +2608,34 @@ class SpatialEmbLoss(nn.Module):
             "metrics": {"IoU": (iou / B).item()}  # single host sync per batch
         }
 
+def pcc_loss(pred, target, eps=1e-8):
+    """``1 - Pearson correlation coefficient``, per sample, averaged over the batch.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted tensor, shape (B, ...).
+    target : torch.Tensor
+        Target tensor, same shape as ``pred``.
+    eps : float
+        Numerical stability constant guarding near-zero-variance samples.
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar loss value.
+    """
+    B = pred.shape[0]
+    pred_flat = pred.reshape(B, -1).to(torch.float32)
+    target_flat = target.reshape(B, -1).to(torch.float32)
+    pred_c = pred_flat - pred_flat.mean(dim=1, keepdim=True)
+    target_c = target_flat - target_flat.mean(dim=1, keepdim=True)
+    numerator = (pred_c * target_c).sum(dim=1)
+    denominator = torch.sqrt(pred_c.pow(2).sum(dim=1) * target_c.pow(2).sum(dim=1) + eps)
+    pcc = numerator / denominator
+    return (1.0 - pcc).mean()
+
+
 def charbonnier_loss(pred, target, eps=1e-3):
     """Charbonnier (robust L1) loss.
 
@@ -2652,20 +2680,24 @@ def laplacian_loss(pred, target):
     ndim = pred.dim() - 2
     channels = pred.shape[1]
 
+    # Kernels normalized by sum of abs weights (12 for 3D, 8 for 2D) -- unnormalized, this term's
+    # gradient was ~5x larger than MAE's at the same point.
     if ndim == 3:
         # 3D Laplacian kernel: center -6, 6-neighbors are 1, others 0
         kernel = torch.tensor([
             [[0., 0., 0.], [0., 1., 0.], [0., 0., 0.]],
             [[0., 1., 0.], [1., -6., 1.], [0., 1., 0.]],
             [[0., 0., 0.], [0., 1., 0.], [0., 0., 0.]]
-        ], device=pred.device, dtype=pred.dtype).unsqueeze(0).unsqueeze(0)
+        ], device=pred.device, dtype=pred.dtype) / 12.0
+        kernel = kernel.unsqueeze(0).unsqueeze(0)
         kernel = kernel.repeat(channels, 1, 1, 1, 1)
         p = F.conv3d(pred, kernel, padding=1, groups=channels)
         t = F.conv3d(target, kernel, padding=1, groups=channels)
     else:
         # 2D Laplacian kernel: center -4, 4-neighbors are 1, others 0
         kernel = torch.tensor([[0., 1., 0.], [1., -4., 1.], [0., 1., 0.]],
-                              device=pred.device, dtype=pred.dtype).unsqueeze(0).unsqueeze(0)
+                              device=pred.device, dtype=pred.dtype) / 8.0
+        kernel = kernel.unsqueeze(0).unsqueeze(0)
         kernel = kernel.repeat(channels, 1, 1, 1)
         p = F.conv2d(pred, kernel, padding=1, groups=channels)
         t = F.conv2d(target, kernel, padding=1, groups=channels)
@@ -2693,15 +2725,13 @@ def fft_highfreq_loss(pred, target, eps=1e-6):
     torch.Tensor
         Scalar loss value.
     """
-    p = pred[:, 0].float()
+    p = clip_grad_norm_passthrough(pred[:, 0].float(), max_norm=0.1)
     t = target[:, 0].float()
 
     if p.dim() == 4: # 3D batch: (B, D, H, W)
-        B, D, H, W = p.shape
-        mag_p = torch.abs(torch.fft.fftshift(torch.fft.fftn(p, dim=(-3, -2, -1))))
-        mag_t = torch.abs(torch.fft.fftshift(torch.fft.fftn(t, dim=(-3, -2, -1))))
-        mag_p = torch.clamp(mag_p, min=eps)
-        mag_t = torch.clamp(mag_t, min=eps)
+        D, H, W = p.shape[-3:]
+        fft_p = torch.fft.fftshift(torch.fft.fftn(p, dim=(-3, -2, -1)))
+        fft_t = torch.fft.fftshift(torch.fft.fftn(t, dim=(-3, -2, -1)))
 
         zz = torch.arange(D, device=p.device) - D / 2
         yy = torch.arange(H, device=p.device) - H / 2
@@ -2711,12 +2741,10 @@ def fft_highfreq_loss(pred, target, eps=1e-6):
         mask = dist / (dist.max() + 1e-9)
         mask = mask.unsqueeze(0)
     else: # 2D batch: (B, H, W)
-        mag_p = torch.abs(torch.fft.fftshift(torch.fft.fft2(p)))
-        mag_t = torch.abs(torch.fft.fftshift(torch.fft.fft2(t)))
-        mag_p = torch.clamp(mag_p, min=eps)
-        mag_t = torch.clamp(mag_t, min=eps)
+        fft_p = torch.fft.fftshift(torch.fft.fft2(p))
+        fft_t = torch.fft.fftshift(torch.fft.fft2(t))
 
-        B, H, W = mag_p.shape
+        H, W = p.shape[-2:]
         yy = torch.arange(H, device=p.device) - H / 2
         xx = torch.arange(W, device=p.device) - W / 2
         Y, X = torch.meshgrid(yy, xx, indexing='ij')
@@ -2724,7 +2752,10 @@ def fft_highfreq_loss(pred, target, eps=1e-6):
         mask = dist / (dist.max() + 1e-9)
         mask = mask.unsqueeze(0)
 
-    return F.l1_loss(mask * mag_p, mask * mag_t)
+    # Magnitude of the complex residual, Charbonnier-smoothed (see rfft_highfreq_loss below).
+    diff = fft_p - fft_t
+    smooth_mag = torch.sqrt(diff.real**2 + diff.imag**2 + eps**2)
+    return (mask * smooth_mag).mean()
 
 
 def rfft_highfreq_loss(pred, target, eps=1e-9):
@@ -2750,7 +2781,7 @@ def rfft_highfreq_loss(pred, target, eps=1e-9):
     torch.Tensor
         Scalar loss value.
     """
-    p = normalize_to_minus_one_one(pred[:, 0].float())
+    p = normalize_to_minus_one_one(clip_grad_norm_passthrough(pred[:, 0].float(), max_norm=0.1))
     t = normalize_to_minus_one_one(target[:, 0].float())
 
     if p.dim() == 4:  # 3D batch: (B, D, H, W)
@@ -2772,7 +2803,39 @@ def rfft_highfreq_loss(pred, target, eps=1e-9):
         radius = torch.sqrt(FH**2 + FW**2)
 
     mask = (radius / (radius.max() + eps)).unsqueeze(0)
-    return F.l1_loss(mask * torch.abs(fft_p), mask * torch.abs(fft_t))
+    # Magnitude of the complex residual (fft_p - fft_t), Charbonnier-smoothed. Not the difference
+    # of magnitudes L1(|fft_p|,|fft_t|): that has zero gradient at fft_p==0, which is every non-DC
+    # bin of a flat pred. Plain abs() on the residual is also unstable near-zero in complex64.
+    diff = fft_p - fft_t
+    smooth_mag = torch.sqrt(diff.real**2 + diff.imag**2 + eps**2)
+    return (mask * smooth_mag).mean()
+
+
+class _ClipGradNorm(torch.autograd.Function):
+    """Identity in forward; clips the incoming gradient's norm to ``max_norm`` in backward.
+
+    Bounds how much gradient a numerically fragile term (VGG/LPIPS/SSIM/RFFT/FFT, which divide by
+    a variance/norm that can approach zero) can inject into `pred`.
+    """
+
+    @staticmethod
+    def forward(ctx, x, max_norm):
+        ctx.max_norm = max_norm
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        norm = grad_output.norm()
+        if not torch.isfinite(norm):
+            grad_output = torch.zeros_like(grad_output)
+        elif norm > ctx.max_norm:
+            grad_output = grad_output * (ctx.max_norm / (norm + 1e-12))
+        return grad_output, None
+
+
+def clip_grad_norm_passthrough(x: torch.Tensor, max_norm: float = 2.0) -> torch.Tensor:
+    """Identity forward; clips (or zeroes, if non-finite) the gradient flowing back through `x`."""
+    return _ClipGradNorm.apply(x, max_norm)
 
 
 def normalize_to_minus_one_one(x: torch.Tensor) -> torch.Tensor:
@@ -2791,8 +2854,10 @@ def normalize_to_minus_one_one(x: torch.Tensor) -> torch.Tensor:
     torch.Tensor
         Tensor rescaled to [-1, 1].
     """
-    x_min = x.min()
-    x_max = x.max()
+    # min()/max() detached: they define a fixed rescale, not something to differentiate through
+    # (left attached, their gradient blows up when x has near-zero variance).
+    x_min = x.min().detach()
+    x_max = x.max().detach()
     return ((x - x_min) / (x_max - x_min + 1e-9)) * 2 - 1
 
 
@@ -2878,9 +2943,163 @@ class VGG(nn.Module):
             pred = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
             target = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
 
+        # See `clip_grad_norm_passthrough`'s docstring: bounds the gradient this
+        # variance-normalizing term can inject into `pred` when `pred` is near-constant.
+        pred = clip_grad_norm_passthrough(pred, max_norm=0.1)
+
         pred_vgg = self.vgg(self._prep(pred))
         target_vgg = self.vgg(self._prep(target))
         return self.loss(pred_vgg, target_vgg)
+
+
+class LPIPSLoss(nn.Module):
+    """LPIPS perceptual loss, normalizing arbitrary-range input to [-1, 1] first."""
+
+    def __init__(self, device):
+        super().__init__()
+        self.lpips = LearnedPerceptualImagePatchSimilarity(net_type="alex", normalize=False).eval().to(device)
+        for param in self.lpips.parameters():
+            param.requires_grad = False
+
+    def forward(self, pred, target):
+        if isinstance(pred, dict):
+            pred = pred["pred"]
+        if isinstance(target, dict):
+            target = target["pred"]
+        # See `clip_grad_norm_passthrough`'s docstring.
+        pred = clip_grad_norm_passthrough(pred, max_norm=0.1)
+        pred = normalize_to_minus_one_one(pred)
+        target = normalize_to_minus_one_one(target)
+        if pred.dim() == 5:
+            B, C, D, H, W = pred.shape
+            pred = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+            target = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+        if pred.shape[1] == 1:
+            pred = pred.repeat(1, 3, 1, 1)
+            target = target.repeat(1, 3, 1, 1)
+        return self.lpips(pred, target).mean()
+
+
+class SSIMTermLoss(nn.Module):
+    """``1 - SSIM``, normalizing arbitrary-range input to [-1, 1] first (matches VGG/LPIPS)."""
+
+    def __init__(self, device):
+        super().__init__()
+        # data_range=2.0: inputs are normalized to [-1, 1] before SSIM.
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=2.0).to(device)
+
+    def forward(self, pred, target):
+        if isinstance(pred, dict):
+            pred = pred["pred"]
+        if isinstance(target, dict):
+            target = target["pred"]
+        # See `clip_grad_norm_passthrough`'s docstring.
+        pred = clip_grad_norm_passthrough(pred, max_norm=0.1)
+        pred_n = normalize_to_minus_one_one(pred)
+        target_n = normalize_to_minus_one_one(target)
+        if pred.dim() == 5:
+            B, C, D, H, W = pred.shape
+            pred_n = pred_n.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+            target_n = target_n.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+        return 1.0 - self.ssim(pred_n, target_n)
+
+
+class _FunctionalLoss(nn.Module):
+    """Wraps a plain ``(pred, target) -> scalar`` function as an ``nn.Module``."""
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, pred, target):
+        if isinstance(pred, dict):
+            pred = pred["pred"]
+        if isinstance(target, dict):
+            target = target["pred"]
+        return self.fn(pred, target)
+
+
+class WeightedCompositeLoss(nn.Module):
+    """Weighted sum of named sub-losses: ``sum(w_i * loss_i(pred, target))``.
+
+    Shared building block for every workflow's ``LOSS.TYPE``/``LOSS.WEIGHTS`` composition (see
+    ``resolve_weighted_composite_loss``) and for ``CycleGanLoss``'s reconstruction terms.
+    """
+
+    def __init__(self, weighted_terms):
+        """
+        Parameters
+        ----------
+        weighted_terms : list of (float, callable)
+            ``(weight, loss_fn)`` pairs, ``loss_fn(pred, target) -> scalar tensor``. Only
+            positive-weight entries should be passed in.
+        """
+        super().__init__()
+        self._registered_modules = nn.ModuleList([fn for _, fn in weighted_terms if isinstance(fn, nn.Module)])
+        self.weighted_terms = weighted_terms
+
+    def forward(self, pred, target):
+        if isinstance(pred, dict):
+            pred = pred["pred"]
+        if isinstance(target, dict):
+            target = target["pred"]
+        total = pred.new_zeros(())
+        for w, fn in self.weighted_terms:
+            total = total + w * fn(pred, target)
+        return total
+
+
+def continuous_image_loss_registry(device):
+    """Name -> zero-arg factory for the atomic losses shared by every continuous-image workflow
+    (IMAGE_TO_IMAGE, SUPER_RESOLUTION, SELF_SUPERVISED, and CycleGanLoss's reconstruction part).
+    """
+    return {
+        "MAE": lambda: nn.L1Loss(),
+        "MSE": lambda: nn.MSELoss(),
+        "PCC": lambda: _FunctionalLoss(pcc_loss),
+        "CHARBONNIER": lambda: _FunctionalLoss(charbonnier_loss),
+        "VGG": lambda: VGG(device),
+        "LPIPS": lambda: LPIPSLoss(device),
+        "SSIM": lambda: SSIMTermLoss(device),
+        "LAPLACIAN": lambda: _FunctionalLoss(laplacian_loss),
+        "FFT": lambda: _FunctionalLoss(fft_highfreq_loss),
+        "RFFT": lambda: _FunctionalLoss(rfft_highfreq_loss),
+    }
+
+
+def resolve_weighted_composite_loss(names, weights, registry, workflow_label):
+    """Build a ``WeightedCompositeLoss`` from ``LOSS.TYPE``/``LOSS.WEIGHTS``-style lists.
+
+    Parameters
+    ----------
+    names : list of str
+        ``LOSS.TYPE``. Matched case-insensitively against ``registry``'s keys.
+    weights : list of float
+        ``LOSS.WEIGHTS``, same length as ``names``.
+    registry : dict of str -> zero-arg callable
+        Maps an allowed (uppercased) name to a factory building that term's loss module/callable.
+    workflow_label : str
+        Used only in the error message when a name isn't in ``registry``.
+
+    Returns
+    -------
+    WeightedCompositeLoss
+    """
+    assert len(names) == len(weights), (
+        f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(names)} vs {len(weights)}"
+    )
+    terms = []
+    for name, w in zip(names, weights):
+        key = str(name).upper()
+        assert key in registry, (
+            f"'{name}' is not a valid LOSS.TYPE entry for {workflow_label}; options: {sorted(registry)}"
+        )
+        if w == 0:
+            continue
+        terms.append((w, registry[key]()))
+    assert terms, f"'LOSS.WEIGHTS' must have at least one positive entry (LOSS.TYPE={list(names)})"
+    return WeightedCompositeLoss(terms)
+
 
 class CycleGanLoss(nn.Module):
     """Weighted composite loss for generator and discriminator training.
@@ -2893,8 +3112,8 @@ class CycleGanLoss(nn.Module):
     - VGG perceptual term
     - SSIM term
 
-    Each term is controlled by configuration weights under
-    ``LOSS.CYCLEGAN``. Heavy components (VGG/SSIM modules) are created only
+    Each term is controlled by ``LOSS.TYPE``/``LOSS.WEIGHTS`` (plus ``LOSS.GAN`` for the
+    adversarial term's own knobs). Heavy components (VGG/SSIM modules) are created only
     when their weight is greater than zero.
 
     References
@@ -2918,43 +3137,51 @@ class CycleGanLoss(nn.Module):
         Parameters
         ----------
         cfg : yacs.config.CfgNode
-                Global configuration node. Uses ``cfg.LOSS.CYCLEGAN`` weights.
+                Global configuration node. Uses ``cfg.LOSS.TYPE``/``cfg.LOSS.WEIGHTS`` and ``cfg.LOSS.GAN``.
         device : torch.device
                 Device where loss terms are computed.
         """
         super().__init__()
         self.device = device
-        self.w_gan = cfg.LOSS.CYCLEGAN.LAMBDA_GAN
-        self.w_l1 = cfg.LOSS.CYCLEGAN.LAMBDA_RECON
-        self.w_vgg = cfg.LOSS.CYCLEGAN.ALPHA_PERCEPTUAL
-        self.w_ssim = cfg.LOSS.CYCLEGAN.GAMMA_SSIM
-        self.w_mse = cfg.LOSS.CYCLEGAN.DELTA_MSE
-        self.w_charb = cfg.LOSS.CYCLEGAN.LAMBDA_CHARB
-        self.w_lap = cfg.LOSS.CYCLEGAN.LAMBDA_LAP
-        self.w_edge = cfg.LOSS.CYCLEGAN.LAMBDA_EDGE
-        self.w_fft = cfg.LOSS.CYCLEGAN.LAMBDA_FFT
-        self.w_rfft = cfg.LOSS.CYCLEGAN.LAMBDA_RFFT
-        self.w_lpips = cfg.LOSS.CYCLEGAN.LAMBDA_LPIPS
-        self.r1_gamma = cfg.LOSS.CYCLEGAN.R1_GAMMA
-        self.gan_type = cfg.LOSS.CYCLEGAN.GAN_TYPE
 
-        # Dont load the vgg if not needed
-        if self.w_vgg > 0:
-            self.vgg = VGG(device)
-        if self.w_ssim > 0:
-            # data_range=2.0 because inputs are normalized to [-1, 1] before SSIM
-            self.ssim = StructuralSimilarityIndexMeasure(data_range=2.0).to(device)
-        if self.w_lpips > 0:
-            self.lpips = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=False).eval().to(device)
-            for param in self.lpips.parameters():
-                param.requires_grad = False
+        # "BCE"/"HINGE" are pulled out into self.w_gan/self.gan_type instead of the composite,
+        # since the adversarial term needs d_fake, not just (pred, target).
+        names = list(cfg.LOSS.TYPE)
+        weights = list(cfg.LOSS.WEIGHTS)
+        assert len(names) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(names)} vs {len(weights)}"
+        )
+        registry = continuous_image_loss_registry(device)
+        self.w_gan = 0.0
+        self.gan_type = None
+        recon_terms = []
+        for name, w in zip(names, weights):
+            key = str(name).upper()
+            if key in ("BCE", "HINGE"):
+                assert self.gan_type is None, "'LOSS.TYPE' must not include both 'BCE' and 'HINGE'"
+                self.gan_type = key.lower()
+                self.w_gan = w
+                continue
+            assert key in registry, (
+                f"'{name}' is not a valid LOSS.TYPE entry for CYCLEGAN; options: {sorted(registry) + ['BCE', 'HINGE']}"
+            )
+            if w == 0:
+                continue
+            recon_terms.append((w, registry[key]()))
+        self.recon_loss_fn = WeightedCompositeLoss(recon_terms) if recon_terms else None
 
-        # Standard lightweight losses are always initialized
-        self.l1 = nn.L1Loss()
-        self.mse = nn.MSELoss()
+        self.r1_gamma = cfg.LOSS.GAN.R1_GAMMA
+        self.adaptive_gan_weight = cfg.LOSS.GAN.ADAPTIVE_GAN_WEIGHT
         self.bce = nn.BCEWithLogitsLoss()
 
-    def forward_generator(self, pred, target, d_fake):
+    def _calculate_adaptive_weight(self, recon_loss, g_loss, last_layer):
+        """Gradient-norm ratio (recon/adv) at the last layer, clamped to [0, 1e4]. VQGAN trick."""
+        recon_grads = torch.autograd.grad(recon_loss, last_layer, retain_graph=True)[0]
+        g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
+        d_weight = torch.norm(recon_grads) / (torch.norm(g_grads) + 1e-4)
+        return torch.clamp(d_weight, 0.0, 1e4).detach()
+
+    def forward_generator(self, pred, target, d_fake, last_layer=None):
         """Compute weighted generator loss.
 
         Parameters
@@ -2965,6 +3192,9 @@ class CycleGanLoss(nn.Module):
             Ground-truth target. If dict, reads ``target['pred']``.
         d_fake : torch.Tensor
             Discriminator logits for generated samples.
+        last_layer : torch.nn.Parameter, optional
+            Weight of the generator's final conv. Required for
+            ``LOSS.GAN.ADAPTIVE_GAN_WEIGHT``; ignored otherwise.
 
         Returns
         -------
@@ -2978,47 +3208,24 @@ class CycleGanLoss(nn.Module):
         pred = torch.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=-1.0)
         target = torch.nan_to_num(target, nan=0.0, posinf=1.0, neginf=-1.0)
 
-        total_loss = torch.tensor(0.0, device=self.device)
+        if self.recon_loss_fn is not None:
+            recon_loss = self.recon_loss_fn(pred, target)
+        else:
+            recon_loss = torch.tensor(0.0, device=self.device)
 
-        if self.w_l1 > 0:
-            total_loss += self.w_l1 * self.l1(pred, target)
-
-        if self.w_charb > 0:
-            total_loss += self.w_charb * charbonnier_loss(pred, target)
-
-        if self.w_mse > 0:
-            total_loss += self.w_mse * self.mse(pred, target)
-
-        if self.w_vgg > 0:
-            total_loss += self.w_vgg * self.vgg(pred, target)
-
-        if self.w_lpips > 0:
-            total_loss += self.w_lpips * self._lpips_loss(pred, target)
-
-        if self.w_ssim > 0:
-            pred_ssim_norm = normalize_to_minus_one_one(pred)
-            target_ssim_norm = normalize_to_minus_one_one(target)
-            if pred.dim() == 5:
-                B, C, D, H, W = pred.shape
-                pred_ssim_norm = pred_ssim_norm.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-                target_ssim_norm = target_ssim_norm.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-            total_loss += self.w_ssim * (1.0 - self.ssim(pred_ssim_norm, target_ssim_norm))
-
-        total_lap_w = self.w_lap + self.w_edge
-        if total_lap_w > 0:
-            total_loss += total_lap_w * laplacian_loss(pred, target)
-
-        if self.w_fft > 0:
-            total_loss += self.w_fft * fft_highfreq_loss(pred, target)
-
-        if self.w_rfft > 0:
-            total_loss += self.w_rfft * rfft_highfreq_loss(pred, target)
+        total_loss = recon_loss
 
         if self.w_gan > 0:
             if self.gan_type == "hinge":
-                total_loss += self.w_gan * F.softplus(-d_fake).mean()
+                g_loss = F.softplus(-d_fake).mean()
             else:
-                total_loss += self.w_gan * self.bce(d_fake, torch.ones_like(d_fake))
+                g_loss = self.bce(d_fake, torch.ones_like(d_fake))
+
+            if self.adaptive_gan_weight and last_layer is not None:
+                d_weight = self._calculate_adaptive_weight(recon_loss, g_loss, last_layer) * self.w_gan
+            else:
+                d_weight = self.w_gan
+            total_loss = total_loss + d_weight * g_loss
 
         if torch.isnan(total_loss):
             print("Warning: NaN detected in generator loss. Returning zero loss.")
@@ -3030,7 +3237,7 @@ class CycleGanLoss(nn.Module):
         """Compute discriminator adversarial loss.
 
         Uses BCE with one-sided label smoothing for real logits (or hinge loss,
-        depending on ``LOSS.CYCLEGAN.GAN_TYPE``).
+        depending on whether ``LOSS.TYPE`` has 'BCE' or 'HINGE').
 
         Parameters
         ----------
@@ -3063,35 +3270,6 @@ class CycleGanLoss(nn.Module):
             total_loss = torch.tensor(0.0, requires_grad=True).to(self.device)
 
         return total_loss
-
-    def _lpips_loss(self, pred, target):
-        """Compute LPIPS perceptual loss with automatic normalization.
-
-        LPIPS expects input in [-1, 1]. Input tensors are re-normalized
-        from their current range.
-
-        Parameters
-        ----------
-        pred : torch.Tensor
-            Predicted image tensor ``(B, C, H, W)`` or ``(B, C, D, H, W)``.
-        target : torch.Tensor
-            Target image tensor with same shape as ``pred``.
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar LPIPS loss.
-        """
-        pred = normalize_to_minus_one_one(pred)
-        target = normalize_to_minus_one_one(target)
-        if pred.dim() == 5:
-            B, C, D, H, W = pred.shape
-            pred = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-            target = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
-        if pred.shape[1] == 1:
-            pred = pred.repeat(1, 3, 1, 1)
-            target = target.repeat(1, 3, 1, 1)
-        return self.lpips(pred, target).mean()
 
     def calculate_r1_penalty(self, d_real_logits, real_images):
         """Compute R1 gradient penalty for the discriminator.

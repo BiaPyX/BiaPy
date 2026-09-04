@@ -35,7 +35,13 @@ from biapy.data.pre_processing import affinity_offsets_from_opts, labels_into_ch
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.image_to_image import Image_to_Image_Workflow as _Image_to_Image_Workflow
 from biapy.engine.malis_loss import MalisLoss
-from biapy.engine.metrics import CLDiceComponentPenaltyLoss, WeightedBCEAffinityLoss, multiple_metrics
+from biapy.engine.metrics import (
+    CLDiceComponentPenaltyLoss,
+    WeightedBCEAffinityLoss,
+    multiple_metrics,
+    WeightedCompositeLoss,
+    loss_encapsulation,
+)
 from biapy.engine.supervoxel_loss import SupervoxelLoss
 from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matching_dataset_lazy
 from biapy.utils.misc import (
@@ -136,38 +142,6 @@ def prepare_membrane_repair_gt(cfg, out_dir: str, data_type: str = "train") -> N
             filenames=[gt_files[i]],
             verbose=False,
         )
-
-
-class _MembraneRepairCombinedLoss(nn.Module):
-    """
-    Combines the enabled ``MEMBRANE_REPAIR_AFFINITY`` sub-losses per ``LOSS.WEIGHTS``.
-
-    Follows the ``(inputs, targets) -> {"losses": [tensor]}`` contract ``train_engine.py`` expects
-    from ``self.loss`` regardless of workflow.
-    """
-
-    def __init__(self, weighted_sub_losses: List[Tuple[float, nn.Module]]):
-        """
-        Initialize the combined loss.
-
-        Parameters
-        ----------
-        weighted_sub_losses : list of (float, nn.Module)
-            ``(weight, sub_loss)`` pairs; only entries with a positive weight are ever
-            constructed by the caller, so every entry here is actually computed.
-        """
-        super().__init__()
-        self.sub_losses = nn.ModuleList([m for _, m in weighted_sub_losses])
-        self.weights = [w for w, _ in weighted_sub_losses]
-
-    def forward(self, inputs, targets):
-        """Compute the weighted sum of the enabled sub-losses."""
-        if isinstance(inputs, dict):
-            inputs = inputs["pred"]
-        total = inputs.new_zeros(())
-        for w, m in zip(self.weights, self.sub_losses):
-            total = total + w * m(inputs, targets)
-        return {"losses": [total]}
 
 
 class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
@@ -286,15 +260,14 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         cfg = self.cfg
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
 
-        malis_enabled = (
-            cfg.LOSS.TYPE == "MEMBRANE_REPAIR_AFFINITY" and len(cfg.LOSS.WEIGHTS) > 1 and cfg.LOSS.WEIGHTS[1] > 0
-        )
+        loss_by_name = dict(zip((str(n).upper() for n in cfg.LOSS.TYPE), cfg.LOSS.WEIGHTS))
+        malis_enabled = loss_by_name.get("MALIS", 0.0) > 0
         y_extra_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0])
         if malis_enabled:
             a_opts = y_extra_opts.get("A", {})
             if a_opts.get("widen_borders", 1) != 0:
                 raise ValueError(
-                    "MALIS (LOSS.WEIGHTS[1] > 0) requires PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR."
+                    "MALIS ('MALIS' in LOSS.TYPE with a positive weight) requires PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR."
                     "DATA_CHANNELS_EXTRA_OPTS[0]['A']['widen_borders'] == 0 to reconstruct GT "
                     "instance labels correctly from the target affinities -- see "
                     "biapy/engine/malis_loss.py's module docstring."
@@ -361,41 +334,47 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
     def define_metrics(self):
         """
-        Define ``LOSS.TYPE == "MEMBRANE_REPAIR_AFFINITY"``; delegate anything else to
-        ``Image_to_Image_Workflow``.
+        Define the membrane-repair affinity loss when ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE``
+        is True; delegate anything else to ``Image_to_Image_Workflow``.
 
-        Combines up to 4 independently-toggleable sub-losses via ``LOSS.WEIGHTS = [w_bce,
-        w_malis, w_cldice, w_svox]``: a weight of 0 skips *constructing* that term, not just
-        multiplying its result by 0, since MALIS's and the supervoxel loss's CPU cost must be
-        avoidable when ablated off.
+        Combines up to 4 independently-toggleable sub-losses named ``BCE``/``MALIS``/``CLDICE``/
+        ``SVOX`` in ``LOSS.TYPE``, weighted by the matching ``LOSS.WEIGHTS`` entry: a weight of 0 (or
+        a name simply absent from LOSS.TYPE) skips *constructing* that term, not just multiplying
+        its result by 0, since MALIS's and the supervoxel loss's CPU cost must be avoidable when
+        ablated off.
         """
-        if self.cfg.LOSS.TYPE != "MEMBRANE_REPAIR_AFFINITY":
+        if not self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
             super().define_metrics()
             return
 
-        weights = list(self.cfg.LOSS.WEIGHTS) + [0.0, 0.0, 0.0, 0.0]
-        w_bce, w_malis, w_cldice, w_svox = weights[0], weights[1], weights[2], weights[3]
+        names = [str(n).upper() for n in self.cfg.LOSS.TYPE]
+        weights = list(self.cfg.LOSS.WEIGHTS)
+        assert len(names) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(names)} vs {len(weights)}"
+        )
+        by_name = dict(zip(names, weights))
 
         weighted_sub_losses = []
-        if w_bce > 0:
-            weighted_sub_losses.append((w_bce, WeightedBCEAffinityLoss().to(self.device)))
-        if w_malis > 0:
+        if by_name.get("BCE", 0.0) > 0:
+            weighted_sub_losses.append((by_name["BCE"], WeightedBCEAffinityLoss().to(self.device)))
+        if by_name.get("MALIS", 0.0) > 0:
             mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
             a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
             offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims)
-            weighted_sub_losses.append((w_malis, MalisLoss(offsets=offsets)))
-        if w_cldice > 0:
-            weighted_sub_losses.append((w_cldice, CLDiceComponentPenaltyLoss().to(self.device)))
-        if w_svox > 0:
-            weighted_sub_losses.append((w_svox, SupervoxelLoss().to(self.device)))
+            weighted_sub_losses.append((by_name["MALIS"], MalisLoss(offsets=offsets)))
+        if by_name.get("CLDICE", 0.0) > 0:
+            weighted_sub_losses.append((by_name["CLDICE"], CLDiceComponentPenaltyLoss().to(self.device)))
+        if by_name.get("SVOX", 0.0) > 0:
+            weighted_sub_losses.append((by_name["SVOX"], SupervoxelLoss().to(self.device)))
 
         if not weighted_sub_losses:
             raise ValueError(
-                "LOSS.WEIGHTS must have at least one positive entry "
-                "([w_bce, w_malis, w_cldice, w_svox]) when LOSS.TYPE == 'MEMBRANE_REPAIR_AFFINITY'"
+                "'LOSS.TYPE'/'LOSS.WEIGHTS' must include at least one of 'BCE'/'MALIS'/'CLDICE'/"
+                "'SVOX' with a positive weight when PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE "
+                "is True"
             )
 
-        self.loss = _MembraneRepairCombinedLoss(weighted_sub_losses).to(self.device)
+        self.loss = loss_encapsulation(WeightedCompositeLoss(weighted_sub_losses).to(self.device))
 
         # Single aggregate IoU across all predicted affinity channels. Requires metric_calculation
         # to be overridden below -- Image_to_Image_Workflow's version would silently drop this

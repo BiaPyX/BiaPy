@@ -11,7 +11,7 @@ import re
 import warnings
 import numpy as np
 import collections
-from typing import Dict
+from typing import Dict, List
 from yacs.config import CfgNode as CN
 
 from biapy.utils.misc import get_checkpoint_path, os_walk_clean
@@ -1316,40 +1316,51 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if "top-5-accuracy" in [x.lower() for x in cfg.TRAIN.METRICS] and cfg.DATA.N_CLASSES < 5:
             raise ValueError("'top-5-accuracy' can only be used when DATA.N_CLASSES >= 5")
 
-    loss = ""
+    # 'loss'/'weights' below are LOSS.TYPE/LOSS.WEIGHTS resolved to per-workflow defaults,
+    # uppercased. Old-style combo strings are upgraded to list form earlier, in
+    # '_convert_old_loss_type_to_list'.
+    _continuous_image_names = {
+        "MAE", "MSE", "PCC", "SSIM", "CHARBONNIER", "VGG", "LPIPS", "LAPLACIAN", "FFT", "RFFT",
+    }
+    loss: List[str] = []
+    weights: List[float] = []
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-        loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss in [
-            "CE",
-            "DICE",
-            "W_CE_DICE",
-        ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
+        loss = [str(n).upper() for n in cfg.LOSS.TYPE] or ["CE"]
+        weights = list(cfg.LOSS.WEIGHTS) or [1.0] * len(loss)
+        assert len(loss) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
+        )
+        assert (set(loss) in ({"CE"}, {"DICE"}, {"CE", "DICE"})), (
+            f"LOSS.TYPE for SEMANTIC_SEG must be ['CE'], ['DICE'], or ['DICE', 'CE'] together, got {loss}"
+        )
 
         if cfg.DATA.N_CLASSES > 2:
-            if loss not in ["CE", 'W_CE_DICE']:
-                raise ValueError("'DATA.N_CLASSES' are only used in ['CE', 'W_CE_DICE'] losses and not with {}".format(loss))
+            if "CE" not in loss:
+                raise ValueError(
+                    "'DATA.N_CLASSES' > 2 requires 'CE' to be one of LOSS.TYPE's entries, not {}".format(loss)
+                )
 
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
     elif cfg.PROBLEM.TYPE == "DETECTION":
-        loss = "CE"
+        loss, weights = ["CE"], [1.0]
         if cfg.DATA.N_CLASSES > 2:
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
 
     elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
-        loss = "MEMBRANE_REPAIR_AFFINITY" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss == "MEMBRANE_REPAIR_AFFINITY", (
-            "LOSS.TYPE must be 'MEMBRANE_REPAIR_AFFINITY' when "
+        loss = [str(n).upper() for n in cfg.LOSS.TYPE]
+        weights = list(cfg.LOSS.WEIGHTS)
+        assert len(loss) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
+        )
+        assert loss and set(loss) <= {"BCE", "MALIS", "CLDICE", "SVOX"}, (
+            "LOSS.TYPE must only contain 'BCE'/'MALIS'/'CLDICE'/'SVOX' when "
+            f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True, got {loss}"
+        )
+        assert any(w > 0 for w in weights), (
+            "'LOSS.WEIGHTS' must have at least one positive entry when "
             "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True"
-        )
-        assert len(cfg.LOSS.WEIGHTS) == 4, (
-            "'LOSS.WEIGHTS' needs to be a list of four floats ([w_bce, w_malis, w_cldice, "
-            "w_svox]) when LOSS.TYPE is 'MEMBRANE_REPAIR_AFFINITY'"
-        )
-        assert any(w > 0 for w in cfg.LOSS.WEIGHTS), (
-            "'LOSS.WEIGHTS' must have at least one positive entry when LOSS.TYPE is "
-            "'MEMBRANE_REPAIR_AFFINITY'"
         )
         assert cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD in ["watershed", "agglomeration"], (
             "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be 'watershed' or "
@@ -1368,41 +1379,39 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
     ]:
-        loss = "MAE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss in [
-            "MAE",
-            "MSE",
-            "SSIM",
-            "W_MAE_SSIM",
-            "W_MSE_SSIM",
-        ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM', 'W_MAE_SSIM', 'W_MSE_SSIM']"
-        if loss in ["W_MAE_SSIM", "W_MSE_SSIM"]:
-            assert (
-                len(cfg.LOSS.WEIGHTS) == 2
-            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
-            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
+        loss = [str(n).upper() for n in cfg.LOSS.TYPE] or ["MAE"]
+        weights = list(cfg.LOSS.WEIGHTS) or [1.0] * len(loss)
+        assert len(loss) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
+        )
+        assert set(loss) <= _continuous_image_names, (
+            f"LOSS.TYPE for {cfg.PROBLEM.TYPE} must only contain {sorted(_continuous_image_names)}, got {loss}"
+        )
     elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
-        loss = "MAE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss in [
-            "MAE",
-            "MSE",
-            "SSIM",
-            "W_MAE_SSIM",
-            "W_MSE_SSIM",
-            "CYCLEGAN",
-        ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM', 'W_MAE_SSIM', 'W_MSE_SSIM', 'CYCLEGAN']"
-        if loss in ["W_MAE_SSIM", "W_MSE_SSIM"]:
-            assert (
-                len(cfg.LOSS.WEIGHTS) == 2
-            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
-            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
+        loss = [str(n).upper() for n in cfg.LOSS.TYPE] or ["MAE"]
+        weights = list(cfg.LOSS.WEIGHTS) or [1.0] * len(loss)
+        assert len(loss) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
+        )
+        assert set(loss) <= (_continuous_image_names | {"BCE", "HINGE"}), (
+            f"LOSS.TYPE for IMAGE_TO_IMAGE must only contain {sorted(_continuous_image_names | {'BCE', 'HINGE'})}, "
+            f"got {loss}"
+        )
     elif cfg.PROBLEM.TYPE == "DENOISING":
-        loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss in ["MSE", "CYCLEGAN"], "LOSS.TYPE must be in ['MSE', 'CYCLEGAN'] for DENOISING"
+        loss = [str(n).upper() for n in cfg.LOSS.TYPE] or ["MSE"]
+        weights = list(cfg.LOSS.WEIGHTS) or [1.0] * len(loss)
+        assert len(loss) == len(weights), (
+            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
+        )
+        assert loss == ["MSE"] or "BCE" in loss or "HINGE" in loss, (
+            f"LOSS.TYPE for DENOISING must be ['MSE'] or include 'BCE'/'HINGE', got {loss}"
+        )
     elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
-        loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss == "CE", "LOSS.TYPE must be 'CE'"
+        loss = [str(n).upper() for n in cfg.LOSS.TYPE] or ["CE"]
+        weights = list(cfg.LOSS.WEIGHTS) or [1.0] * len(loss)
+        assert loss == ["CE"], "LOSS.TYPE must be ['CE'] for CLASSIFICATION"
     opts.extend(["LOSS.TYPE", loss])
+    opts.extend(["LOSS.WEIGHTS", weights])
 
     if cfg.LOSS.IGNORE_INDEX != -1 and not check_value(cfg.LOSS.IGNORE_INDEX, (0, 255)):
         raise ValueError("If 'LOSS.IGNORE_INDEX' is set it needs to be a value in [0,255] range")
@@ -1415,8 +1424,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
         if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
             raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
-    if cfg.LOSS.IGNORE_INDEX != -1 and cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-        warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
+    if cfg.LOSS.IGNORE_INDEX != -1 and loss != ["CE"] and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+        warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is ['CE']")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     
@@ -1983,7 +1992,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == "DENOISING":
-        if cfg.PROBLEM.DENOISING.LOAD_GT_DATA or cfg.LOSS.TYPE == "CYCLEGAN":
+        loss_type_upper = [str(n).upper() for n in cfg.LOSS.TYPE]
+        if cfg.PROBLEM.DENOISING.LOAD_GT_DATA or "BCE" in loss_type_upper or "HINGE" in loss_type_upper:
             if not cfg.DATA.TRAIN.GT_PATH and not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
                 raise ValueError(
                     "Supervised denoising (e.g., with CYCLEGAN or LOAD_GT_DATA=True) "
@@ -2562,19 +2572,30 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         target_type = (
             cfg.DATA.NORMALIZATION.TARGET.TYPE if cfg.DATA.NORMALIZATION.TARGET.TYPE != "" else cfg.DATA.NORMALIZATION.TYPE
         )
-        assert target_type == "zero_mean_unit_variance", (
-            "'DATA.NORMALIZATION.TARGET' only supports 'zero_mean_unit_variance' (via "
-            "'DATA.NORMALIZATION.TARGET.TYPE' or the inherited 'DATA.NORMALIZATION.TYPE'), got "
+        assert target_type in ("zero_mean_unit_variance", "scale_range", "div"), (
+            "'DATA.NORMALIZATION.TARGET' only supports 'zero_mean_unit_variance', 'scale_range' or 'div' "
+            "(via 'DATA.NORMALIZATION.TARGET.TYPE' or the inherited 'DATA.NORMALIZATION.TYPE'), got "
             f"'{target_type}'"
         )
-        if cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL[0] == -1:
-            raise ValueError(
-                "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed "
-                "values when 'DATA.NORMALIZATION.TARGET.ENABLE' is True. A per-image adaptive mean/std "
-                "computed from the ground truth cannot be recovered at test time without the ground truth "
-                "itself, which defeats the purpose of this section - compute fixed values once from the "
-                "training set's target images and set them here."
-            )
+        if target_type == "zero_mean_unit_variance":
+            if cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL[0] == -1:
+                raise ValueError(
+                    "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed "
+                    "values when 'DATA.NORMALIZATION.TARGET.ENABLE' is True. A per-image adaptive mean/std "
+                    "computed from the ground truth cannot be recovered at test time without the ground truth "
+                    "itself, which defeats the purpose of this section - compute fixed values once from the "
+                    "training set's target images and set them here."
+                )
+        else:  # 'scale_range' / 'div': no mean/std concept, fixed clip bounds double as the fixed
+            # min/max used to undo the 0-1 scaling (see 'resolve_fixed_norm_info'), so they are required.
+            if not cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
+                raise ValueError(
+                    "'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' must be True, with fixed "
+                    "'LOWER_VALUE'/'UPPER_VALUE', when 'DATA.NORMALIZATION.TARGET.TYPE' is "
+                    "'scale_range'/'div': those fixed bounds double as the fixed min/max used to undo the "
+                    "0-1 scaling at test time, since an adaptive per-image min/max cannot be recovered from "
+                    "the ground truth at test time."
+                )
         if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
             if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE[0] == -1:
                 raise ValueError(
@@ -2635,6 +2656,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "rcan",
                 "hrnet",
                 "stunet",
+                "nafnet",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -2658,6 +2680,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "rcan",
                         "hrnet",
                         "stunet",
+                        "nafnet",
                     ]
                 )
             )
@@ -2742,6 +2765,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "attention_unet",
             "unext_v1",
             "unext_v2",
+            "nafnet",
         ]:
             if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.YX_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.YX_DOWN' length must be equal")
@@ -2794,6 +2818,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "attention_unet",
             "unext_v1",
             "unext_v2",
+            "nafnet",
         ]:
             if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
@@ -3064,11 +3089,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "nafnet",
                     "stunet",
                 ], "MODEL.NAFNET.GENERATOR_BACKBONE not in ['nafnet', 'stunet']"
-                if cfg.PROBLEM.NDIM == "3D":
-                    raise ValueError(
-                        "'nafnet' architecture is not available for 3D 'IMAGE_TO_IMAGE' (its PatchGAN "
-                        "discriminator is 2D-only)"
-                    )
         elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED":
             if model_arch not in [
                 "unet",
@@ -3310,6 +3330,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("Seems that you want to test a model without training first. In this case, 'MODEL.LOAD_CHECKPOINT' needs to be set to True to load a pre-trained model.")
 
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
+
+    ## NAFNet is always GAN-based ##
+    if cfg.MODEL.ARCHITECTURE == "nafnet":
+        if cfg.MODEL.NAFNET.ARCHITECTURE_D == "":
+            raise ValueError("'MODEL.ARCHITECTURE' is 'nafnet', which always requires a discriminator: set 'MODEL.NAFNET.ARCHITECTURE_D'.")
+        loss_names_upper = [str(n).upper() for n in cfg.LOSS.TYPE]
+        if "BCE" not in loss_names_upper and "HINGE" not in loss_names_upper:
+            raise ValueError("'MODEL.ARCHITECTURE' is 'nafnet', which always requires an adversarial term: include 'BCE' or 'HINGE' in 'LOSS.TYPE'.")
 
     ### Train ###
     ## Optimizers ##
@@ -4347,9 +4375,89 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "LWR_Y_FILE" in old_cfg["PATHS"]:
             del old_cfg["PATHS"]["LWR_Y_FILE"]
         if "UPR_Y_FILE" in old_cfg["PATHS"]:
-            del old_cfg["PATHS"]["UPR_Y_FILE"]  
+            del old_cfg["PATHS"]["UPR_Y_FILE"]
+
+    _convert_old_loss_type_to_list(old_cfg, workflow)
 
     return old_cfg
+
+
+def _convert_old_loss_type_to_list(old_cfg: dict, workflow: str) -> None:
+    """
+    Convert a pre-list-format ``LOSS.TYPE`` (a single combo string, e.g. ``"W_MAE_SSIM"`` or
+    ``"CYCLEGAN"``) into the current list format (``LOSS.TYPE`` a list of individually-weighted
+    loss names, ``LOSS.WEIGHTS`` the matching list of weights). No-op if ``LOSS.TYPE`` is absent,
+    empty, or already a list. Mutates ``old_cfg`` in place.
+
+    Parameters
+    ----------
+    old_cfg : dict
+        Raw (pre-merge) configuration dict.
+    workflow : str
+        ``PROBLEM.TYPE``, already resolved by the caller.
+    """
+    loss_cfg = old_cfg.get("LOSS")
+    if not isinstance(loss_cfg, dict):
+        return
+    old_type = loss_cfg.get("TYPE")
+    if not isinstance(old_type, str) or old_type == "":
+        return
+
+    old_weights = list(loss_cfg.get("WEIGHTS", []))
+    cyclegan_cfg = loss_cfg.get("CYCLEGAN", {})
+    membrane_repair_enabled = bool(
+        old_cfg.get("PROBLEM", {}).get("IMAGE_TO_IMAGE", {}).get("MEMBRANE_REPAIR", {}).get("ENABLE", False)
+    )
+
+    def cyclegan_to_list():
+        # Converts old LOSS.CYCLEGAN.LAMBDA_*/DELTA_MSE/ALPHA_PERCEPTUAL/GAMMA_SSIM/GAN_TYPE into
+        # LOSS.TYPE/LOSS.WEIGHTS. LOSS.CYCLEGAN -> LOSS.GAN, keeping only R1_GAMMA/ADAPTIVE_GAN_WEIGHT.
+        defaults = {
+            "LAMBDA_GAN": 1.0, "LAMBDA_RECON": 10.0, "LAMBDA_CHARB": 0.0, "DELTA_MSE": 0.0,
+            "ALPHA_PERCEPTUAL": 0.0, "LAMBDA_LPIPS": 0.0, "GAMMA_SSIM": 1.0, "LAMBDA_LAP": 0.0,
+            "LAMBDA_EDGE": 0.0, "LAMBDA_FFT": 0.0, "LAMBDA_RFFT": 0.0,
+        }
+        vals = {k: cyclegan_cfg.get(k, v) for k, v in defaults.items()}
+        vals["LAMBDA_LAP"] += vals.pop("LAMBDA_EDGE")  # same computation, single "LAPLACIAN" name
+        gan_name = str(cyclegan_cfg.get("GAN_TYPE", "bce")).upper()
+        name_by_key = {
+            "LAMBDA_RECON": "MAE", "LAMBDA_CHARB": "CHARBONNIER", "DELTA_MSE": "MSE",
+            "ALPHA_PERCEPTUAL": "VGG", "LAMBDA_LPIPS": "LPIPS", "GAMMA_SSIM": "SSIM",
+            "LAMBDA_LAP": "LAPLACIAN", "LAMBDA_FFT": "FFT",
+            "LAMBDA_RFFT": "RFFT", "LAMBDA_GAN": gan_name,
+        }
+        names, weights = [], []
+        for key, name in name_by_key.items():
+            if vals[key] != 0:
+                names.append(name)
+                weights.append(vals[key])
+        for key in list(defaults) + ["GAN_TYPE"]:
+            cyclegan_cfg.pop(key, None)
+        loss_cfg.pop("CYCLEGAN", None)
+        loss_cfg["GAN"] = cyclegan_cfg
+        return names, weights
+
+    new_names, new_weights = None, None
+    if old_type == "CYCLEGAN":
+        new_names, new_weights = cyclegan_to_list()
+    elif old_type == "MEMBRANE_REPAIR_AFFINITY" or (workflow == "IMAGE_TO_IMAGE" and membrane_repair_enabled):
+        w = (old_weights + [0.0, 0.0, 0.0, 0.0])[:4]
+        new_names, new_weights = ["BCE", "MALIS", "CLDICE", "SVOX"], w
+    elif old_type == "W_CE_DICE":
+        w = (old_weights + [1.0, 1.0])[:2]
+        new_names, new_weights = ["DICE", "CE"], w
+    elif old_type == "W_MAE_SSIM":
+        w = (old_weights + [1.0, 1.0])[:2]
+        new_names, new_weights = ["MAE", "SSIM"], w
+    elif old_type == "W_MSE_SSIM":
+        w = (old_weights + [1.0, 1.0])[:2]
+        new_names, new_weights = ["MSE", "SSIM"], w
+    else:
+        # A single bare name ("CE", "DICE", "MAE", "MSE", "SSIM") -- unambiguous either way.
+        new_names, new_weights = [old_type], [1.0]
+
+    loss_cfg["TYPE"] = new_names
+    loss_cfg["WEIGHTS"] = new_weights
 
 def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path: str=""):
     """
