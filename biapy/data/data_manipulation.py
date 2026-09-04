@@ -1076,19 +1076,15 @@ def load_and_prepare_test_data(
             test_filenames = next(os_walk_clean(test_path))[1]
             if len(test_filenames) == 0:
                 raise ValueError("No folders found in dir {}".format(test_path))
-            for folder in test_filenames:
-                sample_path = os.path.join(test_path, folder)
-                ids = next(os_walk_clean(sample_path))[2]
-                if len(ids) == 0:
-                    raise ValueError("No images found in dir {}".format(sample_path))
-                for i in range(len(ids)):
-                    dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                    # 'fid' indexes into 'dataset_info', which grows across all folders, so it must
-                    # be the cumulative index (len(dataset_info) - 1), not the per-folder local 'i' -
-                    # otherwise every folder after the first points its samples at the wrong file.
-                    sample_list.append(DataSample(fid=len(dataset_info) - 1, coords=None))
 
-            # Extract a list of all training gt images
+            # Extract a list of all gt images first (keyed by folder name) so each raw folder
+            # below can look up the list position of its own study's GT. Raw and GT samples
+            # can't be paired by walk order or by position: os_walk_clean's order over
+            # 'test_path' and 'test_mask_path' is not guaranteed to match, and in practice each
+            # raw folder holds a different number of images (e.g. a z-stack) than its single-
+            # image GT counterpart, so a naive positional pairing silently associates a raw
+            # sample with an unrelated study's GT (only the first study lines up by luck).
+            gt_folder_to_ypos: Dict[str, int] = {}
             if test_mask_path:
                 y_dataset_info = []
                 y_sample_list = []
@@ -1100,6 +1096,7 @@ def load_and_prepare_test_data(
                     ids = next(os_walk_clean(sample_path))[2]
                     if len(ids) == 0:
                         raise ValueError("No images found in dir {}".format(sample_path))
+                    gt_folder_to_ypos[folder] = len(y_sample_list)
                     for i in range(len(ids)):
                         y_dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
                         # Same fix as above: use the cumulative index into 'y_dataset_info', not the
@@ -1107,6 +1104,32 @@ def load_and_prepare_test_data(
                         # would otherwise stay 0 forever and make every sample point at the first
                         # study's ground truth).
                         y_sample_list.append(DataSample(fid=len(y_dataset_info) - 1, coords=None))
+
+            for folder in test_filenames:
+                sample_path = os.path.join(test_path, folder)
+                ids = next(os_walk_clean(sample_path))[2]
+                if len(ids) == 0:
+                    raise ValueError("No images found in dir {}".format(sample_path))
+                gt_pos = None
+                if test_mask_path:
+                    if folder not in gt_folder_to_ypos:
+                        raise ValueError(
+                            "Raw folder '{}' in {} has no matching GT folder in {}".format(
+                                folder, test_path, test_mask_path
+                            )
+                        )
+                    gt_pos = gt_folder_to_ypos[folder]
+                for i in range(len(ids)):
+                    dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
+                    # 'fid' indexes into 'dataset_info', which grows across all folders, so it must
+                    # be the cumulative index (len(dataset_info) - 1), not the per-folder local 'i' -
+                    # otherwise every folder after the first points its samples at the wrong file.
+                    # 'gt_associated_id' links this raw sample to its own study's GT (looked up by
+                    # folder name above), since raw and GT samples are not in 1:1 positional
+                    # correspondence here.
+                    sample_list.append(
+                        DataSample(fid=len(dataset_info) - 1, coords=None, gt_associated_id=gt_pos)
+                    )
 
     X_test = BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
     if test_mask_path:
