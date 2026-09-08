@@ -226,6 +226,10 @@ class Classification_Workflow(Base_Workflow):
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
+    def _train_pred_raw_to_numpy(self, pred_raw) -> Optional[NDArray]:
+        """Classification predicts a per-class score vector, not an image; skip the preview."""
+        return None
+
     def prepare_targets(self, targets, batch):
         """
         Perform any necessary data transformations to ``targets`` before calculating the loss.

@@ -1034,6 +1034,155 @@ class Base_Workflow(metaclass=ABCMeta):
             self.plot_values[self.train_metric_names[i]] = []
             self.plot_values["val_" + self.train_metric_names[i]] = []
 
+    def _prepare_train_pred_sample_batch(self):
+        """Pick a fixed batch (val data if available, else train data) and save its input/GT once."""
+        source_generator = self.val_generator if self.val_generator else self.train_generator
+        n = self.cfg.TRAIN.SAVE_TRAIN_PREDS_NUM_SAMPLES
+        try:
+            images, targets = next(iter(source_generator))
+            images = images[:n]
+            targets = targets[:n] if targets is not None else None
+        except Exception as e:
+            print(f"WARNING: could not extract a fixed batch for TRAIN.SAVE_TRAIN_PREDS_FREQ ({e}). Disabling it.")
+            self.cfg.defrost()
+            self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ = -1
+            self.cfg.freeze()
+            return
+
+        self._train_pred_sample_batch = images
+        out_dir = self.cfg.PATHS.TRAIN_PRED_SAMPLES
+        images_np = images.cpu().numpy() if torch.is_tensor(images) else np.asarray(images)
+        self._train_pred_sample_images_np = images_np
+        self._train_pred_sample_targets_np = None
+        self._train_pred_display_handle = None
+        save_tif(images_np, os.path.join(out_dir, "input"), verbose=False)
+        try:
+            if targets is not None:
+                targets_np = targets.cpu().numpy() if torch.is_tensor(targets) else np.asarray(targets)
+                if targets_np.ndim == images_np.ndim:
+                    save_tif(targets_np, os.path.join(out_dir, "gt"), verbose=False)
+                    self._train_pred_sample_targets_np = targets_np
+        except Exception as e:
+            print(f"WARNING: could not save ground-truth preview for TRAIN.SAVE_TRAIN_PREDS_FREQ ({e})")
+        print(
+            f"Tracking {len(images_np)} fixed sample(s) for periodic training predictions "
+            f"(every {self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ} epochs) in: {out_dir}"
+        )
+
+    def _save_train_pred_samples(self, epoch: int):
+        """Re-predict the fixed sample batch and save the current prediction to disk."""
+        try:
+            was_training = self.model.training
+            self.model.eval()
+            with torch.no_grad():
+                pred_raw = self.model_call_func(self._train_pred_sample_batch, is_train=False)
+            if was_training:
+                self.model.train(True)
+
+            pred_np = self._train_pred_raw_to_numpy(pred_raw)
+            if pred_np is None:
+                return
+
+            out_dir = os.path.join(self.cfg.PATHS.TRAIN_PRED_SAMPLES, "pred_epoch_{:04d}".format(epoch + 1))
+            save_tif(pred_np, out_dir, verbose=False)
+
+            if self.cfg.TRAIN.SAVE_TRAIN_PREDS_SHOW:
+                self._display_train_pred_samples(epoch, pred_np)
+        except Exception as e:
+            print(f"WARNING: could not save training prediction preview at epoch {epoch + 1} ({e})")
+
+    def _train_pred_raw_to_numpy(self, pred_raw) -> Optional[NDArray]:
+        """Convert the raw model output into a numpy array to save/preview, or None to skip it."""
+        if isinstance(pred_raw, dict):
+            pred_raw = pred_raw["pred"] if "pred" in pred_raw else next(iter(pred_raw.values()))
+        elif isinstance(pred_raw, list):
+            pred_raw = pred_raw[0]
+        return to_numpy_format(pred_raw, self.axes_order_back)
+
+    def _train_pred_sample_panels(
+        self, image: NDArray, target: Optional[NDArray], pred: NDArray
+    ) -> list[tuple[str, NDArray]]:
+        """
+        Build the (title, 2D array) panels to preview for one sample. Default: one panel per
+        channel of input/GT/prediction (e.g. all B/C/D channels for instance segmentation).
+        Override in a workflow subclass for a different preview.
+        """
+
+        def channel_panels(name: str, arr: NDArray) -> list:
+            n_ch = arr.shape[-1]
+            if n_ch == 1:
+                return [(name, arr[..., 0])]
+            return [(f"{name} ch{c}", arr[..., c]) for c in range(n_ch)]
+
+        panels = channel_panels("input", image)
+        if target is not None:
+            panels += channel_panels("GT", target)
+        panels += channel_panels("pred", pred)
+        return panels
+
+    def _display_train_pred_samples(self, epoch: int, pred_np: NDArray):
+        """
+        Render the tracked sample(s) inline, updated in place, at most 3 panels per row. Jupyter/
+        Colab only; any failure disables 'TRAIN.SAVE_TRAIN_PREDS_SHOW'.
+        """
+        try:
+            from IPython import get_ipython
+            from IPython.display import display
+            import matplotlib.pyplot as plt
+
+            # Only a Jupyter/Colab kernel (ZMQInteractiveShell) has a frontend that renders images;
+            # a plain script (get_ipython() is None) or a terminal IPython REPL do not.
+            shell = get_ipython()
+            if shell is None or type(shell).__name__ != "ZMQInteractiveShell":
+                raise RuntimeError("no notebook frontend available")
+
+            images_np = self._train_pred_sample_images_np
+            targets_np = self._train_pred_sample_targets_np
+            is_3d = self.cfg.PROBLEM.NDIM == "3D"
+            n_samples = len(images_np)
+
+            def mid_slice(img: NDArray) -> NDArray:
+                return img[img.shape[0] // 2] if is_3d else img
+
+            sample_panels = []
+            for i in range(n_samples):
+                panels = self._train_pred_sample_panels(
+                    mid_slice(images_np[i]),
+                    mid_slice(targets_np[i]) if targets_np is not None else None,
+                    mid_slice(pred_np[i]),
+                )
+                if n_samples > 1:
+                    panels = [(f"s{i} {title}", img) for title, img in panels]
+                sample_panels.append(panels)
+
+            ncols = 3
+            rows_per_sample = [-(-len(p) // ncols) for p in sample_panels]
+            nrows = sum(rows_per_sample)
+            fig, axes = plt.subplots(nrows, ncols, figsize=(3 * ncols, 3 * nrows), squeeze=False)
+            for ax in axes.ravel():
+                ax.axis("off")
+
+            row0 = 0
+            for panels, nrows_sample in zip(sample_panels, rows_per_sample):
+                for i, (title, img) in enumerate(panels):
+                    ax = axes[row0 + i // ncols][i % ncols]
+                    ax.imshow(img, cmap="gray")
+                    ax.set_title(title, fontsize=8)
+                row0 += nrows_sample
+            fig.suptitle(f"Epoch {epoch + 1}")
+            fig.tight_layout(rect=(0, 0, 1, 0.96))
+
+            if self._train_pred_display_handle is None:
+                self._train_pred_display_handle = display(fig, display_id=True)
+            else:
+                self._train_pred_display_handle.update(fig)
+            plt.close(fig)
+        except Exception as e:
+            print(f"WARNING: TRAIN.SAVE_TRAIN_PREDS_SHOW could not render inline ({e}). Disabling it.")
+            self.cfg.defrost()
+            self.cfg.TRAIN.SAVE_TRAIN_PREDS_SHOW = False
+            self.cfg.freeze()
+
     def train(self):
         """Training phase."""
         self.load_train_data()
@@ -1042,6 +1191,8 @@ class Base_Workflow(metaclass=ABCMeta):
         self.prepare_train_generators()
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)
+        if self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ != -1 and is_main_process():
+            self._prepare_train_pred_sample_batch()
 
         assert (
             self.start_epoch is not None and self.model is not None and self.model_without_ddp is not None and self.loss
@@ -1126,6 +1277,11 @@ class Base_Workflow(metaclass=ABCMeta):
                         model_build_kwargs=self.model_build_kwargs,
                         extension=self.cfg.MODEL.OUT_CHECKPOINT_FORMAT,
                     )
+
+            # Save/show a preview of the model's predictions
+            if self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ != -1 and is_main_process():
+                if (epoch + 1) % self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ == 0 or epoch + 1 == self.cfg.TRAIN.EPOCHS:
+                    self._save_train_pred_samples(epoch)
 
             # Validation
             if self.val_generator:

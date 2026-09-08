@@ -1978,6 +1978,13 @@ class Config:
         # Callbacks
         # To determine which value monitor to consider which epoch consider the best to save. Currently not used.
         _C.TRAIN.CHECKPOINT_MONITOR = "val_loss"
+
+        # Epochs to save a preview of the model's predictions on a fixed set of samples to PATHS.TRAIN_PRED_SAMPLES. Set it to -1 to not do it.
+        _C.TRAIN.SAVE_TRAIN_PREDS_FREQ = -1
+        # Number of fixed samples to track when 'TRAIN.SAVE_TRAIN_PREDS_FREQ' != -1.
+        _C.TRAIN.SAVE_TRAIN_PREDS_NUM_SAMPLES = 1
+        # Whether to also render the tracked samples inline (Jupyter/Colab only; ignored elsewhere).
+        _C.TRAIN.SAVE_TRAIN_PREDS_SHOW = False
         # Add profiler callback to the training
         # _C.TRAIN.PROFILER = False
         # # Batch range to be analyzed
@@ -2436,6 +2443,8 @@ class Config:
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "charts")
+        # Folder where TRAIN.SAVE_TRAIN_PREDS_FREQ previews are stored.
+        _C.PATHS.TRAIN_PRED_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, "train_pred_samples")
         # Folder where samples of DA will be stored
         _C.PATHS.DA_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, "aug")
         # Folder where generator samples (X) will be stored

@@ -91,13 +91,17 @@ class _Tee:
     def write(self, data):
         for s in self._streams:
             s.write(data)
+            s.flush()
 
     def flush(self):
         for s in self._streams:
             s.flush()
 
     def fileno(self):
-        return self._streams[0].fileno()
+        try:
+            return self._streams[0].fileno()
+        except (AttributeError, OSError) as e:
+            raise io.UnsupportedOperation("redirected stream has no fileno") from e
 
     def isatty(self):
         return False
@@ -178,6 +182,12 @@ class BiaPy:
         """
         self.verbose = bool(verbose)
 
+        # Real console streams, captured before anything redirects them. Used instead of
+        # sys.__stdout__/__stderr__ so output reaches Jupyter's live OutStream, not just the
+        # process-level stream (which a notebook cell doesn't render until it's closed/flushed).
+        self._console_stdout = sys.stdout
+        self._console_stderr = sys.stderr
+
         # Third instantiation option: a model checkpoint as the configuration source. A BiaPy
         # '.pth' embeds the whole configuration, so the workflow is rebuilt from it (see
         # BiaPy.load_workflow_from_model for BMZ ids). '.safetensors' has no embedded config.
@@ -253,8 +263,8 @@ class BiaPy:
         # the console, so building the workflow is silent.
         _early_buf = io.StringIO()
         if self.verbose:
-            sys.stdout = _Tee(sys.__stdout__, _early_buf)
-            sys.stderr = _Tee(sys.__stderr__, _early_buf)
+            sys.stdout = _Tee(self._console_stdout, _early_buf)
+            sys.stderr = _Tee(self._console_stderr, _early_buf)
         else:
             sys.stdout = _Tee(_early_buf)
             sys.stderr = _Tee(_early_buf)
@@ -310,8 +320,8 @@ class BiaPy:
 
         # Rank is settled: on rank 0 open the log file (unless disabled) and flush the buffer
         # into it. In verbose mode the buffer was already shown live on the console.
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
+        sys.stdout = self._console_stdout
+        sys.stderr = self._console_stderr
         if self.save_files and is_main_process():
             logs_dir = self.cfg.LOG.LOG_DIR
             os.makedirs(logs_dir, exist_ok=True)
@@ -420,18 +430,17 @@ class BiaPy:
         log = self._stdout_log_file
         if mirror_console:
             extra = [log] if log is not None else []
-            sys.stdout = _Tee(sys.__stdout__, *extra)
-            sys.stderr = _Tee(sys.__stderr__, *extra)
+            sys.stdout = _Tee(self._console_stdout, *extra)
+            sys.stderr = _Tee(self._console_stderr, *extra)
         else:
             target = log if log is not None else self._null_sink()
             sys.stdout = _Tee(target)
             sys.stderr = _Tee(target)
 
-    @staticmethod
-    def _restore_std_streams():
+    def _restore_std_streams(self):
         """Give stdout/stderr back to the real console."""
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
+        sys.stdout = self._console_stdout
+        sys.stderr = self._console_stderr
 
     @contextmanager
     def _run_output(self, mirror_console: bool = True):
@@ -1938,8 +1947,8 @@ class BiaPy:
         print("FINISHED JOB {} !!".format(self.job_identifier))
 
         if self._stdout_log_file is not None:
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
+            sys.stdout = self._console_stdout
+            sys.stderr = self._console_stderr
             self._stdout_log_file.flush()
             self._stdout_log_file.close()
             self._stdout_log_file = None
