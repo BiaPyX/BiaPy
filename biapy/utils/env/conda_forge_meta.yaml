@@ -24,11 +24,10 @@ requirements:
     - setuptools
   run:
     - python >={{ python_min }}
-    # These must mirror pyproject.toml exactly, or the `pip check` in the test
-    # section fails against the metadata of the installed sdist. conda-forge's
-    # torchvision 0.27.1 is built against pytorch >=2.12.0,<2.13.0a0.
-    - pytorch >=2.12,<2.13
-    - torchvision >=0.27,<0.28
+    # Must mirror pyproject.toml's torch/torchvision range exactly, or the `pip
+    # check` in the test section fails against the installed sdist's metadata.
+    - pytorch >=2.9,<3.0
+    - torchvision >=0.24,<1.0
     - timm ==1.0.14
     - pytorch-msssim
     - torchmetrics >=1.4,<1.5

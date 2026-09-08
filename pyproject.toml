@@ -42,8 +42,8 @@ dependencies = [
     "pytorch-msssim",
     "torchmetrics[image]==1.4.*",
     "safetensors",
-    "torch>=2.12,<2.13",
-    "torchvision>=0.27,<0.28",
+    "torch>=2.9,<3.0",
+    "torchvision>=0.24,<1.0",
     "nibabel>=5.4.2",
 ]
 

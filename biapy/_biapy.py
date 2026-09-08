@@ -20,6 +20,8 @@ from yacs.config import CfgNode as CN
 from typing import (
     Optional,
     Dict,
+    List,
+    Tuple,
     Union,
 )
 from bioimageio.spec.model.v0_5 import (
@@ -107,6 +109,25 @@ class _Tee:
         return False
 
 
+GpuArg = Union[str, int, List[Union[str, int]], Tuple[Union[str, int], ...], None]
+
+
+def _normalize_gpu_arg(gpu: GpuArg) -> str:
+    """Normalize 'gpu' (str, int, or list/tuple of either) into a CUDA_VISIBLE_DEVICES-style string."""
+    if gpu is None:
+        return ""
+    if isinstance(gpu, str):
+        return gpu.strip()
+    if isinstance(gpu, int):
+        return str(gpu)
+    if isinstance(gpu, (list, tuple)):
+        return ",".join(str(g).strip() for g in gpu)
+    raise TypeError(
+        f"'gpu' must be a str, int, list or tuple (got {type(gpu).__name__}). "
+        "Examples: gpu=0, gpu='0', gpu='0,1', gpu=[0, 1]."
+    )
+
+
 class BiaPy:
     def __init__(
         self,
@@ -114,7 +135,7 @@ class BiaPy:
         result_dir: Optional[str] = None,
         name: Optional[str] = "unknown_job",
         run_id: Optional[int] = 1,
-        gpu: Optional[str] = "",
+        gpu: GpuArg = "",
         world_size: Optional[int] = 1,
         local_rank: Optional[int] = -1,
         dist_on_itp: Optional[bool] = False,
@@ -146,8 +167,10 @@ class BiaPy:
         run_id: int, optional
             Run number of the same job. Defaults to 1.
 
-        gpu: str, optional
-            GPU number according to 'nvidia-smi' command. Defaults to None.
+        gpu: str, int, list or tuple, optional
+            GPU number(s) according to 'nvidia-smi' command, or "mps" for Apple Silicon. Accepts
+            a single value (``0`` or ``"0"``) or multiple (``"0,1"``, ``[0, 1]``, ``(0, 1)``).
+            Defaults to "" (CPU).
 
         world_size: int, optional
             Number of distributed processes. Defaults to 1.
@@ -220,7 +243,7 @@ class BiaPy:
             result_dir=result_dir,
             name=name,
             run_id=run_id,
-            gpu=gpu,
+            gpu=_normalize_gpu_arg(gpu),
             world_size=world_size,
             local_rank=local_rank,
             dist_on_itp=dist_on_itp,
