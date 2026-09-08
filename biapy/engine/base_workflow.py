@@ -1128,12 +1128,15 @@ class Base_Workflow(metaclass=ABCMeta):
         try:
             from IPython import get_ipython
             from IPython.display import display
+            from ipykernel.zmqshell import ZMQInteractiveShell
             import matplotlib.pyplot as plt
 
-            # Only a Jupyter/Colab kernel (ZMQInteractiveShell) has a frontend that renders images;
-            # a plain script (get_ipython() is None) or a terminal IPython REPL do not.
+            # isinstance, not a class-name match: Colab's shell (google.colab._shell.Shell)
+            # subclasses ZMQInteractiveShell, so its __class__.__name__ is "Shell", not
+            # "ZMQInteractiveShell" - a name check misses Colab. A terminal IPython REPL
+            # (TerminalInteractiveShell) is a sibling class, not a subclass, so it's still excluded.
             shell = get_ipython()
-            if shell is None or type(shell).__name__ != "ZMQInteractiveShell":
+            if not isinstance(shell, ZMQInteractiveShell):
                 raise RuntimeError("no notebook frontend available")
 
             images_np = self._train_pred_sample_images_np
