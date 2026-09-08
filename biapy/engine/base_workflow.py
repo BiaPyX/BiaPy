@@ -56,6 +56,7 @@ from biapy.utils.misc import (
     MetricLogger,
     to_pytorch_format,
     to_numpy_format,
+    build_preview_panels,
     is_dist_avail_and_initialized,
     setup_for_distributed,
     update_dict_with_existing_keys,
@@ -99,7 +100,7 @@ from biapy.data.post_processing.post_processing import (
 from biapy.data.roi_mask import load_roi_mask
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.pre_processing import set_cellpose_diameters
+from biapy.data.pre_processing import compute_cellpose_diameters
 from biapy.data.pre_processing import set_file_resolutions
 from biapy.data.norm import normalize_image
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
@@ -746,7 +747,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Attach the per-image Cellpose diameter to each GT DatasetFile so the train generator can
         # rescale each patch by DIAM_MEAN / diameter (mirroring Cellpose's diameter normalization).
-        self.cellpose_diameter = set_cellpose_diameters(self.cfg, self.Y_train, self.Y_val)
+        self.cellpose_diameter = compute_cellpose_diameters(self.cfg, self.Y_train, self.Y_val)
 
         # Attach the per-image physical resolution to each raw DatasetFile so the train generator can
         # rescale each patch toward DATA.RESOLUTION_NORM.TARGET_RESOLUTION.
@@ -1054,7 +1055,6 @@ class Base_Workflow(metaclass=ABCMeta):
         images_np = images.cpu().numpy() if torch.is_tensor(images) else np.asarray(images)
         self._train_pred_sample_images_np = images_np
         self._train_pred_sample_targets_np = None
-        self._train_pred_display_handle = None
         save_tif(images_np, os.path.join(out_dir, "input"), verbose=False)
         try:
             if targets is not None:
@@ -1101,29 +1101,21 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def _train_pred_sample_panels(
         self, image: NDArray, target: Optional[NDArray], pred: NDArray
-    ) -> list[tuple[str, NDArray]]:
-        """
-        Build the (title, 2D array) panels to preview for one sample. Default: one panel per
-        channel of input/GT/prediction (e.g. all B/C/D channels for instance segmentation).
-        Override in a workflow subclass for a different preview.
-        """
-
-        def channel_panels(name: str, arr: NDArray) -> list:
-            n_ch = arr.shape[-1]
-            if n_ch == 1:
-                return [(name, arr[..., 0])]
-            return [(f"{name} ch{c}", arr[..., c]) for c in range(n_ch)]
-
-        panels = channel_panels("input", image)
+    ) -> list[tuple[str, NDArray, str]]:
+        """Panels to preview for one sample. Default: per-channel; override per workflow."""
+        class_ch = 0
+        if getattr(self, "separated_class_channel", False) and "class" in self.model_output_channel_info:
+            class_ch = self.model_output_channels[self.model_output_channel_info.index("class")]
+        panels = build_preview_panels("input", image)
         if target is not None:
-            panels += channel_panels("GT", target)
-        panels += channel_panels("pred", pred)
+            panels += build_preview_panels("GT", target)
+        panels += build_preview_panels("pred", pred, class_channels=class_ch)
         return panels
 
     def _display_train_pred_samples(self, epoch: int, pred_np: NDArray):
         """
-        Render the tracked sample(s) inline, updated in place, at most 3 panels per row. Jupyter/
-        Colab only; any failure disables 'TRAIN.SAVE_TRAIN_PREDS_SHOW'.
+        Render the tracked sample(s) inline as a new output each time, at most 3 panels per row.
+        Jupyter/Colab only; any failure disables 'TRAIN.SAVE_TRAIN_PREDS_SHOW'.
         """
         try:
             from IPython import get_ipython
@@ -1131,10 +1123,7 @@ class Base_Workflow(metaclass=ABCMeta):
             from ipykernel.zmqshell import ZMQInteractiveShell
             import matplotlib.pyplot as plt
 
-            # isinstance, not a class-name match: Colab's shell (google.colab._shell.Shell)
-            # subclasses ZMQInteractiveShell, so its __class__.__name__ is "Shell", not
-            # "ZMQInteractiveShell" - a name check misses Colab. A terminal IPython REPL
-            # (TerminalInteractiveShell) is a sibling class, not a subclass, so it's still excluded.
+            # isinstance, not a class-name check: Colab's shell subclasses ZMQInteractiveShell.
             shell = get_ipython()
             if not isinstance(shell, ZMQInteractiveShell):
                 raise RuntimeError("no notebook frontend available")
@@ -1155,7 +1144,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     mid_slice(pred_np[i]),
                 )
                 if n_samples > 1:
-                    panels = [(f"s{i} {title}", img) for title, img in panels]
+                    panels = [(f"s{i} {title}", img, cmap) for title, img, cmap in panels]
                 sample_panels.append(panels)
 
             ncols = 3
@@ -1167,18 +1156,15 @@ class Base_Workflow(metaclass=ABCMeta):
 
             row0 = 0
             for panels, nrows_sample in zip(sample_panels, rows_per_sample):
-                for i, (title, img) in enumerate(panels):
+                for i, (title, img, cmap) in enumerate(panels):
                     ax = axes[row0 + i // ncols][i % ncols]
-                    ax.imshow(img, cmap="gray")
+                    ax.imshow(img, cmap=cmap)
                     ax.set_title(title, fontsize=8)
                 row0 += nrows_sample
             fig.suptitle(f"Epoch {epoch + 1}")
             fig.tight_layout(rect=(0, 0, 1, 0.96))
 
-            if self._train_pred_display_handle is None:
-                self._train_pred_display_handle = display(fig, display_id=True)
-            else:
-                self._train_pred_display_handle.update(fig)
+            display(fig)
             plt.close(fig)
         except Exception as e:
             print(f"WARNING: TRAIN.SAVE_TRAIN_PREDS_SHOW could not render inline ({e}). Disabling it.")

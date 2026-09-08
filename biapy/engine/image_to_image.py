@@ -30,6 +30,7 @@ from biapy.utils.misc import (
     MetricLogger,
     is_dist_avail_and_initialized,
     get_world_size,
+    build_preview_panels,
 )
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
@@ -154,6 +155,14 @@ class Image_to_Image_Workflow(Base_Workflow):
             self.head_activations = ["linear"] * self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
 
         super().define_activations_and_channels()
+
+    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
+        """Show input/GT/pred as single composite images, not split by channel."""
+        panels = build_preview_panels("input", image, mode="composite")
+        if target is not None:
+            panels += build_preview_panels("GT", target, mode="composite")
+        panels += build_preview_panels("pred", pred, mode="composite")
+        return panels
 
     def define_metrics(self):
         """

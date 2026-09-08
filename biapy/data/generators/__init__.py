@@ -681,10 +681,16 @@ def create_test_generator(
         # 'I' is in the test GT too and must be dropped before the GT is used for the metrics.
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             _test_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            _extra_opts = dict(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])
             dic["instance_channel"] = (
-                channel_physical_offsets(_test_channels, cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])["I"]
-                if "I" in _test_channels else None
+                channel_physical_offsets(_test_channels, _extra_opts)["I"] if "I" in _test_channels else None
             )
+            # Channel names + opts so the test generator can build the target channel stack in memory
+            # from the raw instance labels, exactly like the train/val generator does (never cached to
+            # disk). Skipped for the 'synapses' type, which stays on the offline-cache path.
+            if cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses":
+                dic["data_channels"] = _test_channels
+                dic["channel_extra_opts"] = _extra_opts
         elif _membrane_repair:
             _mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
             _test_channels = list(_mr.DATA_CHANNELS)
@@ -692,6 +698,8 @@ def create_test_generator(
             dic["instance_channel"] = (
                 channel_physical_offsets(_test_channels, _extra_opts)["I"] if "I" in _test_channels else None
             )
+            dic["data_channels"] = _test_channels
+            dic["channel_extra_opts"] = _extra_opts
         dic["ignore_index"] = cfg.LOSS.IGNORE_INDEX
         dic["n_classes"] = cfg.DATA.N_CLASSES
     

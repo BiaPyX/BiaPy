@@ -18,7 +18,7 @@ from biapy.data.data_3D_manipulation import read_chunked_data
 from biapy.data.dataset import PatchCoords
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, crop_border_tensor, MetricLogger
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, crop_border_tensor, MetricLogger, build_preview_panels
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
@@ -403,6 +403,14 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 if metric_logger:
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
+
+    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
+        """Show pred as a single argmax label map instead of one panel per class."""
+        panels = build_preview_panels("input", image)
+        if target is not None:
+            panels += build_preview_panels("GT", target)
+        panels += build_preview_panels("pred", pred, mode="argmax")
+        return panels
 
     def prepare_targets(self, targets, batch):
         """

@@ -226,7 +226,7 @@ class DatasetFile:
         -----
         The ``diameter`` attribute (Cellpose cell diameter in pixels, ``None`` by default) is not a
         constructor argument; it is populated later by
-        :func:`biapy.data.pre_processing.set_cellpose_diameters` and used to rescale patches during
+        :func:`biapy.data.pre_processing.compute_cellpose_diameters` and used to rescale patches during
         the Cellpose/Omnipose flow training.
 
         The ``resolution`` attribute (physical voxel spacing, ``None`` by default) is likewise not a

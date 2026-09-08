@@ -733,6 +733,40 @@ def to_numpy_format(x, axes_order_back):
     return x.permute(axes_order_back).cpu().numpy()
 
 
+def build_preview_panels(
+    name: str, arr: NDArray, mode: str = "split", cmap: Optional[str] = None, class_channels: int = 0
+) -> List[Tuple[str, NDArray, str]]:
+    """
+    Build (title, 2D array, colormap) panels for a training-preview image, from a (H, W, C) array.
+
+    mode: "split" (one panel per channel; class_channels>0 argmaxes the last N channels into a
+    single labeled panel instead), "argmax" (one panel, argmax over channels), or "composite"
+    (one panel, all channels shown together, untouched).
+    """
+    if cmap is None:
+        cmap = "tab20" if mode == "argmax" else "gray"
+
+    if mode == "composite":
+        img = arr[..., 0] if arr.shape[-1] == 1 else arr
+        return [(name, img, cmap)]
+
+    if mode == "argmax":
+        img = np.argmax(arr, axis=-1) if arr.shape[-1] > 1 else arr[..., 0]
+        return [(name, img, cmap)]
+
+    if class_channels and 0 < class_channels <= arr.shape[-1]:
+        panels = []
+        if class_channels < arr.shape[-1]:
+            panels = build_preview_panels(name, arr[..., :-class_channels], mode="split")
+        panels += build_preview_panels(f"{name} class", arr[..., -class_channels:], mode="argmax")
+        return panels
+
+    n_ch = arr.shape[-1]
+    if n_ch == 1:
+        return [(name, arr[..., 0], cmap)]
+    return [(f"{name} ch{c}", arr[..., c], cmap) for c in range(n_ch)]
+
+
 def crop_border_numpy(arr: NDArray, border: List[int], has_channel_axis: bool = False) -> NDArray:
     """
     Crop ``border[i]`` pixels/voxels off both sides of each leading spatial axis of `arr`.

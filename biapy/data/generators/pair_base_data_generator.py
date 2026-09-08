@@ -565,9 +565,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.no_bin_channel_found = False
 
         # Instance-seg channel names + their extra opts: used to regenerate every geometry-derived
-        # ("no_bin"/"flow") channel from the augmented labels each batch (``heat_cols`` below indexes them).
+        # ("no_bin"/"flow") channel from the augmented labels each batch (``heat_cols`` below indexes them),
+        # and (with ``n_classes``) to expand the raw instance-label patch into this channel stack on the fly
+        # in ``load_sample`` -- set before the first ``load_sample`` call below, which needs them.
         self.data_channels = list(data_channels)
         self.channel_extra_opts = dict(channel_extra_opts)
+        self.n_classes = n_classes
         self.heat_cols: List[int] = []
         # Directional binary channels (affinities 'A') live in the mask group, not heat, but must also be
         # regenerated: list of (mask-group position, full-mask column).
@@ -710,7 +713,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
         self.resolution = resolution
         self.o_indexes = np.arange(self.length)
-        self.n_classes = n_classes
         self.da = da
         self.aug_prob = aug_prob
         self.cutout = cutout
@@ -1160,6 +1162,32 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 img_prob=img_prob,
                 scale=self.random_crop_scale,
             )
+
+        # Instance-seg / membrane-repair: expand the raw single-channel instance-label patch (plus an
+        # optional second classification channel) into the full training-target channel stack, on the
+        # already-cropped, patch-sized array. Never cached to disk: apply_transform's regeneration step
+        # (see below) recomputes this from scratch from the (possibly warped) 'I' channel on every call
+        # anyway whenever any geometry-derived channel is configured, so persisting it offline saved
+        # nothing there; for purely-binary channel sets (no regeneration ever fires) this now runs once
+        # per access instead of once ever, which is the accepted trade-off for never touching disk.
+        if self.data_channels:
+            if self.n_classes > 2:
+                if mask.shape[-1] != 2:
+                    raise ValueError(
+                        "In instance segmentation, when 'DATA.N_CLASSES' are more than 2 labels need to have two "
+                        "channels, e.g. (256,256,2), containing the instance segmentation map (first channel) and "
+                        "classification map (second channel). Got mask with shape {}".format(mask.shape)
+                    )
+                class_channel = np.expand_dims(mask[..., 1].copy(), -1)
+                mask = np.expand_dims(mask[..., 0], -1)
+            elif mask.shape[-1] != 1:
+                raise ValueError(
+                    "Expected instance segmentation GT images to have a single channel containing the instance "
+                    "labels, but got a mask with shape {} ({} channels).".format(mask.shape, mask.shape[-1])
+                )
+            mask = labels_into_channels(mask, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts)
+            if self.n_classes > 2:
+                mask = np.concatenate([mask, class_channel], axis=-1)
 
         if not first_load:
             xnorm_info = self.X.dataset_info[sample.fid].norm_info

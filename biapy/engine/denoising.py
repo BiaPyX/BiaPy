@@ -25,7 +25,14 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, crop_border_tensor, is_main_process, MetricLogger
+from biapy.utils.misc import (
+    to_pytorch_format,
+    to_numpy_format,
+    crop_border_tensor,
+    is_main_process,
+    MetricLogger,
+    build_preview_panels,
+)
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
 from biapy.data.norm import undo_image_norm, normalize_image
 from biapy.utils.util import check_downsample_division
@@ -123,6 +130,14 @@ class Denoising_Workflow(Base_Workflow):
         self.model_output_channel_info = ["pred{}".format(i) for i in range(len(self.model_output_channels))]
 
         super().define_activations_and_channels()
+
+    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
+        """Show input/GT/pred as single composite images, not split by channel."""
+        panels = build_preview_panels("input", image, mode="composite")
+        if target is not None:
+            panels += build_preview_panels("GT", target, mode="composite")
+        panels += build_preview_panels("pred", pred, mode="composite")
+        return panels
 
     def define_metrics(self):
         """

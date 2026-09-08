@@ -44,6 +44,7 @@ from biapy.data.pre_processing import (
     affinity_channel_names,
     affinity_offsets_from_opts,
     create_instance_channels,
+    labels_into_channels,
     set_embedseg_grid_size,
 )
 from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matching_dataset_lazy
@@ -2851,7 +2852,18 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         """
         Create instance segmentation ground truth images to train the model based on the ground truth instances provided.
 
-        They will be saved in a separate folder in the root path of the ground truth.
+        Only applies to ``PROBLEM.INSTANCE_SEG.TYPE == "synapses"``: its channel creation
+        (``synapse_channel_creation``) is a whole-file point-annotation rasterization, not a per-patch
+        transform of a label array, so unlike regular instance labels it has no online-generation
+        counterpart in ``PairBaseDataGenerator.load_sample`` -- the created channels are still cached
+        to a separate folder in the root path of the ground truth, and ``DATA.<SPLIT>.GT_PATH`` is
+        repointed at it, exactly as before.
+
+        For regular instance labels, nothing is prepared or cached here anymore: the data generator
+        builds the target channel stack on the fly, per patch, from the raw instance-label files (see
+        ``PairBaseDataGenerator.load_sample``), so ``DATA.<SPLIT>.GT_PATH`` stays pointed at the
+        user's original label folder for the whole run. Only a small debug preview of the configured
+        channels is written (see ``_preview_instance_channels``).
         """
         original_test_path, original_test_mask_path = None, None
         train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
@@ -2861,7 +2873,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         if not self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
             test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
         else:
-            test_instance_mask_dir = self.cfg.DATA.TEST.PATH            
+            test_instance_mask_dir = self.cfg.DATA.TEST.PATH
+
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses":
+            print("###########################")
+            print("#  PREPARE INSTANCE DATA  #")
+            print("###########################")
+            self._preview_instance_channels()
+            return self.cfg.DATA.TEST.PATH, test_instance_mask_dir
 
         opts = []
         print("###########################")
@@ -2989,6 +3008,50 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         self.cfg.merge_from_list(opts)
 
         return original_test_path, original_test_mask_path
+
+    def _preview_instance_channels(self):
+        """
+        Write a one-off debug preview of the configured instance-seg channels to
+        ``PATHS.<SPLIT>_INSTANCE_CHANNELS_CHECK``, so users can sanity-check ``DATA_CHANNELS`` without
+        the channels ever being cached alongside the ground truth. Best-effort: silently skipped for
+        Zarr/H5/co-located (``INPUT_ZARR_MULTIPLE_DATA``) ground truth, where building a preview would
+        need the same chunked-read machinery as the real (per-patch, in-generator) channel expansion;
+        it's purely a convenience check, not required for training/inference to work.
+        """
+        cfg = self.cfg
+        mode = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        extra_opts = dict(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0])
+
+        splits = []
+        if cfg.TRAIN.ENABLE or cfg.DATA.TEST.USE_VAL_AS_TEST:
+            splits.append("TRAIN")
+        if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN:
+            splits.append("VAL")
+        if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and cfg.DATA.TEST.LOAD_GT:
+            splits.append("TEST")
+
+        for tag in splits:
+            data_cfg = getattr(cfg.DATA, tag)
+            if data_cfg.INPUT_ZARR_MULTIPLE_DATA:
+                continue
+            try:
+                gt_file = next(os_walk_clean(data_cfg.GT_PATH))[2][0]
+                img_path = os.path.join(data_cfg.GT_PATH, gt_file)
+                img = read_img_as_ndarray(img_path, is_3d=(cfg.PROBLEM.NDIM == "3D"))
+            except (StopIteration, IndexError, OSError, ValueError):
+                continue
+            if cfg.DATA.N_CLASSES > 2:
+                if img.shape[-1] != 2:
+                    continue
+                img = np.expand_dims(img[..., 0], -1)
+            elif img.shape[-1] != 1:
+                continue
+            labels_into_channels(
+                img,
+                mode=mode,
+                channel_extra_opts=extra_opts,
+                save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
+            )
 
     def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """

@@ -4,34 +4,33 @@ Membrane-repair sub-problem of the IMAGE_TO_IMAGE workflow (PROBLEM.IMAGE_TO_IMA
 Trains a dataset-agnostic network that repairs membrane-segmentation errors coming out of an
 upstream foundation-model + GMM pipeline. This module holds:
 
-- ``prepare_membrane_repair_gt``: offline step that expands the raw GT instance-label folder into
-  the affinity (+ raw-label regeneration source) channel stack, into a dedicated cache directory,
-  repointing ``DATA.*.GT_PATH`` at it.
-
-  X is *not* prepared offline, unlike Y: the derived channels (skeleton-DT/Hessian/Meijering) must
-  be recomputed after every corruption augmentor runs anyway. ``DATA.PATCH_SIZE`` stays
-  ``len(SOURCE_CHANNELS)``; the model's actual input width (``len(DERIVED_CHANNELS)`` --
-  ``SOURCE_CHANNELS`` are never fed to the model, see ``biapy.data.membrane_channels``) is
-  presented to the model builder only for the duration of ``prepare_model``.
 - ``Membrane_Repair_Workflow``: the workflow subclass wiring the membrane-repair loss options,
-  running the Y preparation step above, presenting the derived-only input width to the model
+  validating the affinity/MALIS configuration, presenting the derived-only input width to the model
   builder, and fixing up ``process_test_sample`` for affinity output.
+
+  Neither X nor Y is prepared offline: X's derived channels (skeleton-DT/Hessian/Meijering) are
+  recomputed after every corruption augmentor runs (see ``biapy.data.membrane_channels``), and Y's
+  affinity (+ raw-label regeneration source) channel stack is built on the fly, per patch, by the
+  data generator from the raw GT instance-label files (see
+  ``PairBaseDataGenerator.load_sample``/``apply_transform``) -- neither is ever cached to disk.
+  ``DATA.PATCH_SIZE`` stays ``len(SOURCE_CHANNELS)``; the model's actual input width
+  (``len(DERIVED_CHANNELS)`` -- ``SOURCE_CHANNELS`` are never fed to the model) is presented to the
+  model builder only for the duration of ``prepare_model``.
 """
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 from numpy.typing import NDArray
 from skimage.transform import resize
-from tqdm import tqdm
 
 from biapy.data.data_manipulation import check_binary_masks, read_img_as_ndarray, save_tif
 from biapy.data.membrane_channels import derive_membrane_input_channels
 from biapy.data.post_processing.affinity_agglomeration import watershed_and_agglomerate_affinities
 from biapy.data.post_processing.post_processing import apply_label_refinement, watershed_by_channels
-from biapy.data.pre_processing import affinity_offsets_from_opts, labels_into_channels
+from biapy.data.pre_processing import affinity_offsets_from_opts
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.image_to_image import Image_to_Image_Workflow as _Image_to_Image_Workflow
 from biapy.engine.malis_loss import MalisLoss
@@ -47,101 +46,9 @@ from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matchi
 from biapy.utils.misc import (
     crop_border_numpy,
     crop_border_tensor,
-    get_rank,
-    get_world_size,
-    is_dist_avail_and_initialized,
-    is_main_process,
     os_walk_clean,
     to_pytorch_format,
 )
-
-
-def _channel_prep_suffix(names: List[str], extra_opts: Dict) -> str:
-    """
-    Build a filesystem-safe suffix encoding channel names + their options.
-
-    Appending this to a raw data path gives a cache directory that's always different from the raw
-    path, and changes whenever the channel config changes, so a stale cache is never reused.
-
-    Parameters
-    ----------
-    names : list of str
-        Ordered channel names.
-
-    extra_opts : dict
-        Per-channel options, e.g. ``{"A": {"z_affinities": [1]}}``.
-
-    Returns
-    -------
-    suffix : str
-        E.g. ``"_A.z_affinities-1_I"``.
-    """
-    suffix = ""
-    for ch in names:
-        suffix += f"_{ch}"
-        for entry, val in extra_opts.get(ch, {}).items():
-            val_str = (
-                str(val).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
-            )
-            suffix += f".{entry}-{val_str}"
-    return suffix
-
-
-def prepare_membrane_repair_gt(cfg, out_dir: str, data_type: str = "train") -> None:
-    """
-    Expand the raw GT instance-label folder into the channel stack the generator consumes.
-
-    For every GT label image in ``DATA.<TRAIN|VAL|TEST>.GT_PATH``, computes
-    ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS`` (affinities + the virtual raw-label
-    channel) via ``labels_into_channels`` and writes the result to ``out_dir``.
-
-    Only supports plain (non-Zarr/H5) label images.
-
-    Parameters
-    ----------
-    cfg : YACS configuration
-        Running configuration.
-
-    out_dir : str
-        Directory to write the prepared channel stack to.
-
-    data_type : str, optional
-        Which split to prepare: ``"train"``, ``"val"`` or ``"test"``.
-    """
-    assert data_type in ["train", "val", "test"]
-    tag = data_type.upper()
-    data_cfg = getattr(cfg.DATA, tag)
-    mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-
-    data_channels = list(mr.DATA_CHANNELS)
-    channel_extra_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0])
-
-    try:
-        gt_files = next(os_walk_clean(data_cfg.GT_PATH))[2]
-    except StopIteration:
-        raise ValueError(f"No GT label images found in {data_cfg.GT_PATH}")
-
-    os.makedirs(out_dir, exist_ok=True)
-    print(f"Creating membrane-repair Y_{data_type} channels {data_channels} in {out_dir} . . .")
-
-    rank, world_size = get_rank(), get_world_size()
-    for i in tqdm(range(rank, len(gt_files), world_size), disable=not is_main_process()):
-        img_path = os.path.join(data_cfg.GT_PATH, gt_files[i])
-        img = read_img_as_ndarray(img_path, is_3d=(cfg.PROBLEM.NDIM == "3D"))
-        if img.shape[-1] != 1:
-            raise ValueError(
-                "Expected membrane-repair GT images to have a single channel containing the "
-                f"instance labels, but got shape {img.shape}. Check the image file: {img_path}"
-            )
-
-        channels = labels_into_channels(img, mode=data_channels, channel_extra_opts=channel_extra_opts)
-
-        save_tif(
-            np.expand_dims(channels, 0),
-            data_dir=out_dir,
-            filenames=[gt_files[i]],
-            verbose=False,
-        )
 
 
 class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
@@ -153,8 +60,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
     - ``process_test_sample`` must not rescale predictions back into X's raw intensity domain (they
       are ``[0,1]`` affinity probabilities), and must expand raw X to the model's input width
       before cropping/prediction.
-    - GT preparation: Y is a GT instance-label volume expanded into affinity (+ raw-label
-      regeneration source) channels before training (see ``prepare_membrane_repair_gt``).
+    - GT: Y is a GT instance-label volume expanded into affinity (+ raw-label regeneration source)
+      channels on the fly, per patch, by the data generator (never cached to disk) -- see
+      ``_prepare_membrane_repair_gt`` and ``PairBaseDataGenerator.load_sample``.
     - Model input width: ``DERIVED_CHANNELS`` only, while ``DATA.PATCH_SIZE`` reflects
       ``SOURCE_CHANNELS`` -- see ``prepare_model``.
     """
@@ -250,12 +158,13 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
     def _prepare_membrane_repair_gt(self):
         """
-        Prepare the GT affinity channel cache (skipping it if already present) and repoint
-        ``DATA.<TRAIN|VAL|TEST>.GT_PATH`` at it.
+        Validate the MALIS/affinity configuration and record the raw GT instance-label path/filenames
+        used later for instance-matching evaluation.
 
-        The cache directory is the raw ``GT_PATH`` plus a config-derived suffix (see
-        ``_channel_prep_suffix``), never ``GT_PATH`` itself, otherwise the "already prepared?"
-        ``os.path.isdir`` check would always be true and silently skip preparation.
+        Y is never cached to disk: the data generator builds the affinity (+ raw-label regeneration
+        source) channel stack on the fly, per patch, from the raw instance-label files (see
+        ``PairBaseDataGenerator.load_sample``), so ``DATA.<TRAIN|VAL|TEST>.GT_PATH`` stays pointed at
+        the user's original label folder for the whole run.
         """
         cfg = self.cfg
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
@@ -273,34 +182,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                     "biapy/engine/malis_loss.py's module docstring."
                 )
 
-        y_suffix = "_mrepair" + _channel_prep_suffix(list(mr.DATA_CHANNELS), y_extra_opts)
-
-        def _prepare_and_repoint(tag: str) -> None:
-            data_cfg = getattr(cfg.DATA, tag)
-            cache_dir = data_cfg.GT_PATH + y_suffix
-            if not os.path.isdir(cache_dir):
-                if is_dist_avail_and_initialized():
-                    torch.distributed.barrier()
-                prepare_membrane_repair_gt(cfg, cache_dir, data_type=tag.lower())
-            if data_cfg.GT_PATH != cache_dir:
-                opts.extend([f"DATA.{tag}.GT_PATH", cache_dir])
-
-        opts = []
-        if cfg.TRAIN.ENABLE:
-            _prepare_and_repoint("TRAIN")
-
-        if cfg.TRAIN.ENABLE and not cfg.DATA.VAL.FROM_TRAIN:
-            _prepare_and_repoint("VAL")
-
         if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
-            # Captured *before* the repoint below: instance evaluation needs the raw GT instance
-            # labels, not the prepared affinity stack DATA.TEST.GT_PATH is about to point to.
             self.original_test_mask_path = cfg.DATA.TEST.GT_PATH
             self.test_gt_filenames = next(os_walk_clean(cfg.DATA.TEST.GT_PATH))[2]
-            _prepare_and_repoint("TEST")
-
-        if opts:
-            cfg.merge_from_list(opts)
 
     def prepare_model(self):
         """
@@ -331,6 +215,10 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         """
         super().define_activations_and_channels()
         self.head_activations = ["ce_sigmoid"] * len(self.head_activations)
+
+    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
+        """Revert to Base_Workflow's per-channel split (not I2I's single composite image)."""
+        return Base_Workflow._train_pred_sample_panels(self, image, target, pred)
 
     def define_metrics(self):
         """

@@ -9,6 +9,7 @@ from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pa
 from biapy.data.data_3D_manipulation import looks_like_hdf5, looks_like_precomputed
 from biapy.data.dataset import BiaPyDataset, DataSample
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
+from biapy.data.pre_processing import labels_into_channels
 
 
 class test_pair_data_generator(Dataset):
@@ -40,6 +41,16 @@ class test_pair_data_generator(Dataset):
 
     instance_problem : bool, optional
         To not divide the labels if being in an instance segmenation problem.
+
+    data_channels : list, optional
+        Instance-seg/membrane-repair channel names (``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` or
+        ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS``). When non-empty, the raw
+        single-channel instance-label GT is expanded into this channel stack in memory (never cached
+        to disk), exactly as the train/val generator does. Empty (default) for non-instance workflows
+        and for the 'synapses' instance type, which stays on the offline-cache path.
+
+    channel_extra_opts : dict, optional
+        Per-channel options used to build ``data_channels`` (``DATA_CHANNELS_EXTRA_OPTS[0]``).
 
     convert_to_rgb : bool, optional
         Whether to convert images into 3-channel, i.e. RGB, by using the information of the first channel.
@@ -94,6 +105,8 @@ class test_pair_data_generator(Dataset):
         seed: int = 42,
         instance_problem: bool = False,
         instance_channel: Optional[int] = None,
+        data_channels: List = [],
+        channel_extra_opts: Dict = {},
         convert_to_rgb: bool = False,
         filter_props: List[List[str]] = [],
         filter_vals: Optional[List[List[float | int]]] = None,
@@ -129,6 +142,8 @@ class test_pair_data_generator(Dataset):
         # let the train generator regenerate the flows from the augmented labels, so it is dropped here
         # before the GT is used for the model/metrics.
         self.instance_channel = instance_channel
+        self.data_channels = list(data_channels)
+        self.channel_extra_opts = dict(channel_extra_opts)
         self.n_classes = n_classes
         self.ignore_index = ignore_index
 
@@ -263,6 +278,34 @@ class test_pair_data_generator(Dataset):
                     )
                     if mask_file and isinstance(mask_file, h5py.File):
                         sample_extra_info["mask_file_to_close"] = mask_file
+
+            # Instance-seg / membrane-repair: expand the raw single-channel instance-label GT into the
+            # full target channel stack in memory (never cached to disk) -- see the equivalent step in
+            # PairBaseDataGenerator.load_sample. No augmentation runs at test time, so this only needs
+            # to happen once per sample, not per access.
+            if self.data_channels and mask is not None:
+                mask = np.array(mask)
+                if self.n_classes > 2:
+                    if mask.shape[-1] != 2:
+                        raise ValueError(
+                            "In instance segmentation, when 'DATA.N_CLASSES' are more than 2 labels need to have "
+                            "two channels, e.g. (256,256,2), containing the instance segmentation map (first "
+                            "channel) and classification map (second channel). Got mask with shape {}".format(
+                                mask.shape
+                            )
+                        )
+                    class_channel = np.expand_dims(mask[..., 1].copy(), -1)
+                    mask = np.expand_dims(mask[..., 0], -1)
+                elif mask.shape[-1] != 1:
+                    raise ValueError(
+                        "Expected instance segmentation GT images to have a single channel containing the "
+                        "instance labels, but got a mask with shape {} ({} channels).".format(
+                            mask.shape, mask.shape[-1]
+                        )
+                    )
+                mask = labels_into_channels(mask, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts)
+                if self.n_classes > 2:
+                    mask = np.concatenate([mask, class_channel], axis=-1)
 
         if not self.test_by_chunks:
             # Skip processing image

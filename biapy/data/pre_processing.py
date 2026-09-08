@@ -4,7 +4,7 @@ Pre-processing utilities for image and mask data in deep learning workflows.
 This module provides pre-processing functions for instance segmentation, detection mask creation, self-supervised learning data generation, semantic segmentation probability maps, and general image processing operations such as resizing, blurring, edge detection, histogram matching, and CLAHE. It supports both 2D and 3D data formats and integrates with BiaPy configuration objects for flexible data pipelines.
 """
 import os
-import glob
+import itertools
 import json
 import warnings
 import edt
@@ -135,11 +135,16 @@ def save_cellpose_diameter_stats(stats: Dict, channels_dir: str, split: str):
     """
     Write per-image Cellpose diameter stats to a per-rank JSON shard.
 
+    Only used by :func:`create_instance_channels`'s synapse-detection path (``PROBLEM.INSTANCE_SEG.TYPE
+    == "synapses"``), which still caches its (whole-file, point-annotation-based) channel creation to
+    disk -- see that function's module-level notes. Regular instance-seg diameters are computed
+    on the fly by :func:`compute_cellpose_diameters` instead, with no disk round-trip.
+
     The JSON is written to the **parent** of ``channels_dir`` (not inside it), because BiaPy expects
     the instance-channels folder to contain only images. The ``split`` (``"train"``/``"val"``/
     ``"test"``) is encoded in the filename so the train/val/test shards do not collide when their
     channel folders share a parent. Per-rank shards avoid write races when the channels are created
-    with several processes; they are merged back by :func:`load_cellpose_diameter_stats`.
+    with several processes.
 
     Parameters
     ----------
@@ -159,52 +164,48 @@ def save_cellpose_diameter_stats(stats: Dict, channels_dir: str, split: str):
         json.dump(stats, f, indent=2)
 
 
-def load_cellpose_diameter_stats(channels_dir: str, split: str) -> Dict:
+def _cellpose_diameter_for_efficient_file(dfile, path_in_zarr: Optional[str], is_3d: bool) -> float:
     """
-    Load and merge the per-image Cellpose diameter JSON shard(s) written during channel creation.
-
-    The shards are read from the **parent** of ``channels_dir`` and filtered by ``split`` (matching
-    how :func:`save_cellpose_diameter_stats` writes them).
+    Compute the Cellpose-style diameter of a Zarr/H5-backed instance-label file without ever
+    materializing the full volume in memory: accumulate per-label voxel counts one native chunk at a
+    time (the file's own chunk grid, not a workflow-specific patch grid), then combine them exactly
+    like :func:`cellpose_diameter_stats` does for a single in-memory array.
 
     Parameters
     ----------
-    channels_dir : str
-        Directory where the instance-channel masks (flows) are stored. The ``cellpose_diameters_
-        {split}_rank*.json`` shard(s) are looked up in its parent.
-    split : str
-        Data split to load (``"train"``, ``"val"`` or ``"test"``).
+    dfile : DatasetFile
+        GT dataset file to read (``dfile.path`` is the Zarr/H5 file).
+    path_in_zarr : str, optional
+        Internal path to the label dataset (``INPUT_ZARR_MULTIPLE_DATA_GT_PATH``-style), for files
+        where raw data and labels are co-located. ``None`` for a plain, label-only Zarr/H5 file.
+    is_3d : bool
+        Whether the data is 3-D.
 
     Returns
     -------
-    dict
-        Mapping of image basename -> diameter (pixels). Empty if no JSON is found.
+    float
+        Median object diameter in pixels, or ``0.0`` when no object is present.
     """
-    if not channels_dir:
-        return {}
-    parent = os.path.dirname(os.path.normpath(channels_dir))
-    if not os.path.isdir(parent):
-        return {}
-    # Accumulate an n_objects-weighted diameter per file. A file normally appears in a single shard,
-    # but a Zarr/H5 file whose patches were split across ranks yields one (partial) entry per rank;
-    # weighting by object count combines them into a single representative diameter.
-    accum = {}  # basename -> [weighted_sum, weight]
-    for shard in sorted(glob.glob(os.path.join(parent, "cellpose_diameters_{}_rank*.json".format(split)))):
-        try:
-            with open(shard) as f:
-                data = json.load(f)
-        except Exception:
-            continue
-        for name, info in data.items():
-            if isinstance(info, dict):
-                d, n = info.get("diameter"), info.get("n_objects", 1)
-            else:
-                d, n = info, 1
-            if d is not None and d > 0:
-                b = os.path.basename(name)
-                w = float(max(1, int(n)))
-                ws, wt = accum.get(b, (0.0, 0.0))
-                accum[b] = (ws + float(d) * w, wt + w)
-    return {b: ws / wt for b, (ws, wt) in accum.items() if wt > 0}
+    if path_in_zarr:
+        fid, data = read_chunked_nested_data(dfile.path, path_in_zarr)
+    else:
+        fid, data = read_chunked_data(dfile.path)
+    try:
+        shape = data.shape
+        chunk_shape = getattr(data, "chunks", None) or shape
+        label_counts: Dict[int, int] = {}
+        ranges = [range(0, shape[d], chunk_shape[d]) for d in range(len(shape))]
+        for starts in itertools.product(*ranges):
+            slices = tuple(slice(s, min(s + chunk_shape[d], shape[d])) for d, s in enumerate(starts))
+            block = np.asarray(data[slices])
+            vals, counts = np.unique(block.astype(np.int64), return_counts=True)
+            for v, c in zip(vals.tolist(), counts.tolist()):
+                if v != 0:
+                    label_counts[v] = label_counts.get(v, 0) + c
+    finally:
+        if isinstance(fid, h5py.File):
+            fid.close()
+    return cellpose_diameter_from_areas(list(label_counts.values()), is_3d)
 
 
 def _max_image_dim_in_dirs(dirs: List[str]) -> int:
@@ -295,18 +296,26 @@ def set_embedseg_grid_size(cfg: CN) -> Optional[int]:
     return grid
 
 
-def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
+def _path_in_zarr_for_file(dataset: BiaPyDataset, file_idx: int) -> Optional[str]:
+    """Return the ``path_in_zarr`` of the first sample in ``dataset`` referencing file ``file_idx``."""
+    for sample in dataset.sample_list:
+        if sample.fid == file_idx:
+            return sample.get_path_in_zarr()
+    return None
+
+
+def compute_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
     """
-    Attach the per-image Cellpose diameter (pixels) to each GT ``DatasetFile``.
+    Attach the per-image Cellpose diameter (pixels) to each GT ``DatasetFile``, computed directly
+    from the raw instance-label files -- never cached to disk (unlike the offline instance-channel
+    creation this replaces: a value is computed once here, in memory, for the run's lifetime).
 
     For the Cellpose/Omnipose flow workflow this lets the train generator rescale every patch by
     ``DIAM_MEAN / diameter`` so cells become ~``DIAM_MEAN`` pixels (mirroring Cellpose's diameter
-    normalization). The per-image diameter is always taken from the ``cellpose_diameters*.json``
-    written when the instance channels were created — ``PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER`` is
-    NOT used here (it only drives the test-time input rescale), matching Cellpose, which measures the
-    diameter of each training image from its labels. When the validation set is split from train
-    (``DATA.VAL.FROM_TRAIN``) no ``val`` JSON exists, so the val files fall back to the train stats
-    (matched by basename). Files without a known diameter are left unscaled.
+    normalization). ``PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER`` is NOT used here (it only drives the
+    test-time input rescale), matching Cellpose, which measures the diameter of each training image
+    from its labels. Files shared between ``Y_train``/``Y_val`` (``DATA.VAL.FROM_TRAIN``) are only
+    scanned once.
 
     Parameters
     ----------
@@ -328,47 +337,31 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
     if not any(ch in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ("Gv", "Gh", "Gz")):
         return None
 
-    def _attach(dataset, channels_dir, split, diam_map=None, fallback_map=None):
+    is_3d = cfg.PROBLEM.NDIM == "3D"
+    diam_by_path: Dict[str, float] = {}
+
+    def _attach(dataset):
         if dataset is None:
             return []
-        if diam_map is None:
-            diam_map = load_cellpose_diameter_stats(channels_dir, split)
-        # When the split has no JSON of its own (e.g. validation split from train, where the val
-        # samples are training files), fall back to the map passed in (keyed by basename too).
-        used_fallback = False
-        if not diam_map and fallback_map:
-            diam_map = fallback_map
-            used_fallback = True
         collected = []
-        for dfile in dataset.dataset_info:
-            d = diam_map.get(os.path.basename(dfile.path))
-            d = d if (d is not None and d > 0) else None
-            dfile.diameter = d
-            if d:
-                collected.append(d)
-
-        # Report where the diameters came from for this split.
-        if is_main_process():
-            n_files = len(dataset.dataset_info)
-            json_dir = os.path.dirname(os.path.normpath(channels_dir))
-            if collected and used_fallback:
-                print("Cellpose [{}] diameter: matched per-image values for {}/{} file(s) from the "
-                      "train diameter stats (no {}-specific JSON; validation split from train).".format(
-                          split, len(collected), n_files, split))
-            elif collected:
-                print("Cellpose [{}] diameter: loaded per-image values for {}/{} file(s) from "
-                      "'{}' (cellpose_diameters_{}_rank*.json).".format(
-                          split, len(collected), n_files, json_dir, split))
-            else:
-                print("Cellpose [{}] diameter: no diameter found (looked for "
-                      "cellpose_diameters_{}_rank*.json in '{}'); {} file(s) left "
-                      "unscaled.".format(split, split, json_dir, n_files))
+        for idx, dfile in enumerate(dataset.dataset_info):
+            d = diam_by_path.get(dfile.path)
+            if d is None:
+                if dfile.is_parallel():
+                    d = _cellpose_diameter_for_efficient_file(
+                        dfile, _path_in_zarr_for_file(dataset, idx), is_3d
+                    )
+                else:
+                    img = read_img_as_ndarray(dfile.path, is_3d=is_3d)
+                    d = cellpose_diameter_stats(img, is_3d=is_3d)["diameter"]
+                diam_by_path[dfile.path] = d
+            dfile.diameter = d if d > 0 else None
+            if dfile.diameter:
+                collected.append(dfile.diameter)
         return collected
 
-    # Load the train map once and reuse it as the fallback for a validation set split from train.
-    train_map = load_cellpose_diameter_stats(cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR, "train")
-    train_diams = _attach(Y_train, cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR, "train", diam_map=train_map)
-    _attach(Y_val, cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR, "val", fallback_map=train_map)
+    train_diams = _attach(Y_train)
+    _attach(Y_val)
 
     representative = float(np.median(train_diams)) if train_diams else None
 
@@ -383,7 +376,7 @@ def set_cellpose_diameters(cfg: CN, Y_train, Y_val=None):
             )
         else:
             print(
-                "No Cellpose diameter stats found (no cellpose_diameters*.json); "
+                "No Cellpose diameter stats found (no foreground objects in the GT labels); "
                 "training patches will NOT be rescaled."
             )
     return representative
@@ -425,7 +418,7 @@ def set_file_resolutions(cfg: CN, X_train, X_val=None) -> None:
 
     Lets the train generator rescale each patch in-plane (Y, X) toward
     ``DATA.RESOLUTION_NORM.TARGET_RESOLUTION`` using the per-file resolution set here, mirroring
-    :func:`set_cellpose_diameters`. Files absent from the JSON are left with ``resolution=None``
+    :func:`compute_cellpose_diameters`. Files absent from the JSON are left with ``resolution=None``
     (no rescale). No-op when ``DATA.RESOLUTION_NORM.ENABLE`` is False.
 
     Parameters
