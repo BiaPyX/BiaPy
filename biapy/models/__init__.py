@@ -1644,7 +1644,10 @@ def check_bmz_model_compatibility(
         except Exception:
             return _result(True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n")
         try:
-            current_model = load_description(nickname)
+            # perform_io_checks=False: we only need the parsed RDF metadata to inspect the
+            # dependencies field, not to download/hash weights, sample and test files, which
+            # are otherwise fetched eagerly and can be hundreds of MBs per model.
+            current_model = load_description(nickname, perform_io_checks=False)
         except Exception:
             return _result(True, f"[{specific_workflow}] Couldn't load model for dependency check.\n")
         
