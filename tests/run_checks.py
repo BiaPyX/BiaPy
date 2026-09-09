@@ -2222,6 +2222,18 @@ def download_onedrive_file(drive_link, out_filename, attempts=5):
         if os.path.exists(out_filename):
             break
 
+def download_url_file(url, out_filename, attempts=5):
+    """ Try a few times to download a file with urllib (used for Zenodo/GitHub raw links) """
+    for i in range(attempts):
+        print(f"Trying to download {url} (attempt {i+1})")
+        try:
+            urllib.request.urlretrieve(url, filename=out_filename)
+        except Exception as e:
+            print(e)
+            time.sleep(5)
+        if os.path.exists(out_filename):
+            break
+
 def check_bmz_file_created(last_lines, pattern_to_find):
     """
     Checks BMZ model creation. E.g. "Package path: *.zip"
@@ -2438,7 +2450,7 @@ for category in DATASETS:
                 if "onedrive" in url.lower() or "sharepoint" in url.lower():
                     download_onedrive_file(url, out_filename)
                 elif "zenodo" in url.lower() or "raw.githubusercontent.com" in url.lower():
-                    urllib.request.urlretrieve(url, filename=out_filename)
+                    download_url_file(url, out_filename)
                 else:
                     download_drive_file(url, out_filename)
 
