@@ -662,10 +662,15 @@ class Base_Workflow(metaclass=ABCMeta):
         print("##########################")
         print("#   LOAD TRAINING DATA   #")
         print("##########################")
+        # Every problem type reads its mask samples from the dedicated GT tag within the Zarr/H5
+        # (DATA.<SPLIT>.INPUT_ZARR_MULTIPLE_DATA_GT_PATH), "use_gt_path" is always True here. This
+        # mirrors how load_and_prepare_test_data() already resolves it for INSTANCE_SEG (see
+        # load_test_data() below): TYPE == "INSTANCE_SEG" makes its "use_gt_path" condition False,
+        # which leaves it at its default of True.
         train_zarr_data_information = {
             "raw_path": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
             "gt_path": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
-            "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
+            "use_gt_path": True,
             "multiple_data_within_zarr": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA,
             "input_img_axes": self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
             "input_mask_axes": self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER,
@@ -673,11 +678,27 @@ class Base_Workflow(metaclass=ABCMeta):
         val_zarr_data_information = {
             "raw_path": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
             "gt_path": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
-            "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
+            "use_gt_path": True,
             "multiple_data_within_zarr": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA,
             "input_img_axes": self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
             "input_mask_axes": self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER,
         }
+
+        # Mirrors the DATA.TRAIN.GT_PATH override in Instance_Segmentation_Workflow.__init__: for
+        # "regular" instance labels co-located in the same Zarr/H5 as the raw val data (no separate
+        # mask folder -- DATA.VAL.GT_PATH is left at its unused default), the val mask samples must
+        # be walked from DATA.VAL.PATH too. Only takes effect when DATA.VAL.FROM_TRAIN is False (and
+        # DATA.VAL.CROSS_VAL is False), since otherwise load_and_prepare_train_data() derives the
+        # validation split from the train data/mask and ignores this value entirely. "synapses"
+        # still caches its rasterized channels to disk and repoints GT_PATH at that real directory
+        # in prepare_instance_data(), so it keeps using it as-is.
+        val_mask_path = self.cfg.DATA.VAL.GT_PATH
+        if (
+            self.cfg.PROBLEM.TYPE == "INSTANCE_SEG"
+            and self.cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses"
+            and self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA
+        ):
+            val_mask_path = self.cfg.DATA.VAL.PATH
 
         (
             self.X_train,
@@ -691,7 +712,7 @@ class Base_Workflow(metaclass=ABCMeta):
             train_ov=self.cfg.DATA.TRAIN.OVERLAP,
             train_padding=self.cfg.DATA.TRAIN.PADDING,
             val_path=self.cfg.DATA.VAL.PATH,
-            val_mask_path=self.cfg.DATA.VAL.GT_PATH,
+            val_mask_path=val_mask_path,
             val_in_memory=self.cfg.DATA.VAL.IN_MEMORY,
             val_ov=self.cfg.DATA.VAL.OVERLAP,
             val_padding=self.cfg.DATA.VAL.PADDING,

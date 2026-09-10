@@ -483,18 +483,18 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
         data_path = getattr(cfg.DATA, tag).PATH
         try:
             zarr_files = next(os_walk_clean(data_path))[1]
-        except StopIteration:
+        except (StopIteration, FileNotFoundError, NotADirectoryError):
             raise ValueError("No Zarr/N5 files found in the input path: {}".format(data_path))
         try:
             h5_files = next(os_walk_clean(data_path))[2]
-        except StopIteration:
+        except (StopIteration, FileNotFoundError, NotADirectoryError):
             raise ValueError("No H5 files found in the input path: {}".format(data_path))
     else:
         data_path = getattr(cfg.DATA, tag).GT_PATH
         try:
             zarr_files = next(os_walk_clean(data_path))[1]
             h5_files = next(os_walk_clean(data_path))[2]
-        except StopIteration:
+        except (StopIteration, FileNotFoundError, NotADirectoryError):
             raise ValueError("No Zarr/N5 or H5 files found in the GT path: {}".format(data_path))
 
     # Find patches info so we can iterate over them to create the instance mask

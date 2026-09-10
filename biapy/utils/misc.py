@@ -1231,6 +1231,14 @@ def os_walk_clean(
         # Pad numeric chunks so '2' < '10' < '100'
         return [p.zfill(10) if p.isdigit() else p.lower() for p in parts]
 
+    # os.walk() silently yields nothing for a missing/non-directory path, which turns into a
+    # cryptic "StopIteration" wherever callers do next(os_walk_clean(path)) - fail loudly here
+    # instead, with the path that is actually the problem.
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"os_walk_clean: path does not exist: '{path}'")
+    if not os.path.isdir(path):
+        raise NotADirectoryError(f"os_walk_clean: path is not a directory: '{path}'")
+
     for root, dirs, files in os.walk(path):
         dirs[:]  = [d for d in dirs  if d not in exclude_dirs and not d.startswith('.')]
         files    = [f for f in files if f not in exclude_files and not f.startswith('.')]
