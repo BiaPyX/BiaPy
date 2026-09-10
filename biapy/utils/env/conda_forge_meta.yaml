@@ -1,6 +1,5 @@
 {% set name = "biapy" %}
 {% set version = "3.7.1" %}
-{% set python_min = "3.11" %}
 
 package:
   name: {{ name }}
