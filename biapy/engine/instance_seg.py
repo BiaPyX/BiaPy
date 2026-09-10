@@ -194,15 +194,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         self.cfg.freeze()
 
         # Workflow specific training variables
-        # For "regular" instance labels with GT co-located in the same Zarr/H5 as the raw data
-        # (DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA), there is no separate mask folder: the raw labels
-        # live under DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH inside the very same file that
-        # DATA.TRAIN.PATH points to (DATA.TRAIN.GT_PATH is left at its unused default), and the
-        # target channels are built on the fly per patch from those raw labels (see
-        # PairBaseDataGenerator.load_sample). So walk DATA.TRAIN.PATH for the mask samples too,
-        # mirroring how prepare_instance_data() already resolves the TEST GT dir in this case.
-        # "synapses" still caches its rasterized channels to disk and repoints GT_PATH at that real
-        # directory in prepare_instance_data(), so it keeps using it as-is.
+        # GT_PATH is unused (co-located Zarr/H5 GT); walk PATH instead. Not for "synapses", which
+        # still repoints GT_PATH at its own cached channel dir in prepare_instance_data().
         if cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses" and cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
             self.mask_path = cfg.DATA.TRAIN.PATH
         else:
