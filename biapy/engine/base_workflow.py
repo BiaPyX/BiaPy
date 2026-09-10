@@ -1488,13 +1488,21 @@ class Base_Workflow(metaclass=ABCMeta):
                     "use_gt_path": use_gt_path,
                 }
 
+            test_mask_path = self.cfg.DATA.TEST.GT_PATH
+            if (
+                self.cfg.PROBLEM.TYPE == "INSTANCE_SEG"
+                and self.cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses"
+                and self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA
+            ):
+                test_mask_path = self.cfg.DATA.TEST.PATH
+
             (
                 self.X_test,
                 self.Y_test,
                 self.test_filenames,
             ) = load_and_prepare_test_data(
                 test_path=self.cfg.DATA.TEST.PATH,
-                test_mask_path=self.cfg.DATA.TEST.GT_PATH if self.use_gt else None,
+                test_mask_path=test_mask_path if self.use_gt else None,
                 multiple_raw_images=(
                     self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
                     and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
