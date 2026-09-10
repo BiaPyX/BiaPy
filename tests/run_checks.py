@@ -1438,7 +1438,12 @@ all_test_info["Test24"] = {
             "TEST": {
                 "PATH": os.path.join(data_folder, "instance_seg", "snemi_zarr", "data", "train", "zarr"),
                 "IN_MEMORY": False,
-                "LOAD_GT": True
+                "LOAD_GT": True,
+                "INPUT_IMG_AXES_ORDER": 'ZYX',
+                "INPUT_MASK_AXES_ORDER": 'ZYX',
+                "INPUT_ZARR_MULTIPLE_DATA": True,
+                "INPUT_ZARR_MULTIPLE_DATA_RAW_PATH": 'volumes.raw',
+                "INPUT_ZARR_MULTIPLE_DATA_GT_PATH": 'volumes.labels.neuron_ids'
             },
         },
         "TRAIN": {
