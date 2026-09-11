@@ -44,7 +44,7 @@ from biapy.engine.metrics import (
 from biapy.engine.supervoxel_loss import SupervoxelLoss
 from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matching_dataset_lazy
 from biapy.utils.misc import (
-    crop_border_numpy,
+    blackout_border_numpy,
     crop_border_tensor,
     os_walk_clean,
     to_pytorch_format,
@@ -141,6 +141,29 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 "DERIVED_CHANNELS includes 'skeleton_dt'/'hessian_blob' but SOURCE_CHANNELS "
                 f"({list(mr.SOURCE_CHANNELS)}) has no 'membrane' entry."
             )
+        if "class_union" in mr.DERIVED_CHANNELS and all(ch in ("membrane", "raw") for ch in mr.SOURCE_CHANNELS):
+            raise ValueError(
+                "DERIVED_CHANNELS includes 'class_union' but SOURCE_CHANNELS "
+                f"({list(mr.SOURCE_CHANNELS)}) has no entry other than 'membrane'/'raw'."
+            )
+        if mr.CLASS_SET_CHANNELS:
+            missing = [ch for ch in mr.CLASS_SET_CHANNELS if ch not in mr.DERIVED_CHANNELS]
+            if missing:
+                raise ValueError(
+                    f"MEMBRANE_REPAIR.CLASS_SET_CHANNELS {list(mr.CLASS_SET_CHANNELS)} must all be present "
+                    f"in DERIVED_CHANNELS ({list(mr.DERIVED_CHANNELS)}); missing: {missing}."
+                )
+            if mr.CLASS_SET_ENCODER.OUT_CHANNELS <= 0:
+                raise ValueError(
+                    "MEMBRANE_REPAIR.CLASS_SET_CHANNELS is non-empty but "
+                    "MEMBRANE_REPAIR.CLASS_SET_ENCODER.OUT_CHANNELS is not > 0."
+                )
+            if cfg.MODEL.ARCHITECTURE.lower() != "stunet" or str(cfg.MODEL.STUNET.VARIANT).lower() != "custom":
+                raise ValueError(
+                    "MEMBRANE_REPAIR.CLASS_SET_CHANNELS requires MODEL.ARCHITECTURE == 'stunet' and "
+                    "MODEL.STUNET.VARIANT == 'custom' (the only combination that supports it -- see "
+                    "MODEL.STUNET.CLASS_SET_CHANNEL_IDXS's docstring)."
+                )
 
     @staticmethod
     def _derive_membrane_repair_output_channels(cfg):
@@ -190,19 +213,38 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         """
         Present the model builder with the derived-only input width (``len(DERIVED_CHANNELS)``),
         then restore ``DATA.PATCH_SIZE`` to the raw ``SOURCE_CHANNELS`` count.
+
+        When ``CLASS_SET_CHANNELS`` is set, also translates it from ``DERIVED_CHANNELS`` names to
+        positions and forwards it (plus ``CLASS_SET_ENCODER``) to ``MODEL.STUNET.CLASS_SET_*`` for
+        the duration of the build, so STUNet routes that group through a permutation-invariant
+        encoder instead of its regular first layer -- see ``STUNet``'s docstring. Both overrides are
+        scoped to this call: neither the expanded patch size nor the STUNet class-set config leaks
+        into the rest of the run.
         """
         cfg = self.cfg
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
         raw_patch = tuple(cfg.DATA.PATCH_SIZE)
         expanded_patch = raw_patch[:-1] + (len(mr.DERIVED_CHANNELS),)
 
+        raw_class_set_idxs = list(cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS)
+        raw_class_set_out = cfg.MODEL.STUNET.CLASS_SET_OUT_CHANNELS
+        raw_class_set_pooling = cfg.MODEL.STUNET.CLASS_SET_POOLING
+
         was_frozen = cfg.is_frozen()
         cfg.defrost()
         cfg.DATA.PATCH_SIZE = expanded_patch
+        if mr.CLASS_SET_CHANNELS:
+            derived = list(mr.DERIVED_CHANNELS)
+            cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS = [derived.index(ch) for ch in mr.CLASS_SET_CHANNELS]
+            cfg.MODEL.STUNET.CLASS_SET_OUT_CHANNELS = mr.CLASS_SET_ENCODER.OUT_CHANNELS
+            cfg.MODEL.STUNET.CLASS_SET_POOLING = mr.CLASS_SET_ENCODER.POOLING
         try:
             super().prepare_model()
         finally:
             cfg.DATA.PATCH_SIZE = raw_patch
+            cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS = raw_class_set_idxs
+            cfg.MODEL.STUNET.CLASS_SET_OUT_CHANNELS = raw_class_set_out
+            cfg.MODEL.STUNET.CLASS_SET_POOLING = raw_class_set_pooling
             if was_frozen:
                 cfg.freeze()
 
@@ -570,9 +612,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         ``"agglomeration"`` (default, see ``biapy/data/post_processing/affinity_agglomeration.py``).
 
         If ``TEST.EVAL_BORDER_CROP`` is set, the saved/agglomerated instance labels are left
-        untouched, but a border-cropped copy of both the predicted labels and the GT is used for
-        matching, so only the center of the image is evaluated (see ``TEST.EVAL_BORDER_CROP``'s
-        docstring in config.py).
+        untouched, but a border-blacked-out copy of both the predicted labels and the GT (same
+        canvas shape, border region zeroed) is used for matching, so only the center of the image
+        is evaluated (see ``TEST.EVAL_BORDER_CROP``'s docstring in config.py).
 
         Parameters
         ----------
@@ -593,7 +635,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
         if pp.METHOD == "agglomeration":
             a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
-            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims)
+            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims, resolution=self.resolution)
             pred_labels = watershed_and_agglomerate_affinities(
                 data=pred,
                 offsets=offsets,
@@ -661,8 +703,8 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
             eval_Y, eval_pred_labels = _Y, pred_labels
             if eval_border_crop:
-                eval_Y = crop_border_numpy(_Y, eval_border_crop, has_channel_axis=False)
-                eval_pred_labels = crop_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
+                eval_Y = blackout_border_numpy(_Y, eval_border_crop, has_channel_axis=False)
+                eval_pred_labels = blackout_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
 
             results = self._matching_stats_and_report(eval_Y, eval_pred_labels, suffix="")
             self.all_matching_stats_merge_patches.append(results)
@@ -697,7 +739,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
             if matching_enabled:
                 eval_pred_labels_post = pred_labels
                 if eval_border_crop:
-                    eval_pred_labels_post = crop_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
+                    eval_pred_labels_post = blackout_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
                 results_post_proc = self._matching_stats_and_report(eval_Y, eval_pred_labels_post, suffix="_post-proc")
                 self.all_matching_stats_merge_patches_post.append(results_post_proc)
                 for i, r_per_th in enumerate(results_post_proc):

@@ -668,7 +668,11 @@ class Config:
         # used to compute DERIVED_CHANNELS (see below). Channels are resolved by name, not
         # position, so any order/subset works, e.g. ["membrane"], ["raw"], ["membrane", "raw"] or
         # ["raw", "membrane"] ("raw" required whenever 'meijering' is in DERIVED_CHANNELS;
-        # "membrane" required whenever 'skeleton_dt'/'hessian_blob' are).
+        # "membrane" required whenever 'skeleton_dt'/'hessian_blob' are). Any entry that is neither
+        # "membrane" nor "raw" (e.g. unsupervised per-slice GMM class maps, whose cluster-to-channel
+        # assignment is not stable across slices) is treated as a "class" channel, folded into the
+        # single 'class_union' derived channel below -- their names/count/order don't matter beyond
+        # that, since 'class_union' only takes their per-pixel union.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane", "raw"]
         # Ordered list of channels derived on the fly from SOURCE_CHANNELS -- the model's actual
         # input; must be non-empty. Options:
@@ -678,6 +682,10 @@ class Config:
         #     Derived from 'membrane' (required in SOURCE_CHANNELS).
         #   - 'meijering': standardised multi-scale Meijering ridge filter. Derived from 'raw'
         #     (required in SOURCE_CHANNELS).
+        #   - 'class_union': per-pixel union (max) of every SOURCE_CHANNELS entry that is not
+        #     'membrane'/'raw' (at least one such entry required in SOURCE_CHANNELS). Order-
+        #     invariant by construction -- use this instead of feeding per-class channels directly
+        #     whenever the class identity behind each channel isn't stable slice to slice.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS = ["skeleton_dt", "hessian_blob", "meijering"]
         # Per-channel options for DERIVED_CHANNELS. Must be a list with a unique element: a dict of
         # dicts, keyed by channel name. Possible options:
@@ -693,10 +701,28 @@ class Config:
         #         filter. Default: [1.0, 4.0]
         #       - 'standardize': bool, whether to z-score/percentile-normalize the response for
         #         cross-dataset comparability. Default: True
+        #   - 'class_union' channel. Possible options:
+        #       - 'threshold': float, threshold applied to each class map before taking the union.
+        #         Default: 0.5
+        #   - identity-passthrough channels (any name matching a SOURCE_CHANNELS entry): no options.
         # For example:
         #  DERIVED_CHANNELS = ['skeleton_dt', 'hessian_blob']
         #  DERIVED_CHANNELS_EXTRA_OPTS = [{'skeleton_dt': {'clamp_px': 8}, 'hessian_blob': {'sigma_range': [1.0, 2.5]}}]
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS_EXTRA_OPTS = [{}]
+        # Subset of DERIVED_CHANNELS naming an "exchangeable" group of identity-passthrough class
+        # channels whose channel-to-semantic mapping isn't stable slice to slice (e.g. per-slice
+        # GMM cluster ids). When non-empty, this is forwarded to MODEL.STUNET.CLASS_SET_CHANNEL_IDXS
+        # (translated from names to DERIVED_CHANNELS positions) so the model routes this group
+        # through a permutation-invariant encoder instead of its regular first layer -- see
+        # MODEL.STUNET.CLASS_SET_CHANNEL_IDXS's docstring. Only meaningful with MODEL.ARCHITECTURE
+        # == 'stunet' and MODEL.STUNET.VARIANT == 'custom'. Left empty (default), this is a no-op.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_CHANNELS = []
+        # Output width and pooling of the CLASS_SET_CHANNELS group's pooled encoding -- forwarded to
+        # MODEL.STUNET.CLASS_SET_OUT_CHANNELS / CLASS_SET_POOLING. Only used when CLASS_SET_CHANNELS
+        # is non-empty.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_ENCODER = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_ENCODER.OUT_CHANNELS = 8
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_ENCODER.POOLING = 'max'
 
         # Y-side: GT target channels, generated offline from the raw GT instance-label folder via the
         # same 'labels_into_channels' machinery INSTANCE_SEG uses (see PROBLEM.INSTANCE_SEG.DATA_CHANNELS
@@ -813,16 +839,6 @@ class Config:
         _C.DATA.SAVE_FILTERED_IMAGES = False
         # Number of filtered images to save. Only work when 'DATA.SAVE_FILTERED_IMAGES' is True
         _C.DATA.SAVE_FILTERED_IMAGES_NUM = 3
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 3.0.1 Per-file resolution normalization (mixing datasets of different physical resolution)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        _C.DATA.RESOLUTION_NORM = CN()
-        # Rescales each patch in-plane (Y,X) to TARGET_RESOLUTION, using a per-file resolution read
-        # from "resolution.json" in the parent of DATA.TRAIN.PATH/DATA.VAL.PATH.
-        _C.DATA.RESOLUTION_NORM.ENABLE = False
-        # Target (z,y,x) resolution; only y,x are used. Must be positive when ENABLE is True.
-        _C.DATA.RESOLUTION_NORM.TARGET_RESOLUTION = (-1.0, -1.0, -1.0)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3.1 Normalization options for the data
@@ -1720,6 +1736,22 @@ class Config:
         # Per-stage conv kernel size, (Z,Y,X), one entry per stage (len(DIMS)). Only used when VARIANT
         # = "custom"; set anisotropic values (e.g. [1,3,3]) to avoid mixing information across Z.
         _C.MODEL.STUNET.CONV_KERNEL_SIZES = [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]]
+        # Indices (into DATA.PATCH_SIZE's channel axis) of an "exchangeable" group of input channels
+        # whose channel-to-semantic mapping isn't stable (e.g. unsupervised per-slice GMM cluster
+        # ids that don't track the same physical structure from slice to slice). When non-empty,
+        # these channels are routed through a permutation-invariant encoder (shared per-channel 1x1
+        # conv + pooling, see biapy.models.blocks.PermInvariantChannelSetEncoder) instead of the
+        # network's regular first layer, so the result is exactly invariant to their order -- unlike
+        # unioning them into a single channel, real per-channel information survives. The remaining
+        # channels are passed through unchanged. Only used when VARIANT = "custom"; requires
+        # CLASS_SET_OUT_CHANNELS > 0. Left empty (default), this is a no-op.
+        _C.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS = []
+        # Output width of the CLASS_SET_CHANNEL_IDXS group's pooled encoding. Only used when
+        # CLASS_SET_CHANNEL_IDXS is non-empty.
+        _C.MODEL.STUNET.CLASS_SET_OUT_CHANNELS = 8
+        # Pooling across the CLASS_SET_CHANNEL_IDXS group: 'max' or 'mean'. Only used when
+        # CLASS_SET_CHANNEL_IDXS is non-empty.
+        _C.MODEL.STUNET.CLASS_SET_POOLING = 'max'
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.6 NafNet architecture options
@@ -2096,8 +2128,9 @@ class Config:
         #     denoising / super-resolution / image-to-image / self-supervised: the border region of the
         #     prediction and GT is excluded before computing pixel-wise metrics (IoU, MAE, MSE, SSIM,
         #     PSNR, etc).
-        #   * Object-level instance segmentation & membrane-repair matching: the predicted/GT instance
-        #     label images are cropped by this amount before matching.
+        #   * Object-level instance segmentation & membrane-repair matching: a copy of the predicted/GT
+        #     instance label images has this border region blacked out (kept at the original shape)
+        #     before matching, so the TP/FP/FN color map stays full-size too.
         #   * Detection: points (predicted or GT) whose coordinates fall in the border region are
         #     excluded from the precision/recall/F1 computation.
         #   * Classification: not applicable (no spatial dimension to crop); must be left empty.

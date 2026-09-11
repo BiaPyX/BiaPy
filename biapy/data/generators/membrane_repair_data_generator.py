@@ -14,7 +14,7 @@ disk). This mixin is the one place X's width changes: raw ``SOURCE_CHANNELS`` wi
 only width out.
 """
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -134,7 +134,7 @@ class MembraneRepairGeneratorMixin:
         img, mask = self.load_sample(index, geom_enlarge=True)
         img, mask = self.apply_transform(
             img, mask, e_im=None, e_mask=None,
-            resolution_norm_factor=self.resolution_norm_factor(index),
+            sample_resolution=self.resolution_for_affinities(index),
         )
 
         # Drop the instance-label regeneration source: it must never reach the model.
@@ -155,7 +155,7 @@ class MembraneRepairGeneratorMixin:
 
     def apply_transform(
         self, image: NDArray, mask: NDArray, e_im, e_mask,
-        diam_factor: float = 1.0, resolution_norm_factor: float = 1.0,
+        diam_factor: float = 1.0, sample_resolution: Optional[Tuple[float, ...]] = None,
     ):
         """
         Apply the shared geometric/content augmentations and GT affinity regeneration (inherited,
@@ -177,9 +177,9 @@ class MembraneRepairGeneratorMixin:
         diam_factor : float, optional
             Unused here (Cellpose-only); forwarded for signature compatibility.
 
-        resolution_norm_factor : float, optional
-            Per-sample in-plane resolution normalization factor; forwarded to the inherited
-            ``apply_transform`` (see ``PairBaseDataGenerator.resolution_norm_factor``).
+        sample_resolution : tuple of float, optional
+            Per-sample ``(z, y, x)`` resolution; forwarded to the inherited ``apply_transform`` for
+            'A'-channel regeneration (see ``PairBaseDataGenerator.resolution_for_affinities``).
 
         Returns
         -------
@@ -192,7 +192,7 @@ class MembraneRepairGeneratorMixin:
         """
         image, mask = super().apply_transform(
             image, mask, e_im, e_mask,
-            diam_factor=diam_factor, resolution_norm_factor=resolution_norm_factor,
+            diam_factor=diam_factor, sample_resolution=sample_resolution,
         )
 
         if self.gap_aug.get("enable") and self.da:

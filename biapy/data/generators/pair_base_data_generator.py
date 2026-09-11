@@ -365,14 +365,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         (``da=True``); validation/test apply the plain rescale with no jitter. ``0.0`` disables the
         jitter. Default ``0.5`` matches Cellpose's rescale training path (range ``[0.75, 1.25]``).
 
-    resolution_norm_target : sequence of float, optional
-        Target ``(z, y, x)`` physical resolution (``DATA.RESOLUTION_NORM.TARGET_RESOLUTION``). When
-        set, each patch is rescaled in-plane by ``resolution / resolution_norm_target`` (last axis),
-        with ``resolution`` the per-file value read from ``DatasetFile.resolution``, so patches from
-        datasets of different physical resolution reach a common in-plane scale. ``None`` (default)
-        disables it. Like the Cellpose rescale, this is a domain normalization, not augmentation, so
-        it also applies on validation.
-
     img_type : str or list of str, optional
         How ``X`` is interpolated by any in-plane scale/rotation warp. Either "image" (default,
         linear) or "mask" (nearest-neighbour) when ``X`` is itself binary/label data. A single
@@ -495,7 +487,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         instance_channel: Optional[int] = None,
         cellpose_diam_mean: float = 0.0,
         cellpose_scale_range: float = 0.5,
-        resolution_norm_target: Optional[Sequence[float]] = None,
         img_type: Union[str, List[str]] = "image",
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
@@ -587,11 +578,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Cellpose-style random scale jitter (CELLPOSE.SCALE_RANGE) applied on top of the diameter rescale
         # during training only. See apply_transform for the sampling formula.
         self.cellpose_scale_range = float(cellpose_scale_range)
-        # A domain normalization, not augmentation, so it also runs on validation.
-        self.resolution_norm_target = (
-            tuple(float(v) for v in resolution_norm_target) if resolution_norm_target else None
-        )
-        self.do_resolution_norm = self.resolution_norm_target is not None
         if isinstance(img_type, list) and len(img_type) != shape[-1]:
             raise ValueError(
                 f"'img_type' was given as a per-channel list of length {len(img_type)} but the "
@@ -701,6 +687,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         print("Normalization config used for X (first sample): {}".format(xnorm_info))
         print("Normalization config used for Y: {}".format(self.mask_norm))
 
+        # Kept in the original (z, y, x) order (unlike 'resolution'/'res_relation' below, reordered
+        # for augmentation), as the generator-wide default 'A'-channel (affinities) resolution
+        # fallback for files with no entry in resolution.json -- see resolution_for_affinities().
+        self.default_resolution_zyx = tuple(resolution)
+
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
             self.res_relation = (1.0, resolution[0] / resolution[1])
@@ -772,7 +763,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # (see geom_aug_load_shape). Folds in the largest-cell diameter downscale (DIAM_MEAN /
         # max_diameter), so it also applies when only the Cellpose rescale is active (validation, ``da`` off).
         self.aug_load_inc = tuple([0] * self.ndim)
-        if da or self.do_cellpose_rescale or self.do_resolution_norm:
+        if da or self.do_cellpose_rescale:
             extra_downscale = 1.0
             if self.do_cellpose_rescale:
                 diams = [
@@ -781,13 +772,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 diams = [float(d) for d in diams if d and float(d) > 0]
                 if diams:
                     extra_downscale = self.cellpose_diam_mean / max(diams)
-            if self.do_resolution_norm:
-                resolutions = [
-                    getattr(f, "resolution", None) for f in getattr(self.X, "dataset_info", [])
-                ]
-                resolutions = [float(r[-1]) for r in resolutions if r]
-                if resolutions:
-                    extra_downscale *= min(resolutions) / self.resolution_norm_target[-1]
             self.aug_load_inc = geom_aug_load_shape(
                 tuple(self.shape[: self.ndim]),
                 self.ndim,
@@ -1025,7 +1009,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         enlarge = (
             geom_enlarge
             and (not first_load)
-            and (self.da or self.do_cellpose_rescale or self.do_resolution_norm)
+            and (self.da or self.do_cellpose_rescale)
             and any(self.aug_load_inc)
         )
 
@@ -1185,7 +1169,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     "Expected instance segmentation GT images to have a single channel containing the instance "
                     "labels, but got a mask with shape {} ({} channels).".format(mask.shape, mask.shape[-1])
                 )
-            mask = labels_into_channels(mask, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts)
+            labels_into_channels_kwargs = {}
+            if self.ndim == 3:  # labels_into_channels's 'A' branch always expects a (z, y, x) triple
+                labels_into_channels_kwargs["resolution"] = (
+                    getattr(self.X.dataset_info[sample.fid], "resolution", None) or self.default_resolution_zyx
+                )
+            mask = labels_into_channels(
+                mask, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts, **labels_into_channels_kwargs
+            )
             if self.n_classes > 2:
                 mask = np.concatenate([mask, class_channel], axis=-1)
 
@@ -1249,32 +1240,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             return 1.0
         return self.cellpose_diam_mean / float(diameter)
 
-    def resolution_norm_factor(self, index: int) -> float:
-        """
-        Compute the per-sample in-plane resolution normalization factor for the sample at ``index``.
-
-        The factor is ``resolution / resolution_norm_target`` (last axis, X; Y is assumed to share
-        the same physical spacing), with ``resolution`` read from the raw ``DatasetFile.resolution``.
-        Returns ``1.0`` when normalization is disabled or the file's resolution is unknown.
-
-        Parameters
-        ----------
-        index : int
-            Sample index.
-
-        Returns
-        -------
-        float
-            In-plane resolution normalization factor to feed to :func:`apply_transform`.
-        """
-        if not self.do_resolution_norm:
-            return 1.0
+    def resolution_for_affinities(self, index: int) -> Tuple[float, ...]:
+        """Per-sample ``(z, y, x)`` resolution for 'A'-channel generation (units='physical_nm')."""
         idx = index % self.real_length
         msample = self.X.sample_list[idx]
         resolution = getattr(self.X.dataset_info[msample.fid], "resolution", None)
-        if resolution is None:
-            return 1.0
-        return float(resolution[-1]) / float(self.resolution_norm_target[-1])
+        return resolution if resolution is not None else self.default_resolution_zyx
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -1310,7 +1281,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Apply transformations. Validation enters here too for the Cellpose rescale: with ``da`` off
         # every augmentation roll returns False (see ``_roll``), so only the rescale, crop-back and flow
         # regeneration run.
-        if self.da or self.do_cellpose_rescale or self.do_resolution_norm:
+        if self.da or self.do_cellpose_rescale:
             e_img, e_mask = None, None
             if self.da and self.cutmix:
                 extra_img = np.random.randint(0, self.length - 1) if self.length > 2 else 0
@@ -1320,7 +1291,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img, mask = self.apply_transform(
                 img, mask, e_im=e_img, e_mask=e_mask,
                 diam_factor=self.cellpose_diam_factor(index),
-                resolution_norm_factor=self.resolution_norm_factor(index),
+                sample_resolution=self.resolution_for_affinities(index),
             )
 
         # Drop the instance channel: it only feeds the flow regeneration and must not reach the model.
@@ -1381,7 +1352,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         e_im: Optional[NDArray],
         e_mask: Optional[NDArray],
         diam_factor: float = 1.0,
-        resolution_norm_factor: float = 1.0,
+        sample_resolution: Optional[Tuple[float, ...]] = None,
     ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a probability.
@@ -1405,11 +1376,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         diam_factor : float, optional
             Per-sample in-plane diameter normalization factor (``DIAM_MEAN / diameter``) folded into
             the zoom so cells reach ~``DIAM_MEAN`` pixels. ``1.0`` (default) disables it.
-
-        resolution_norm_factor : float, optional
-            Per-sample in-plane resolution normalization factor (``resolution / resolution_norm_target``)
-            folded into the zoom so patches from different datasets reach a common physical scale.
-            ``1.0`` (default) disables it.
 
         Returns
         -------
@@ -1457,9 +1423,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # normalization (diam_factor = DIAM_MEAN / diameter, in-plane) is applied whenever needed, even
         # when no augmentation roll fires.
         do_diam_rescale = self.do_cellpose_rescale and diam_factor > 0 and abs(diam_factor - 1.0) > 1e-3
-        do_resolution_rescale = (
-            self.do_resolution_norm and resolution_norm_factor > 0 and abs(resolution_norm_factor - 1.0) > 1e-3
-        )
         # Cellpose-style random scale jitter around the diameter rescale, applied during training only
         # (da=True). It provides the scale randomization for the Cellpose approach on its own, so the
         # general 'zoom' augmentation is not additionally sampled when it is active.
@@ -1473,7 +1436,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             or apply_rand_rot
             or apply_rot90
             or do_diam_rescale
-            or do_resolution_rescale
         ):
             if apply_cellpose_jitter:
                 # Cellpose sampling: scale = (1 - scale_range/2) + scale_range * U[0, 1)
@@ -1492,7 +1454,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image,
                 mask=mask,
                 heat=heat,
-                scale_xy=scale * diam_factor * resolution_norm_factor,
+                scale_xy=scale * diam_factor,
                 scale_z=scale if self.zoom_in_z else 1.0,
                 angle=angle,
                 mode=self.affine_mode,
@@ -1689,8 +1651,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             and (self.heat_cols or self.regen_mask_map)
         ):
             labels_aug = np.expand_dims(mask[..., self.instance_mask_pos].astype(np.int32), -1)
+            regen_kwargs = {}
+            if self.ndim == 3:  # labels_into_channels's 'A' branch always expects a (z, y, x) triple
+                regen_kwargs["resolution"] = sample_resolution if sample_resolution is not None else self.default_resolution_zyx
             regen = labels_into_channels(
-                labels_aug, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts,
+                labels_aug, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts, **regen_kwargs
             )
             if heat is not None and self.heat_cols:
                 heat[...] = regen[..., self.heat_cols]
@@ -1885,7 +1850,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     e_im=e_img,
                     e_mask=e_mask,
                     diam_factor=self.cellpose_diam_factor(pos),
-                    resolution_norm_factor=self.resolution_norm_factor(pos),
+                    sample_resolution=self.resolution_for_affinities(pos),
                 )
 
             if self.n2v and not self.val:

@@ -7,10 +7,22 @@ model directly -- only these derived channels are:
 - ``skeleton_dt``: clamped EDT of the per-slice membrane skeleton.
 - ``hessian_blob``: Hessian-eigenvalue "blobness" response.
 - ``meijering``: standardised, multi-scale Meijering ridge response.
+- ``class_union``: per-pixel union (max) of every SOURCE_CHANNELS entry that is neither "membrane"
+  nor "raw" (e.g. unsupervised GMM-derived class maps). CAUTION: if those entries -- together with
+  "membrane" -- form a full partition of every pixel (e.g. a hard per-pixel GMM/argmax assignment
+  that includes a "membrane" class), this is *exactly* the pixelwise complement of "membrane" by
+  set-complement, not independent new information; a plain identity passthrough (see below) of the
+  individual entries, combined downstream by a permutation-invariant encoder (see
+  ``MODEL.STUNET.CLASS_SET_CHANNEL_IDXS``), is very likely what you actually want instead.
+- any other name that exactly matches a SOURCE_CHANNELS entry: identity passthrough of that source
+  channel, unchanged (e.g. for feeding a group of per-slice-unstable class channels through
+  individually, to be combined downstream by a permutation-invariant model-side encoder rather
+  than collapsed here).
 
 Channels are resolved by name, not position: ``skeleton_dt``/``hessian_blob`` need "membrane" in
-SOURCE_CHANNELS, ``meijering`` needs "raw". SOURCE_CHANNELS may be e.g. ``["membrane"]``,
-``["raw"]``, ``["membrane", "raw"]`` or ``["raw", "membrane"]``.
+SOURCE_CHANNELS, ``meijering`` needs "raw", ``class_union`` needs at least one non-"membrane",
+non-"raw" entry. SOURCE_CHANNELS may be e.g. ``["membrane"]``, ``["raw"]``,
+``["membrane", "raw"]``, ``["raw", "membrane"]`` or ``["membrane", "raw", "class_1", "class_2"]``.
 """
 from typing import Dict, List, Sequence, Tuple
 
@@ -226,12 +238,43 @@ def meijering_ridge(
     return response.astype(np.float32)
 
 
+def class_union(class_maps: NDArray, threshold: float = 0.5) -> NDArray:
+    """
+    Per-pixel union (max) of an arbitrary number of binary class maps.
+
+    Order-invariant by construction: unsupervised (e.g. GMM-over-features) class maps have no
+    stable cluster-to-channel assignment from slice to slice, so no fixed channel position can be
+    trusted to mean the same physical structure throughout a volume. Taking the union sidesteps
+    that entirely -- the result only encodes "some non-membrane/non-raw structure is here",
+    independent of which input channel it happened to land in.
+
+    Parameters
+    ----------
+    class_maps : 3D/4D Numpy array
+        Stacked class maps, ``(y, x, n_classes)`` in 2D or ``(z, y, x, n_classes)`` in 3D.
+
+    threshold : float, optional
+        Threshold applied to each class map before taking the union.
+
+    Returns
+    -------
+    union : 2D/3D Numpy array of float32
+        Same spatial shape as ``class_maps`` minus the class axis, values in ``{0, 1}``.
+    """
+    return (class_maps > threshold).any(axis=-1).astype(np.float32)
+
+
 def source_channel_offsets(source_channels: List[str], derived_channels: List[str]) -> Dict[str, int]:
     """
     Map channel names to indices. Only the ``source_channels`` entries are physically meaningful
     (used by corruption augmentors on the pre-derivation working array); ``derived_channels``
     entries are just offset by ``len(source_channels)`` for a collision-free namespace, since
     source and derived channels never coexist in the same array.
+
+    A ``derived_channels`` entry that is an identity passthrough of a ``source_channels`` entry
+    (see ``derive_membrane_input_channels``) legitimately shares that entry's name; its
+    ``source_channels`` offset wins in that case, since that's what every current caller (corruption
+    augmentors operating on the pre-derivation array) actually needs.
 
     Parameters
     ----------
@@ -251,7 +294,8 @@ def source_channel_offsets(source_channels: List[str], derived_channels: List[st
         offsets[name] = i
     base = len(source_channels)
     for i, name in enumerate(derived_channels):
-        offsets[name] = base + i
+        if name not in offsets:  # don't let a passthrough's derived offset shadow its source offset
+            offsets[name] = base + i
     return offsets
 
 
@@ -279,7 +323,10 @@ def derive_membrane_input_channels(
     derived_channels : list of str
         Ordered derived channel names to compute. Must be non-empty. Supported: ``"skeleton_dt"``,
         ``"hessian_blob"`` (from ``"membrane"``, which must be present in ``source_channels``),
-        ``"meijering"`` (from ``"raw"``, which must then be present in ``source_channels``).
+        ``"meijering"`` (from ``"raw"``, which must then be present in ``source_channels``),
+        ``"class_union"`` (per-pixel union of every ``source_channels`` entry that is not
+        ``"membrane"``/``"raw"``, at least one of which must then be present); any other name
+        that exactly matches a ``source_channels`` entry is passed through unchanged.
 
     derived_channels_extra_opts : dict of str to dict
         Per-channel options, e.g. ``{"skeleton_dt": {"clamp_px": 10}}``.
@@ -303,6 +350,7 @@ def derive_membrane_input_channels(
         raise ValueError("DERIVED_CHANNELS is empty -- at least one derived channel is required.")
     membrane_idx = source_channels.index("membrane") if "membrane" in source_channels else None
     raw_idx = source_channels.index("raw") if "raw" in source_channels else None
+    class_idxs = [i for i, name in enumerate(source_channels) if name not in ("membrane", "raw")]
 
     derived = []
     for name in derived_channels:
@@ -329,6 +377,15 @@ def derive_membrane_input_channels(
                 )
             raw = source_stack[..., raw_idx]
             chan = meijering_ridge(raw, ndim=ndim, **opts)
+        elif name == "class_union":
+            if not class_idxs:
+                raise ValueError(
+                    "'class_union' is in DERIVED_CHANNELS but SOURCE_CHANNELS "
+                    f"({source_channels}) has no entry other than 'membrane'/'raw'."
+                )
+            chan = class_union(source_stack[..., class_idxs], **opts)
+        elif name in source_channels:
+            chan = source_stack[..., source_channels.index(name)].astype(np.float32)
         else:
             raise ValueError(f"Unknown derived channel '{name}'")
         derived.append(np.expand_dims(chan.astype(np.float32), -1))

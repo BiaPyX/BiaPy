@@ -360,9 +360,6 @@ def create_train_val_augmentors(
             salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE,
             resolution=cfg.DATA.TRAIN.RESOLUTION,
-            resolution_norm_target=(
-                cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION if cfg.DATA.RESOLUTION_NORM.ENABLE else None
-            ),
             random_crops_in_DA=cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
             prob_map=prob_map,
             n_classes=cfg.DATA.N_CLASSES,
@@ -442,9 +439,6 @@ def create_train_val_augmentors(
             seed=cfg.SYSTEM.SEED,
             norm_module=norm_module,
             resolution=cfg.DATA.VAL.RESOLUTION,
-            resolution_norm_target=(
-                cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION if cfg.DATA.RESOLUTION_NORM.ENABLE else None
-            ),
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
             preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.VAL else None,

@@ -414,12 +414,9 @@ def load_resolution_stats(data_dir: str) -> Dict:
 def set_file_resolutions(cfg: CN, X_train, X_val=None) -> None:
     """
     Attach the per-image physical resolution to each raw ``DatasetFile``, read from
-    ``resolution.json`` (see :func:`load_resolution_stats`).
-
-    Lets the train generator rescale each patch in-plane (Y, X) toward
-    ``DATA.RESOLUTION_NORM.TARGET_RESOLUTION`` using the per-file resolution set here, mirroring
-    :func:`compute_cellpose_diameters`. Files absent from the JSON are left with ``resolution=None``
-    (no rescale). No-op when ``DATA.RESOLUTION_NORM.ENABLE`` is False.
+    ``resolution.json`` (see :func:`load_resolution_stats`). Used by the 'A'-channel generator
+    (``labels_into_channels``) when ``DATA_CHANNELS_EXTRA_OPTS[0]['A']['units'] == 'physical_nm'``.
+    Files absent from the JSON are left with ``resolution=None``.
 
     Parameters
     ----------
@@ -431,8 +428,6 @@ def set_file_resolutions(cfg: CN, X_train, X_val=None) -> None:
         Validation raw dataset (same treatment). Falls back to the train JSON, matched by
         basename, when it has no JSON of its own (e.g. validation split from train).
     """
-    if not cfg.DATA.RESOLUTION_NORM.ENABLE:
-        return
 
     def _attach(dataset, data_dir, res_map=None, fallback_map=None):
         if dataset is None:
@@ -1074,37 +1069,60 @@ def affinity_channel_names(a_opts: Dict) -> List[str]:
     return names
 
 
-def affinity_offsets_from_opts(a_opts: Dict, ndim: int) -> List[Tuple[int, ...]]:
+def _affinity_lists_to_voxels(
+    a_opts: Dict, ndim: int, resolution: Optional[List[int | float]]
+) -> Tuple[List[int], ...]:
     """
-    Build the per-channel offset list matching ``labels_into_channels``'s interleaved 'A' layout.
+    Read ``z/y/x_affinities`` from ``a_opts``; convert nm -> voxels per-axis
+    (``round(nm / resolution[axis])``, min 1) when ``a_opts["units"] == "physical_nm"``, else
+    used as-is (``"voxel"``, the default). ``resolution`` is required in ``"physical_nm"`` mode.
+    """
+    y_list = list(a_opts.get("y_affinities", [1]))
+    x_list = list(a_opts.get("x_affinities", [1]))
+    z_list = list(a_opts.get("z_affinities", [1])) if ndim == 3 else None
+    units = a_opts.get("units", "voxel")
+    if units not in ("voxel", "physical_nm"):
+        raise ValueError(f"a_opts['units'] must be 'voxel' or 'physical_nm', got {units!r}")
 
-    Shared by every consumer that turns predicted affinities back into instances (plain affinity
-    watershed, affinity agglomeration): ``biapy.engine.instance_seg`` and
-    ``biapy.engine.membrane_repair`` both call this with their own ``DATA_CHANNELS_EXTRA_OPTS[0]["A"]``.
+    if units == "physical_nm":
+        if resolution is None:
+            raise ValueError(
+                "a_opts['units'] == 'physical_nm' requires that sample's own (z, y, x) "
+                "'resolution' to convert nm offsets to voxel counts."
+            )
+        rz, ry, rx = resolution[0], resolution[-2], resolution[-1]
+        y_list = [max(1, round(v / ry)) for v in y_list]
+        x_list = [max(1, round(v / rx)) for v in x_list]
+        if z_list is not None:
+            z_list = [max(1, round(v / rz)) for v in z_list]
+
+    return (z_list, y_list, x_list) if ndim == 3 else (y_list, x_list)
+
+
+def affinity_offsets_from_opts(
+    a_opts: Dict, ndim: int, resolution: Optional[List[int | float]] = None
+) -> List[Tuple[int, ...]]:
+    """
+    Build the per-channel voxel-offset list matching ``labels_into_channels``'s interleaved 'A'
+    layout. Used by ``biapy.engine.instance_seg`` and ``biapy.engine.membrane_repair`` to turn
+    predicted affinities into instances (watershed / agglomeration).
 
     Parameters
     ----------
     a_opts : dict
-        ``DATA_CHANNELS_EXTRA_OPTS[0]["A"]``, with ``z_affinities``/``y_affinities``/
-        ``x_affinities`` (paired by index).
-
+        ``DATA_CHANNELS_EXTRA_OPTS[0]["A"]``.
     ndim : int
-        Number of spatial dimensions (``2`` or ``3``).
-
-    Returns
-    -------
-    offsets : list of tuple of int
-        One offset per affinity channel, in the same order ``labels_into_channels`` writes them
-        (interleaved: all offsets of pair 0, then pair 1, ...).
+        2 or 3.
+    resolution : list of int/float, optional
+        Required only when ``a_opts["units"] == "physical_nm"``.
     """
-    y_list = list(a_opts.get("y_affinities", [1]))
-    x_list = list(a_opts.get("x_affinities", [1]))
     if ndim == 3:
-        z_list = list(a_opts.get("z_affinities", [1]))
+        z_list, y_list, x_list = _affinity_lists_to_voxels(a_opts, ndim, resolution)
         offsets = []
         for z, y, x in zip(z_list, y_list, x_list):
             offsets.extend([(z, 0, 0), (0, y, 0), (0, 0, x)])
     else:
+        y_list, x_list = _affinity_lists_to_voxels(a_opts, ndim, resolution)
         offsets = []
         for y, x in zip(y_list, x_list):
             offsets.extend([(y, 0), (0, x)])
@@ -1639,16 +1657,9 @@ def labels_into_channels(
         if wb:
             ins_vol = seg_widen_border(vol, tsz_h=wb)
             
-        # One (z, y, x) triple per offset index, laid out from the 'A' block's own start channel --
-        # the order affinity_channel_names() declares and every consumer expects.
         a_start = channel_offsets["A"]
-        for k, (zaff, yaff, xaff) in enumerate(
-            zip(
-                channel_extra_opts["A"].get("z_affinities", []),
-                channel_extra_opts["A"].get("y_affinities", []),
-                channel_extra_opts["A"].get("x_affinities", []),
-            )
-        ):
+        z_affs, y_affs, x_affs = _affinity_lists_to_voxels(channel_extra_opts["A"], ndim=3, resolution=resolution)
+        for k, (zaff, yaff, xaff) in enumerate(zip(z_affs, y_affs, x_affs)):
             affs = seg2aff_pni(ins_vol, dz=zaff, dy=yaff, dx=xaff, dtype=dtype)  # shape: (n_affs, Z, Y, X)
             affs = np.transpose(affs, (1, 2, 3, 0))  # shape: (Z, Y, X, n_affs)
             new_mask[..., a_start + k * 3 : a_start + (k + 1) * 3] = affs

@@ -69,8 +69,8 @@ from biapy.utils.misc import (
     os_walk_clean,
     get_rank,
     get_world_size,
-    crop_border_numpy,
     crop_border_tensor,
+    blackout_border_numpy,
 )
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 from biapy.data.data_3D_manipulation import (
@@ -867,7 +867,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         elif self.cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "agglomeration":
             agg = self.cfg.PROBLEM.INSTANCE_SEG.AGGLOMERATION
             a_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("A", {})
-            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims)
+            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims, resolution=self.resolution)
             pred_labels = watershed_and_agglomerate_affinities(
                 data=pred,
                 offsets=offsets,
@@ -1237,10 +1237,14 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             border_crop = list(self.cfg.TEST.EVAL_BORDER_CROP)
             eval_border_crop = (([0] + border_crop) if self.cfg.PROBLEM.NDIM == "2D" else border_crop) if border_crop else []
 
+            # Blacked out (not cropped) so the GT and the TP/FP/FN color map derived from
+            # 'eval_pred_labels' keep the original canvas shape -- matching() already discards
+            # background (label 0) from its stats, so this gives identical matching numbers to a
+            # crop while not shrinking anything that gets saved to disk.
             eval_Y, eval_pred_labels = _Y, pred_labels
             if eval_border_crop:
-                eval_Y = crop_border_numpy(_Y, eval_border_crop, has_channel_axis=False)
-                eval_pred_labels = crop_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
+                eval_Y = blackout_border_numpy(_Y, eval_border_crop, has_channel_axis=False)
+                eval_pred_labels = blackout_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
 
             results = self._matching_stats_and_report(eval_Y, eval_pred_labels, filenames, suffix="")
 
@@ -1451,7 +1455,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 print("Calculating matching stats after post-processing . . .")
                 eval_pred_labels_post = pred_labels
                 if eval_border_crop:
-                    eval_pred_labels_post = crop_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
+                    eval_pred_labels_post = blackout_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
                 results_post_proc = self._matching_stats_and_report(
                     eval_Y, eval_pred_labels_post, filenames, suffix="_post-proc"
                 )

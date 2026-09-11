@@ -270,6 +270,10 @@ def build_model(
             args["dims"] = cfg.MODEL.STUNET.DIMS
             args["pool_op_kernel_sizes"] = cfg.MODEL.STUNET.POOL_OP_KERNEL_SIZES
             args["conv_kernel_sizes"] = cfg.MODEL.STUNET.CONV_KERNEL_SIZES
+            if cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS:
+                args["class_set_idxs"] = cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS
+                args["class_set_out_channels"] = cfg.MODEL.STUNET.CLASS_SET_OUT_CHANNELS
+                args["class_set_pooling"] = cfg.MODEL.STUNET.CLASS_SET_POOLING
         model = build_stunet(**args) # type: ignore
     else:
         if modelname == "simple_cnn":

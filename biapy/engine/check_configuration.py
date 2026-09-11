@@ -65,13 +65,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'TEST.EVAL_BORDER_CROP' needs to be of " f"{dim_count} dimension"
         )
 
-    if cfg.DATA.RESOLUTION_NORM.ENABLE:
-        yx_target = cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION[-2:]
-        assert len(cfg.DATA.RESOLUTION_NORM.TARGET_RESOLUTION) == 3 and all(v > 0 for v in yx_target), (
-            "'DATA.RESOLUTION_NORM.TARGET_RESOLUTION' must be a (z,y,x) tuple with positive y,x values "
-            "when 'DATA.RESOLUTION_NORM.ENABLE' is True"
-        )
-
     # Adjust overlap and padding in the default setting if it was not set
     opts = []
     if cfg.PROBLEM.NDIM == "3D":
@@ -617,14 +610,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # A — pixel/voxel affinities (fixed: removed invalid 'mode')
             if "A" in chs:
                 if "A" in dst:
-                    assert [x for x in dst["A"].keys() if x not in ["z_affinities", "y_affinities", "x_affinities", "widen_borders"]] == [], (
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'A' can only have 'z_affinities', 'y_affinities', 'x_affinities' and 'widen_borders' keys"
+                    assert [x for x in dst["A"].keys() if x not in ["z_affinities", "y_affinities", "x_affinities", "widen_borders", "units"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'A' can only have 'z_affinities', 'y_affinities', 'x_affinities', 'widen_borders' and 'units' keys"
                     )
                 dst["A"] = {
                     "z_affinities": dst.get("A", {}).get("z_affinities", [1]),
                     "y_affinities": dst.get("A", {}).get("y_affinities", [1]),
                     "x_affinities": dst.get("A", {}).get("x_affinities", [1]),
                     "widen_borders": dst.get("A", {}).get("widen_borders", 1),
+                    "units": dst.get("A", {}).get("units", "voxel"),  # 'voxel' or 'physical_nm'
                 }
                 # # If you want the SNEMI3D setup, uncomment:
                 # dst["A"] = {
@@ -1774,6 +1768,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         Ly, Lx = len(val["y_affinities"]), len(val["x_affinities"])
                         assert Ly == Lx, f"'{ctx}' affinity lists must have the same length (got {Ly}, {Lx})"
                     _assert_int(val, "widen_borders", ctx, min_val=0)
+                    _assert_optional_str_in(val, "units", {"voxel", "physical_nm"}, ctx)
 
                 elif key == "E_offset":
                     _assert_str_in(val, "center_mode", {"medoid", "centroid"}, ctx)

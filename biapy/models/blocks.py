@@ -22,6 +22,65 @@ from torchvision.ops.misc import Permute
 from typing import Optional, Type, List, Tuple
 
 
+class PermInvariantChannelSetEncoder(nn.Module):
+    """
+    Permutation-invariant encoder for a group of "exchangeable" single-channel inputs.
+
+    Applies the same learned 1x1(x1) convolution independently to each input channel in the group
+    (mapping 1 -> ``out_channels``), then pools across the group with ``'max'`` or ``'mean'``. The
+    result is exactly invariant to the order of the group's channels -- unlike a plain union/OR
+    reduction, each channel still gets a real (learned) per-channel embedding before pooling, so
+    distinguishing information between channels survives instead of collapsing to one bit.
+
+    Useful when a group of channels carries real per-channel information but their channel-to-
+    semantic mapping isn't stable (e.g. unsupervised per-slice cluster ids that don't track the
+    same physical structure from slice to slice, so no fixed channel position can be trusted).
+    """
+
+    def __init__(self, out_channels: int, ndim: int = 3, pooling: str = "max"):
+        """
+        Initialize the encoder.
+
+        Parameters
+        ----------
+        out_channels : int
+            Number of output (pooled) channels.
+
+        ndim : int, optional
+            Number of spatial dimensions (``2`` or ``3``).
+
+        pooling : str, optional
+            ``'max'`` or ``'mean'``.
+        """
+        super().__init__()
+        if pooling not in ("max", "mean"):
+            raise ValueError(f"pooling must be 'max' or 'mean', got {pooling!r}")
+        conv_op = nn.Conv3d if ndim == 3 else nn.Conv2d
+        self.embed = conv_op(1, out_channels, kernel_size=1)
+        self.pooling = pooling
+        self.out_channels = out_channels
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Encode and pool a group of exchangeable channels.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            ``(B, n_channels, *spatial)`` -- the group of exchangeable channels.
+
+        Returns
+        -------
+        torch.Tensor
+            ``(B, out_channels, *spatial)``.
+        """
+        b, n = x.shape[0], x.shape[1]
+        spatial = x.shape[2:]
+        embedded = self.embed(x.reshape(b * n, 1, *spatial))
+        embedded = embedded.reshape(b, n, self.out_channels, *spatial)
+        return embedded.max(dim=1).values if self.pooling == "max" else embedded.mean(dim=1)
+
+
 class ConvBlock(nn.Module):
     """
     Implements a standard Convolutional Block.

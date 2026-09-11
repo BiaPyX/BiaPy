@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 from torch import nn
 
-from biapy.models.blocks import init_weights, prepare_activation_layers
+from biapy.models.blocks import PermInvariantChannelSetEncoder, init_weights, prepare_activation_layers
 
 class BasicResBlock(nn.Module):
     """
@@ -145,7 +145,7 @@ class STUNet(nn.Module):
 
     conv_kernel_sizes : Optional[Sequence[Sequence[int]]]
         Convolution kernel sizes per stage.
-    
+
     explicit_activations : bool, optional
         If True, uses explicit activation functions in the last layers.
 
@@ -154,6 +154,22 @@ class STUNet(nn.Module):
 
     deep_supervision : bool
         Whether to enable deep supervision (multiple outputs).
+
+    class_set_idxs : sequence of int, optional
+        Indices (into ``image_shape``'s channel axis) of an "exchangeable" group of input
+        channels whose channel-to-semantic mapping isn't stable (e.g. unsupervised per-slice
+        cluster ids). When given, these channels are routed through a
+        ``PermInvariantChannelSetEncoder`` (see ``biapy.models.blocks``) instead of the network's
+        regular first layer, so the result is invariant to their order. The remaining channels
+        are passed through unchanged. Requires ``class_set_out_channels > 0``.
+
+    class_set_out_channels : int, optional
+        Output width of the ``class_set_idxs`` group's pooled encoding. Only used when
+        ``class_set_idxs`` is given.
+
+    class_set_pooling : str, optional
+        ``'max'`` or ``'mean'`` pooling across the ``class_set_idxs`` group. Only used when
+        ``class_set_idxs`` is given.
 
     return_one_tensor : bool
         If True, concatenates all outputs into a single tensor along the channel dimension.
@@ -177,6 +193,9 @@ class STUNet(nn.Module):
         return_one_tensor: bool = False,
         *,
         deep_supervision: bool = True,
+        class_set_idxs: Optional[Sequence[int]] = None,
+        class_set_out_channels: int = 0,
+        class_set_pooling: str = "max",
     ):
         super().__init__()
 
@@ -193,6 +212,21 @@ class STUNet(nn.Module):
         self.image_shape = image_shape
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.input_channels = int(image_shape[-1])
+
+        self.class_set_idxs = list(class_set_idxs) if class_set_idxs else []
+        if self.class_set_idxs:
+            if class_set_out_channels <= 0:
+                raise ValueError("'class_set_out_channels' must be > 0 when 'class_set_idxs' is given.")
+            self.regular_idxs = [i for i in range(self.input_channels) if i not in self.class_set_idxs]
+            self.class_set_encoder = PermInvariantChannelSetEncoder(
+                out_channels=class_set_out_channels, ndim=self.ndim, pooling=class_set_pooling
+            )
+            # Everything downstream (stage0's first conv included) is built at the post-adapter
+            # width: len(regular channels) + the pooled group's width, not the raw input width.
+            self.input_channels = len(self.regular_idxs) + class_set_out_channels
+        else:
+            self.regular_idxs = []
+            self.class_set_encoder = None
 
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
@@ -345,6 +379,11 @@ class STUNet(nn.Module):
         """
         skips: List[torch.Tensor] = []
         seg_outputs: List[torch.Tensor] = []
+
+        if self.class_set_encoder is not None:
+            regular = x[:, self.regular_idxs]
+            pooled = self.class_set_encoder(x[:, self.class_set_idxs])
+            x = torch.cat([regular, pooled], dim=1)
 
         # encoder (collect skips except bottleneck)
         for d in range(len(self.conv_blocks_context) - 1):
@@ -520,7 +559,10 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
                  pretrained: Union[bool, str] = False, map_location: str = "cpu", return_one_tensor: bool = False,
                  depth: Optional[Sequence[int]] = None, dims: Optional[Sequence[int]] = None,
                  pool_op_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
-                 conv_kernel_sizes: Optional[Sequence[Sequence[int]]] = None) -> STUNet:
+                 conv_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
+                 class_set_idxs: Optional[Sequence[int]] = None,
+                 class_set_out_channels: int = 0,
+                 class_set_pooling: str = "max") -> STUNet:
     """
     Build a STUNet model (small, base, large, custom) with optional pretrained encoder loading.
 
@@ -559,8 +601,16 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
     conv_kernel_sizes : sequence of sequence of int, optional
         Only used when ``variant == "custom"``. Per-stage (potentially anisotropic) convolution
         kernel sizes, same length as ``dims`` -- see ``STUNet``.
+    class_set_idxs, class_set_out_channels, class_set_pooling
+        Only used when ``variant == "custom"`` (forwarded to ``STUNet`` -- see its docstring).
+        Not supported together with a pretrained small/base/large checkpoint, whose stem weights
+        assume the plain, unreduced input width.
     """
     v = variant.lower()
+    if class_set_idxs and v != "custom":
+        raise ValueError(
+            f"'class_set_idxs' is only supported with variant == 'custom' (got variant={variant!r})."
+        )
     if v == "small":
         model = STUNet_small(
             image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info,
@@ -593,6 +643,8 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
             return_one_tensor=return_one_tensor,
             depth=depth, dims=dims, pool_op_kernel_sizes=pool_op_kernel_sizes, conv_kernel_sizes=conv_kernel_sizes,
+            class_set_idxs=class_set_idxs, class_set_out_channels=class_set_out_channels,
+            class_set_pooling=class_set_pooling,
         )
         if pretrained is True:
             raise ValueError(

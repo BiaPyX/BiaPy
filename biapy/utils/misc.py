@@ -803,6 +803,54 @@ def crop_border_numpy(arr: NDArray, border: List[int], has_channel_axis: bool = 
     return arr[slices]
 
 
+def blackout_border_numpy(arr: NDArray, border: List[int], has_channel_axis: bool = False) -> NDArray:
+    """
+    Zero out the ``border[i]``-pixel/voxel frame of each leading spatial axis of `arr`, keeping
+    its original shape.
+
+    Same purpose as ``crop_border_numpy`` (excluding the border region from evaluation, see
+    ``TEST.EVAL_BORDER_CROP``), but for object-level instance matching, where shrinking the array
+    would also shrink whatever is derived from it for visual inspection (e.g. the TP/FP/FN color
+    map). Since object matching (``biapy.utils.matching.matching``) already discards background
+    (label 0) from its stats, zeroing the border gives the same matching numbers as
+    ``crop_border_numpy`` while keeping the full-size canvas -- unlike pixel-wise metrics (IoU,
+    MAE, ...), which must use ``crop_border_numpy``/``crop_border_tensor`` instead, since zeroing
+    would count the blacked-out background as a (trivially correct) prediction.
+
+    Parameters
+    ----------
+    arr : NDArray
+        Array whose leading axes are spatial (``(z, y, x, ...)`` or ``(y, x, ...)``), optionally
+        followed by a trailing channel axis left untouched.
+
+    border : list of int
+        Per-spatial-axis border width, zeroed symmetrically on both sides, e.g. ``[z, y, x]``
+        (3D) or ``[y, x]`` (2D). Must match the number of spatial axes in `arr`.
+
+    has_channel_axis : bool, optional
+        Whether `arr`'s last axis is a channel axis to leave uncropped.
+
+    Returns
+    -------
+    NDArray
+        A copy of `arr` with the border region set to 0.
+    """
+    spatial_ndim = arr.ndim - 1 if has_channel_axis else arr.ndim
+    assert len(border) == spatial_ndim, (
+        f"Border crop {border} does not match the {spatial_ndim} spatial axes of an array with shape {arr.shape}"
+    )
+    out = arr.copy()
+    for axis, b in enumerate(border):
+        if b <= 0:
+            continue
+        slices: List[slice] = [slice(None)] * out.ndim
+        slices[axis] = slice(0, b)
+        out[tuple(slices)] = 0
+        slices[axis] = slice(out.shape[axis] - b, out.shape[axis])
+        out[tuple(slices)] = 0
+    return out
+
+
 def crop_border_tensor(tensor: torch.Tensor, border: List[int]) -> torch.Tensor:
     """
     Crop ``border[i]`` pixels/voxels off both sides of each spatial axis of a ``(N, C, ...)`` tensor.

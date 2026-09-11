@@ -19,7 +19,7 @@ import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 import torch.distributed as dist
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
 import pandas as pd
@@ -102,6 +102,7 @@ from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import compute_cellpose_diameters
 from biapy.data.pre_processing import set_file_resolutions
+from biapy.data.pre_processing import load_resolution_stats
 from biapy.data.norm import normalize_image
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.engine.chunked_tiles import ChunkedTileProcessor
@@ -264,6 +265,10 @@ class Base_Workflow(metaclass=ABCMeta):
             self.resolution = [
                 1,
             ] + self.resolution
+        # Per-file resolution override for TEST (test() sets self.resolution from this map per
+        # current_sample, falling back to the default above).
+        self._default_test_resolution: List[int | float] = list(self.resolution)
+        self._test_resolution_map: Dict[str, Tuple[float, ...]] = load_resolution_stats(self.cfg.DATA.TEST.PATH)
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
@@ -758,8 +763,8 @@ class Base_Workflow(metaclass=ABCMeta):
         # rescale each patch by DIAM_MEAN / diameter (mirroring Cellpose's diameter normalization).
         self.cellpose_diameter = compute_cellpose_diameters(self.cfg, self.Y_train, self.Y_val)
 
-        # Attach the per-image physical resolution to each raw DatasetFile so the train generator can
-        # rescale each patch toward DATA.RESOLUTION_NORM.TARGET_RESOLUTION.
+        # Attach the per-image physical resolution to each raw DatasetFile (used for 'A'-channel
+        # generation when units == 'physical_nm').
         set_file_resolutions(self.cfg, self.X_train, self.X_val)
 
         # Ensure all the processes have read the data
@@ -1698,6 +1703,13 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Process all the images
         for i, self.current_sample in enumerate(self.test_generator):  # type: ignore
+            # Per-file resolution override (see '_test_resolution_map' in __init__).
+            file_resolution = self._test_resolution_map.get(self.current_sample["X_filename"])
+            if file_resolution is not None:
+                self.resolution = [1] + list(file_resolution) if self.cfg.PROBLEM.NDIM == "2D" else list(file_resolution)
+            else:
+                self.resolution = list(self._default_test_resolution)
+
             self.current_sample_metrics = {"file": self.current_sample["X_filename"]}
             self.f_numbers = [i]
             if "Y" not in self.current_sample:
