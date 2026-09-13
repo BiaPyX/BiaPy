@@ -670,6 +670,7 @@ def create_test_generator(
         gen_name = test_pair_data_generator
         dic["Y"] = Y_test
         dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
+        dic["resolution"] = cfg.DATA.TEST.RESOLUTION
         _membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
         dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG" or _membrane_repair
         # 'I' is in the test GT too and must be dropped before the GT is used for the metrics.

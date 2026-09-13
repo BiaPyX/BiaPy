@@ -411,6 +411,55 @@ def load_resolution_stats(data_dir: str) -> Dict:
     return {name: tuple(float(v) for v in res) for name, res in data.items()}
 
 
+def _attach_file_resolutions(dataset, data_dir, res_map=None, fallback_map=None, fallback_split_name=None):
+    """
+    Attach ``.resolution`` (per basename, from ``res_map``) to every ``DatasetFile`` of ``dataset``.
+    Shared implementation behind :func:`set_file_resolutions` and :func:`set_test_file_resolutions`.
+
+    Parameters
+    ----------
+    dataset : BiaPyDataset or None
+        Raw dataset whose ``DatasetFile`` entries get ``.resolution`` set (in place). No-op if ``None``.
+    data_dir : str
+        Directory the dataset's images were loaded from (used only for the log message).
+    res_map : dict, optional
+        Basename -> ``(z, y, x)`` resolution mapping. Loaded from ``data_dir``'s own
+        ``resolution.json`` (see :func:`load_resolution_stats`) if not given.
+    fallback_map : dict, optional
+        Used, matched by basename, when ``res_map`` is empty (e.g. this split has no
+        ``resolution.json`` of its own).
+    fallback_split_name : str, optional
+        Name of the split ``fallback_map`` came from, for the log message (e.g. ``"train"``).
+
+    Returns
+    -------
+    dict
+        The resolution map actually used (``res_map`` or ``fallback_map``).
+    """
+    if dataset is None:
+        return {}
+    if res_map is None:
+        res_map = load_resolution_stats(data_dir)
+    used_fallback = False
+    if not res_map and fallback_map:
+        res_map = fallback_map
+        used_fallback = True
+    matched = 0
+    for dfile in dataset.dataset_info:
+        dfile.resolution = res_map.get(os.path.basename(dfile.path))
+        if dfile.resolution is not None:
+            matched += 1
+
+    if is_main_process():
+        n_files = len(dataset.dataset_info)
+        if used_fallback:
+            print(f"Resolution norm: matched {matched}/{n_files} file(s) from the {fallback_split_name} "
+                  f"resolution.json (no split-specific JSON).")
+        else:
+            print(f"Resolution norm: matched {matched}/{n_files} file(s) from '{data_dir}'.")
+    return res_map
+
+
 def set_file_resolutions(cfg: CN, X_train, X_val=None) -> None:
     """
     Attach the per-image physical resolution to each raw ``DatasetFile``, read from
@@ -428,34 +477,30 @@ def set_file_resolutions(cfg: CN, X_train, X_val=None) -> None:
         Validation raw dataset (same treatment). Falls back to the train JSON, matched by
         basename, when it has no JSON of its own (e.g. validation split from train).
     """
-
-    def _attach(dataset, data_dir, res_map=None, fallback_map=None):
-        if dataset is None:
-            return {}
-        if res_map is None:
-            res_map = load_resolution_stats(data_dir)
-        used_fallback = False
-        if not res_map and fallback_map:
-            res_map = fallback_map
-            used_fallback = True
-        matched = 0
-        for dfile in dataset.dataset_info:
-            dfile.resolution = res_map.get(os.path.basename(dfile.path))
-            if dfile.resolution is not None:
-                matched += 1
-
-        if is_main_process():
-            n_files = len(dataset.dataset_info)
-            if used_fallback:
-                print(f"Resolution norm: matched {matched}/{n_files} file(s) from the train "
-                      "resolution.json (no split-specific JSON; validation split from train).")
-            else:
-                print(f"Resolution norm: matched {matched}/{n_files} file(s) from '{data_dir}'.")
-        return res_map
-
     train_map = load_resolution_stats(cfg.DATA.TRAIN.PATH)
-    _attach(X_train, cfg.DATA.TRAIN.PATH, res_map=train_map)
-    _attach(X_val, cfg.DATA.VAL.PATH, fallback_map=train_map)
+    _attach_file_resolutions(X_train, cfg.DATA.TRAIN.PATH, res_map=train_map)
+    _attach_file_resolutions(X_val, cfg.DATA.VAL.PATH, fallback_map=train_map, fallback_split_name="train")
+
+
+def set_test_file_resolutions(cfg: CN, X_test) -> None:
+    """
+    Attach the per-image physical resolution to each raw test ``DatasetFile``, read from
+    ``resolution.json`` (see :func:`load_resolution_stats`). Mirrors :func:`set_file_resolutions`
+    for train/val; test is loaded separately (:meth:`base_workflow.BaseWorkflow.load_test_data`), so
+    it needs its own entry point. Without this, per-sample resolution is never available at test time
+    and the 'A'-channel generator silently falls back to its ``[1, 1, 1]`` default when
+    ``units == 'physical_nm'``, turning nm offsets into voxel offsets unscaled.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
+    X_test : BiaPyDataset
+        Test raw dataset whose ``DatasetFile`` entries get ``.resolution`` set (in place). Falls back
+        to the train JSON, matched by basename, when the test split has no JSON of its own.
+    """
+    train_map = load_resolution_stats(cfg.DATA.TRAIN.PATH)
+    _attach_file_resolutions(X_test, cfg.DATA.TEST.PATH, fallback_map=train_map, fallback_split_name="train")
 
 
 def create_instance_channels(cfg: CN, data_type: str = "train"):

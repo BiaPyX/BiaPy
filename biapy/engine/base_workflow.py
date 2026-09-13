@@ -101,7 +101,7 @@ from biapy.data.roi_mask import load_roi_mask
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import compute_cellpose_diameters
-from biapy.data.pre_processing import set_file_resolutions
+from biapy.data.pre_processing import set_file_resolutions, set_test_file_resolutions
 from biapy.data.pre_processing import load_resolution_stats
 from biapy.data.norm import normalize_image
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
@@ -1514,6 +1514,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 ),
                 test_zarr_data_information=test_zarr_data_information,
             )
+
+            # Attach the per-image physical resolution to each raw DatasetFile (used for 'A'-channel
+            # generation when units == 'physical_nm'), same as load_train_data does for train/val.
+            set_test_file_resolutions(self.cfg, self.X_test)
 
     def destroy_test_data(self):
         """Delete test variable to release memory."""

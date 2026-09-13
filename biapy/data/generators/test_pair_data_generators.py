@@ -52,6 +52,12 @@ class test_pair_data_generator(Dataset):
     channel_extra_opts : dict, optional
         Per-channel options used to build ``data_channels`` (``DATA_CHANNELS_EXTRA_OPTS[0]``).
 
+    resolution : tuple of int/float, optional
+        Fallback ``(z, y, x)`` physical resolution used for 'A'-channel generation
+        (``units == 'physical_nm'``) when a sample has no per-file resolution attached (see
+        ``biapy.data.pre_processing.set_test_file_resolutions``). Mirrors
+        ``PairBaseDataGenerator``'s ``resolution`` parameter.
+
     convert_to_rgb : bool, optional
         Whether to convert images into 3-channel, i.e. RGB, by using the information of the first channel.
 
@@ -107,6 +113,7 @@ class test_pair_data_generator(Dataset):
         instance_channel: Optional[int] = None,
         data_channels: List = [],
         channel_extra_opts: Dict = {},
+        resolution: Tuple[int | float, ...] = (-1,),
         convert_to_rgb: bool = False,
         filter_props: List[List[str]] = [],
         filter_vals: Optional[List[List[float | int]]] = None,
@@ -144,6 +151,7 @@ class test_pair_data_generator(Dataset):
         self.instance_channel = instance_channel
         self.data_channels = list(data_channels)
         self.channel_extra_opts = dict(channel_extra_opts)
+        self.default_resolution_zyx = tuple(resolution)
         self.n_classes = n_classes
         self.ignore_index = ignore_index
 
@@ -174,6 +182,11 @@ class test_pair_data_generator(Dataset):
                 instance_problem=instance_problem,
                 apply_norm=False
             )
+
+    def resolution_for_affinities(self, sample: DataSample) -> Tuple[int | float, ...]:
+        """Per-sample ``(z, y, x)`` resolution for 'A'-channel generation (units='physical_nm')."""
+        resolution = getattr(self.X.dataset_info[sample.fid], "resolution", None)
+        return resolution if resolution is not None else self.default_resolution_zyx
 
     def _mask_fits_uint8(self) -> bool:
         """Whether every ground-truth channel holds integer-like values, i.e. survives a uint8 cast."""
@@ -303,7 +316,12 @@ class test_pair_data_generator(Dataset):
                             mask.shape, mask.shape[-1]
                         )
                     )
-                mask = labels_into_channels(mask, mode=self.data_channels, channel_extra_opts=self.channel_extra_opts)
+                mask = labels_into_channels(
+                    mask,
+                    mode=self.data_channels,
+                    channel_extra_opts=self.channel_extra_opts,
+                    resolution=self.resolution_for_affinities(sample),
+                )
                 if self.n_classes > 2:
                     mask = np.concatenate([mask, class_channel], axis=-1)
 
