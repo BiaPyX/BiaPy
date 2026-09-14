@@ -2162,106 +2162,6 @@ class SSIM_loss(torch.nn.Module):
         return 1 - self.ssim(input, target)
 
 
-class W_MAE_SSIM_loss(torch.nn.Module):
-    """
-    Weighted combination of MAE and SSIM loss.
-
-    This loss combines Mean Absolute Error (MAE) and Structural Similarity Index Measure (SSIM)
-    for image regression tasks, allowing the user to balance pixel-wise and perceptual similarity.
-    """
-
-    def __init__(self, data_range, device, w_mae=0.5, w_ssim=0.5):
-        """
-        Initialize the W_MAE_SSIM_loss module.
-
-        Parameters
-        ----------
-        data_range : float
-            The value range of the input images (e.g., 1.0 or 255).
-        device : torch.device
-            Device to use for computation.
-        w_mae : float, optional
-            Weight for the MAE loss component (default: 0.5).
-        w_ssim : float, optional
-            Weight for the SSIM loss component (default: 0.5).
-        """
-        super(W_MAE_SSIM_loss, self).__init__()
-        self.w_mae = w_mae
-        self.w_ssim = w_ssim
-        self.mse = torch.nn.L1Loss().to(device, non_blocking=True)
-        self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
-
-    def forward(self, input, target):
-        """
-        Compute the weighted sum of MAE and SSIM loss.
-
-        Parameters
-        ----------
-        input : torch.Tensor or dict
-            Predicted images. If a dict, expects the prediction under the "pred" key.
-        target : torch.Tensor
-            Ground truth images.
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Weighted sum of MAE and (1 - SSIM) loss.
-        """
-        if isinstance(input, dict):
-            input = input["pred"]
-        return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
-
-
-class W_MSE_SSIM_loss(torch.nn.Module):
-    """
-    Weighted combination of MSE and SSIM loss.
-
-    This loss combines Mean Squared Error (MSE) and Structural Similarity Index Measure (SSIM)
-    for image regression tasks, allowing the user to balance pixel-wise and perceptual similarity.
-    """
-
-    def __init__(self, data_range, device, w_mse=0.5, w_ssim=0.5):
-        """
-        Initialize the W_MSE_SSIM_loss module.
-
-        Parameters
-        ----------
-        data_range : float
-            The value range of the input images (e.g., 1.0 or 255).
-        device : torch.device
-            Device to use for computation.
-        w_mse : float, optional
-            Weight for the MSE loss component (default: 0.5).
-        w_ssim : float, optional
-            Weight for the SSIM loss component (default: 0.5).
-        """
-        super(W_MSE_SSIM_loss, self).__init__()
-        self.w_mse = w_mse
-        self.w_ssim = w_ssim
-        self.mse = torch.nn.MSELoss().to(device, non_blocking=True)
-        self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
-
-    def forward(self, input, target):
-        """
-        Compute the weighted sum of MSE and SSIM loss.
-
-        Parameters
-        ----------
-        input : torch.Tensor or dict
-            Predicted images. If a dict, expects the prediction under the "pred" key.
-        target : torch.Tensor
-            Ground truth images.
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Weighted sum of MSE and (1 - SSIM) loss.
-        """
-        if isinstance(input, dict):
-            input = input["pred"]
-        return (self.mse(input, target) * self.w_mse) + ((1 - self.ssim(input, target)) * self.w_ssim)
-
-
 def n2v_loss_mse(y_pred, y_true):
     """
     Noise2Void MSE loss for self-supervised denoising.
@@ -3303,10 +3203,19 @@ class CycleGanLoss(nn.Module):
 class WeightedBCEAffinityLoss(nn.Module):
     """Foreground/background-balanced BCE on affinity logits, via :func:`weight_binary_ratio`."""
 
-    def __init__(self):
-        """Initialize the weighted BCE affinity loss."""
+    def __init__(self, class_rebalance_within_channels: bool = True):
+        """
+        Initialize the weighted BCE affinity loss.
+
+        Parameters
+        ----------
+        class_rebalance_within_channels : bool, optional
+            True: weight_binary_ratio computed per affinity channel. False: pooled across all
+            channels (old behavior, kept for reproducibility).
+        """
         super().__init__()
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
+        self.class_rebalance_within_channels = class_rebalance_within_channels
 
     def forward(self, pred_logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """
@@ -3325,8 +3234,13 @@ class WeightedBCEAffinityLoss(nn.Module):
         loss : torch.Tensor
             Scalar loss.
         """
-        weight = weight_binary_ratio(target).float()
         loss = self.bce(pred_logits.float(), target.float())
+        if self.class_rebalance_within_channels:
+            weight = torch.ones_like(target, dtype=torch.float32)
+            for c in range(target.shape[1]):
+                weight[:, c : c + 1] = weight_binary_ratio(target[:, c : c + 1]).float()
+        else:
+            weight = weight_binary_ratio(target).float()
         return (loss * weight).sum() / weight.sum().clamp_min(1.0)
 
 

@@ -286,7 +286,11 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
         weighted_sub_losses = []
         if by_name.get("BCE", 0.0) > 0:
-            weighted_sub_losses.append((by_name["BCE"], WeightedBCEAffinityLoss().to(self.device)))
+            mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+            bce_loss = WeightedBCEAffinityLoss(
+                class_rebalance_within_channels=mr.CLASS_REBALANCE_WITHIN_CHANNELS
+            ).to(self.device)
+            weighted_sub_losses.append((by_name["BCE"], bce_loss))
         if by_name.get("MALIS", 0.0) > 0:
             mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
             a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})

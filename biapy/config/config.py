@@ -736,6 +736,9 @@ class Config:
         # 'z_affinities'/'y_affinities'/'x_affinities' (paired-by-index neighbour offset lists) and
         # 'widen_borders'. E.g. [{'A': {'z_affinities': [1], 'y_affinities': [1], 'x_affinities': [1]}}]
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS = [{}]
+        # Like PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS, but per affinity offset channel
+        # instead of pooled across the whole 'A' stack. False = old pooled behavior (reproducibility).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_REBALANCE_WITHIN_CHANNELS = True
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.6.2 Membrane repair test-time post-processing (affinities -> instances)
