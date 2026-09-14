@@ -592,6 +592,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.affine_mode = (
             "constant" if self.has_flow_channels and self.gradient_type == "cellpose" else affine_mode
         )
+        self.default_resolution_zyx = tuple(resolution)
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
@@ -686,11 +687,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         print("Normalization config used for X (first sample): {}".format(xnorm_info))
         print("Normalization config used for Y: {}".format(self.mask_norm))
-
-        # Kept in the original (z, y, x) order (unlike 'resolution'/'res_relation' below, reordered
-        # for augmentation), as the generator-wide default 'A'-channel (affinities) resolution
-        # fallback for files with no entry in resolution.json -- see resolution_for_affinities().
-        self.default_resolution_zyx = tuple(resolution)
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
