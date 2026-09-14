@@ -55,8 +55,8 @@ class test_pair_data_generator(Dataset):
     resolution : tuple of int/float, optional
         Fallback ``(z, y, x)`` physical resolution used for 'A'-channel generation
         (``units == 'physical_nm'``) when a sample has no per-file resolution attached (see
-        ``biapy.data.pre_processing.set_test_file_resolutions``). Mirrors
-        ``PairBaseDataGenerator``'s ``resolution`` parameter.
+        ``biapy.data.pre_processing.set_test_file_resolutions``). Falls back to ``(1, 1, 1)`` when not
+        a length-3 tuple.
 
     convert_to_rgb : bool, optional
         Whether to convert images into 3-channel, i.e. RGB, by using the information of the first channel.
@@ -151,7 +151,7 @@ class test_pair_data_generator(Dataset):
         self.instance_channel = instance_channel
         self.data_channels = list(data_channels)
         self.channel_extra_opts = dict(channel_extra_opts)
-        self.default_resolution_zyx = tuple(resolution)
+        self.default_resolution_zyx = tuple(resolution) if len(resolution) == 3 else (1, 1, 1)
         self.n_classes = n_classes
         self.ignore_index = ignore_index
 

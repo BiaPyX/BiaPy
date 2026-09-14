@@ -1515,8 +1515,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 test_zarr_data_information=test_zarr_data_information,
             )
 
-            # Attach the per-image physical resolution to each raw DatasetFile (used for 'A'-channel
-            # generation when units == 'physical_nm'), same as load_train_data does for train/val.
             set_test_file_resolutions(self.cfg, self.X_test)
 
     def destroy_test_data(self):

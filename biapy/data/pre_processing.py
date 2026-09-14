@@ -486,10 +486,7 @@ def set_test_file_resolutions(cfg: CN, X_test) -> None:
     """
     Attach the per-image physical resolution to each raw test ``DatasetFile``, read from
     ``resolution.json`` (see :func:`load_resolution_stats`). Mirrors :func:`set_file_resolutions`
-    for train/val; test is loaded separately (:meth:`base_workflow.BaseWorkflow.load_test_data`), so
-    it needs its own entry point. Without this, per-sample resolution is never available at test time
-    and the 'A'-channel generator silently falls back to its ``[1, 1, 1]`` default when
-    ``units == 'physical_nm'``, turning nm offsets into voxel offsets unscaled.
+    for train/val.
 
     Parameters
     ----------
