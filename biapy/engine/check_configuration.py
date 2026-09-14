@@ -2461,8 +2461,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.VAL.CROSS_VAL' can only be used when 'DATA.VAL.FROM_TRAIN' is True")
         if cfg.DATA.VAL.CROSS_VAL_NFOLD < cfg.DATA.VAL.CROSS_VAL_FOLD:
             raise ValueError("'DATA.VAL.CROSS_VAL_NFOLD' can not be less than 'DATA.VAL.CROSS_VAL_FOLD'")
-    if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.DATA.VAL.CROSS_VAL:
-        raise ValueError("'DATA.TEST.USE_VAL_AS_TEST' can only be used when 'DATA.VAL.CROSS_VAL' is selected")
+    if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.DATA.VAL.FROM_TRAIN:
+        raise ValueError("'DATA.TEST.USE_VAL_AS_TEST' requires 'DATA.VAL.FROM_TRAIN'")
     if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
         raise ValueError(
             "When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be length {}, given {}.".format(
