@@ -57,7 +57,9 @@ MODEL:
     UNETR_DEC_ACTIVATION: 'relu'
     UNETR_DEC_KERNEL_SIZE: 9
     N_CLASSES: 2
-    LOAD_CHECKPOINT: True
+    SOURCE: bmz
+    BMZ:
+        SOURCE_MODEL_ID: 'vengeful-zebra'
 
 TRAIN:
     ENABLE: False
@@ -73,6 +75,3 @@ TRAIN:
 TEST:
     ENABLE: True
     AUGMENTATION: False
-
-PATHS:
-  CHECKPOINT_FILE: /path/checkpoints/lightmycells_actin.pth
