@@ -35,6 +35,7 @@ from biapy.utils.misc import (
 )
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
 from biapy.data.norm import undo_image_norm, normalize_image
+from biapy.data.pre_processing import resize_images
 from biapy.utils.util import check_downsample_division
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions
 
@@ -426,6 +427,33 @@ class Denoising_Workflow(Base_Workflow):
                         -reflected_orig_shape[2] :,
                         -reflected_orig_shape[3] :,
                     ]  # type: ignore
+
+        # Resize prediction (and GT) back to the native image shape when DATA.PREPROCESS.RESIZE
+        # downscaled the input for the model. Base_Workflow.process_test_sample already does this for
+        # other problem types; this workflow overrides that method, so it needs its own copy.
+        if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+            rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1] + (pred.shape[-1],)
+            pred = resize_images(
+                [pred],
+                output_shape=rescaled_shape,
+                order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
+                mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+            )[0]
+            if self.current_sample["Y"] is not None:
+                self.current_sample["Y"] = resize_images(
+                    [self.current_sample["Y"]],
+                    output_shape=self.current_sample["rescaled_shape"][:-1] + (self.current_sample["Y"].shape[-1],),
+                    order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
+                    mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                    cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                    clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                    preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                    anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+                )[0]
 
         # Undo normalization
         pred = undo_image_norm(pred, self.current_sample["X_norm"])
