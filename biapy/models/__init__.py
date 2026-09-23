@@ -402,6 +402,24 @@ def build_model(
             )
             model = wdsr(**args)  # type: ignore
             callable_model = wdsr  # type: ignore
+        elif modelname == "wavelettention":
+            args = dict(
+                img_size=cfg.DATA.PATCH_SIZE[:2],
+                in_chans=cfg.DATA.PATCH_SIZE[-1],
+                upscale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else 1,
+                embed_dim=cfg.MODEL.WAVELETTENTION_EMBED_DIM,
+                depths=cfg.MODEL.WAVELETTENTION_DEPTHS,
+                num_heads=cfg.MODEL.WAVELETTENTION_NUM_HEADS,
+                window_size=cfg.MODEL.WAVELETTENTION_WINDOW_SIZE,
+                compress_ratio=cfg.MODEL.WAVELETTENTION_COMPRESS_RATIO,
+                squeeze_factor=cfg.MODEL.WAVELETTENTION_SQUEEZE_FACTOR,
+                conv_scale=cfg.MODEL.WAVELETTENTION_CONV_SCALE,
+                overlap_ratio=cfg.MODEL.WAVELETTENTION_OVERLAP_RATIO,
+                mlp_ratio=cfg.MODEL.WAVELETTENTION_MLP_RATIO,
+                upsampler="pixelshuffle",  
+            )
+            model = Wavelettention(**args)  # type: ignore
+            callable_model = Wavelettention  # type: ignore
         elif modelname == "mae":
             args = dict(
                 img_size=cfg.DATA.PATCH_SIZE[0],

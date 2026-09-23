@@ -6,3 +6,4 @@ biapy.egg-info/
 biapy_checks/
 dist/
 *.DS_Store
+outputs/

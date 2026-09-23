@@ -22,6 +22,8 @@ from torchvision import transforms
 from torchvision.models import vgg16, VGG16_Weights
 from typing import Optional, List, Tuple, Dict, Union
 
+from biapy.engine.swt_loss import SWTLoss
+
 def jaccard_index_numpy(y_true, y_pred):
     """
     Compute the Jaccard index (Intersection over Union) between ground truth and prediction.
@@ -2972,6 +2974,7 @@ def continuous_image_loss_registry(device):
         "LAPLACIAN": lambda: _FunctionalLoss(laplacian_loss),
         "FFT": lambda: _FunctionalLoss(fft_highfreq_loss),
         "RFFT": lambda: _FunctionalLoss(rfft_highfreq_loss),
+        "SWT": lambda: SWTLoss(device),
     }
 
 

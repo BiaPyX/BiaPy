@@ -1,0 +1,59 @@
+# BiaPy version: 3.7.1
+
+SYSTEM:
+    NUM_CPUS: -1
+
+PROBLEM:
+    TYPE: SUPER_RESOLUTION
+    NDIM: 2D
+    SUPER_RESOLUTION:
+        UPSCALING: (4,4)
+  
+DATA: 
+    PATCH_SIZE: (64, 64, 1)
+    NORMALIZATION:
+        TYPE: 'div'
+    TRAIN:                                                                                                              
+        PATH: /data4/loregi/TFM/datasets/EM/train/lr
+        GT_PATH: /data4/loregi/TFM/datasets/EM/train/hr
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: True
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        IN_MEMORY: True
+        LOAD_GT: True
+        PATH: /data4/loregi/TFM/datasets/EM/test/lr
+        GT_PATH: /data4/loregi/TFM/datasets/EM/test/hr
+        PADDING: (16,16)
+
+AUGMENTOR:
+    ENABLE: True
+    DA_PROB: 0.5
+    VFLIP: True
+    HFLIP: True
+    ROT90: True
+
+MODEL:
+    ARCHITECTURE: wavelettention
+    LOAD_CHECKPOINT: False
+
+LOSS:
+    TYPE: [MAE, SWT]
+    WEIGHTS: [1.0, 1.0]
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAM
+    LR: 1.E-5
+    OPT_BETAS: [[0.9, 0.99]]
+    W_DECAY: 0.0
+    BATCH_SIZE: 2
+    EPOCHS: 100
+    PATIENCE: -1
+    METRICS: [psnr, ssim]
+
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    METRICS: [psnr, ssim]

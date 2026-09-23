@@ -1547,7 +1547,7 @@ class Config:
         #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2', 'hrnet' and 
         #                'stunet'
         #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 'unext_v1', 'unext_v2', 'hrnet' and 'stunet'
-        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1' 
+        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'wavelettention', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1' 
         #                       and 'unext_v2'
         #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit',
         #                       'mae', 'unext_v1', 'unext_v2', 'hrnet' and 'stunet'
@@ -1808,7 +1808,30 @@ class Config:
         _C.MODEL.RDBM.LAMB = 1.0e-4
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 5.1.8 Checkpoint options
+        # 5.1.8 Wavelettention architecture options
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Embedding dimension of the patch features.
+        _C.MODEL.WAVELETTENTION_EMBED_DIM = 180
+        # Number of RHAG (Residual Hybrid Attention Group) blocks and, per block, depth
+        # (number of HAB blocks stacked inside it). One value per group.
+        _C.MODEL.WAVELETTENTION_DEPTHS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+        # Number of attention heads per RHAG block. Must have the same length as WAVELETTENTION_DEPTHS.
+        _C.MODEL.WAVELETTENTION_NUM_HEADS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+        # Local window size for the window-based attention.
+        _C.MODEL.WAVELETTENTION_WINDOW_SIZE = 16
+        # Channel compression ratio inside the CAB (Convolutional Attention Block).
+        _C.MODEL.WAVELETTENTION_COMPRESS_RATIO = 3
+        # Channel squeeze factor for the channel attention inside the CAB.
+        _C.MODEL.WAVELETTENTION_SQUEEZE_FACTOR = 30
+        # Scale applied to the convolutional branch output before adding it to the attention branch.
+        _C.MODEL.WAVELETTENTION_CONV_SCALE = 0.01
+        # Overlap ratio used by the overlapping cross-attention block (OCAB).
+        _C.MODEL.WAVELETTENTION_OVERLAP_RATIO = 0.5
+        # Ratio of the MLP hidden dimension to the embedding dimension.
+        _C.MODEL.WAVELETTENTION_MLP_RATIO = 2.0
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 5.1.9 Checkpoint options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         # To load a model (and more items if available) from a given checkpoint. Items that can be loaded are defined in 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT'.
         _C.MODEL.LOAD_CHECKPOINT = False
