@@ -206,6 +206,11 @@ def evaluate_dataset(input_dir, gt_dir, spacing=(1.0, 1.0, 1.0), skip_erl=False,
             pred = crop_border_numpy(pred, list(border_crop))
 
         fg_mask = (gt != 0) & (pred != 0)
+        if not fg_mask.any():
+            print("WARNING: no overlapping foreground voxels between GT and prediction for {} "
+                  "(gt nonzero={}, pred nonzero={}); VOI/ARE are undefined here, skipping this file "
+                  "from the aggregated stats.".format(id_, int((gt != 0).sum()), int((pred != 0).sum())))
+            continue
         voi_split, voi_merge = variation_of_information(gt[fg_mask], pred[fg_mask])
         are, prec, rec = adapted_rand_error(gt[fg_mask], pred[fg_mask])
 
