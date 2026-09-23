@@ -13,8 +13,9 @@ Example (membrane repair, agglomeration):
         --grid '{"FRAGMENT_SEED_TH": [0.8, 0.9, 0.95], "FRAGMENT_GROWTH_TH": [0.05, 0.1, 0.2], "MERGE_TH": [0.3, 0.5, 0.7]}'
 
 INSTANCE_SEG uses --method agglomeration|watershed (PROBLEM.INSTANCE_SEG.AGGLOMERATION /
-.WATERSHED). Membrane repair's "watershed" METHOD has no tunable threshold (Otsu-"auto",
-hardcoded in membrane_repair.py) -- only "agglomeration" is supported there.
+.WATERSHED). Membrane repair also supports both --method values: "agglomeration" grid keys are
+FRAGMENT_SEED_TH/FRAGMENT_GROWTH_TH/MERGE_TH/MERGE_QUANTILE; "watershed" grid keys are
+WATERSHED_SEED_TH/WATERSHED_GROWTH_TH.
 """
 import argparse
 import copy
@@ -32,6 +33,7 @@ BIAPY_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 POSTPROCESS_BLOCK = {
     ("IMAGE_TO_IMAGE", "agglomeration"): "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS",
+    ("IMAGE_TO_IMAGE", "watershed"): "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS",
     ("INSTANCE_SEG", "agglomeration"): "PROBLEM.INSTANCE_SEG.AGGLOMERATION",
     ("INSTANCE_SEG", "watershed"): "PROBLEM.INSTANCE_SEG.WATERSHED",
 }
@@ -56,16 +58,10 @@ def set_by_path(cfg: dict, dotted_key: str, value) -> None:
 
 def detect_block(cfg: dict, method: str) -> str:
     problem_type = get_by_path(cfg, "PROBLEM.TYPE")
-    if problem_type == "IMAGE_TO_IMAGE":
-        if method == "watershed":
-            raise ValueError(
-                "Membrane-repair's 'watershed' POSTPROCESS.METHOD has no tunable threshold "
-                "(seed/growth are Otsu-'auto', not exposed to config) -- nothing to grid-search."
-            )
-        return POSTPROCESS_BLOCK[("IMAGE_TO_IMAGE", "agglomeration")]
-    if problem_type == "INSTANCE_SEG":
-        return POSTPROCESS_BLOCK[("INSTANCE_SEG", method)]
-    raise ValueError(f"Unsupported PROBLEM.TYPE for threshold tuning: {problem_type}")
+    key = (problem_type, method)
+    if key not in POSTPROCESS_BLOCK:
+        raise ValueError(f"Unsupported (PROBLEM.TYPE, method) combination for threshold tuning: {key}")
+    return POSTPROCESS_BLOCK[key]
 
 
 def build_grid(grid: dict):
@@ -74,7 +70,7 @@ def build_grid(grid: dict):
         yield dict(zip(keys, combo))
 
 
-def build_run_config(base_cfg, block, combo, checkpoint, reuse_predictions):
+def build_run_config(base_cfg, block, combo, checkpoint, reuse_predictions, method):
     cfg = copy.deepcopy(base_cfg)
     set_by_path(cfg, "TRAIN.ENABLE", False)
     set_by_path(cfg, "TEST.ENABLE", True)
@@ -84,7 +80,7 @@ def build_run_config(base_cfg, block, combo, checkpoint, reuse_predictions):
     set_by_path(cfg, "TEST.REUSE_PREDICTIONS", reuse_predictions)
     set_by_path(cfg, "TEST.SAVE_MODEL_RAW_OUTPUT", True)
     if get_by_path(cfg, "PROBLEM.TYPE") == "IMAGE_TO_IMAGE":
-        set_by_path(cfg, "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD", "agglomeration")
+        set_by_path(cfg, "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD", method)
     for key, value in combo.items():
         set_by_path(cfg, f"{block}.{key}", value)
     return cfg
@@ -154,7 +150,7 @@ def main():
     for i, combo in enumerate(combos):
         reuse = i > 0
         print(f"[{i + 1}/{len(combos)}] {combo} (reuse_predictions={reuse})")
-        cfg = build_run_config(base_cfg, block, combo, args.checkpoint, reuse)
+        cfg = build_run_config(base_cfg, block, combo, args.checkpoint, reuse, args.method)
         csv_path = run_one(cfg, args.result_dir, args.name, args.run_id, args.gpu, args.dry_run)
         if args.dry_run:
             continue

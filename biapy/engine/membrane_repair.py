@@ -612,8 +612,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         evaluate them against the raw GT instance labels.
 
         Method selected by ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD``:
-        ``"watershed"`` (single min-affinity watershed, see ``watershed_by_channels``) or
-        ``"agglomeration"`` (default, see ``biapy/data/post_processing/affinity_agglomeration.py``).
+        ``"watershed"`` (single min-affinity watershed, see ``watershed_by_channels``'s ``"A"``-only
+        branch) or ``"agglomeration"`` (default, see
+        ``biapy/data/post_processing/affinity_agglomeration.py``).
 
         If ``TEST.EVAL_BORDER_CROP`` is set, the saved/agglomerated instance labels are left
         untouched, but a border-blacked-out copy of both the predicted labels and the GT (same
@@ -657,10 +658,10 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 data=pred,
                 channels=["A"],
                 seed_channels=["A"],
-                seed_channel_ths=["auto"],
+                seed_channel_ths=[pp.WATERSHED_SEED_TH],
                 topo_surface_channel="",
                 growth_mask_channels=["A"],
-                growth_mask_channel_ths=["auto"],
+                growth_mask_channel_ths=[pp.WATERSHED_GROWTH_TH],
                 resolution=self.resolution,
                 watershed_by_2d_slices=False,
                 save_dir=None,

@@ -744,14 +744,14 @@ class Config:
         # 2.6.2 Membrane repair test-time post-processing (affinities -> instances)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS = CN()
-        # How to turn predicted affinities into instance labels at test time. Options:
-        #   - 'watershed': single marker-controlled watershed over the min of the first (z,y,x)
-        #     affinity triple (see watershed_by_channels's 'A'-only branch), Otsu-thresholded.
-        #   - 'agglomeration': oversegment into small fragments, then merge fragment pairs by a
-        #     quantile (MERGE_QUANTILE) of their affinity histogram until MERGE_TH is reached, using
-        #     only the first (z,y,x) short-range affinity triple (matches waterz -- see
-        #     biapy/data/post_processing/affinity_agglomeration.py).
+        # How to turn predicted affinities into instance labels at test time: 'watershed' or
+        # 'agglomeration' (see biapy/data/post_processing/affinity_agglomeration.py).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD = "agglomeration"
+        # 'watershed' only: seed threshold for watershed_by_channels's 'A'-only branch.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_SEED_TH = 0.5
+        # 'watershed' only: growth-mask threshold. Equal to WATERSHED_SEED_TH gives plain
+        # threshold + 3D connected components (no seeded growth).
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_GROWTH_TH = 0.5
         # 'agglomeration' only: seed threshold for the initial oversegmented fragments (high, so
         # fragments never straddle a real instance boundary).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.FRAGMENT_SEED_TH = 0.9
