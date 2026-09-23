@@ -124,6 +124,7 @@ class test_pair_data_generator(Dataset):
         reflect_to_complete_shape: bool = True,
         n_classes: int = 1,
         ignore_index: Optional[int]=None,
+        is_y_mask: bool = True,
     ):
         if preprocess_data and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' must be set when 'preprocess_data' is provided")
@@ -154,6 +155,7 @@ class test_pair_data_generator(Dataset):
         self.default_resolution_zyx = tuple(resolution) if len(resolution) == 3 else (1, 1, 1)
         self.n_classes = n_classes
         self.ignore_index = ignore_index
+        self.is_y_mask = is_y_mask
 
         # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
         # means that validation data is being used as test, so we need to clean the sample_list.
@@ -354,7 +356,7 @@ class test_pair_data_generator(Dataset):
                             self.preprocess_cfg,
                             y_data=[mask],
                             is_2d=(self.ndim == 2),
-                            is_y_mask=True,
+                            is_y_mask=self.is_y_mask,
                         )[0]
 
                 # Reflect data to complete the needed shape

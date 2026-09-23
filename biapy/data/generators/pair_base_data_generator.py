@@ -33,7 +33,7 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
-from biapy.data.pre_processing import labels_into_channels, channel_physical_offsets
+from biapy.data.pre_processing import labels_into_channels, channel_physical_offsets, resize_images
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -88,6 +88,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     zoom_in_z: bool, optional
         Whether to apply or not zoom in Z axis.
+
+    random_resized_crop : bool, optional
+        Whether to resize the full (pre-crop) image/mask to a random size before the usual
+        fixed-size random crop, so the crop covers a random ``random_resized_crop_scale_range``
+        fraction of the original image's area instead of a fixed pixel window. 2D only.
+
+    random_resized_crop_scale_range : tuple of floats, optional
+        Area-fraction range of the original image the eventual crop should cover. E.g. ``(0.7, 0.95)``.
+        Rolled against ``aug_prob["random_resized_crop"]``; otherwise the image is resized directly to
+        the crop size (no extra crop margin).
+
+    is_y_mask : bool, optional
+        Whether Y is a categorical mask (nearest-neighbor resizing) or continuous data (same
+        interpolation as X), used by ``preprocess_f`` and ``random_resized_crop``.
 
     shift : float, optional
         To make shifts.
@@ -402,6 +416,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         zoom: bool = False,
         zoom_range: Tuple[float, float] = (0.8, 1.2),
         zoom_in_z: bool = False,
+        random_resized_crop: bool = False,
+        random_resized_crop_scale_range: Tuple[float, float] = (0.7, 0.95),
+        is_y_mask: bool = True,
         shift: bool = False,
         shift_range: Tuple[float, float] = (0.1, 0.2),
         affine_mode: Literal["constant", "edge", "symmetric", "reflect", "wrap"] = "constant",
@@ -754,6 +771,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.zoom = zoom
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
+        self.random_resized_crop = random_resized_crop
+        self.random_resized_crop_scale_range = random_resized_crop_scale_range
+        self.is_y_mask = is_y_mask
 
         # Extra size to extract so a later zoom-out / rotation samples real content instead of padding
         # (see geom_aug_load_shape). Folds in the largest-cell diameter downscale (DIAM_MEAN /
@@ -1059,6 +1079,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.Y.dataset_info[msample.fid].path,
                 is_3d=(self.ndim == 3),
             )
+            mask = pad_to_shape(mask, self.shape, verbose=False, mode=self.affine_mode)
             # Extract the sample within the image
             if msample.coords:
                 coords = (
@@ -1083,7 +1104,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     # Apply preprocessing
                     if self.preprocess_f:
                         mask = self.preprocess_f(
-                            self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=True
+                            self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=self.is_y_mask
                         )[0]
 
                     mask = pad_to_shape(mask, self.shape, verbose=False, mode=self.affine_mode)
@@ -1111,7 +1132,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     # Apply preprocessing after extract sample
                     if self.preprocess_f:
                         mask = self.preprocess_f(
-                            self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=True
+                            self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=self.is_y_mask
                         )[0]
 
                     if self.Y.dataset_info[msample.fid].is_parallel():
@@ -1131,6 +1152,27 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img_prob = prob_entry
             else:
                 img_prob = None
+
+            # RandomResizedCrop-style scale augmentation: resize the whole image/mask down so that the
+            # usual fixed-size crop below ends up covering a random 'random_resized_crop_scale_range'
+            # area-fraction of the original image, instead of a fixed native-pixel window. 2D only; skip
+            # when there's a probability map (crop-center coordinates aren't valid post-resize) or a
+            # bigger 'enlarge' window is already being extracted for a different geometric augmentation.
+            if (
+                not first_load
+                and getattr(self, "random_resized_crop", False)
+                and self.ndim == 2
+                and not enlarge
+                and img_prob is None
+                and self._roll("random_resized_crop")
+            ):
+                area_scale = random.uniform(*self.random_resized_crop_scale_range)
+                side_scale = area_scale**0.5
+                resized_spatial = tuple(
+                    max(self.shape[i], int(round(self.shape[i] / side_scale))) for i in range(self.ndim)
+                )
+                img = resize_images([img], output_shape=resized_spatial, order=1)[0]
+                mask = resize_images([mask], output_shape=resized_spatial, order=0 if self.is_y_mask else 1)[0]
 
             # Crop a bigger window when enlarging; bounded by the image, apply_transform crops it back.
             crop_spatial = self.aug_load_spatial if enlarge else self.shape[: self.ndim]

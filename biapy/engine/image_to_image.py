@@ -10,6 +10,7 @@ import torch
 import numpy as np
 from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError, PearsonCorrCoef
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+from torchmetrics.functional.image import peak_signal_noise_ratio, structural_similarity_index_measure
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
@@ -42,6 +43,7 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.data.data_manipulation import save_tif
 from biapy.data.norm import undo_image_norm, resolve_fixed_norm_info
+from biapy.data.pre_processing import resize_images
 
 class Image_to_Image_Workflow(Base_Workflow):
     """
@@ -264,7 +266,13 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         # 'BCE'/'HINGE' in LOSS.TYPE selects the adversarial path (via CycleGanLoss/forward_loss).
         loss_names_upper = [str(n).upper() for n in self.cfg.LOSS.TYPE]
-        if "BCE" in loss_names_upper or "HINGE" in loss_names_upper:
+        if self.cfg.MODEL.ARCHITECTURE == "rdbm":
+            registry = continuous_image_loss_registry(self.device)
+            self._rdbm_recon_loss = resolve_weighted_composite_loss(
+                self.cfg.LOSS.TYPE, self.cfg.LOSS.WEIGHTS, registry, "IMAGE_TO_IMAGE (RDBM)"
+            )
+            self.loss = self.RDBM_loss_wrapper
+        elif "BCE" in loss_names_upper or "HINGE" in loss_names_upper:
             self.cyclegan_loss = CycleGanLoss(cfg=self.cfg, device=self.device)
             self.loss = self.GAN_loss_wrapper
             if "loss_discriminator" not in self.loss_names:
@@ -286,6 +294,13 @@ class Image_to_Image_Workflow(Base_Workflow):
             pred = output
         loss_g, loss_d = self.model_without_ddp.forward_loss(pred, targets, self.cyclegan_loss)
         return {"losses": [loss_g, loss_d]}
+
+    def RDBM_loss_wrapper(self, output, targets):
+        """Uses ``output["cond"]`` (the raw input, stashed by ``RDBM.forward``) since RDBM's
+        loss samples its own random bridge timestep rather than reusing ``pred``.
+        """
+        loss = self.model_without_ddp.forward_loss(output["cond"], targets, self._rdbm_recon_loss)
+        return {"losses": [loss]}
 
     def metric_calculation(
         self,
@@ -383,6 +398,14 @@ class Image_to_Image_Workflow(Base_Workflow):
                     val = self._grouped_metric_update(
                         metric, m_name_real, _output, _targets, group_ids_this_batch, metric_logger
                     )
+                elif not train and m_name == "ssim" and getattr(self, "test_data_range", None) is not None:
+                    # Use a fixed data_range instead of 'metric's inferred one - see PSNR below.
+                    val = structural_similarity_index_measure(
+                        _output.contiguous(), _targets.contiguous(), data_range=self.test_data_range
+                    )
+                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
+                    if metric_logger:
+                        metric_logger.meters[m_name_real].update(val)
                 else:
                     val = metric(_output.contiguous(), _targets.contiguous())
                     val = val.item() if not torch.isnan(val) else 0  # type: ignore
@@ -428,6 +451,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                     # 'define_metrics'), so no rescale is needed here. Rescaling by a hardcoded 255
                     # assumed normalized data always came from an 8-bit image, which silently inflated
                     # PSNR by up to ~48 dB whenever that wasn't true (e.g. sources already in [0,1]).
+                    #
+                    # At test time 'metric' has data_range=None, so torchmetrics infers the range
+                    # from each call's own target min/max instead of the image's dtype ceiling,
+                    # making PSNR incomparable between calls. 'test_data_range' (set in
+                    # 'process_test_sample' from the pre-cast dtype) fixes that below.
                     if balance_by_study:
                         val = self._grouped_metric_update(
                             metric,
@@ -437,6 +465,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                             group_ids_this_batch,
                             metric_logger,
                         )
+                    elif not train and getattr(self, "test_data_range", None) is not None:
+                        val = peak_signal_noise_ratio(_output, _targets, data_range=self.test_data_range)
+                        val = val.item() if not torch.isnan(val) else 0  # type: ignore
+                        if metric_logger:
+                            metric_logger.meters[m_name_real].update(val)
                     else:
                         val = metric(_output, _targets)
                         val = val.item() if not torch.isnan(val) else 0  # type: ignore
@@ -800,6 +833,34 @@ class Image_to_Image_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
+        # Resize prediction (and GT) back to the native image shape when DATA.PREPROCESS.RESIZE
+        # downscaled the input for the model (e.g. testing a fixed-resolution model on full-size
+        # images). Base_Workflow.process_test_sample already does this for other problem types;
+        # this workflow overrides that method, so it needs its own copy.
+        if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+            rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1] + (pred.shape[-1],)
+            pred = resize_images(
+                [pred],
+                output_shape=rescaled_shape,
+                order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
+                mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+            )[0]
+            if self.current_sample["Y"] is not None:
+                self.current_sample["Y"] = resize_images(
+                    [self.current_sample["Y"]],
+                    output_shape=self.current_sample["rescaled_shape"][:-1] + (self.current_sample["Y"].shape[-1],),
+                    order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
+                    mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                    cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                    clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                    preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                    anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+                )[0]
+
         # Undo normalization
         target_norm_override = self.test_norm_module.get("target_norm_override")
         if target_norm_override is not None:
@@ -834,6 +895,15 @@ class Image_to_Image_Workflow(Base_Workflow):
                 )
 
         # Calculate metrics
+        # Fixed data_range for test-time PSNR/SSIM (see 'metric_calculation'), from the original
+        # pre-cast dtype (e.g. 65535 for uint16). None for already-float data.
+        _dtype_for_range = (
+            self.current_sample["Y"].dtype if self.current_sample["Y"] is not None else pred.dtype
+        )
+        self.test_data_range = (
+            float(np.iinfo(_dtype_for_range).max) if np.issubdtype(_dtype_for_range, np.integer) else None
+        )
+
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
 

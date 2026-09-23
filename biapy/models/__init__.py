@@ -490,6 +490,18 @@ def build_model(
                 )
                 callable_model = NAFNet   # type: ignore
                 model = callable_model(**args)  # type: ignore
+        elif modelname == "rdbm":
+            args = dict(
+                image_shape=cfg.DATA.PATCH_SIZE,
+                output_channels=output_channels,
+                base_dim=cfg.MODEL.RDBM.BASE_DIM,
+                dim_mults=cfg.MODEL.RDBM.DIM_MULTS,
+                timesteps=cfg.MODEL.RDBM.TIMESTEPS,
+                sampling_timesteps=cfg.MODEL.RDBM.SAMPLING_TIMESTEPS,
+                lamb=cfg.MODEL.RDBM.LAMB,
+            )
+            callable_model = RDBM  # type: ignore
+            model = callable_model(**args)  # type: ignore
 
     # Initialize the ViT backbone with pretrained weights, if requested. It is done here, and not
     # within the models, so the architectures stay self-contained (e.g. when they are exported to
@@ -1935,12 +1947,26 @@ def can_import_env_deps(
             s = item.strip()
             low = s.lower()
 
-            if low.startswith("python="):
-                m = re.match(r"python\s*=\s*(\d+)\.(\d+)", low)
+            if low == "python" or re.match(r"python\s*(==|=|>=|<=|!=|>|<)", low):
+                m = re.match(r"python\s*(==|=|>=|<=|!=|>|<)?\s*(\d+)(?:\.(\d+))?", low)
                 if m:
-                    req_major, req_minor = int(m.group(1)), int(m.group(2))
-                    if (sys.version_info.major, sys.version_info.minor) != (req_major, req_minor):
-                        failures.append(f"python={req_major}.{req_minor}")
+                    op = m.group(1) or "=="
+                    if op == "=":
+                        op = "=="
+                    req_major = int(m.group(2))
+                    req_minor = int(m.group(3)) if m.group(3) is not None else 0
+                    cur = (sys.version_info.major, sys.version_info.minor)
+                    req = (req_major, req_minor)
+                    version_ok = {
+                        "==": cur == req,
+                        ">=": cur >= req,
+                        "<=": cur <= req,
+                        ">": cur > req,
+                        "<": cur < req,
+                        "!=": cur != req,
+                    }[op]
+                    if not version_ok:
+                        failures.append(f"python{op}{req_major}.{req_minor}")
 
             elif low == "pip":
                 continue

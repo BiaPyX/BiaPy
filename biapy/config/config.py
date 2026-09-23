@@ -1331,6 +1331,7 @@ class Config:
         # DA_PROB. The geometric augmentations (ZOOM, RANDOM_ROT, ROT90) are each rolled with their
         # own probability and then composed into a single resampling pass (see affine_transform).
         _C.AUGMENTOR.ZOOM_PROB = 0.5
+        _C.AUGMENTOR.RANDOM_RESIZED_CROP_PROB = 0.5
         _C.AUGMENTOR.RANDOM_ROT_PROB = 0.5
         _C.AUGMENTOR.ROT90_PROB = 0.5
         _C.AUGMENTOR.SHEAR_PROB = 0.5
@@ -1386,6 +1387,12 @@ class Config:
         _C.AUGMENTOR.ZOOM_RANGE = (0.5, 1.5)
         # Whether to apply or not zoom in Z axis (for 3D volumes).
         _C.AUGMENTOR.ZOOM_IN_Z = False
+        # RandomResizedCrop-style augmentation (2D only): resize the whole image/mask so the usual
+        # fixed-size crop covers a random area fraction of the original, instead of a fixed pixel
+        # window. Rolled against AUGMENTOR.RANDOM_RESIZED_CROP_PROB.
+        _C.AUGMENTOR.RANDOM_RESIZED_CROP = False
+        # Area-fraction range of the original image the crop should cover, e.g. (0.7, 0.95).
+        _C.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE = (0.7, 0.95)
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
         # Shift range. Translation as a fraction of the image height/width (x-translation, y-translation), where 0 denotes
@@ -1782,7 +1789,22 @@ class Config:
         _C.MODEL.NAFNET.GENERATOR_BACKBONE = "nafnet"
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 5.1.7 Checkpoint options
+        # 5.1.7 RDBM (Residual Diffusion Bridge Model) architecture options
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.MODEL.RDBM = CN()
+        # Base channel width of the conditional U-Net used as the bridge's denoising network.
+        _C.MODEL.RDBM.BASE_DIM = 64
+        # Channel multiplier per resolution level of the U-Net (encoder/decoder depth = len(DIM_MULTS)).
+        _C.MODEL.RDBM.DIM_MULTS = [1, 2, 4, 8]
+        # Number of discretization steps of the forward bridge process used during training.
+        _C.MODEL.RDBM.TIMESTEPS = 100
+        # Number of reverse (sampling) steps at validation/test time. Must be <= TIMESTEPS.
+        _C.MODEL.RDBM.SAMPLING_TIMESTEPS = 10
+        # Noise scale of the bridge's stochastic term.
+        _C.MODEL.RDBM.LAMB = 1.0e-4
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 5.1.8 Checkpoint options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         # To load a model (and more items if available) from a given checkpoint. Items that can be loaded are defined in 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT'.
         _C.MODEL.LOAD_CHECKPOINT = False
@@ -1816,6 +1838,11 @@ class Config:
         # means no layers are frozen.
         # Examples: ["backbone\.layer1\..*", "backbone\.layer2\.conv.*"]
         _C.MODEL.FREEZE_LAYERS_MATCHING = []
+
+        # Passed as 'find_unused_parameters' to DistributedDataParallel. Set to True if the model has
+        # parameters that don't participate in every forward pass (e.g. some BMZ models), otherwise DDP
+        # raises "Expected to have finished reduction...". Costs a small per-iteration overhead.
+        _C.MODEL.FIND_UNUSED_PARAMETERS = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.2 BioImage Model Zoo (BMZ) options

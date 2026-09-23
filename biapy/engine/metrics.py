@@ -2951,7 +2951,8 @@ class WeightedCompositeLoss(nn.Module):
 
 def continuous_image_loss_registry(device):
     """Name -> zero-arg factory for the atomic losses shared by every continuous-image workflow
-    (IMAGE_TO_IMAGE, SUPER_RESOLUTION, SELF_SUPERVISED, and CycleGanLoss's reconstruction part).
+    (IMAGE_TO_IMAGE, SUPER_RESOLUTION, SELF_SUPERVISED, CycleGanLoss's and RDBM's reconstruction
+    part).
     """
     return {
         "MAE": lambda: nn.L1Loss(),

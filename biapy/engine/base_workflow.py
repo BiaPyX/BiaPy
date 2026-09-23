@@ -348,6 +348,10 @@ class Base_Workflow(metaclass=ABCMeta):
             # Adapt configuration to match the one defined in the RDF
             option_list = []
             for key, val in opts.items():
+                if "DATA.NORMALIZATION" in key and "norm" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                    continue
+                if "DATA.PATCH_SIZE" in key and "model_arch" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                    continue
                 old_val = get_cfg_key_value(cfg, key)
                 change = False
 
@@ -988,7 +992,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model = torch.nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.args.gpu],
-                find_unused_parameters=False,
+                find_unused_parameters=self.cfg.MODEL.FIND_UNUSED_PARAMETERS,
             )
             self.model_without_ddp = self.model.module
         self.model_prepared = True
