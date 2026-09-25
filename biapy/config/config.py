@@ -1169,6 +1169,10 @@ class Config:
 
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
+        # Whether to read the per-image test resolution from a 'resolution.json' file placed in the parent
+        # folder of 'DATA.TEST.PATH' (a mapping of image basename -> (z, y, x) resolution) instead of using
+        # 'DATA.TEST.RESOLUTION'. Images missing from the JSON fall back to 'DATA.TEST.RESOLUTION'.
+        _C.DATA.TEST.RESOLUTION_FROM_JSON = False
         # Order of the axes of the image when using Zarr/H5 images in test data.
         _C.DATA.TEST.INPUT_IMG_AXES_ORDER = "TZCYX"
         # Order of the axes of the mask when using Zarr/H5 images in test data.

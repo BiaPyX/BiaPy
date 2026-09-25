@@ -266,9 +266,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 1,
             ] + self.resolution
         # Per-file resolution override for TEST (test() sets self.resolution from this map per
-        # current_sample, falling back to the default above).
+        # current_sample, falling back to the default above). Only when DATA.TEST.RESOLUTION_FROM_JSON.
         self._default_test_resolution: List[int | float] = list(self.resolution)
-        self._test_resolution_map: Dict[str, Tuple[float, ...]] = load_resolution_stats(self.cfg.DATA.TEST.PATH)
+        self._test_resolution_map: Dict[str, Tuple[float, ...]] = (
+            load_resolution_stats(self.cfg.DATA.TEST.PATH) if self.cfg.DATA.TEST.RESOLUTION_FROM_JSON else {}
+        )
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
@@ -1519,7 +1521,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 test_zarr_data_information=test_zarr_data_information,
             )
 
-            set_test_file_resolutions(self.cfg, self.X_test)
+            if self.cfg.DATA.TEST.RESOLUTION_FROM_JSON:
+                set_test_file_resolutions(self.cfg, self.X_test)
 
     def destroy_test_data(self):
         """Delete test variable to release memory."""
