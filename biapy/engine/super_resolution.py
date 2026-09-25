@@ -465,7 +465,10 @@ class Super_resolution_Workflow(Base_Workflow):
                 pred = np.expand_dims(pred, 0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-            reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+            _orig_shape = self.current_sample["reflected_orig_shape"]
+            _upscaling = self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
+            _spatial = tuple(_orig_shape[i] * _upscaling[i] for i in range(len(_upscaling)))
+            reflected_orig_shape = (1,) + _spatial + _orig_shape[len(_upscaling) :]
             if reflected_orig_shape != pred.shape:
                 if self.cfg.PROBLEM.NDIM == "2D":
                     pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]  # type: ignore
