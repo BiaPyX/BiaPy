@@ -1,0 +1,59 @@
+# BiaPy version: 3.7.1
+
+SYSTEM:
+    NUM_CPUS: -1
+    
+PROBLEM:
+    TYPE: SUPER_RESOLUTION
+    NDIM: 3D
+    SUPER_RESOLUTION:
+        UPSCALING: (1,1,1)
+  
+DATA: 
+    PATCH_SIZE: (6, 32, 32, 1)
+    NORMALIZATION:
+        TYPE: "div"
+    TRAIN:                                                                                                              
+        PATH: /data4/loregi/TFM/datasets/Nuclear_pore_complex_3D/train/LR
+        GT_PATH: /data4/loregi/TFM/datasets/Nuclear_pore_complex_3D/train/HR
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: True
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        IN_MEMORY: True
+        LOAD_GT: True
+        PATH: /data4/loregi/TFM/datasets/Nuclear_pore_complex_3D/test/LR
+        GT_PATH: /data4/loregi/TFM/datasets/Nuclear_pore_complex_3D/test/HR
+        PADDING: (2,8,8)
+
+AUGMENTOR:
+    ENABLE: True
+    DA_PROB: 0.5
+    VFLIP: True
+    HFLIP: True
+    ZFLIP: True
+
+MODEL:
+    ARCHITECTURE: wavelettention
+    LOAD_CHECKPOINT: False
+
+LOSS:
+    TYPE: [MAE, SWT]
+    WEIGHTS: [1.0, 1.0]
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    LR: 1.E-5
+    BATCH_SIZE: 2
+    EPOCHS: 2
+    PATIENCE: -1
+    METRICS: [psnr, ssim]
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use one-cycle learning rate scheduler
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    METRICS: [psnr, ssim]

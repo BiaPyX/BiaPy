@@ -510,11 +510,24 @@ class SWTLoss(nn.Module):
         # RGB: BT.601 luma conversion, same as the original paper.
         return 16.0 + (x[:, 0:1, :, :] * 65.481 + x[:, 1:2, :, :] * 128.553 + x[:, 2:3, :, :] * 24.966)
 
+    def _fold_depth(self, x):
+        """SWTForward is a 2D transform. For a 5D (N, C, D, H, W) volume, fold D into the
+        batch dim and treat each Z-slice as its own 2D image -- same trick as
+        biapy.models.wavelettention.PixelShuffle3D. No need to unfold back since the L1
+        criterion below reduces to a scalar regardless of shape."""
+        if x.dim() == 5:
+            n, c, d, h, w = x.shape
+            x = x.permute(0, 2, 1, 3, 4).reshape(n * d, c, h, w)
+        return x
+
     def forward(self, pred, target):
         if isinstance(pred, dict):
             pred = pred["pred"]
         if isinstance(target, dict):
             target = target["pred"]
+
+        pred = self._fold_depth(pred)
+        target = self._fold_depth(target)
 
         wavelet_sr = self.sfm(self._to_luma(pred))[0]
         wavelet_hr = self.sfm(self._to_luma(target))[0]
