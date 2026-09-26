@@ -4009,7 +4009,9 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
         raise ValueError(m)
 
 
-def check_binary_masks(path: str, is_3d: bool = False, channel: Optional[int] = None):
+def check_binary_masks(
+    path: str, is_3d: bool = False, channel: Optional[int] = None, extra_allowed_values: List[int] = []
+):
     """
     Check that every image in the given path is strictly binary (only 0 and 1 values).
 
@@ -4025,8 +4027,12 @@ def check_binary_masks(path: str, is_3d: bool = False, channel: Optional[int] = 
 
     channel : int, optional
         If set, only that channel (last axis) is checked instead of the whole image.
+
+    extra_allowed_values : list of int, optional
+        Values accepted on top of 0 and 1, e.g. an ignore label (``LOSS.IGNORE_INDEX``).
     """
-    print("Checking that images in {} are binary (0/1 only) . . .".format(path))
+    allowed = [0, 1] + list(extra_allowed_values)
+    print("Checking that images in {} only contain values {} . . .".format(path, allowed))
 
     ids = next(os_walk_clean(path))[2]
     error = False
@@ -4041,13 +4047,13 @@ def check_binary_masks(path: str, is_3d: bool = False, channel: Optional[int] = 
             img = read_img_as_ndarray(img_path, is_3d=is_3d)
             data = img[..., channel] if channel is not None else img
             values = np.unique(data)
-            if not np.all(np.isin(values, [0, 1])):
+            if not np.all(np.isin(values, allowed)):
                 print("Error: given image ({}) is not binary. Values found: {}".format(img_path, values))
                 error = True
 
     if error:
         m += (
-            "Some images above contain values other than 0 and 1. This workflow expects a strictly binary "
+            f"Some images above contain values other than {allowed}. This workflow expects a strictly binary "
             "input (e.g. a hard membrane mask), not a soft/continuous class-probability map.\n"
             "Correct the errors in the images above to continue"
         )

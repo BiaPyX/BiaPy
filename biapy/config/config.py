@@ -1984,7 +1984,8 @@ class Config:
         # The length of the list must be equal to the number of classes.
         _C.LOSS.CLASS_WEIGHTS = []
         # Whether to ignore a value in the loss and metric calculation. This is only available when LOSS.TYPE == "CE". This value will not only
-        # be ignored in the loss computation but in the metrics, e.g. IoU.
+        # be ignored in the loss computation but in the metrics, e.g. IoU. In membrane repair it marks ignored voxels in the
+        # membrane channel: they are excluded from its normalization, fed as 0 and the affinities between two of them ignored.
         _C.LOSS.IGNORE_INDEX = -1
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

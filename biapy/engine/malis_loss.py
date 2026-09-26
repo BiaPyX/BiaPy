@@ -29,7 +29,7 @@ The MST passes are numba-jitted (``nogil=True``); the batch loop dispatches samp
 ``ThreadPoolExecutor`` so they run concurrently.
 """
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -279,7 +279,7 @@ class MalisLoss(nn.Module):
     Malis-weighted affinity loss (see the module docstring for the full algorithm and scope).
     """
 
-    def __init__(self, offsets: List[Tuple[int, ...]], eps: float = 1e-8):
+    def __init__(self, offsets: List[Tuple[int, ...]], eps: float = 1e-8, ignore_index: Optional[int] = None):
         """
         Initialize the Malis-weighted affinity loss.
 
@@ -293,10 +293,15 @@ class MalisLoss(nn.Module):
 
         eps : float, optional
             Denominator floor.
+
+        ignore_index : int, optional
+            Target value marking ignored edges: unconnected in the GT reconstruction and left out of
+            the MST passes.
         """
         super().__init__()
         self.offsets = list(offsets)
         self.eps = eps
+        self.ignore_index = ignore_index
 
     def _compute_sample_weights(
         self,
@@ -306,10 +311,12 @@ class MalisLoss(nn.Module):
         edge_v: NDArray,
         edge_c: NDArray,
         shape: Tuple[int, ...],
+        ignored: Optional[NDArray] = None,
     ) -> Tuple[NDArray, NDArray]:
         """
         Run both MST passes for one sample and scatter the per-edge pair counts back to
         per-(channel, position) weight arrays. Called per-sample from a thread pool in ``forward``.
+        Edges marked in ``ignored`` (same shape as ``pred_np``) are left out of both passes.
 
         Returns
         -------
@@ -317,6 +324,9 @@ class MalisLoss(nn.Module):
         """
         gt_label = _reconstruct_gt_labels(target_np, self.offsets, shape).reshape(-1)
         n_gt = int(gt_label.max())
+        if ignored is not None:
+            keep = ~ignored.reshape(ignored.shape[0], -1)[edge_c, edge_v]
+            edge_u, edge_v, edge_c = edge_u[keep], edge_v[keep], edge_c[keep]
         flat_pred = pred_np.reshape(pred_np.shape[0], -1)
         # Predicted/target affinity for offset c is stored at the *target* (edge_v) position,
         # matching seg2aff_pni's convention (see _reconstruct_gt_labels).
@@ -356,15 +366,24 @@ class MalisLoss(nn.Module):
         batch_size = pred_prob.shape[0]
         pred_np_list = [pred_prob[b].detach().cpu().numpy().astype(np.float64) for b in range(batch_size)]
         target_np_list = [target[b].detach().cpu().numpy().astype(np.float64) for b in range(batch_size)]
+        ignored_list = [None] * batch_size
+        if self.ignore_index is not None:
+            ignored_list = [t == self.ignore_index for t in target_np_list]
+            for t, ign in zip(target_np_list, ignored_list):
+                t[ign] = 0
 
         if batch_size == 1:
-            weights = [self._compute_sample_weights(pred_np_list[0], target_np_list[0], edge_u, edge_v, edge_c, shape)]
+            weights = [
+                self._compute_sample_weights(
+                    pred_np_list[0], target_np_list[0], edge_u, edge_v, edge_c, shape, ignored_list[0]
+                )
+            ]
         else:
             with ThreadPoolExecutor(max_workers=batch_size) as pool:
                 weights = list(
                     pool.map(
                         lambda i: self._compute_sample_weights(
-                            pred_np_list[i], target_np_list[i], edge_u, edge_v, edge_c, shape
+                            pred_np_list[i], target_np_list[i], edge_u, edge_v, edge_c, shape, ignored_list[i]
                         ),
                         range(batch_size),
                     )

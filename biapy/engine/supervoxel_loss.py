@@ -24,7 +24,7 @@ Method:
 """
 import itertools
 from collections import deque
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import scipy.ndimage as ndi
@@ -148,7 +148,7 @@ class SupervoxelLoss(nn.Module):
     algorithm, its provenance, and the background-free domain adaptation).
     """
 
-    def __init__(self, alpha: float = 0.5, beta: float = 0.5, threshold: float = 0.5):
+    def __init__(self, alpha: float = 0.5, beta: float = 0.5, threshold: float = 0.5, ignore_index: Optional[int] = None):
         """
         Initialize the supervoxel loss.
 
@@ -164,17 +164,25 @@ class SupervoxelLoss(nn.Module):
         threshold : float, optional
             Probability threshold used to binarize the derived cell-interior probability into a
             foreground mask before connected-component labeling.
+
+        ignore_index : int, optional
+            Target value excluded from the loss; voxels with any ignored channel are also left out of
+            the critical-region detection.
         """
         super().__init__()
+        self.ignore_index = ignore_index
         self.alpha = alpha
         self.beta = beta
         self.threshold = threshold
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
 
-    def _critical_weight(self, pred_prob_np: NDArray, target_np: NDArray) -> NDArray:
+    def _critical_weight(self, pred_prob_np: NDArray, target_np: NDArray, valid_np: Optional[NDArray] = None) -> NDArray:
         """Compute the spatial critical-weight map (independent of ``alpha``) for one sample."""
         target_interior = target_np.mean(axis=0) > self.threshold
         pred_interior = pred_prob_np.mean(axis=0) > self.threshold
+        if valid_np is not None:
+            target_interior &= valid_np
+            pred_interior &= valid_np
 
         target_labels, _ = ndi.label(target_interior)
         pred_labels, _ = ndi.label(pred_interior)
@@ -201,15 +209,23 @@ class SupervoxelLoss(nn.Module):
             Scalar loss.
         """
         pred_prob = torch.sigmoid(pred_logits)
+        valid = None
+        if self.ignore_index is not None:
+            valid = target != self.ignore_index
+            target = target.masked_fill(~valid, 0)
         voxel_loss = self.bce(pred_logits.float(), target.float())  # (B, C, ...), no reduction
 
         sample_losses = []
         for b in range(pred_prob.shape[0]):
             pred_prob_np = pred_prob[b].detach().cpu().numpy()
             target_np = target[b].detach().cpu().numpy()
-            weight_np = self._critical_weight(pred_prob_np, target_np)
+            valid_np = None if valid is None else valid[b].all(dim=0).cpu().numpy()
+            weight_np = self._critical_weight(pred_prob_np, target_np, valid_np)
             weight_t = torch.from_numpy(weight_np).to(voxel_loss.device, voxel_loss.dtype).unsqueeze(0)
 
             combined = (1.0 - self.alpha) * voxel_loss[b] + self.alpha * weight_t * voxel_loss[b]
-            sample_losses.append(combined.mean())
+            if valid is None:
+                sample_losses.append(combined.mean())
+            else:
+                sample_losses.append((combined * valid[b]).sum() / valid[b].sum().clamp_min(1))
         return torch.stack(sample_losses).mean()

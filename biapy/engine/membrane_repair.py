@@ -30,7 +30,7 @@ from biapy.data.data_manipulation import check_binary_masks, read_img_as_ndarray
 from biapy.data.membrane_channels import derive_membrane_input_channels
 from biapy.data.post_processing.affinity_agglomeration import watershed_and_agglomerate_affinities
 from biapy.data.post_processing.post_processing import apply_label_refinement, watershed_by_channels
-from biapy.data.pre_processing import affinity_offsets_from_opts
+from biapy.data.pre_processing import affinity_offsets_from_opts, load_resolution_stats
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.image_to_image import Image_to_Image_Workflow as _Image_to_Image_Workflow
 from biapy.engine.malis_loss import MalisLoss
@@ -98,10 +98,15 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         source_channels = list(cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS)
         membrane_idx = source_channels.index("membrane") if "membrane" in source_channels else None
         if membrane_idx is not None:
+            ignore = [cfg.LOSS.IGNORE_INDEX] if cfg.LOSS.IGNORE_INDEX != -1 else []
             if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
-                check_binary_masks(cfg.DATA.TRAIN.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
+                check_binary_masks(
+                    cfg.DATA.TRAIN.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx, extra_allowed_values=ignore
+                )
                 if not cfg.DATA.VAL.FROM_TRAIN:
-                    check_binary_masks(cfg.DATA.VAL.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
+                    check_binary_masks(
+                        cfg.DATA.VAL.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx, extra_allowed_values=ignore
+                    )
             if cfg.TEST.ENABLE and cfg.DATA.TEST.CHECK_DATA:
                 check_binary_masks(cfg.DATA.TEST.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
 
@@ -110,6 +115,10 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         self.is_y_mask = True
         self.norm_module["target_type"] = "mask"
         self.test_norm_module["target_type"] = "mask"
+        # Keep ignored membrane voxels out of the train/val normalization
+        if cfg.LOSS.IGNORE_INDEX != -1 and membrane_idx is not None:
+            self.norm_module["ignore_value"] = cfg.LOSS.IGNORE_INDEX
+            self.norm_module["ignore_channels"] = [membrane_idx]
 
     @staticmethod
     def _validate_membrane_repair_channel_counts(cfg):
@@ -284,22 +293,26 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         )
         by_name = dict(zip(names, weights))
 
+        ignore_index = self.cfg.LOSS.IGNORE_INDEX if self.cfg.LOSS.IGNORE_INDEX != -1 else None
         weighted_sub_losses = []
         if by_name.get("BCE", 0.0) > 0:
             mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
             bce_loss = WeightedBCEAffinityLoss(
-                class_rebalance_within_channels=mr.CLASS_REBALANCE_WITHIN_CHANNELS
+                class_rebalance_within_channels=mr.CLASS_REBALANCE_WITHIN_CHANNELS, ignore_index=ignore_index
             ).to(self.device)
             weighted_sub_losses.append((by_name["BCE"], bce_loss))
         if by_name.get("MALIS", 0.0) > 0:
             mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
             a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
-            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims)
-            weighted_sub_losses.append((by_name["MALIS"], MalisLoss(offsets=offsets)))
+            resolution = self._malis_resolution() if a_opts.get("units", "voxel") == "physical_nm" else None
+            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims, resolution=resolution)
+            weighted_sub_losses.append((by_name["MALIS"], MalisLoss(offsets=offsets, ignore_index=ignore_index)))
         if by_name.get("CLDICE", 0.0) > 0:
-            weighted_sub_losses.append((by_name["CLDICE"], CLDiceComponentPenaltyLoss().to(self.device)))
+            weighted_sub_losses.append(
+                (by_name["CLDICE"], CLDiceComponentPenaltyLoss(ignore_index=ignore_index).to(self.device))
+            )
         if by_name.get("SVOX", 0.0) > 0:
-            weighted_sub_losses.append((by_name["SVOX"], SupervoxelLoss().to(self.device)))
+            weighted_sub_losses.append((by_name["SVOX"], SupervoxelLoss(ignore_index=ignore_index).to(self.device)))
 
         if not weighted_sub_losses:
             raise ValueError(
@@ -338,6 +351,26 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 ndim=self.dims,
             )
         ]
+
+    def _malis_resolution(self) -> Tuple[float, ...]:
+        """
+        Single (z, y, x) training resolution used to turn nm affinity offsets into MALIS voxel offsets: from
+        ``DATA.TRAIN.RESOLUTION`` or, if unset, the ``resolution.json`` of the train/val data.
+        """
+        cfg = self.cfg
+        if cfg.DATA.TRAIN.RESOLUTION[0] != -1:
+            return tuple(cfg.DATA.TRAIN.RESOLUTION)
+        paths = [cfg.DATA.TRAIN.PATH] + ([] if cfg.DATA.VAL.FROM_TRAIN else [cfg.DATA.VAL.PATH])
+        found = set()
+        for path in paths:
+            found.update(load_resolution_stats(path).values())
+        if len(found) != 1:
+            raise ValueError(
+                "MALIS with 'units': 'physical_nm' affinities needs a single training resolution (set "
+                f"'DATA.TRAIN.RESOLUTION' or a resolution.json next to the data), found: {sorted(found)}. "
+                "Use voxel units for data with mixed resolutions."
+            )
+        return found.pop()
 
     def metric_calculation(
         self,

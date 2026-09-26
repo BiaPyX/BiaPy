@@ -85,6 +85,7 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
             scalar_keys=("band_prob",),
         ),
         "skeleton_perturb_aug": _aug_cfg(mr.SKELETON_PERTURB_AUG, "radius_range"),
+        "ignore_value": cfg.LOSS.IGNORE_INDEX if cfg.LOSS.IGNORE_INDEX != -1 else None,
         # Per-channel warp interpolation: nearest-neighbour for binary channels, linear for "raw".
         "img_type": ["image" if ch == "raw" else "mask" for ch in mr.SOURCE_CHANNELS],
     }

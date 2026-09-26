@@ -175,24 +175,40 @@ def normalize_image(
         if not isinstance(img, np.floating):
             img = img.astype(np.float32)
 
+    # Voxels equal to 'ignore_value' in 'ignore_channels' are excluded from the statistics and left untouched
+    ignore_value = norm_module.get("ignore_value", None)
+    ignore_channels = set(norm_module.get("ignore_channels", [])) if ignore_value is not None else set()
+    if ignore_value is not None:
+        new_norm_info["ignore_value"] = ignore_value
+        new_norm_info["ignore_channels"] = sorted(ignore_channels)
+
     # Do the normalization channel by channel to be able to store the normalization information for each channel separately in the norm_info dict
     for c in range(img.shape[-1]):
         new_norm_info["per_channel_info"][f"{c}"] = {}
+        keep = None
+        data = img[..., c]
+        if c in ignore_channels:
+            keep = data != ignore_value
+            data = data[keep]
+            if data.shape[0] == 0:  # all ignored: dummy stats, channel left as is
+                keep = None
+                data = data.new_zeros(1) if isinstance(data, torch.Tensor) else np.zeros(1, dtype=img.dtype)
+
         if norm_module["percentile_clip"]:
-            img[..., c], x_lwr, x_upr = percentile_clip( # type: ignore
-                img[..., c], 
+            data, x_lwr, x_upr = percentile_clip( # type: ignore
+                data,
                 per_lower_bound=per_lower_bound,
                 per_upper_bound=per_upper_bound,
-                lower_bound_val=lower_bound_val[c] if lower_bound_val is not None else None, 
+                lower_bound_val=lower_bound_val[c] if lower_bound_val is not None else None,
                 upper_bound_val=upper_bound_val[c] if upper_bound_val is not None else None,
                 apply_norm=apply_norm
             )
             new_norm_info["per_channel_info"][f"{c}"]["lower_bound_val"] = x_lwr
             new_norm_info["per_channel_info"][f"{c}"]["upper_bound_val"] = x_upr
-        
+
         if norm_module["type"] in ["div", "scale_range"]:
-            img[..., c], max_val, min_val = norm_range01( # type: ignore
-                img[..., c],
+            data, max_val, min_val = norm_range01( # type: ignore
+                data,
                 div_using_max_and_scale=(norm_module["type"] == "scale_range"),
                 max_val_to_div = max_val_to_div[c] if max_val_to_div is not None else None,
                 min_val_to_div = min_val_to_div[c] if min_val_to_div is not None else None,
@@ -202,14 +218,19 @@ def normalize_image(
             new_norm_info["per_channel_info"][f"{c}"]["max_val_to_div"] = max_val
 
         elif norm_module["type"] == "zero_mean_unit_variance":
-            img[..., c], used_mean, used_std = zero_mean_unit_variance_normalization( # type: ignore
-                img[..., c], 
+            data, used_mean, used_std = zero_mean_unit_variance_normalization( # type: ignore
+                data,
                 mean=mean[c] if mean is not None else None,
                 std=std[c] if std is not None else None,
                 apply_norm=apply_norm
             )
             new_norm_info["per_channel_info"][f"{c}"]["mean"] = used_mean
             new_norm_info["per_channel_info"][f"{c}"]["std"] = used_std
+
+        if c not in ignore_channels:
+            img[..., c] = data
+        elif keep is not None:
+            img[..., c][keep] = data
 
     if isinstance(img, np.ndarray):
         img = img.astype(torch_numpy_dtype_dict[norm_module["out_dtype"]][1])

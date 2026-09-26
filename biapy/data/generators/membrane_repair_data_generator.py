@@ -13,6 +13,7 @@ not appended to -- by the channels derived from them, recomputed every call (nev
 disk). This mixin is the one place X's width changes: raw ``SOURCE_CHANNELS`` width in, derived-
 only width out.
 """
+import copy
 import random
 from typing import Dict, List, Optional, Tuple
 
@@ -23,6 +24,7 @@ from numpy.typing import NDArray
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
 from biapy.data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
 from biapy.data.membrane_channels import derive_membrane_input_channels, source_channel_offsets
+from biapy.data.pre_processing import channel_physical_offsets, labels_into_channels
 from biapy.data.generators.membrane_augmentors import (
     artifact_corruption,
     skeleton_perturbation,
@@ -48,6 +50,7 @@ class MembraneRepairGeneratorMixin:
         bridge_aug: Dict = {},
         artifact_aug: Dict = {},
         skeleton_perturb_aug: Dict = {},
+        ignore_value: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -75,6 +78,10 @@ class MembraneRepairGeneratorMixin:
             Corruption-augmentor configs, each with an ``"enable"`` bool, a ``"prob"`` float and
             augmentor-specific range keys (see ``biapy.data.generators.membrane_augmentors``).
             ``artifact_aug``'s blob artifact affects every channel, not just the membrane channel.
+
+        ignore_value : int, optional
+            Ignore label (``LOSS.IGNORE_INDEX``) in the membrane channel. Fed to the model as 0; the
+            affinities between two ignored voxels are set to this value.
 
         **kwargs : dict
             Forwarded to ``Pair2DImageDataGenerator``/``Pair3DImageDataGenerator``. Must include
@@ -112,6 +119,18 @@ class MembraneRepairGeneratorMixin:
         ):
             if aug.get("enable") and self.membrane_idx is None:
                 raise ValueError(f"{name} requires 'membrane' in SOURCE_CHANNELS.")
+
+        self.ignore_value = ignore_value
+        self.ignore_mask_col = None
+        if self.ignore_value is not None:
+            if self.membrane_idx is None:
+                raise ValueError("An ignore value (LOSS.IGNORE_INDEX) requires 'membrane' in SOURCE_CHANNELS.")
+            if "A" not in self.data_channels:
+                raise ValueError("An ignore value (LOSS.IGNORE_INDEX) requires 'A' in DATA_CHANNELS.")
+            # Ignore mask travels as an extra binary mask channel through the augmentations
+            self.ignore_mask_col = self.Y_channels
+            self.mask_norm = copy.deepcopy(self.mask_norm)
+            self.mask_norm["per_channel_info"][self.ignore_mask_col] = {"type": "bin", "div": False}
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -190,10 +209,20 @@ class MembraneRepairGeneratorMixin:
         mask : 3D/4D Numpy array
             GT channel stack, warped and with 'A' regenerated (unchanged shape).
         """
+        if self.ignore_value is not None:
+            ignored = image[..., self.membrane_idx] == self.ignore_value
+            image[..., self.membrane_idx][ignored] = 0
+            mask = np.concatenate([mask, ignored[..., None].astype(mask.dtype)], axis=-1)
+
         image, mask = super().apply_transform(
             image, mask, e_im, e_mask,
             diam_factor=diam_factor, sample_resolution=sample_resolution,
         )
+
+        if self.ignore_value is not None:
+            ignored = mask[..., self.ignore_mask_col] > 0.5
+            mask = np.delete(mask, self.ignore_mask_col, axis=-1)
+            mask = self._ignore_affinities(mask, ignored, sample_resolution)
 
         if self.gap_aug.get("enable") and self.da:
             image = synthetic_gap(
@@ -258,6 +287,43 @@ class MembraneRepairGeneratorMixin:
         )
 
         return image, mask
+
+    def _ignore_affinities(
+        self, mask: NDArray, ignored: NDArray, sample_resolution: Optional[Tuple[float, ...]] = None
+    ) -> NDArray:
+        """
+        Set to ``ignore_value`` every 'A' target whose two voxels are both ignored.
+
+        Parameters
+        ----------
+        mask : 3D/4D Numpy array
+            GT channel stack (without the ignore mask channel).
+
+        ignored : 2D/3D Numpy array of bool
+            Ignore mask, same spatial shape as ``mask``.
+
+        sample_resolution : tuple of float, optional
+            Per-sample ``(z, y, x)`` resolution, as used to regenerate 'A'.
+
+        Returns
+        -------
+        mask : 3D/4D Numpy array
+            ``mask`` with the ignored affinity entries set to ``ignore_value``.
+        """
+        if not ignored.any():
+            return mask
+        a_opts = dict(self.channel_extra_opts.get("A", {}))
+        a_opts["widen_borders"] = 0
+        kwargs = {}
+        if self.ndim == 3:
+            kwargs["resolution"] = sample_resolution if sample_resolution is not None else self.default_resolution_zyx
+        both_ignored = labels_into_channels(
+            ignored[..., None].astype(np.int32), mode=["A"], channel_extra_opts={"A": a_opts}, **kwargs
+        ) > 0.5
+        a_start = channel_physical_offsets(self.data_channels, self.channel_extra_opts)["A"]
+        a_block = mask[..., a_start : a_start + both_ignored.shape[-1]]
+        a_block[both_ignored] = self.ignore_value
+        return mask
 
 
 class Membrane2DRepairDataGenerator(MembraneRepairGeneratorMixin, Pair2DImageDataGenerator):

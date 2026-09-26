@@ -90,7 +90,7 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
     return jac
 
 
-def weight_binary_ratio(target):
+def weight_binary_ratio(target, valid=None):
     """
     Compute a weight map to balance foreground and background pixels.
 
@@ -99,12 +99,16 @@ def weight_binary_ratio(target):
     target : torch.Tensor
         Target tensor.
 
+    valid : torch.Tensor of bool, optional
+        If given, only these positions are used to compute the ratio.
+
     Returns
     -------
     weight : torch.Tensor
         Weight map.
     """
-    if torch.max(target) == torch.min(target):
+    values = target if valid is None else target[valid]
+    if values.numel() == 0 or torch.max(values) == torch.min(values):
         return torch.ones_like(target, dtype=torch.float32)
 
     # Generate weight map by balancing the foreground and background.
@@ -113,7 +117,10 @@ def weight_binary_ratio(target):
 
     label = (label != 0).double()  # foreground
 
-    ww = label.sum() / torch.prod(torch.tensor(label.shape, dtype=torch.double))
+    if valid is None:
+        ww = label.sum() / torch.prod(torch.tensor(label.shape, dtype=torch.double))
+    else:
+        ww = label[valid].sum() / valid.sum()
 
     ww = torch.clamp(ww, min=min_ratio, max=1 - min_ratio)
 
@@ -3204,7 +3211,7 @@ class CycleGanLoss(nn.Module):
 class WeightedBCEAffinityLoss(nn.Module):
     """Foreground/background-balanced BCE on affinity logits, via :func:`weight_binary_ratio`."""
 
-    def __init__(self, class_rebalance_within_channels: bool = True):
+    def __init__(self, class_rebalance_within_channels: bool = True, ignore_index: Optional[int] = None):
         """
         Initialize the weighted BCE affinity loss.
 
@@ -3213,10 +3220,14 @@ class WeightedBCEAffinityLoss(nn.Module):
         class_rebalance_within_channels : bool, optional
             True: weight_binary_ratio computed per affinity channel. False: pooled across all
             channels (old behavior, kept for reproducibility).
+
+        ignore_index : int, optional
+            Target value excluded from the loss.
         """
         super().__init__()
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
         self.class_rebalance_within_channels = class_rebalance_within_channels
+        self.ignore_index = ignore_index
 
     def forward(self, pred_logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """
@@ -3235,13 +3246,21 @@ class WeightedBCEAffinityLoss(nn.Module):
         loss : torch.Tensor
             Scalar loss.
         """
+        valid = None
+        if self.ignore_index is not None:
+            valid = target != self.ignore_index
+            target = target.masked_fill(~valid, 0)
         loss = self.bce(pred_logits.float(), target.float())
         if self.class_rebalance_within_channels:
             weight = torch.ones_like(target, dtype=torch.float32)
             for c in range(target.shape[1]):
-                weight[:, c : c + 1] = weight_binary_ratio(target[:, c : c + 1]).float()
+                weight[:, c : c + 1] = weight_binary_ratio(
+                    target[:, c : c + 1], None if valid is None else valid[:, c : c + 1]
+                ).float()
         else:
-            weight = weight_binary_ratio(target).float()
+            weight = weight_binary_ratio(target, valid).float()
+        if valid is not None:
+            weight = weight * valid
         return (loss * weight).sum() / weight.sum().clamp_min(1.0)
 
 
@@ -3305,7 +3324,14 @@ class CLDiceComponentPenaltyLoss(nn.Module):
       probability penalised toward 0.
     """
 
-    def __init__(self, cl_iters: int = 5, smooth: float = 1.0, threshold: float = 0.5, component_weight: float = 1.0):
+    def __init__(
+        self,
+        cl_iters: int = 5,
+        smooth: float = 1.0,
+        threshold: float = 0.5,
+        component_weight: float = 1.0,
+        ignore_index: Optional[int] = None,
+    ):
         """
         Initialize the clDice + spurious-component-penalty loss.
 
@@ -3323,8 +3349,13 @@ class CLDiceComponentPenaltyLoss(nn.Module):
 
         component_weight : float, optional
             Weight applied to the spurious-component penalty term relative to clDice.
+
+        ignore_index : int, optional
+            Target value marking ignored entries; voxels with any ignored channel are zeroed in both
+            membrane maps.
         """
         super().__init__()
+        self.ignore_index = ignore_index
         self.cl_iters = cl_iters
         self.smooth = smooth
         self.threshold = threshold
@@ -3376,8 +3407,15 @@ class CLDiceComponentPenaltyLoss(nn.Module):
             Scalar loss (clDice + ``component_weight`` * spurious-component penalty).
         """
         affinity_prob = torch.sigmoid(pred_logits)
+        if self.ignore_index is not None:
+            ignored = target == self.ignore_index
+            valid = (~ignored.any(dim=1, keepdim=True)).to(affinity_prob.dtype)
+            target = target.masked_fill(ignored, 0)
         membrane_pred = self._membrane_prob(affinity_prob)
         membrane_true = self._membrane_prob(target.float())
+        if self.ignore_index is not None:
+            membrane_pred = membrane_pred * valid
+            membrane_true = membrane_true * valid
 
         skel_pred = _soft_skeletonize(membrane_pred, self.cl_iters)
         skel_true = _soft_skeletonize(membrane_true, self.cl_iters)

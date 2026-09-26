@@ -1418,8 +1418,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
         if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
             raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
-    if cfg.LOSS.IGNORE_INDEX != -1 and loss != ["CE"] and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+    membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
+    if cfg.LOSS.IGNORE_INDEX != -1 and loss != ["CE"] and cfg.PROBLEM.TYPE != "INSTANCE_SEG" and not membrane_repair:
         warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is ['CE']")
+    if cfg.LOSS.IGNORE_INDEX != -1 and membrane_repair:
+        if "membrane" not in cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS:
+            raise ValueError("'LOSS.IGNORE_INDEX' in membrane repair requires 'membrane' in SOURCE_CHANNELS")
+        if "A" not in cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS:
+            raise ValueError("'LOSS.IGNORE_INDEX' in membrane repair requires 'A' in DATA_CHANNELS")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     
