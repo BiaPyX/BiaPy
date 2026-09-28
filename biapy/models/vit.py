@@ -17,6 +17,7 @@ Functions:
 - ``vit_large_patch16``: Factory function for a large-sized ViT model with 16x16 patches.
 - ``vit_huge_patch14``: Factory function for a huge-sized ViT model with 14x14 patches.
 - ``sam3_vit``: Factory function for a ViT with SAM 3's image encoder as backbone.
+- ``celldino_vit``: Factory function for a ViT with Cell-DINO's channel-adaptive image encoder as backbone.
 
 References:
 
@@ -35,6 +36,7 @@ import timm.models.vision_transformer
 from biapy.models.blocks import prepare_activation_layers
 from biapy.models.tr_layers import PatchEmbed
 from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
+from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
 
 
 class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
@@ -333,5 +335,35 @@ def sam3_vit(**kwargs):
     print(
         f"SAM 3 image encoder built with {params['depth']} blocks over a {grid_size}x{grid_size} token grid "
         f"({params['patch_size']}x{params['patch_size']} tokens)"
+    )
+    return model
+
+
+def celldino_vit(**kwargs):
+    """Create a ViT with Cell-DINO's channel-adaptive (1-channel) image encoder as backbone."""
+    params = CELLDINO_VIT_PARAMS
+    if kwargs.get("ndim", 2) != 2:
+        raise ValueError("'celldino_vit' can only be used with 2D data.")
+    if kwargs.get("in_chans", params["in_chans"]) != params["in_chans"]:
+        raise ValueError(
+            f"'celldino_vit' needs {params['in_chans']} input channel, got {kwargs.get('in_chans')}."
+        )
+    for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "init_values"]:
+        kwargs.pop(k, None)
+
+    model = VisionTransformer(
+        patch_size=params["patch_size"],
+        embed_dim=params["embed_dim"],
+        depth=params["depth"],
+        num_heads=params["num_heads"],
+        mlp_ratio=params["mlp_ratio"],
+        qkv_bias=params["qkv_bias"],
+        norm_layer=partial(nn.LayerNorm, eps=params["norm_eps"]),
+        init_values=params["init_values"],
+        **kwargs,
+    )
+    print(
+        f"Cell-DINO image encoder built with {params['depth']} blocks, {params['embed_dim']} "
+        f"embedding dimensions and {params['patch_size']}x{params['patch_size']} tokens"
     )
     return model
