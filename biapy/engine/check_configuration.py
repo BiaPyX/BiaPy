@@ -1314,7 +1314,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     # uppercased. Old-style combo strings are upgraded to list form earlier, in
     # '_convert_old_loss_type_to_list'.
     _continuous_image_names = {
-        "MAE", "MSE", "PCC", "SSIM", "CHARBONNIER", "VGG", "LPIPS", "LAPLACIAN", "FFT", "RFFT",
+        "MAE", "MSE", "PCC", "SSIM", "CHARBONNIER", "VGG", "LPIPS", "LAPLACIAN", "FFT", "RFFT", "SWT",
     }
     loss: List[str] = []
     weights: List[float] = []
@@ -2630,6 +2630,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "rcan",
             "dfcan",
             "wdsr",
+            "wavelettention",
             "vit",
             "mae",
             "unext_v1",
@@ -2638,7 +2639,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "stunet",
             "nafnet",
             "rdbm",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm']"
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'wavelettention', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm']"
         if (
             model_arch
             not in [
@@ -2659,6 +2660,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet",
                 "stunet",
                 "nafnet",
+                "wavelettention",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -2683,6 +2685,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "hrnet",
                         "stunet",
                         "nafnet",
+                        "wavelettention",
                     ]
                 )
             )
@@ -3039,6 +3042,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "rcan",
                 "dfcan",
                 "wdsr",
+                "wavelettention",
                 "unet",
                 "resunet",
                 "resunet++",
@@ -3050,7 +3054,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
             ]:
                 raise ValueError(
-                    "Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
+                    "Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'wavelettention', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
                 )
 
             # Not allowed archs
