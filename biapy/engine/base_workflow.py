@@ -2249,7 +2249,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = resize_images(
                             [self.current_sample["Y"]],
-                            output_shape=self.current_sample["rescaled_shape"][:-1]+(self.current_sample["Y"].shape[-1],),
+                            output_shape=(1,) + self.current_sample["rescaled_shape"][:-1] + (self.current_sample["Y"].shape[-1],),
                             order=0,
                             mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
                             cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,

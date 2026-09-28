@@ -98,6 +98,9 @@ class test_pair_data_generator(Dataset):
     ignore_index : int, optional
         Value to ignore in the loss/metrics. In this generator is not used but added for compatibility
         with ``PairBaseDataGenerator``.
+
+    keep_native_y : bool, optional
+        Whether to skip resizing and padding Y when ``preprocess_data`` is set.
     """
 
     def __init__(
@@ -125,6 +128,7 @@ class test_pair_data_generator(Dataset):
         n_classes: int = 1,
         ignore_index: Optional[int]=None,
         is_y_mask: bool = True,
+        keep_native_y: bool = False,
     ):
         if preprocess_data and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' must be set when 'preprocess_data' is provided")
@@ -156,6 +160,8 @@ class test_pair_data_generator(Dataset):
         self.n_classes = n_classes
         self.ignore_index = ignore_index
         self.is_y_mask = is_y_mask
+        # Only applies when X is resized.
+        self.keep_native_y = keep_native_y and preprocess_data is not None
 
         # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
         # means that validation data is being used as test, so we need to clean the sample_list.
@@ -351,7 +357,7 @@ class test_pair_data_generator(Dataset):
                         x_data=[img],
                         is_2d=(self.ndim == 2),
                     )[0]
-                    if self.provide_Y:
+                    if self.provide_Y and not self.keep_native_y:
                         mask = self.preprocess_data(
                             self.preprocess_cfg,
                             y_data=[mask],
@@ -367,7 +373,7 @@ class test_pair_data_generator(Dataset):
                         self.data_shape,
                         verbose=True,
                     )
-                    if self.provide_Y:
+                    if self.provide_Y and not self.keep_native_y:
                         assert mask is not None
                         mask = pad_to_shape(
                             mask,

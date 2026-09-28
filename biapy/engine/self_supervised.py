@@ -417,7 +417,8 @@ class Self_supervised_Workflow(Base_Workflow):
                     val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[m_name_real] = val
 
-                if metric_logger:
+                # Skip non-finite values (e.g. PSNR on a constant target) so they don't poison the mean.
+                if metric_logger and math.isfinite(val):
                     metric_logger.meters[m_name_real].update(val)
 
         return out_metrics
@@ -453,6 +454,11 @@ class Self_supervised_Workflow(Base_Workflow):
             return True
 
         original_data_shape = self.current_sample["X"].shape
+
+        # Keep native GT aside until the metrics.
+        native_Y = None
+        if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+            native_Y, self.current_sample["Y"] = self.current_sample["Y"], None
 
         # Crop if necessary
         if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -621,11 +627,11 @@ class Self_supervised_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]  # type: ignore
 
-        # Resize prediction (and GT) back to the native image shape when DATA.PREPROCESS.RESIZE
-        # downscaled the input for the model. Base_Workflow.process_test_sample already does this for
-        # other problem types; this workflow overrides that method, so it needs its own copy.
+        # Resize prediction to the native GT shape.
         if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
-            rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1] + (pred.shape[-1],)
+            self.current_sample["Y"] = native_Y
+            native_shape = native_Y.shape[1:-1] if native_Y is not None else self.current_sample["rescaled_shape"][:-1]
+            rescaled_shape = (1,) + tuple(native_shape) + (pred.shape[-1],)
             _resize_kwargs = dict(
                 order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
                 mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
@@ -635,21 +641,15 @@ class Self_supervised_Workflow(Base_Workflow):
                 anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
             )
             pred = resize_images([pred], output_shape=rescaled_shape, **_resize_kwargs)[0]
-            if self.current_sample["Y"] is not None:
-                self.current_sample["Y"] = resize_images(
-                    [self.current_sample["Y"]],
-                    output_shape=self.current_sample["rescaled_shape"][:-1] + (self.current_sample["Y"].shape[-1],),
-                    **_resize_kwargs,
-                )[0]
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                 pred_mask = resize_images(
                     [pred_mask],
-                    output_shape=(1,) + self.current_sample["rescaled_shape"][:-1] + (pred_mask.shape[-1],),
+                    output_shape=rescaled_shape[:-1] + (pred_mask.shape[-1],),
                     **_resize_kwargs,
                 )[0]
                 pred_visi = resize_images(
                     [pred_visi],
-                    output_shape=(1,) + self.current_sample["rescaled_shape"][:-1] + (pred_visi.shape[-1],),
+                    output_shape=rescaled_shape[:-1] + (pred_visi.shape[-1],),
                     **_resize_kwargs,
                 )[0]
 
@@ -692,6 +692,11 @@ class Self_supervised_Workflow(Base_Workflow):
             if self.current_sample["Y"].dtype == np.dtype("uint16"):
                 self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
 
+            if pred.shape[:-1] != self.current_sample["Y"].shape[:-1]:
+                raise ValueError(
+                    f"Prediction shape {pred.shape} does not match GT shape {self.current_sample['Y'].shape} "
+                    f"for '{self.current_sample['X_filename']}'"
+                )
             metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
             for metric in metric_values:
                 if str(metric).lower() not in self.stats["merge_patches"]:

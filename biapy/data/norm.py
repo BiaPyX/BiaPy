@@ -83,6 +83,11 @@ def normalize_image(
     assert "out_dtype" in norm_module, "'out_dtype' key should be in 'norm_module' dict"
 
     orig_dtype = str(img.dtype)
+    # Capture before the float cast below.
+    orig_was_integer = (
+        (isinstance(img, torch.Tensor) and not torch.is_floating_point(img))
+        or (isinstance(img, np.ndarray) and np.issubdtype(img.dtype, np.integer))
+    )
     new_norm_info = {
         "type": norm_module["type"],
         "percentile_clip": norm_module["percentile_clip"],
@@ -212,7 +217,8 @@ def normalize_image(
                 div_using_max_and_scale=(norm_module["type"] == "scale_range"),
                 max_val_to_div = max_val_to_div[c] if max_val_to_div is not None else None,
                 min_val_to_div = min_val_to_div[c] if min_val_to_div is not None else None,
-                apply_norm=apply_norm
+                apply_norm=apply_norm,
+                orig_was_integer=orig_was_integer,
             )
             new_norm_info["per_channel_info"][f"{c}"]["min_val_to_div"] = min_val
             new_norm_info["per_channel_info"][f"{c}"]["max_val_to_div"] = max_val
@@ -615,6 +621,7 @@ def norm_range01(
     min_val_to_div: int | float | None,
     apply_norm: bool = True,
     eps: float = 1e-6,
+    orig_was_integer: Optional[bool] = None,
 ) -> Tuple[NDArray | torch.Tensor, float, float]:
     """
     Normalize given data by dividing it by a value.
@@ -644,6 +651,10 @@ def norm_range01(
         Small value to add to the denominator to prevent division by zero when normalizing by using the
         maximum and minimum values of the data.
 
+    orig_was_integer : bool, optional
+        Whether the source data was of integer type. Needed when the caller has already cast ``data`` to
+        float (as :func:`normalize_image` does). If ``None``, it is inferred from ``data``'s dtype.
+
     Returns
     -------
     data : 3D/4D Numpy array or torch.Tensor
@@ -666,14 +677,12 @@ def norm_range01(
     if _is_binary_channel(data):
         return data, 1.0, 0.0
 
-    # Capture this before the cast below, which would otherwise erase it: an originally-integer
-    # array (uint8/uint16) is raw pixel data and must always be divided by 255/65535 below, even
-    # if a particular dim sample happens to have a low max. Only a source that was *already*
-    # floating-point can plausibly be pre-normalized data.
-    orig_was_integer = (
-        (isinstance(data, torch.Tensor) and not torch.is_floating_point(data))
-        or (isinstance(data, np.ndarray) and np.issubdtype(data.dtype, np.integer))
-    )
+    # Integer sources are raw pixels: never treated as already in [0, 1].
+    if orig_was_integer is None:
+        orig_was_integer = (
+            (isinstance(data, torch.Tensor) and not torch.is_floating_point(data))
+            or (isinstance(data, np.ndarray) and np.issubdtype(data.dtype, np.integer))
+        )
 
     # Changing dtype to floating tensor
     if isinstance(data, torch.Tensor):

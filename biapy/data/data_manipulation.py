@@ -1855,13 +1855,15 @@ def samples_from_image_list(
         # Data range check
         if not is_mask:
             if data_range_expected == -1:
-                data_range_expected = data_range(img)
+                data_range_expected = (data_range(img), img.dtype)
             drange = data_range(img)
-            if data_range_expected != drange:
+            if not data_range_matches(
+                data_range_expected, drange, img.dtype, strict=norm_depends_on_data_range(norm_module)
+            ):
                 raise ValueError(
                     f"All images must be within the same data range. However, the current image (with a "
                     f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {data_range_expected}) in the folder. Current image: {img_path}"
+                    f"of {data_range_expected[0]}) in the folder. Current image: {img_path}"
                 )
 
         original_data_shape = img.shape
@@ -2214,13 +2216,18 @@ def samples_from_image_list_multiple_raw_one_gt(
 
         # Data range check
         if gt_sample_data_range_expected == -1:
-            gt_sample_data_range_expected = data_range(gt_sample)
+            gt_sample_data_range_expected = (data_range(gt_sample), gt_sample.dtype)
         drange = data_range(gt_sample)
-        if gt_sample_data_range_expected != drange:
+        if not data_range_matches(
+            gt_sample_data_range_expected,
+            drange,
+            gt_sample.dtype,
+            strict=norm_depends_on_data_range(norm_module.get("target_norm_override") or norm_module),
+        ):
             raise ValueError(
                 f"All images must be within the same data range. However, the current image (with a "
                 f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                f"of {gt_sample_data_range_expected}) in the folder. Current image: {gt_sample_path}"
+                f"of {gt_sample_data_range_expected[0]}) in the folder. Current image: {gt_sample_path}"
             )
 
         # Extract all raw images for the current gt sample
@@ -2306,13 +2313,15 @@ def samples_from_image_list_multiple_raw_one_gt(
 
             # Data range check
             if raw_sample_data_range_expected == -1:
-                raw_sample_data_range_expected = data_range(raw_sample)
+                raw_sample_data_range_expected = (data_range(raw_sample), raw_sample.dtype)
             drange = data_range(raw_sample)
-            if raw_sample_data_range_expected != drange:
+            if not data_range_matches(
+                raw_sample_data_range_expected, drange, raw_sample.dtype, strict=norm_depends_on_data_range(norm_module)
+            ):
                 raise ValueError(
                     f"All images must be within the same data range. However, the current image (with a "
                     f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {raw_sample_data_range_expected}) in the folder. Current image: {raw_sample_path}"
+                    f"of {raw_sample_data_range_expected[0]}) in the folder. Current image: {raw_sample_path}"
                 )
 
             original_data_shape = raw_sample.shape
@@ -2517,13 +2526,15 @@ def samples_from_class_list(
 
             # Data range check
             if data_range_expected == -1:
-                data_range_expected = data_range(img)
+                data_range_expected = (data_range(img), img.dtype)
             drange = data_range(img)
-            if data_range_expected != drange:
+            if not data_range_matches(
+                data_range_expected, drange, img.dtype, strict=norm_depends_on_data_range(norm_module)
+            ):
                 raise ValueError(
                     f"All images must be within the same data range. However, the current image (with a "
                     f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {data_range_expected}) in the folder. Current image: {img_path}"
+                    f"of {data_range_expected[0]}) in the folder. Current image: {img_path}"
                 )
 
             img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
@@ -3279,13 +3290,18 @@ def load_images_to_dataset(
             # Data range check
             if not is_mask and isinstance(data, np.ndarray):
                 if data_range_expected == -1:
-                    data_range_expected = data_range(data)
+                    data_range_expected = (data_range(data), data.dtype)
                 drange = data_range(data)
-                if data_range_expected != drange:
+                if not data_range_matches(
+                    data_range_expected,
+                    drange,
+                    data.dtype,
+                    strict=norm_depends_on_data_range(dataset.dataset_info[sample.fid].norm_info),
+                ):
                     raise ValueError(
                         f"All images must be within the same data range. However, the current image (with a "
                         f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                        f"of {data_range_expected}) in the folder. Current image: {img_path}"
+                        f"of {data_range_expected[0]}) in the folder. Current image: {img_path}"
                     )
 
             # Apply preprocessing
@@ -3951,6 +3967,69 @@ def data_range(x: NDArray) -> str:
     else:
         return "none_range"
 
+
+def norm_depends_on_data_range(norm_module: Optional[Dict]) -> bool:
+    """
+    Whether a normalization derives its scale from the image's value range.
+
+    ``div`` divides by 255 or 65535 depending on each image's maximum (see
+    :func:`biapy.data.norm.norm_range01`), so all images must fall in the same value-based
+    :func:`data_range` or they would be scaled inconsistently. ``scale_range`` and
+    ``zero_mean_unit_variance`` compute their statistics per image (or use fixed values), so they
+    are unaffected by it.
+
+    Parameters
+    ----------
+    norm_module : dict or None
+        Normalization module (or a sample's ``norm_info``) with a ``type`` key. When not
+        available the normalization is assumed to depend on the data range.
+
+    Returns
+    -------
+    bool
+        ``True`` if the normalization depends on the value-based data range of each image.
+    """
+    if not norm_module or "type" not in norm_module:
+        return True
+    return norm_module["type"] == "div"
+
+
+def data_range_matches(expected: Tuple[str, Any], drange: str, dtype: Any, strict: bool = True) -> bool:
+    """
+    Check whether an image's data range is consistent with the one expected for its folder.
+
+    :func:`data_range` is value-based, so a dim integer image (e.g. a ``uint16`` fluorescence image
+    whose maximum is below 256) is reported as ``"uint8 range"``. When the normalization does not
+    depend on the data range (``strict=False``, see :func:`norm_depends_on_data_range`), two images
+    stored with the same integer dtype are considered consistent even if their value-based ranges
+    differ. With ``strict=True`` (e.g. ``div`` normalization) the value-based ranges must match, as
+    they decide the divisor used for each image.
+
+    Parameters
+    ----------
+    expected : tuple of str and dtype
+        ``(data_range, dtype)`` of the first image of the folder.
+
+    drange : str
+        Value-based data range of the current image, as returned by :func:`data_range`.
+
+    dtype : dtype
+        Dtype of the current image.
+
+    strict : bool, optional
+        Whether the value-based data ranges must match exactly.
+
+    Returns
+    -------
+    bool
+        ``True`` if the current image is consistent with the expected data range.
+    """
+    expected_range, expected_dtype = expected
+    if drange == expected_range:
+        return True
+    if strict:
+        return False
+    return np.issubdtype(dtype, np.integer) and np.dtype(dtype) == np.dtype(expected_dtype)
 
 def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     """

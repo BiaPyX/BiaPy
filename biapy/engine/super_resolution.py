@@ -384,7 +384,8 @@ class Super_resolution_Workflow(Base_Workflow):
                     val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[m_name_real] = val
 
-                if metric_logger:
+                # Skip non-finite values (e.g. PSNR on a constant target) so they don't poison the mean.
+                if metric_logger and math.isfinite(val):
                     metric_logger.meters[m_name_real].update(val)
 
         return out_metrics
@@ -395,6 +396,11 @@ class Super_resolution_Workflow(Base_Workflow):
         # Skip processing image
         if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
+
+        # Keep native GT aside until the metrics.
+        native_Y = None
+        if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+            native_Y, self.current_sample["Y"] = self.current_sample["Y"], None
 
         if self.cfg.PROBLEM.NDIM == "2D":
             original_data_shape = (
@@ -491,16 +497,16 @@ class Super_resolution_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
-        # Resize prediction (and GT) back to the native image shape when DATA.PREPROCESS.RESIZE
-        # downscaled the input for the model. 'rescaled_shape' is the LR input's native shape (see
-        # test_pair_data_generators.py), so the HR target is that shape scaled by UPSCALING.
-        # Base_Workflow.process_test_sample already does the 1:1 version of this for other problem
-        # types; this workflow overrides that method, so it needs its own copy.
+        # Resize prediction to the native HR GT shape.
         if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
-            upscaling = self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
-            native_hr_spatial = tuple(
-                int(round(s * upscaling[i])) for i, s in enumerate(self.current_sample["rescaled_shape"][:-1])
-            )
+            self.current_sample["Y"] = native_Y
+            if native_Y is not None:
+                native_hr_spatial = tuple(native_Y.shape[1:-1])
+            else:
+                upscaling = self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
+                native_hr_spatial = tuple(
+                    int(round(s * upscaling[i])) for i, s in enumerate(self.current_sample["rescaled_shape"][:-1])
+                )
             pred = resize_images(
                 [pred],
                 output_shape=(1,) + native_hr_spatial + (pred.shape[-1],),
@@ -511,17 +517,6 @@ class Super_resolution_Workflow(Base_Workflow):
                 preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
                 anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
             )[0]
-            if self.current_sample["Y"] is not None:
-                self.current_sample["Y"] = resize_images(
-                    [self.current_sample["Y"]],
-                    output_shape=native_hr_spatial + (self.current_sample["Y"].shape[-1],),
-                    order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
-                    mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
-                    cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
-                    clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
-                    preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
-                    anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
-                )[0]
 
         # Undo normalization
         pred = undo_image_norm(pred, self.current_sample["X_norm"])
@@ -550,6 +545,11 @@ class Super_resolution_Workflow(Base_Workflow):
             if self.current_sample["Y"].dtype == np.dtype("uint16"):
                 self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
 
+            if pred.shape[:-1] != self.current_sample["Y"].shape[:-1]:
+                raise ValueError(
+                    f"Prediction shape {pred.shape} does not match GT shape {self.current_sample['Y'].shape} "
+                    f"for '{self.current_sample['X_filename']}'"
+                )
             metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
             for metric in metric_values:
                 if str(metric).lower() not in self.stats["merge_patches"]:

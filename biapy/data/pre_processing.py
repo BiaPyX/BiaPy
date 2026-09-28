@@ -3902,6 +3902,7 @@ def resize_images(images: List[NDArray], **kwards) -> List[NDArray]:
         The resized images. The returned data will use the same data type as the given `images`.
 
     """
+    kwards.setdefault("preserve_range", True)
     resized_images = [resize(img, **kwards).astype(img.dtype) for img in images]
     return resized_images
 

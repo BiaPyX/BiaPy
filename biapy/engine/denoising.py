@@ -301,15 +301,16 @@ class Denoising_Workflow(Base_Workflow):
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
+        # Train/val targets are N2V [values, mask] unless using NAFNet.
+        if train and self.cfg.MODEL.ARCHITECTURE.lower() != "nafnet":
+            n_ch = _output.shape[1]
+            n2v_mask = _targets[:, n_ch:].bool()
+            _output = _output[n2v_mask]
+            _targets = _targets[:, :n_ch][n2v_mask]
+
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                # Nafnet for Gan With Supervised
-                if self.cfg.PROBLEM.DENOISING.LOAD_GT_DATA:
-                    target_for_metric = _targets.contiguous()
-                # Normal N2Void
-                else:
-                    target_for_metric = _targets[:, _output.shape[1]:].contiguous()
-                val = metric(_output.contiguous(), target_for_metric)
+                val = metric(_output.contiguous(), _targets.contiguous())
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 
@@ -325,6 +326,11 @@ class Denoising_Workflow(Base_Workflow):
             return True
 
         original_data_shape = self.current_sample["X"].shape
+
+        # Keep native GT aside until the metrics.
+        native_Y = None
+        if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+            native_Y, self.current_sample["Y"] = self.current_sample["Y"], None
 
         if self.cfg.TEST.FULL_IMG and self.cfg.PROBLEM.NDIM == "2D":
             self.current_sample["X"], o_test_shape = check_downsample_division(
@@ -420,6 +426,10 @@ class Denoising_Workflow(Base_Workflow):
             if reflected_orig_shape != pred.shape:
                 if self.cfg.PROBLEM.NDIM == "2D":
                     pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]  # type: ignore
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = self.current_sample["Y"][
+                            :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
+                        ]
                 else:
                     pred = pred[
                         :,
@@ -427,12 +437,19 @@ class Denoising_Workflow(Base_Workflow):
                         -reflected_orig_shape[2] :,
                         -reflected_orig_shape[3] :,
                     ]  # type: ignore
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = self.current_sample["Y"][
+                            :,
+                            -reflected_orig_shape[1] :,
+                            -reflected_orig_shape[2] :,
+                            -reflected_orig_shape[3] :,
+                        ]
 
-        # Resize prediction (and GT) back to the native image shape when DATA.PREPROCESS.RESIZE
-        # downscaled the input for the model. Base_Workflow.process_test_sample already does this for
-        # other problem types; this workflow overrides that method, so it needs its own copy.
+        # Resize prediction to the native GT shape.
         if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
-            rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1] + (pred.shape[-1],)
+            self.current_sample["Y"] = native_Y
+            native_shape = native_Y.shape[1:-1] if native_Y is not None else self.current_sample["rescaled_shape"][:-1]
+            rescaled_shape = (1,) + tuple(native_shape) + (pred.shape[-1],)
             pred = resize_images(
                 [pred],
                 output_shape=rescaled_shape,
@@ -443,17 +460,6 @@ class Denoising_Workflow(Base_Workflow):
                 preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
                 anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
             )[0]
-            if self.current_sample["Y"] is not None:
-                self.current_sample["Y"] = resize_images(
-                    [self.current_sample["Y"]],
-                    output_shape=self.current_sample["rescaled_shape"][:-1] + (self.current_sample["Y"].shape[-1],),
-                    order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
-                    mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
-                    cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
-                    clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
-                    preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
-                    anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
-                )[0]
 
         # Undo normalization
         pred = undo_image_norm(pred, self.current_sample["X_norm"])
@@ -476,6 +482,11 @@ class Denoising_Workflow(Base_Workflow):
 
         # Calculate metrics
         if self.current_sample["Y"] is not None:
+            if pred.shape[:-1] != self.current_sample["Y"].shape[:-1]:
+                raise ValueError(
+                    f"Prediction shape {pred.shape} does not match GT shape {self.current_sample['Y'].shape} "
+                    f"for '{self.current_sample['X_filename']}'"
+                )
             metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
             for metric in metric_values:
                 if str(metric).lower() not in self.stats["merge_patches"]:

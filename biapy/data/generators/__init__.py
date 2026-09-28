@@ -706,6 +706,8 @@ def create_test_generator(
         # Y is a continuous regression target in these workflows, not a categorical mask -- resizing
         # it should use the same interpolation as X, not nearest-neighbor.
         dic["is_y_mask"] = cfg.PROBLEM.TYPE not in ("IMAGE_TO_IMAGE", "DENOISING", "SUPER_RESOLUTION", "SELF_SUPERVISED")
+        # Don't resize the test GT.
+        dic["keep_native_y"] = cfg.PROBLEM.TYPE in ("IMAGE_TO_IMAGE", "DENOISING", "SUPER_RESOLUTION", "SELF_SUPERVISED")
     
     test_generator = gen_name(**dic)
 
