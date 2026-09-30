@@ -48,7 +48,8 @@ parser.add_argument(
 parser.add_argument("-output_csv", "--output_csv", required=True, help="Where to write the per-image metrics CSV")
 args = vars(parser.parse_args())
 
-STUDY_PREFIX_RE = re.compile(r"^(Study_\d+_[A-Za-z0-9]+_image_\d+)_")
+# Modality may contain hyphens, e.g. "DIC-PC"
+STUDY_PREFIX_RE = re.compile(r"^(Study_\d+_[^_]+_image_\d+)_")
 
 
 def find_gt_file(gt_study_dir: str) -> str:
