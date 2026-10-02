@@ -69,7 +69,7 @@ from skimage.transform import resize as sk_resize
 import nibabel as nib
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
-from biapy.data.norm import normalize_image, normalize_mask
+from biapy.data.norm import normalize_image, normalize_mask, gt_stats_norm_module
 from biapy.utils.misc import is_main_process, os_walk_clean, get_rank, get_world_size, is_dist_avail_and_initialized
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
@@ -1885,7 +1885,7 @@ def samples_from_image_list(
             tot_samples_to_insert = 1
         
         if is_mask:
-            img, norm_info = normalize_mask(img, norm_module=norm_module, apply_norm=False)
+            img, norm_info = normalize_mask(img, norm_module=gt_stats_norm_module(norm_module), apply_norm=False)
         else:
             img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
 
@@ -2257,7 +2257,10 @@ def samples_from_image_list_multiple_raw_one_gt(
         else:
             gt_tot_samples_to_insert = 1
 
-        gt_sample, norm_info = normalize_image(gt_sample, norm_module=norm_module, apply_norm=False)
+        gt_norm_module = gt_stats_norm_module(norm_module)
+        gt_sample, norm_info = normalize_image(gt_sample, norm_module=gt_norm_module, apply_norm=False)
+        if gt_norm_module is not norm_module:
+            norm_info["target_type"] = gt_norm_module["target_type"]
         data_file = DatasetFile(
             path=os.path.join(gt_path, id_, gt_id), 
             shape=original_data_shape, 

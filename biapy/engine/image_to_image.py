@@ -43,7 +43,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
-from biapy.data.norm import undo_image_norm, resolve_fixed_norm_info
+from biapy.data.norm import undo_image_norm, resolve_fixed_norm_info, normalize_image, target_norm_is_fixed
 from biapy.data.pre_processing import resize_images
 
 class Image_to_Image_Workflow(Base_Workflow):
@@ -706,6 +706,14 @@ class Image_to_Image_Workflow(Base_Workflow):
             vals.append(v.item() if not torch.isnan(v) else 0.0)
         return float(np.mean(vals)) if vals else 0.0
 
+    def _per_image_target_norm(self, data: NDArray, target_norm: Dict) -> NDArray:
+        """Normalize each sample of ``data`` (``(B, ...spatial, C)``) with its own stats."""
+        norm_module = {k: v for k, v in target_norm.items() if k != "per_channel_info"}
+        out = np.empty(data.shape, dtype=np.float32)
+        for b in range(data.shape[0]):
+            out[b], _ = normalize_image(np.array(data[b]), norm_module=norm_module)
+        return out
+
     def process_test_sample(self):
         """Process a sample in the inference phase."""
         assert self.model
@@ -859,7 +867,10 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         # Undo normalization
         target_norm_override = self.test_norm_module.get("target_norm_override")
-        if target_norm_override is not None:
+        per_image_target = target_norm_override is not None and not target_norm_is_fixed(target_norm_override)
+        if per_image_target:
+            adjusted_norm = None
+        elif target_norm_override is not None:
             if getattr(self, "_resolved_target_norm_info", None) is None:
                 self._resolved_target_norm_info = resolve_fixed_norm_info(
                     target_norm_override,
@@ -873,7 +884,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                 for i in range(len(self.current_sample["X_norm"]["per_channel_info"]), self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS):
                     adjusted_norm["per_channel_info"][str(i)] = copy.deepcopy(self.current_sample["X_norm"]["per_channel_info"]["0"])
 
-        pred = undo_image_norm(pred, adjusted_norm)
+        if adjusted_norm is not None:
+            pred = undo_image_norm(pred, adjusted_norm)
         assert isinstance(pred, np.ndarray)
 
         if self.return_prediction:
@@ -902,6 +914,13 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
+
+        if per_image_target:
+            # Metrics in the per-image target space
+            self.test_data_range = 1.0
+            pred = self._per_image_target_norm(pred, target_norm_override)
+            if self.current_sample["Y"] is not None:
+                self.current_sample["Y"] = self._per_image_target_norm(self.current_sample["Y"], target_norm_override)
 
         if self.current_sample["Y"] is not None:
             if self.current_sample["Y"].dtype == np.dtype("uint16"):

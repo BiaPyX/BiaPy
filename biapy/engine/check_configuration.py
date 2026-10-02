@@ -2570,41 +2570,27 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
 
     if cfg.DATA.NORMALIZATION.TARGET.ENABLE:
-        target_type = (
-            cfg.DATA.NORMALIZATION.TARGET.TYPE if cfg.DATA.NORMALIZATION.TARGET.TYPE != "" else cfg.DATA.NORMALIZATION.TYPE
-        )
-        assert target_type in ("zero_mean_unit_variance", "scale_range", "div"), (
-            "'DATA.NORMALIZATION.TARGET' only supports 'zero_mean_unit_variance', 'scale_range' or 'div' "
-            "(via 'DATA.NORMALIZATION.TARGET.TYPE' or the inherited 'DATA.NORMALIZATION.TYPE'), got "
-            f"'{target_type}'"
-        )
+        tnorm = cfg.DATA.NORMALIZATION.TARGET
+        target_type = tnorm.TYPE if tnorm.TYPE != "" else cfg.DATA.NORMALIZATION.TYPE
+        if target_type not in ("zero_mean_unit_variance", "scale_range", "div"):
+            raise ValueError(f"'DATA.NORMALIZATION.TARGET' doesn't support '{target_type}' normalization")
+        fixed_clip = tnorm.PERC_CLIP.LOWER_VALUE[0] != -1 or tnorm.PERC_CLIP.UPPER_VALUE[0] != -1
+        perc_clip = tnorm.PERC_CLIP.LOWER_PERC != -1 or tnorm.PERC_CLIP.UPPER_PERC != -1
+        if tnorm.PERC_CLIP.ENABLE:
+            if fixed_clip == perc_clip:
+                raise ValueError(
+                    "Set either 'DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_PERC'/'UPPER_PERC' or 'LOWER_VALUE'/'UPPER_VALUE'"
+                )
+            if perc_clip:
+                for key in ["LOWER_PERC", "UPPER_PERC"]:
+                    if not check_value(tnorm.PERC_CLIP[key], value_range=(0, 100)):
+                        raise ValueError(f"'DATA.NORMALIZATION.TARGET.PERC_CLIP.{key}' not in [0, 100] range")
         if target_type == "zero_mean_unit_variance":
-            if cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL[0] == -1:
-                raise ValueError(
-                    "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed "
-                    "values when 'DATA.NORMALIZATION.TARGET.ENABLE' is True. A per-image adaptive mean/std "
-                    "computed from the ground truth cannot be recovered at test time without the ground truth "
-                    "itself, which defeats the purpose of this section - compute fixed values once from the "
-                    "training set's target images and set them here."
-                )
-        else:  # 'scale_range' / 'div': no mean/std concept, fixed clip bounds double as the fixed
-            # min/max used to undo the 0-1 scaling (see 'resolve_fixed_norm_info'), so they are required.
-            if not cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
-                raise ValueError(
-                    "'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' must be True, with fixed "
-                    "'LOWER_VALUE'/'UPPER_VALUE', when 'DATA.NORMALIZATION.TARGET.TYPE' is "
-                    "'scale_range'/'div': those fixed bounds double as the fixed min/max used to undo the "
-                    "0-1 scaling at test time, since an adaptive per-image min/max cannot be recovered from "
-                    "the ground truth at test time."
-                )
-        if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
-            if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE[0] == -1:
-                raise ValueError(
-                    "'DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE'/'UPPER_VALUE' must be set to fixed "
-                    "values when 'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' is True - only fixed clip "
-                    "values are supported here, as percentiles would need to be computed from the ground "
-                    "truth, which is not available at test time."
-                )
+            fixed_stats = tnorm.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] != -1
+            if fixed_stats != (tnorm.ZERO_MEAN_UNIT_VAR.STD_VAL[0] != -1):
+                raise ValueError("Set both or none of 'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL'")
+            if fixed_stats and tnorm.PERC_CLIP.ENABLE and perc_clip:
+                raise ValueError("Fixed target mean/std need fixed 'DATA.NORMALIZATION.TARGET.PERC_CLIP' values")
 
     ### Model ###
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":

@@ -1174,8 +1174,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 resized_spatial = tuple(
                     max(self.shape[i], int(round(self.shape[i] / side_scale))) for i in range(self.ndim)
                 )
-                img = resize_images([img], output_shape=resized_spatial, order=1)[0]
-                mask = resize_images([mask], output_shape=resized_spatial, order=0 if self.is_y_mask else 1)[0]
+                img = resize_images([img], output_shape=resized_spatial, order=1, anti_aliasing=True)[0]
+                mask = resize_images([mask], output_shape=resized_spatial, order=0 if self.is_y_mask else 1, anti_aliasing=not self.is_y_mask)[0]
 
             # Crop a bigger window when enlarging; bounded by the image, apply_transform crops it back.
             crop_spatial = self.aug_load_spatial if enlarge else self.shape[: self.ndim]

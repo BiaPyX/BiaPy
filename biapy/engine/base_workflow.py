@@ -103,7 +103,7 @@ from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import compute_cellpose_diameters
 from biapy.data.pre_processing import set_file_resolutions, set_test_file_resolutions
 from biapy.data.pre_processing import load_resolution_stats
-from biapy.data.norm import normalize_image
+from biapy.data.norm import normalize_image, target_norm_is_fixed
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.engine.chunked_tiles import ChunkedTileProcessor
 from biapy.data.dataset import PatchCoords
@@ -408,6 +408,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     "out_dtype": "float32",
                     "norm_target": False,
                     "percentile_clip": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE,
+                    "per_lower_bound": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_PERC,
+                    "per_upper_bound": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_PERC,
                     "lower_bound_val": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE,
                     "upper_bound_val": cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE,
                     "mean": cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
@@ -417,6 +419,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 else None
             ),
         }
+        if self.norm_module["target_norm_override"] is not None:
+            # Per-image target stats come from each GT's dataset info
+            self.norm_module["norm_target"] = not target_norm_is_fixed(self.norm_module["target_norm_override"])
         print("Normalization module created with the following configuration:")
         for key, val in self.norm_module.items():
             print(f"  {key}: {val}")

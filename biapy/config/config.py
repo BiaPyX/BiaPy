@@ -868,22 +868,21 @@ class Config:
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
-        # Target/GT-specific normalization (image-to-image style targets only). Off by default = fully
-        # retrocompatible (target normalized like the input, as before). When enabled, the target is
-        # normalized with its own FIXED type/mean/std/clip below, and predictions are un-normalized with
-        # those same fixed values at test time instead of the input's - needed because the input's stats
-        # are computable at test time (the input always exists) but the target's are not.
+        # Target-specific normalization (image-to-image only). Stats are computed per image unless fixed values are
+        # given; only fixed stats let predictions be un-normalized at test time.
         _C.DATA.NORMALIZATION.TARGET = CN()
         _C.DATA.NORMALIZATION.TARGET.ENABLE = False
-        # '' reuses 'DATA.NORMALIZATION.TYPE'. Only 'zero_mean_unit_variance' is supported here.
+        # 'zero_mean_unit_variance', 'scale_range' or 'div'. '' reuses 'DATA.NORMALIZATION.TYPE'.
         _C.DATA.NORMALIZATION.TARGET.TYPE = ""
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP = CN()
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE = False
-        # Fixed clip values only (no percentiles - those would need the target image at test time).
+        # Percentiles (per image) or fixed values, not both.
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_PERC = -1.0
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_PERC = -1.0
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR = CN()
-        # Required (not -1) when 'DATA.NORMALIZATION.TARGET.ENABLE' is True.
+        # -1 computes them per image.
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
