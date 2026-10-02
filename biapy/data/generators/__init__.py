@@ -40,6 +40,17 @@ from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initial
 from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
 
 
+def worker_init_fn(worker_id: int):
+    """
+    Ensure DataLoader workers don't each spawn many threads.
+
+    Defined at module level (not inside the functions that create the DataLoaders) so it can be pickled:
+    on Windows (and macOS) workers are started with "spawn", which pickles ``worker_init_fn``, and local
+    functions cannot be pickled ("Can't pickle local object ... worker_init_fn").
+    """
+    torch.set_num_threads(1)
+
+
 def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
     """
     Build the kwargs specific to ``Membrane2D/3DRepairDataGenerator`` from
@@ -504,10 +515,6 @@ def create_train_val_augmentors(
     # Don't spawn more workers than samples (helps tiny datasets / edge cases)
     num_workers = min(num_workers, training_samples) if training_samples > 0 else 0
 
-    # Ensure DataLoader workers don't each spawn many threads
-    def worker_init_fn(worker_id):
-        torch.set_num_threads(1)
-
     # Set num_workers
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
         sampler_train = DistributedSampler(
@@ -839,10 +846,6 @@ def create_chunked_test_generator(
     n_tiles = len(chunked_generator.tile_ids)
     num_workers = min(num_workers, n_tiles) if n_tiles > 0 else 0
 
-    # Ensure DataLoader workers don't each spawn many threads
-    def worker_init_fn(worker_id):
-        torch.set_num_threads(1)
-
     if is_main_process():
         print(f"Chunked test generator with {num_workers} workers")
 
@@ -957,10 +960,6 @@ def create_chunked_workflow_process_generator(
     except TypeError:
         # length unknown -> keep computed num_workers
         pass
-
-    # Ensure DataLoader workers don't each spawn many threads
-    def worker_init_fn(worker_id):
-        torch.set_num_threads(1)
 
     print(f"Chunked test generator with {num_workers} workers")
 
