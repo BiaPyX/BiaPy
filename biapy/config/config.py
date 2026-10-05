@@ -868,22 +868,21 @@ class Config:
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
-        # Target/GT-specific normalization (image-to-image style targets only). Off by default = fully
-        # retrocompatible (target normalized like the input, as before). When enabled, the target is
-        # normalized with its own FIXED type/mean/std/clip below, and predictions are un-normalized with
-        # those same fixed values at test time instead of the input's - needed because the input's stats
-        # are computable at test time (the input always exists) but the target's are not.
+        # Target-specific normalization (image-to-image only). Stats are computed per image unless fixed values are
+        # given; only fixed stats let predictions be un-normalized at test time.
         _C.DATA.NORMALIZATION.TARGET = CN()
         _C.DATA.NORMALIZATION.TARGET.ENABLE = False
-        # '' reuses 'DATA.NORMALIZATION.TYPE'. Only 'zero_mean_unit_variance' is supported here.
+        # 'zero_mean_unit_variance', 'scale_range' or 'div'. '' reuses 'DATA.NORMALIZATION.TYPE'.
         _C.DATA.NORMALIZATION.TARGET.TYPE = ""
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP = CN()
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE = False
-        # Fixed clip values only (no percentiles - those would need the target image at test time).
+        # Percentiles (per image) or fixed values, not both.
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_PERC = -1.0
+        _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_PERC = -1.0
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR = CN()
-        # Required (not -1) when 'DATA.NORMALIZATION.TARGET.ENABLE' is True.
+        # -1 computes them per image.
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
@@ -923,7 +922,8 @@ class Config:
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", "train", "y_detection_masks")
         # Path to load/save SSL target prepared.
         _C.DATA.TRAIN.SSL_SOURCE_DIR = os.path.join("user_data", "train", "x_ssl_source")
-        # Extract random patches during data augmentation (DA)
+        # Take one random DATA.PATCH_SIZE crop per image each time it is sampled, at native resolution.
+        # If False, images are tiled beforehand into fixed patches.
         _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH = False
         # Create a probability map so the patches extracted will have a high probability of having an object in the middle
         # of it. Useful to avoid extracting patches which no foreground class information. Use it only when
@@ -1335,6 +1335,7 @@ class Config:
         # DA_PROB. The geometric augmentations (ZOOM, RANDOM_ROT, ROT90) are each rolled with their
         # own probability and then composed into a single resampling pass (see affine_transform).
         _C.AUGMENTOR.ZOOM_PROB = 0.5
+        # Samples that don't roll RANDOM_RESIZED_CROP are cropped at native resolution.
         _C.AUGMENTOR.RANDOM_RESIZED_CROP_PROB = 0.5
         _C.AUGMENTOR.RANDOM_ROT_PROB = 0.5
         _C.AUGMENTOR.ROT90_PROB = 0.5
@@ -1385,17 +1386,17 @@ class Config:
         _C.AUGMENTOR.SHEAR = False
         # Shear range. Expected value range is around [-360, 360], with reasonable values being in the range of [-45, 45].
         _C.AUGMENTOR.SHEAR_RANGE = (-20, 20)
-        # Apply zoom to images
+        # Rescale the patch around its native resolution (e.g. 0.5 = content shown at half size).
         _C.AUGMENTOR.ZOOM = False
         # Zoom range. Scaling factor to use, where 1.0 denotes “no change” and 0.5 is zoomed out to 50 percent of the original size.
         _C.AUGMENTOR.ZOOM_RANGE = (0.5, 1.5)
         # Whether to apply or not zoom in Z axis (for 3D volumes).
         _C.AUGMENTOR.ZOOM_IN_Z = False
-        # RandomResizedCrop-style augmentation (2D only): resize the whole image/mask so the usual
-        # fixed-size crop covers a random area fraction of the original, instead of a fixed pixel
-        # window. Rolled against AUGMENTOR.RANDOM_RESIZED_CROP_PROB.
+        # Resize the whole image before the random crop so the patch covers a random fraction of the
+        # field of view. Use it when test images are resized whole to the patch size (DATA.PREPROCESS.RESIZE).
+        # 2D only; requires DATA.TRAIN.EXTRACT_RANDOM_PATCH, and can't be combined with ZOOM or RANDOM_ROT.
         _C.AUGMENTOR.RANDOM_RESIZED_CROP = False
-        # Area-fraction range of the original image the crop should cover, e.g. (0.7, 0.95).
+        # Area-fraction range of the whole image the crop should cover, e.g. (0.7, 0.95).
         _C.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE = (0.7, 0.95)
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
@@ -1541,19 +1542,21 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Architecture of the network. Possible values are:
         #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2',
-        #                            'hrnet' and 'stunet'
+        #                            'hrnet', 'stunet', 'dpt', 'vit_readout', 'edsr', 'rcan', 'dfcan' and 'wdsr'
         #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2',
-        #                            'hrnet' and 'stunet'
-        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2', 'hrnet' and 
-        #                'stunet'
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 'unext_v1', 'unext_v2', 'hrnet' and 'stunet'
-        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1' 
-        #                       and 'unext_v2'
+        #                            'hrnet', 'stunet', 'dpt' and 'vit_readout'
+        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2', 'hrnet',
+        #                'stunet', 'dpt' and 'vit_readout'
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2', 'hrnet',
+        #                'stunet', 'nafnet', 'dpt' and 'vit_readout'
+        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'wavelettention', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet',
+        #                       'multiresunet', 'unext_v1' and 'unext_v2'
         #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit',
-        #                       'mae', 'unext_v1', 'unext_v2', 'hrnet' and 'stunet'
-        #   * Classification: 'simple_cnn', 'vit' and 'efficientnet_b[0-7]' (only 2D)
+        #                       'mae', 'unext_v1', 'unext_v2', 'hrnet' and 'stunet'. 'mae' is required for the 'masking' pretext task and not allowed for 'crappify'
+        #   * Classification: 'simple_cnn', 'vit' and 'efficientnet_b[0-7]'
         #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1',
-        #                     'unext_v2', 'hrnet' and 'stunet'
+        #                     'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm', 'dpt' and 'vit_readout'
+        # 2D only: 'wdsr', 'dpt', 'vit_readout' and 'efficientnet_b[0-7]'.
         _C.MODEL.ARCHITECTURE = "unet"
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1617,14 +1620,8 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.1.2 UNETR architecture options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model to use as UNETR's backbone. Options are "custom", "vit_base_patch16", "vit_large_patch16",
-        # "vit_huge_patch14" and "sam3_vit". On "custom" setting the backbone is built with the 'MODEL.VIT_*' variables,
-        # whereas with the rest of the options all of them ('MODEL.VIT_TOKEN_SIZE' included) are set automatically.
-        # Notice that UNETR's decoder upsamples the ViT features by a factor of two on each of its levels, so the
-        # resulting token size must be a power of two: "vit_huge_patch14" can not be used and "custom" must be selected
-        # instead. "sam3_vit" builds the image encoder of SAM 3, which can be initialized with its pretrained weights
-        # through 'MODEL.VIT_PRETRAINED_WEIGHTS'. As SAM 3's 14x14 tokens are not a power of two, 16x16 ones are used
-        # here and its patch embedding is resized to them. It is 2D only, as SAM 3's pretrained weights are 2D.
+        # Type of ViT model to use as UNETR's backbone. Same options as 'MODEL.VIT_MODEL', except "vit_huge_patch14"
+        # (UNETR needs a power-of-two token size).
         _C.MODEL.UNETR_VIT_MODEL = "custom"
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
         # Leave it as -1 to decide it automatically based on the encoder selected, which spaces the skip connections
@@ -1641,19 +1638,19 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.2 Transformer-based architectures options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14" and
-        # "sam3_vit". On "custom" setting the rest of the ViT parameters can be modified as other options will set
-        # them automatically. "sam3_vit" builds the image encoder of SAM 3 (Segment Anything Model 3), which can be
-        # initialized with its pretrained weights through 'MODEL.VIT_PRETRAINED_WEIGHTS'. It uses SAM 3's 14x14
-        # tokens, so 'DATA.PATCH_SIZE' must be a multiple of 14, and it is 2D only.
+        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14",
+        # "sam3_vit" and "celldino_vit". "custom" uses the rest of the 'MODEL.VIT_*' variables; the rest set them
+        # automatically. "sam3_vit" (SAM 3's image encoder, 14x14 tokens) and "celldino_vit" (Cell-DINO's
+        # channel-adaptive ViT-L/16, https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013828,
+        # 16x16 tokens, 1 input channel) are both 2D only and initializable via 'MODEL.VIT_PRETRAINED_WEIGHTS'.
         _C.MODEL.VIT_MODEL = "custom"
-        # Pretrained weights to initialize the ViT backbone with. Leave it empty to train from scratch. It can be a
-        # Hugging Face repository, i.e. "facebook/sam3" or "facebook/sam3.1" (both share the same image encoder, so
-        # "sam3_vit" builds the backbone for either of them), or the path to a local file with the weights. Only used when
-        # the selected ViT is "sam3_vit" ('MODEL.VIT_MODEL' or 'MODEL.UNETR_VIT_MODEL'). Notice that SAM 3 is a gated
-        # model, so its license needs to be accepted in https://huggingface.co/facebook/sam3 and this machine needs
-        # to be authenticated (running "hf auth login" or exporting the HF_TOKEN environment variable) to download it.
-        # The weights are not downloaded when 'MODEL.LOAD_CHECKPOINT' is enabled, as the checkpoint replaces them.
+        # Pretrained weights for the ViT backbone. Leave empty to train from scratch. Only used with "sam3_vit" or
+        # "celldino_vit":
+        #   - "sam3_vit": a Hugging Face repo (e.g. "facebook/sam3") or local file path. Gated model: accept the
+        #     license at https://huggingface.co/facebook/sam3 and authenticate ("hf auth login" or HF_TOKEN).
+        #   - "celldino_vit": local path to the "channel_adaptive_dino_vitl16" checkpoint. Not on the HF Hub; request
+        #     access at https://ai.meta.com/resources/models-and-libraries/cell-dino-downloads/ and download manually.
+        # Ignored when 'MODEL.LOAD_CHECKPOINT' is enabled.
         _C.MODEL.VIT_PRETRAINED_WEIGHTS = ""
         # Size of the patches (tokens) that are extracted from the input image. Only used when the ViT model selected
         # is "custom", as the rest of them are built with the token size they were designed with (e.g. "sam3_vit"
@@ -1669,6 +1666,19 @@ class Config:
         _C.MODEL.VIT_MLP_RATIO = 4.0
         # Normalization layer epsion
         _C.MODEL.VIT_NORM_EPS = 1e-6
+        # Stride of the ViT's patch embedding. Only used by the 'dpt' and 'vit_readout' architectures. Leave it as -1
+        # to use the token size (non-overlapping tokens). A smaller value makes the tokens overlap and increases the
+        # token grid (and the compute) while keeping the patch embedding, so pretrained weights still apply: e.g. 8
+        # with 16x16 tokens doubles the grid, as Cellpose 4 does. It must be <= the token size, their difference even
+        # and 'DATA.PATCH_SIZE' divisible by it.
+        _C.MODEL.VIT_TOKEN_STRIDE = -1
+        # Stochastic depth (drop path) of the ViT's last block; it grows linearly from 0 in the first one. Only used
+        # by the 'dpt' and 'vit_readout' architectures. Cellpose 4 uses 0.4 when fine-tuning its ViT-L.
+        _C.MODEL.VIT_DROP_PATH_RATE = 0.0
+        # Whether to recompute the ViT blocks in the backward pass instead of storing their activations, which saves
+        # a lot of memory when fine-tuning large ViTs with many tokens at the cost of ~30% more training time. Only
+        # used by the 'dpt' and 'vit_readout' architectures.
+        _C.MODEL.VIT_GRAD_CHECKPOINTING = False
 
         # ViT architecture adapted for self-supervised learning with masked autoencoders (MAE). Original paper: https://arxiv.org/abs/2111.06377
         # Dimension of the embedding space for the MAE decoder
@@ -1683,6 +1693,41 @@ class Config:
         _C.MODEL.MAE_MASK_TYPE = "grid"
         # Percentage of the input image to mask (applied only when MODEL.MAE_MASK_TYPE == "random"). Value between 0 and 1.
         _C.MODEL.MAE_MASK_RATIO = 0.5
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 5.1.2.1 Dense-prediction ViT architectures ('dpt' and 'vit_readout')
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Both are 2D only and use the ViT encoder set in 'MODEL.VIT_MODEL' (any but "sam3_vit"). Their decoder uses
+        # 'MODEL.NORMALIZATION', 'MODEL.ACTIVATION' and, in 'vit_readout', 'MODEL.KERNEL_SIZE' and 'MODEL.DROPOUT_VALUES'.
+        #
+        # 'dpt': Dense Prediction Transformer (Ranftl et al., ICCV 2021, https://arxiv.org/abs/2103.13413). Four ViT
+        # layers are reassembled into a feature pyramid (4x, 2x, 1x and 0.5x the token grid) and fused from coarse to
+        # fine with residual convolutional units, followed by a small head to the input resolution.
+        _C.MODEL.DPT = CN()
+        # The four ViT blocks (1-indexed, increasing) the decoder reads, from the finest to the coarsest level. Leave
+        # it empty to space them evenly (e.g. [6, 12, 18, 24] with a 24-block ViT, as DPT-Large).
+        _C.MODEL.DPT.LAYERS = []
+        # Channels of the fusion stage (256 in DPT).
+        _C.MODEL.DPT.FEATURES = 256
+        # Channels of the four reassembled maps. Leave it empty to use DPT's: [256, 512, 1024, 1024] for ViTs with
+        # 1024 or more dimensions and [D/8, D/4, D/2, D] otherwise (e.g. [96, 192, 384, 768] with ViT-B).
+        _C.MODEL.DPT.REASSEMBLE_CHANNELS = []
+        # How the class token is folded into the patch tokens. Options: "project" (DPT's default), "add", "ignore".
+        _C.MODEL.DPT.READOUT = "project"
+        #
+        # 'vit_readout': ViT-Readout, following Cellpose 4 (Cellpose-SAM / CPDINO, https://github.com/MouseLand/cellpose).
+        # Only the last ViT layer is used: each token is linearly projected into its own 'stride x stride' block of
+        # pixels (pixel shuffle), so all the spatial reasoning is left to the ViT (fine-tune it, and use a small
+        # 'MODEL.VIT_TOKEN_STRIDE' for detail). A small convolutional refinement at full resolution is added on top.
+        _C.MODEL.VIT_READOUT = CN()
+        # Channels each pixel receives from the per-token readout.
+        _C.MODEL.VIT_READOUT.FEATURES = 32
+        # Number of 3x3 convolutional blocks applied at full resolution after the readout. 0 disables the refinement,
+        # leaving Cellpose's linear readout.
+        _C.MODEL.VIT_READOUT.REFINE_LAYERS = 2
+        # Whether to concatenate the input image to the readout features before the refinement (needs
+        # 'MODEL.VIT_READOUT.REFINE_LAYERS' > 0).
+        _C.MODEL.VIT_READOUT.INPUT_SKIP = True
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.3 RCAN architecture options
@@ -1808,7 +1853,30 @@ class Config:
         _C.MODEL.RDBM.LAMB = 1.0e-4
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 5.1.8 Checkpoint options
+        # 5.1.8 Wavelettention architecture options
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Embedding dimension of the patch features.
+        _C.MODEL.WAVELETTENTION_EMBED_DIM = 180
+        # Number of RHAG (Residual Hybrid Attention Group) blocks and, per block, depth
+        # (number of HAB blocks stacked inside it). One value per group.
+        _C.MODEL.WAVELETTENTION_DEPTHS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+        # Number of attention heads per RHAG block. Must have the same length as WAVELETTENTION_DEPTHS.
+        _C.MODEL.WAVELETTENTION_NUM_HEADS = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+        # Local window size for the window-based attention.
+        _C.MODEL.WAVELETTENTION_WINDOW_SIZE = 16
+        # Channel compression ratio inside the CAB (Convolutional Attention Block).
+        _C.MODEL.WAVELETTENTION_COMPRESS_RATIO = 3
+        # Channel squeeze factor for the channel attention inside the CAB.
+        _C.MODEL.WAVELETTENTION_SQUEEZE_FACTOR = 30
+        # Scale applied to the convolutional branch output before adding it to the attention branch.
+        _C.MODEL.WAVELETTENTION_CONV_SCALE = 0.01
+        # Overlap ratio used by the overlapping cross-attention block (OCAB).
+        _C.MODEL.WAVELETTENTION_OVERLAP_RATIO = 0.5
+        # Ratio of the MLP hidden dimension to the embedding dimension.
+        _C.MODEL.WAVELETTENTION_MLP_RATIO = 2.0
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 5.1.9 Checkpoint options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         # To load a model (and more items if available) from a given checkpoint. Items that can be loaded are defined in 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT'.
         _C.MODEL.LOAD_CHECKPOINT = False

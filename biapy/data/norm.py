@@ -83,6 +83,11 @@ def normalize_image(
     assert "out_dtype" in norm_module, "'out_dtype' key should be in 'norm_module' dict"
 
     orig_dtype = str(img.dtype)
+    # Capture before the float cast below.
+    orig_was_integer = (
+        (isinstance(img, torch.Tensor) and not torch.is_floating_point(img))
+        or (isinstance(img, np.ndarray) and np.issubdtype(img.dtype, np.integer))
+    )
     new_norm_info = {
         "type": norm_module["type"],
         "percentile_clip": norm_module["percentile_clip"],
@@ -206,26 +211,35 @@ def normalize_image(
             new_norm_info["per_channel_info"][f"{c}"]["lower_bound_val"] = x_lwr
             new_norm_info["per_channel_info"][f"{c}"]["upper_bound_val"] = x_upr
 
+        # Stats on clipped data, as applying them clips first
+        stats_data = data
+        if norm_module["percentile_clip"] and not apply_norm:
+            stats_data = data.clamp(x_lwr, x_upr) if isinstance(data, torch.Tensor) else np.clip(data, x_lwr, x_upr)
+
         if norm_module["type"] in ["div", "scale_range"]:
-            data, max_val, min_val = norm_range01( # type: ignore
-                data,
+            out, max_val, min_val = norm_range01( # type: ignore
+                stats_data,
                 div_using_max_and_scale=(norm_module["type"] == "scale_range"),
                 max_val_to_div = max_val_to_div[c] if max_val_to_div is not None else None,
                 min_val_to_div = min_val_to_div[c] if min_val_to_div is not None else None,
-                apply_norm=apply_norm
+                apply_norm=apply_norm,
+                orig_was_integer=orig_was_integer,
             )
             new_norm_info["per_channel_info"][f"{c}"]["min_val_to_div"] = min_val
             new_norm_info["per_channel_info"][f"{c}"]["max_val_to_div"] = max_val
 
         elif norm_module["type"] == "zero_mean_unit_variance":
-            data, used_mean, used_std = zero_mean_unit_variance_normalization( # type: ignore
-                data,
+            out, used_mean, used_std = zero_mean_unit_variance_normalization( # type: ignore
+                stats_data,
                 mean=mean[c] if mean is not None else None,
                 std=std[c] if std is not None else None,
                 apply_norm=apply_norm
             )
             new_norm_info["per_channel_info"][f"{c}"]["mean"] = used_mean
             new_norm_info["per_channel_info"][f"{c}"]["std"] = used_std
+
+        if apply_norm:
+            data = out
 
         if c not in ignore_channels:
             img[..., c] = data
@@ -238,6 +252,19 @@ def normalize_image(
         img = img.to(torch_numpy_dtype_dict[norm_module["out_dtype"]][0])
 
     return img, new_norm_info
+
+def target_norm_is_fixed(target_norm: Dict) -> bool:
+    """Whether a target normalization uses fixed stats (so it can be undone) instead of per-image ones."""
+    if target_norm["type"] == "zero_mean_unit_variance":
+        return target_norm["mean"][0] != -1
+    return target_norm["percentile_clip"] and target_norm["lower_bound_val"][0] != -1
+
+def gt_stats_norm_module(norm_module: Dict) -> Dict:
+    """Normalization config to compute each GT's stats with: the target one if it is per image."""
+    override = norm_module.get("target_norm_override")
+    if override is not None and not target_norm_is_fixed(override):
+        return override
+    return norm_module
 
 def resolve_fixed_norm_info(
     norm_module: Dict,
@@ -615,6 +642,7 @@ def norm_range01(
     min_val_to_div: int | float | None,
     apply_norm: bool = True,
     eps: float = 1e-6,
+    orig_was_integer: Optional[bool] = None,
 ) -> Tuple[NDArray | torch.Tensor, float, float]:
     """
     Normalize given data by dividing it by a value.
@@ -644,6 +672,10 @@ def norm_range01(
         Small value to add to the denominator to prevent division by zero when normalizing by using the
         maximum and minimum values of the data.
 
+    orig_was_integer : bool, optional
+        Whether the source data was of integer type. Needed when the caller has already cast ``data`` to
+        float (as :func:`normalize_image` does). If ``None``, it is inferred from ``data``'s dtype.
+
     Returns
     -------
     data : 3D/4D Numpy array or torch.Tensor
@@ -666,14 +698,12 @@ def norm_range01(
     if _is_binary_channel(data):
         return data, 1.0, 0.0
 
-    # Capture this before the cast below, which would otherwise erase it: an originally-integer
-    # array (uint8/uint16) is raw pixel data and must always be divided by 255/65535 below, even
-    # if a particular dim sample happens to have a low max. Only a source that was *already*
-    # floating-point can plausibly be pre-normalized data.
-    orig_was_integer = (
-        (isinstance(data, torch.Tensor) and not torch.is_floating_point(data))
-        or (isinstance(data, np.ndarray) and np.issubdtype(data.dtype, np.integer))
-    )
+    # Integer sources are raw pixels: never treated as already in [0, 1].
+    if orig_was_integer is None:
+        orig_was_integer = (
+            (isinstance(data, torch.Tensor) and not torch.is_floating_point(data))
+            or (isinstance(data, np.ndarray) and np.issubdtype(data.dtype, np.integer))
+        )
 
     # Changing dtype to floating tensor
     if isinstance(data, torch.Tensor):

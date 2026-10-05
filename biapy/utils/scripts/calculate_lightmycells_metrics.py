@@ -48,7 +48,8 @@ parser.add_argument(
 parser.add_argument("-output_csv", "--output_csv", required=True, help="Where to write the per-image metrics CSV")
 args = vars(parser.parse_args())
 
-STUDY_PREFIX_RE = re.compile(r"^(Study_\d+_[A-Za-z0-9]+_image_\d+)_")
+# Modality may contain hyphens, e.g. "DIC-PC"
+STUDY_PREFIX_RE = re.compile(r"^(Study_\d+_[^_]+_image_\d+)_")
 
 
 def find_gt_file(gt_study_dir: str) -> str:
@@ -103,15 +104,18 @@ def collect_pairs(pred_dir: str, gt_dir: str, organelle: str | None):
                 yield os.path.join(pred_study_dir, pred_fname), gt_path, pred_fname
     else:
         assert organelle is not None, "--organelle is required when --pred_dir holds a flat list of files"
+        # Case-insensitive lookup so e.g. "nucleus" matches "<Study>_Nucleus" GT folders
+        gt_dirs_lower = {d.lower(): d for d in os.listdir(gt_dir) if os.path.isdir(os.path.join(gt_dir, d))}
         for pred_fname in entries:
             if not pred_fname.endswith((".tif", ".tiff")):
                 continue
             m = STUDY_PREFIX_RE.match(pred_fname)
             assert m is not None, f"Could not parse a Study_id prefix out of '{pred_fname}'"
-            gt_study_dir = os.path.join(gt_dir, f"{m.group(1)}_{organelle}")
-            if not os.path.isdir(gt_study_dir):
-                print(f"WARNING: no GT dir {gt_study_dir} for prediction {pred_fname}, skipping")
+            gt_study_name = gt_dirs_lower.get(f"{m.group(1)}_{organelle}".lower())
+            if gt_study_name is None:
+                print(f"WARNING: no GT dir {m.group(1)}_{organelle} in {gt_dir} for prediction {pred_fname}, skipping")
                 continue
+            gt_study_dir = os.path.join(gt_dir, gt_study_name)
             gt_path = find_gt_file(gt_study_dir)
             yield os.path.join(pred_dir, pred_fname), gt_path, pred_fname
 

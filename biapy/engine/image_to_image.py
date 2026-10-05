@@ -17,6 +17,7 @@ from torchmetrics.image.inception import InceptionScore
 from typing import Dict, Optional
 from numpy.typing import NDArray
 import copy
+import math
 
 from biapy.engine.metrics import (
     loss_encapsulation,
@@ -42,7 +43,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
-from biapy.data.norm import undo_image_norm, resolve_fixed_norm_info
+from biapy.data.norm import undo_image_norm, resolve_fixed_norm_info, normalize_image, target_norm_is_fixed
 from biapy.data.pre_processing import resize_images
 
 class Image_to_Image_Workflow(Base_Workflow):
@@ -465,15 +466,14 @@ class Image_to_Image_Workflow(Base_Workflow):
                             group_ids_this_batch,
                             metric_logger,
                         )
-                    elif not train and getattr(self, "test_data_range", None) is not None:
-                        val = peak_signal_noise_ratio(_output, _targets, data_range=self.test_data_range)
-                        val = val.item() if not torch.isnan(val) else 0  # type: ignore
-                        if metric_logger:
-                            metric_logger.meters[m_name_real].update(val)
                     else:
-                        val = metric(_output, _targets)
-                        val = val.item() if not torch.isnan(val) else 0  # type: ignore
-                        if metric_logger:
+                        if not train and getattr(self, "test_data_range", None) is not None:
+                            val = peak_signal_noise_ratio(_output, _targets, data_range=self.test_data_range)
+                        else:
+                            val = metric(_output, _targets)
+                        val = val.item()  # type: ignore
+                        # Skip non-finite values (e.g. PSNR on a constant target) so they don't poison the study mean.
+                        if metric_logger and math.isfinite(val):
                             metric_logger.meters[m_name_real].update(val)
                     out_metrics[m_name_real] = val
                 elif m_name in ["is", "lpips", "fid"]:
@@ -654,7 +654,10 @@ class Image_to_Image_Workflow(Base_Workflow):
                 v = metric(pred_b.reshape(-1), targ_b.reshape(-1))
             else:
                 v = metric(pred_b.contiguous(), targ_b.contiguous())
-            v = v.item() if not torch.isnan(v) else 0.0
+            v = v.item()
+            # Skip non-finite values (e.g. PSNR on a constant target) so they don't poison the study mean.
+            if not math.isfinite(v):
+                continue
             sums[gid] = sums.get(gid, 0.0) + v
             counts[gid] = counts.get(gid, 0) + 1
             last_val = v
@@ -703,6 +706,14 @@ class Image_to_Image_Workflow(Base_Workflow):
             vals.append(v.item() if not torch.isnan(v) else 0.0)
         return float(np.mean(vals)) if vals else 0.0
 
+    def _per_image_target_norm(self, data: NDArray, target_norm: Dict) -> NDArray:
+        """Normalize each sample of ``data`` (``(B, ...spatial, C)``) with its own stats."""
+        norm_module = {k: v for k, v in target_norm.items() if k != "per_channel_info"}
+        out = np.empty(data.shape, dtype=np.float32)
+        for b in range(data.shape[0]):
+            out[b], _ = normalize_image(np.array(data[b]), norm_module=norm_module)
+        return out
+
     def process_test_sample(self):
         """Process a sample in the inference phase."""
         assert self.model
@@ -711,6 +722,11 @@ class Image_to_Image_Workflow(Base_Workflow):
             return True
 
         original_data_shape = self.current_sample["X"].shape
+
+        # Keep native GT aside until the metrics.
+        native_Y = None
+        if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+            native_Y, self.current_sample["Y"] = self.current_sample["Y"], None
 
         # Crop if necessary
         if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -833,12 +849,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
-        # Resize prediction (and GT) back to the native image shape when DATA.PREPROCESS.RESIZE
-        # downscaled the input for the model (e.g. testing a fixed-resolution model on full-size
-        # images). Base_Workflow.process_test_sample already does this for other problem types;
-        # this workflow overrides that method, so it needs its own copy.
+        # Resize prediction to the native GT shape.
         if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
-            rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1] + (pred.shape[-1],)
+            self.current_sample["Y"] = native_Y
+            native_shape = native_Y.shape[1:-1] if native_Y is not None else self.current_sample["rescaled_shape"][:-1]
+            rescaled_shape = (1,) + tuple(native_shape) + (pred.shape[-1],)
             pred = resize_images(
                 [pred],
                 output_shape=rescaled_shape,
@@ -849,21 +864,13 @@ class Image_to_Image_Workflow(Base_Workflow):
                 preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
                 anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
             )[0]
-            if self.current_sample["Y"] is not None:
-                self.current_sample["Y"] = resize_images(
-                    [self.current_sample["Y"]],
-                    output_shape=self.current_sample["rescaled_shape"][:-1] + (self.current_sample["Y"].shape[-1],),
-                    order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
-                    mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
-                    cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
-                    clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
-                    preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
-                    anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
-                )[0]
 
         # Undo normalization
         target_norm_override = self.test_norm_module.get("target_norm_override")
-        if target_norm_override is not None:
+        per_image_target = target_norm_override is not None and not target_norm_is_fixed(target_norm_override)
+        if per_image_target:
+            adjusted_norm = None
+        elif target_norm_override is not None:
             if getattr(self, "_resolved_target_norm_info", None) is None:
                 self._resolved_target_norm_info = resolve_fixed_norm_info(
                     target_norm_override,
@@ -877,7 +884,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                 for i in range(len(self.current_sample["X_norm"]["per_channel_info"]), self.cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS):
                     adjusted_norm["per_channel_info"][str(i)] = copy.deepcopy(self.current_sample["X_norm"]["per_channel_info"]["0"])
 
-        pred = undo_image_norm(pred, adjusted_norm)
+        if adjusted_norm is not None:
+            pred = undo_image_norm(pred, adjusted_norm)
         assert isinstance(pred, np.ndarray)
 
         if self.return_prediction:
@@ -907,10 +915,22 @@ class Image_to_Image_Workflow(Base_Workflow):
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
 
+        if per_image_target:
+            # Metrics in the per-image target space
+            self.test_data_range = 1.0
+            pred = self._per_image_target_norm(pred, target_norm_override)
+            if self.current_sample["Y"] is not None:
+                self.current_sample["Y"] = self._per_image_target_norm(self.current_sample["Y"], target_norm_override)
+
         if self.current_sample["Y"] is not None:
             if self.current_sample["Y"].dtype == np.dtype("uint16"):
                 self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
 
+            if pred.shape[:-1] != self.current_sample["Y"].shape[:-1]:
+                raise ValueError(
+                    f"Prediction shape {pred.shape} does not match GT shape {self.current_sample['Y'].shape} "
+                    f"for '{self.current_sample['X_filename']}'"
+                )
             metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
             for metric in metric_values:
                 if str(metric).lower() not in self.stats["merge_patches"]:

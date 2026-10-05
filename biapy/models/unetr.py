@@ -22,6 +22,8 @@ Reference:
 """
 
 import math
+from functools import partial
+
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
@@ -38,24 +40,30 @@ from biapy.models.blocks import (
 from biapy.models.tr_layers import PatchEmbed
 from biapy.models.heads import ProjectionHead
 from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
+from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
 
-# Predefined ViT backbones that can be used as UNETR's encoder. They mirror the models available in
-# `biapy.models.vit` (`vit_base_patch16`, `vit_large_patch16` and `vit_huge_patch14`), so the same ViT
-# type can be built with or without the UNETR decoder. With any of them the ViT is fully defined by the
-# preset, whereas with "custom" the values provided to the model are used.
+# Predefined ViT backbones for UNETR's encoder. "custom" uses the values passed to the model; the
+# rest are fully defined by the preset. Optional "init_values" enables LayerScale and "norm_eps" sets the
+# epsilon of the ViT's LayerNorms (PyTorch's default, 1e-5, otherwise).
 UNETR_VIT_MODELS = {
     "vit_base_patch16": dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4.0),
     "vit_large_patch16": dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4.0),
     "vit_huge_patch14": dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4.0),
-    # SAM 3's image encoder. It uses 14x14 tokens, but UNETR's decoder upsamples the ViT features by a
-    # factor of two on each of its levels, so it needs a power of two: the closest one is used instead
-    # and the pretrained patch embedding is resized to it when the weights are loaded.
     "sam3_vit": dict(
         patch_size=16,
         embed_dim=SAM3_VIT_PARAMS["embed_dim"],
         depth=SAM3_VIT_PARAMS["depth"],
         num_heads=SAM3_VIT_PARAMS["num_heads"],
         mlp_ratio=SAM3_VIT_PARAMS["mlp_ratio"],
+    ),
+    "celldino_vit": dict(
+        patch_size=CELLDINO_VIT_PARAMS["patch_size"],
+        embed_dim=CELLDINO_VIT_PARAMS["embed_dim"],
+        depth=CELLDINO_VIT_PARAMS["depth"],
+        num_heads=CELLDINO_VIT_PARAMS["num_heads"],
+        mlp_ratio=CELLDINO_VIT_PARAMS["mlp_ratio"],
+        init_values=CELLDINO_VIT_PARAMS["init_values"],
+        norm_eps=CELLDINO_VIT_PARAMS["norm_eps"],
     ),
 }
 
@@ -229,6 +237,7 @@ class UNETR(nn.Module):
             print(f"  - {i} channel for {info} output")
 
         # Build the ViT backbone out of one of the predefined models, if selected
+        init_values = None
         if vit_model != "custom":
             if vit_model not in UNETR_VIT_MODELS:
                 raise ValueError(
@@ -242,12 +251,23 @@ class UNETR(nn.Module):
                     "weights are 2D (its patch embedding projects 3-channel 2D images). Set "
                     "'MODEL.UNETR_VIT_MODEL' to another value to work with 3D data."
                 )
+            if vit_model == "celldino_vit":
+                if len(input_shape) == 4:
+                    raise ValueError("'celldino_vit' can only be used with 2D data.")
+                if input_shape[-1] != CELLDINO_VIT_PARAMS["in_chans"]:
+                    raise ValueError(
+                        f"'celldino_vit' needs {CELLDINO_VIT_PARAMS['in_chans']} input channel, "
+                        f"'DATA.PATCH_SIZE' has {input_shape[-1]}."
+                    )
             vit_params = UNETR_VIT_MODELS[vit_model]
             patch_size = vit_params["patch_size"]
             embed_dim = vit_params["embed_dim"]
             depth = vit_params["depth"]
             num_heads = vit_params["num_heads"]
             mlp_ratio = vit_params["mlp_ratio"]
+            init_values = vit_params.get("init_values")
+            if "norm_eps" in vit_params:
+                norm_layer = partial(nn.LayerNorm, eps=vit_params["norm_eps"])
             print(f"Building UNETR's ViT backbone as '{vit_model}': {vit_params}")
 
         # The decoder recovers the input resolution upsampling the ViT features by a factor of two on each
@@ -357,6 +377,7 @@ class UNETR(nn.Module):
                         mlp_ratio,
                         qkv_bias=True,
                         norm_layer=norm_layer,
+                        init_values=init_values,
                     )
                     for i in range(depth)
                 ]

@@ -795,6 +795,10 @@ def create_model_doc(
         message += f"[{ref_count}] Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. \"U-net: Convolutional networks for biomedical image segmentation.\" International Conference on Medical image computing and computer-assisted intervention. Cham: Springer international publishing, 2015.\n"
     elif model_arch == "unetr":
         message += f"[{ref_count}] Hatamizadeh, Ali, et al. \"Unetr: Transformers for 3d medical image segmentation.\" Proceedings of the IEEE/CVF winter conference on applications of computer vision. 2022.\n"
+    elif model_arch == "dpt":
+        message += f"[{ref_count}] Ranftl, René, Alexey Bochkovskiy, and Vladlen Koltun. \"Vision transformers for dense prediction.\" Proceedings of the IEEE/CVF international conference on computer vision. 2021.\n"
+    elif model_arch == "vit_readout":
+        message += f"[{ref_count}] Pachitariu, Marius, Michael Rariden, and Carsen Stringer. \"Cellpose-SAM: superhuman generalization for cellular segmentation.\" bioRxiv (2025).\n"
     elif model_arch == "unext_v1":
         message += f"[{ref_count}] Liu, Zhuang, et al. \"A convnet for the 2020s.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2022.\n"
     elif model_arch == "unext_v2":

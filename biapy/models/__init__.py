@@ -353,6 +353,44 @@ def build_model(
             )
             model = UNETR(**args)  # type: ignore
             callable_model = UNETR  # type: ignore
+        elif modelname in ["dpt", "vit_readout"]:
+            args = dict(
+                input_shape=cfg.DATA.PATCH_SIZE,
+                patch_size=cfg.MODEL.VIT_TOKEN_SIZE,
+                embed_dim=cfg.MODEL.VIT_EMBED_DIM,
+                depth=cfg.MODEL.VIT_NUM_LAYERS,
+                num_heads=cfg.MODEL.VIT_NUM_HEADS,
+                mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
+                vit_model=cfg.MODEL.VIT_MODEL,
+                token_stride=cfg.MODEL.VIT_TOKEN_STRIDE,
+                drop_path_rate=cfg.MODEL.VIT_DROP_PATH_RATE,
+                grad_checkpointing=cfg.MODEL.VIT_GRAD_CHECKPOINTING,
+                normalization=cfg.MODEL.NORMALIZATION,
+                decoder_activation=cfg.MODEL.ACTIVATION.lower(),
+                output_channels=output_channels,
+                output_channel_info=output_channel_info,
+                head_activations=head_activations,
+                explicit_activations=False,
+                return_one_tensor=False,
+            )
+            if modelname == "dpt":
+                args.update(
+                    layers=list(cfg.MODEL.DPT.LAYERS),
+                    features=cfg.MODEL.DPT.FEATURES,
+                    reassemble_channels=list(cfg.MODEL.DPT.REASSEMBLE_CHANNELS),
+                    readout=cfg.MODEL.DPT.READOUT,
+                )
+                callable_model = DPT  # type: ignore
+            else:
+                args.update(
+                    readout_features=cfg.MODEL.VIT_READOUT.FEATURES,
+                    refine_layers=cfg.MODEL.VIT_READOUT.REFINE_LAYERS,
+                    input_skip=cfg.MODEL.VIT_READOUT.INPUT_SKIP,
+                    k_size=cfg.MODEL.KERNEL_SIZE,
+                    dropout=cfg.MODEL.DROPOUT_VALUES[0],
+                )
+                callable_model = ViTReadout  # type: ignore
+            model = callable_model(**args)  # type: ignore
         elif modelname == "edsr":
             args = dict(
                 ndim=ndim,
@@ -402,6 +440,25 @@ def build_model(
             )
             model = wdsr(**args)  # type: ignore
             callable_model = wdsr  # type: ignore
+        elif modelname == "wavelettention":
+            args = dict(
+                img_size=cfg.DATA.PATCH_SIZE[:ndim],
+                in_chans=cfg.DATA.PATCH_SIZE[-1],
+                upscale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else 1,
+                embed_dim=cfg.MODEL.WAVELETTENTION_EMBED_DIM,
+                depths=cfg.MODEL.WAVELETTENTION_DEPTHS,
+                num_heads=cfg.MODEL.WAVELETTENTION_NUM_HEADS,
+                window_size=cfg.MODEL.WAVELETTENTION_WINDOW_SIZE,
+                compress_ratio=cfg.MODEL.WAVELETTENTION_COMPRESS_RATIO,
+                squeeze_factor=cfg.MODEL.WAVELETTENTION_SQUEEZE_FACTOR,
+                conv_scale=cfg.MODEL.WAVELETTENTION_CONV_SCALE,
+                overlap_ratio=cfg.MODEL.WAVELETTENTION_OVERLAP_RATIO,
+                mlp_ratio=cfg.MODEL.WAVELETTENTION_MLP_RATIO,
+                upsampler="pixelshuffle",
+                ndim=ndim,
+            )
+            model = Wavelettention(**args)  # type: ignore
+            callable_model = Wavelettention  # type: ignore
         elif modelname == "mae":
             args = dict(
                 img_size=cfg.DATA.PATCH_SIZE[0],
@@ -506,17 +563,22 @@ def build_model(
     # Initialize the ViT backbone with pretrained weights, if requested. It is done here, and not
     # within the models, so the architectures stay self-contained (e.g. when they are exported to
     # the BioImage Model Zoo, where the weights shipped are the trained ones).
-    vit_backbone = cfg.MODEL.VIT_MODEL if modelname == "vit" else cfg.MODEL.UNETR_VIT_MODEL
-    if modelname in ["vit", "unetr"] and vit_backbone == "sam3_vit" and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
+    vit_backbone = cfg.MODEL.UNETR_VIT_MODEL if modelname == "unetr" else cfg.MODEL.VIT_MODEL
+    if modelname in ["vit", "unetr", "dpt", "vit_readout"] and vit_backbone in ["sam3_vit", "celldino_vit"] and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
         if cfg.MODEL.LOAD_CHECKPOINT:
             print(
-                "Skipping the download of SAM 3's pretrained weights, as 'MODEL.LOAD_CHECKPOINT' is enabled "
-                "and the checkpoint loaded afterwards would replace them"
+                f"Skipping the download of {'SAM 3' if vit_backbone == 'sam3_vit' else 'Cell-DINO'}'s pretrained "
+                "weights, as 'MODEL.LOAD_CHECKPOINT' is enabled and the checkpoint loaded afterwards would "
+                "replace them"
             )
-        else:
+        elif vit_backbone == "sam3_vit":
             from biapy.models.sam3_vit import load_sam3_pretrained_encoder
 
             load_sam3_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
+        else:
+            from biapy.models.celldino_vit import load_celldino_pretrained_encoder
+
+            load_celldino_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
 
     # Check the network created
     model.to(device)

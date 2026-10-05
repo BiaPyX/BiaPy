@@ -1314,7 +1314,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     # uppercased. Old-style combo strings are upgraded to list form earlier, in
     # '_convert_old_loss_type_to_list'.
     _continuous_image_names = {
-        "MAE", "MSE", "PCC", "SSIM", "CHARBONNIER", "VGG", "LPIPS", "LAPLACIAN", "FFT", "RFFT",
+        "MAE", "MSE", "PCC", "SSIM", "CHARBONNIER", "VGG", "LPIPS", "LAPLACIAN", "FFT", "RFFT", "SWT",
     }
     loss: List[str] = []
     weights: List[float] = []
@@ -2570,41 +2570,27 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
 
     if cfg.DATA.NORMALIZATION.TARGET.ENABLE:
-        target_type = (
-            cfg.DATA.NORMALIZATION.TARGET.TYPE if cfg.DATA.NORMALIZATION.TARGET.TYPE != "" else cfg.DATA.NORMALIZATION.TYPE
-        )
-        assert target_type in ("zero_mean_unit_variance", "scale_range", "div"), (
-            "'DATA.NORMALIZATION.TARGET' only supports 'zero_mean_unit_variance', 'scale_range' or 'div' "
-            "(via 'DATA.NORMALIZATION.TARGET.TYPE' or the inherited 'DATA.NORMALIZATION.TYPE'), got "
-            f"'{target_type}'"
-        )
+        tnorm = cfg.DATA.NORMALIZATION.TARGET
+        target_type = tnorm.TYPE if tnorm.TYPE != "" else cfg.DATA.NORMALIZATION.TYPE
+        if target_type not in ("zero_mean_unit_variance", "scale_range", "div"):
+            raise ValueError(f"'DATA.NORMALIZATION.TARGET' doesn't support '{target_type}' normalization")
+        fixed_clip = tnorm.PERC_CLIP.LOWER_VALUE[0] != -1 or tnorm.PERC_CLIP.UPPER_VALUE[0] != -1
+        perc_clip = tnorm.PERC_CLIP.LOWER_PERC != -1 or tnorm.PERC_CLIP.UPPER_PERC != -1
+        if tnorm.PERC_CLIP.ENABLE:
+            if fixed_clip == perc_clip:
+                raise ValueError(
+                    "Set either 'DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_PERC'/'UPPER_PERC' or 'LOWER_VALUE'/'UPPER_VALUE'"
+                )
+            if perc_clip:
+                for key in ["LOWER_PERC", "UPPER_PERC"]:
+                    if not check_value(tnorm.PERC_CLIP[key], value_range=(0, 100)):
+                        raise ValueError(f"'DATA.NORMALIZATION.TARGET.PERC_CLIP.{key}' not in [0, 100] range")
         if target_type == "zero_mean_unit_variance":
-            if cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL[0] == -1:
-                raise ValueError(
-                    "'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL' must be set to fixed "
-                    "values when 'DATA.NORMALIZATION.TARGET.ENABLE' is True. A per-image adaptive mean/std "
-                    "computed from the ground truth cannot be recovered at test time without the ground truth "
-                    "itself, which defeats the purpose of this section - compute fixed values once from the "
-                    "training set's target images and set them here."
-                )
-        else:  # 'scale_range' / 'div': no mean/std concept, fixed clip bounds double as the fixed
-            # min/max used to undo the 0-1 scaling (see 'resolve_fixed_norm_info'), so they are required.
-            if not cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
-                raise ValueError(
-                    "'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' must be True, with fixed "
-                    "'LOWER_VALUE'/'UPPER_VALUE', when 'DATA.NORMALIZATION.TARGET.TYPE' is "
-                    "'scale_range'/'div': those fixed bounds double as the fixed min/max used to undo the "
-                    "0-1 scaling at test time, since an adaptive per-image min/max cannot be recovered from "
-                    "the ground truth at test time."
-                )
-        if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE:
-            if cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE[0] == -1 or cfg.DATA.NORMALIZATION.TARGET.PERC_CLIP.UPPER_VALUE[0] == -1:
-                raise ValueError(
-                    "'DATA.NORMALIZATION.TARGET.PERC_CLIP.LOWER_VALUE'/'UPPER_VALUE' must be set to fixed "
-                    "values when 'DATA.NORMALIZATION.TARGET.PERC_CLIP.ENABLE' is True - only fixed clip "
-                    "values are supported here, as percentiles would need to be computed from the ground "
-                    "truth, which is not available at test time."
-                )
+            fixed_stats = tnorm.ZERO_MEAN_UNIT_VAR.MEAN_VAL[0] != -1
+            if fixed_stats != (tnorm.ZERO_MEAN_UNIT_VAR.STD_VAL[0] != -1):
+                raise ValueError("Set both or none of 'DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL'/'STD_VAL'")
+            if fixed_stats and tnorm.PERC_CLIP.ENABLE and perc_clip:
+                raise ValueError("Fixed target mean/std need fixed 'DATA.NORMALIZATION.TARGET.PERC_CLIP' values")
 
     ### Model ###
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
@@ -2630,6 +2616,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "rcan",
             "dfcan",
             "wdsr",
+            "wavelettention",
             "vit",
             "mae",
             "unext_v1",
@@ -2638,7 +2625,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "stunet",
             "nafnet",
             "rdbm",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm']"
+            'dpt',
+            'vit_readout',
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'wavelettention', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm', 'dpt', 'vit_readout']"
         if (
             model_arch
             not in [
@@ -2659,6 +2648,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet",
                 "stunet",
                 "nafnet",
+                "wavelettention",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -2683,6 +2673,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "hrnet",
                         "stunet",
                         "nafnet",
+                        "wavelettention",
                     ]
                 )
             )
@@ -2703,10 +2694,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "hrnet",
                 "stunet",
+                "dpt",
+                "vit_readout",
             ]
         ):
             raise ValueError(
-                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'dpt', 'vit_readout']"
             )
 
         # Conv block ordering (post- vs pre-activation)
@@ -2728,13 +2721,22 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
 
+    if model_arch not in ["dpt", "vit_readout"]:
+        for var, val, default in [
+            ("MODEL.VIT_TOKEN_STRIDE", cfg.MODEL.VIT_TOKEN_STRIDE, -1),
+            ("MODEL.VIT_DROP_PATH_RATE", cfg.MODEL.VIT_DROP_PATH_RATE, 0.0),
+            ("MODEL.VIT_GRAD_CHECKPOINTING", cfg.MODEL.VIT_GRAD_CHECKPOINTING, False),
+        ]:
+            if val != default:
+                raise ValueError(f"'{var}' is only used by the 'dpt' and 'vit_readout' architectures")
+
     # Adjust dropout to feature maps
-    if model_arch in ["vit", "unetr", "mae"]:
+    if model_arch in ["vit", "unetr", "mae", "dpt", "vit_readout"]:
         if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
             opts.extend(["MODEL.DROPOUT_VALUES", (0.0,)])
         elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
             raise ValueError(
-                "'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['vit', 'mae', 'unetr']"
+                "'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['vit', 'mae', 'unetr', 'dpt', 'vit_readout']"
             )
         elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
             raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
@@ -2982,9 +2984,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "hrnet",
                 "stunet",
+                "dpt",
+                "vit_readout",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'dpt', 'vit_readout']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -3006,9 +3010,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "hrnet",
                 "stunet",
+                "dpt",
+                "vit_readout",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'dpt', 'vit_readout']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -3027,9 +3033,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet",
                 "stunet",
                 "nafnet",
+                "dpt",
+                "vit_readout",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'dpt', 'vit_readout']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -3039,6 +3047,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "rcan",
                 "dfcan",
                 "wdsr",
+                "wavelettention",
                 "unet",
                 "resunet",
                 "resunet++",
@@ -3050,7 +3059,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
             ]:
                 raise ValueError(
-                    "Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
+                    "Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'wavelettention', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
                 )
 
             # Not allowed archs
@@ -3080,9 +3089,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "stunet",
                 "nafnet",
                 "rdbm",
+                "dpt",
+                "vit_readout",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet', 'nafnet', 'rdbm', 'dpt', 'vit_readout']"
                 )
             # Not allowed archs
             if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
@@ -3128,14 +3139,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
             if cfg.PROBLEM.NDIM == "3D" and "efficientnet" in model_arch:
                 raise ValueError("EfficientNet architectures are only available for 2D images")
-        if model_arch in ["unetr", "vit", "mae"]:
+        if model_arch in ["unetr", "vit", "mae", "dpt", "vit_readout"]:
             if model_arch == "mae" and cfg.PROBLEM.TYPE != "SELF_SUPERVISED":
                 raise ValueError("'mae' model can only be used in 'SELF_SUPERVISED' workflow")
 
-            _vit_models = ["custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14", "sam3_vit"]
+            _vit_models = [
+                "custom",
+                "vit_base_patch16",
+                "vit_large_patch16",
+                "vit_huge_patch14",
+                "sam3_vit",
+                "celldino_vit",
+            ]
             if model_arch == "unetr":
                 vit_backbone, vit_backbone_var = cfg.MODEL.UNETR_VIT_MODEL, "MODEL.UNETR_VIT_MODEL"
-            elif model_arch == "vit":
+            elif model_arch in ["vit", "dpt", "vit_readout"]:
                 vit_backbone, vit_backbone_var = cfg.MODEL.VIT_MODEL, "MODEL.VIT_MODEL"
             else:  # 'mae' is always built with the 'MODEL.VIT_*' variables
                 vit_backbone, vit_backbone_var = "custom", "MODEL.VIT_MODEL"
@@ -3169,6 +3187,60 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if custom_vit and cfg.MODEL.VIT_EMBED_DIM % cfg.MODEL.VIT_NUM_HEADS != 0:
                 raise ValueError("'MODEL.VIT_EMBED_DIM' should be divisible by 'MODEL.VIT_NUM_HEADS'")
 
+            if model_arch in ["dpt", "vit_readout"]:
+                if vit_backbone == "sam3_vit":
+                    raise ValueError(
+                        f"'{model_arch}' does not support 'sam3_vit' as 'MODEL.VIT_MODEL', as SAM 3's encoder uses its "
+                        "own blocks (windowed attention and rotary position embeddings). Use it with 'unetr' or 'vit'."
+                    )
+                if cfg.PROBLEM.NDIM == "3D":
+                    raise ValueError(f"'{model_arch}' is only available for 2D data")
+                if cfg.DATA.PATCH_SIZE[0] != cfg.DATA.PATCH_SIZE[1]:
+                    raise ValueError(f"'{model_arch}' needs square patches. 'DATA.PATCH_SIZE': {cfg.DATA.PATCH_SIZE}")
+                if cfg.LOSS.CONTRAST.ENABLE:
+                    raise ValueError(f"'LOSS.CONTRAST.ENABLE' is not supported by '{model_arch}'")
+                stride = token_size if cfg.MODEL.VIT_TOKEN_STRIDE <= 0 else cfg.MODEL.VIT_TOKEN_STRIDE
+                if stride > token_size or (token_size - stride) % 2 != 0:
+                    raise ValueError(
+                        f"'MODEL.VIT_TOKEN_STRIDE' ({stride}) must be <= the token size ({token_size}) and their "
+                        "difference even, so the image can be padded symmetrically"
+                    )
+                if cfg.DATA.PATCH_SIZE[0] % stride != 0:
+                    raise ValueError(
+                        f"'DATA.PATCH_SIZE' ({cfg.DATA.PATCH_SIZE[0]}) must be divisible by the ViT's token stride "
+                        f"({stride}, set by 'MODEL.VIT_TOKEN_STRIDE' or the token size)"
+                    )
+                if not check_value(cfg.MODEL.VIT_DROP_PATH_RATE):
+                    raise ValueError("'MODEL.VIT_DROP_PATH_RATE' not in [0, 1] range")
+                if model_arch == "dpt":
+                    depth = cfg.MODEL.VIT_NUM_LAYERS if custom_vit else {"vit_base_patch16": 12, "vit_large_patch16": 24, "vit_huge_patch14": 32, "celldino_vit": 24}[vit_backbone]
+                    layers = list(cfg.MODEL.DPT.LAYERS)
+                    if len(layers) > 0 and (
+                        len(layers) != 4
+                        or any(b >= a for a, b in zip(layers[1:], layers[:-1]))
+                        or not 1 <= layers[0] <= layers[-1] <= depth
+                    ):
+                        raise ValueError(
+                            f"'MODEL.DPT.LAYERS' needs 4 increasing ViT blocks in [1, {depth}] (1-indexed), or to be "
+                            f"empty to space them evenly. Provided: {layers}"
+                        )
+                    if len(cfg.MODEL.DPT.REASSEMBLE_CHANNELS) not in [0, 4] or any(c <= 0 for c in cfg.MODEL.DPT.REASSEMBLE_CHANNELS):
+                        raise ValueError("'MODEL.DPT.REASSEMBLE_CHANNELS' needs to be empty or have 4 positive values")
+                    if cfg.MODEL.DPT.FEATURES < 2:
+                        raise ValueError("'MODEL.DPT.FEATURES' needs to be >= 2")
+                    if cfg.MODEL.DPT.READOUT not in ["project", "add", "ignore"]:
+                        raise ValueError("'MODEL.DPT.READOUT' not in ['project', 'add', 'ignore']")
+                else:
+                    if cfg.MODEL.VIT_READOUT.FEATURES < 1:
+                        raise ValueError("'MODEL.VIT_READOUT.FEATURES' needs to be >= 1")
+                    if cfg.MODEL.VIT_READOUT.REFINE_LAYERS < 0:
+                        raise ValueError("'MODEL.VIT_READOUT.REFINE_LAYERS' needs to be >= 0")
+                    if cfg.MODEL.VIT_READOUT.INPUT_SKIP and cfg.MODEL.VIT_READOUT.REFINE_LAYERS == 0:
+                        raise ValueError(
+                            "'MODEL.VIT_READOUT.INPUT_SKIP' needs 'MODEL.VIT_READOUT.REFINE_LAYERS' > 0, as the input "
+                            "image is concatenated before the refinement"
+                        )
+
             if vit_backbone == "sam3_vit":
                 if cfg.DATA.PATCH_SIZE[0] % token_size != 0:
                     valid = [token_size * i for i in range(4, 10)]
@@ -3197,14 +3269,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "(1 channel), combine them into an RGB image (3 channels), or set 'MODEL.VIT_PRETRAINED_WEIGHTS' "
                         f"to '' to train from scratch with the {cfg.DATA.PATCH_SIZE[-1]} channels."
                     )
+            elif vit_backbone == "celldino_vit":
+                if cfg.PROBLEM.NDIM == "3D":
+                    raise ValueError(f"'{vit_backbone_var}' can not be 'celldino_vit' with 3D data.")
+                if cfg.DATA.PATCH_SIZE[-1] != 1:
+                    raise ValueError(
+                        f"'celldino_vit' needs 1 input channel, 'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}."
+                    )
             elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
                 raise ValueError(
-                    "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit', as it is "
-                    f"the only one with pretrained weights available. '{vit_backbone_var}' is set to '{vit_backbone}'."
+                    "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit' or "
+                    f"'celldino_vit', as those are the only ones with pretrained weights available. "
+                    f"'{vit_backbone_var}' is set to '{vit_backbone}'."
                 )
         elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
             raise ValueError(
-                "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used with the 'vit' and 'unetr' architectures, but "
+                "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used with the 'vit', 'unetr', 'dpt' and 'vit_readout' "
+                "architectures, but "
                 f"'MODEL.ARCHITECTURE' is '{cfg.MODEL.ARCHITECTURE}'"
             )
             if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):
@@ -3502,6 +3583,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE values not in [0, 1] range")
             if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
                 raise ValueError("AUGMENTOR.GRID_ROTATE not in [0, 1] range")
+        if cfg.AUGMENTOR.RANDOM_RESIZED_CROP:
+            if dim_count != 2:
+                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP is only supported in 2D")
+            if not cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH:
+                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP requires DATA.TRAIN.EXTRACT_RANDOM_PATCH")
+            if cfg.DATA.TRAIN.PROBABILITY_MAP:
+                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP can't be combined with DATA.TRAIN.PROBABILITY_MAP")
+            if cfg.AUGMENTOR.ZOOM or cfg.AUGMENTOR.RANDOM_ROT:
+                raise ValueError(
+                    "AUGMENTOR.RANDOM_RESIZED_CROP can't be combined with AUGMENTOR.ZOOM or AUGMENTOR.RANDOM_ROT"
+                )
+            rrc_range = cfg.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE
+            if min(rrc_range) <= 0 or not check_value(rrc_range, (0, 1)):
+                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE values need to be in (0, 1]")
         if cfg.AUGMENTOR.ZOOM:
             if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1, 10)):
                 raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")

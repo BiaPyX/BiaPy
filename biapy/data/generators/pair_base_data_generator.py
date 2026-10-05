@@ -90,14 +90,17 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Whether to apply or not zoom in Z axis.
 
     random_resized_crop : bool, optional
-        Whether to resize the full (pre-crop) image/mask to a random size before the usual
-        fixed-size random crop, so the crop covers a random ``random_resized_crop_scale_range``
-        fraction of the original image's area instead of a fixed pixel window. 2D only.
+        Whether to resize the full (pre-crop) image/mask before the usual fixed-size random crop, so
+        the crop covers a random ``random_resized_crop_scale_range`` fraction of the whole image's area
+        instead of a fixed native-pixel window. The image is resized to ``patch_size / sqrt(s)`` per
+        axis (``s`` drawn from the range, never below the patch size), i.e. the resized size depends
+        only on the patch size, not on the original image size or aspect ratio. 2D only; skipped when
+        a probability map is used or an enlarged window is loaded for ZOOM/RANDOM_ROT.
 
     random_resized_crop_scale_range : tuple of floats, optional
-        Area-fraction range of the original image the eventual crop should cover. E.g. ``(0.7, 0.95)``.
-        Rolled against ``aug_prob["random_resized_crop"]``; otherwise the image is resized directly to
-        the crop size (no extra crop margin).
+        Area-fraction range of the whole image the eventual crop should cover. E.g. ``(0.7, 0.95)``.
+        Rolled against ``aug_prob["random_resized_crop"]``; when the roll fails no resize is done and
+        the fixed-size crop is taken from the image at its native resolution.
 
     is_y_mask : bool, optional
         Whether Y is a categorical mask (nearest-neighbor resizing) or continuous data (same
@@ -1171,8 +1174,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 resized_spatial = tuple(
                     max(self.shape[i], int(round(self.shape[i] / side_scale))) for i in range(self.ndim)
                 )
-                img = resize_images([img], output_shape=resized_spatial, order=1)[0]
-                mask = resize_images([mask], output_shape=resized_spatial, order=0 if self.is_y_mask else 1)[0]
+                img = resize_images([img], output_shape=resized_spatial, order=1, anti_aliasing=True)[0]
+                mask = resize_images([mask], output_shape=resized_spatial, order=0 if self.is_y_mask else 1, anti_aliasing=not self.is_y_mask)[0]
 
             # Crop a bigger window when enlarging; bounded by the image, apply_transform crops it back.
             crop_spatial = self.aug_load_spatial if enlarge else self.shape[: self.ndim]
