@@ -12,7 +12,7 @@ import numpy as np
 import numpy.ma as ma
 from tqdm import tqdm
 from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
-from typing import Tuple, Callable, Dict, Optional
+from typing import Tuple, Callable, Dict, List, Optional
 from numpy.typing import NDArray
 
 from biapy.data.data_2D_manipulation import (
@@ -31,7 +31,6 @@ from biapy.utils.misc import (
     crop_border_tensor,
     is_main_process,
     MetricLogger,
-    build_preview_panels,
 )
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
 from biapy.data.norm import undo_image_norm, normalize_image
@@ -132,13 +131,11 @@ class Denoising_Workflow(Base_Workflow):
 
         super().define_activations_and_channels()
 
-    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
-        """Show input/GT/pred as single composite images, not split by channel."""
-        panels = build_preview_panels("input", image, mode="composite")
-        if target is not None:
-            panels += build_preview_panels("GT", target, mode="composite")
-        panels += build_preview_panels("pred", pred, mode="composite")
-        return panels
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Composite images. N2V targets ([values, mask]) are not shown."""
+        if n_gt is not None and n_gt == 2 * n_input:
+            n_gt = None
+        return self._composite_preview_spec(n_input, n_gt, n_pred)
 
     def define_metrics(self):
         """

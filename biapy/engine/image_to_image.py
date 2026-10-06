@@ -14,7 +14,7 @@ from torchmetrics.functional.image import peak_signal_noise_ratio, structural_si
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from numpy.typing import NDArray
 import copy
 import math
@@ -32,7 +32,6 @@ from biapy.utils.misc import (
     MetricLogger,
     is_dist_avail_and_initialized,
     get_world_size,
-    build_preview_panels,
 )
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
@@ -159,13 +158,9 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         super().define_activations_and_channels()
 
-    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
-        """Show input/GT/pred as single composite images, not split by channel."""
-        panels = build_preview_panels("input", image, mode="composite")
-        if target is not None:
-            panels += build_preview_panels("GT", target, mode="composite")
-        panels += build_preview_panels("pred", pred, mode="composite")
-        return panels
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Composite images."""
+        return self._composite_preview_spec(n_input, n_gt, n_pred)
 
     def define_metrics(self):
         """

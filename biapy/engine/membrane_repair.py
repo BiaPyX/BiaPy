@@ -18,7 +18,7 @@ upstream foundation-model + GMM pipeline. This module holds:
   model builder only for the duration of ``prepare_model``.
 """
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -267,9 +267,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         super().define_activations_and_channels()
         self.head_activations = ["ce_sigmoid"] * len(self.head_activations)
 
-    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
-        """Revert to Base_Workflow's per-channel split (not I2I's single composite image)."""
-        return Base_Workflow._train_pred_sample_panels(self, image, target, pred)
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Per-channel split (Base_Workflow), not I2I's composite."""
+        return Base_Workflow._train_pred_preview_spec(self, n_input, n_gt, n_pred)
 
     def define_metrics(self):
         """

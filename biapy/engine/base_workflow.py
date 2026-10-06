@@ -56,7 +56,11 @@ from biapy.utils.misc import (
     MetricLogger,
     to_pytorch_format,
     to_numpy_format,
-    build_preview_panels,
+    PREVIEW_LABEL_COLORS,
+    activation_value_range,
+    build_preview_rows,
+    build_preview_spec,
+    render_preview_panel,
     is_dist_avail_and_initialized,
     setup_for_distributed,
     update_dict_with_existing_keys,
@@ -97,6 +101,7 @@ from biapy.data.pre_processing import resize_images
 from biapy.data.post_processing.post_processing import (
     ensemble_predictions,
 )
+from biapy.data.post_processing.tta import parse_model_output_channel_names
 from biapy.data.roi_mask import load_roi_mask
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
@@ -1061,13 +1066,19 @@ class Base_Workflow(metaclass=ABCMeta):
             self.plot_values["val_" + self.train_metric_names[i]] = []
 
     def _prepare_train_pred_sample_batch(self):
-        """Pick a fixed batch (val data if available, else train data) and save its input/GT once."""
+        """Pick a fixed batch (val data if available, else train data), save its input/GT and samples.json."""
         source_generator = self.val_generator if self.val_generator else self.train_generator
         n = self.cfg.TRAIN.SAVE_TRAIN_PREDS_NUM_SAMPLES
+        dataset = getattr(source_generator, "dataset", None)
+        sample_ids: List[int] = []
         try:
-            images, targets = next(iter(source_generator))
-            images = images[:n]
-            targets = targets[:n] if targets is not None else None
+            if dataset is not None and len(dataset) > 0:
+                sample_ids = list(range(min(n, len(dataset))))
+                images, targets = source_generator.collate_fn([dataset[i] for i in sample_ids])
+            else:
+                images, targets = next(iter(source_generator))
+                images = images[:n]
+                targets = targets[:n] if targets is not None else None
         except Exception as e:
             print(f"WARNING: could not extract a fixed batch for TRAIN.SAVE_TRAIN_PREDS_FREQ ({e}). Disabling it.")
             self.cfg.defrost()
@@ -1080,67 +1091,186 @@ class Base_Workflow(metaclass=ABCMeta):
         images_np = images.cpu().numpy() if torch.is_tensor(images) else np.asarray(images)
         self._train_pred_sample_images_np = images_np
         self._train_pred_sample_targets_np = None
+        self._train_pred_sample_targets_raw = None
         save_tif(images_np, os.path.join(out_dir, "input"), verbose=False)
         try:
             if targets is not None:
                 targets_np = targets.cpu().numpy() if torch.is_tensor(targets) else np.asarray(targets)
+                self._train_pred_sample_targets_raw = targets_np
                 if targets_np.ndim == images_np.ndim:
                     save_tif(targets_np, os.path.join(out_dir, "gt"), verbose=False)
                     self._train_pred_sample_targets_np = targets_np
         except Exception as e:
             print(f"WARNING: could not save ground-truth preview for TRAIN.SAVE_TRAIN_PREDS_FREQ ({e})")
+
+        # A first prediction gives the number of output channels
+        n_pred = 0
+        try:
+            pred_np = self._train_pred_raw_to_numpy(self._predict_train_pred_batch())
+            n_pred = pred_np.shape[-1] if pred_np is not None else 0
+        except Exception as e:
+            print(f"WARNING: could not predict the training prediction samples ({e})")
+        targets_np = self._train_pred_sample_targets_np
+        panels = self._train_pred_preview_spec(
+            images_np.shape[-1], targets_np.shape[-1] if targets_np is not None else None, n_pred
+        )
+        self._train_pred_preview = {
+            "panels": panels,
+            "rows": build_preview_rows(panels["input"], panels["gt"], panels["pred"]),
+        }
+
+        names = [self._train_pred_sample_name(dataset, i) for i in sample_ids]
+        info = {
+            "workflow": self.cfg.PROBLEM.TYPE,
+            "ndim": self.cfg.PROBLEM.NDIM,
+            # Same zero-padding as save_tif
+            "samples": [
+                {"file": str(k).zfill(len(str(len(images_np)))) + ".tif", "image": names[k] if k < len(names) else None}
+                for k in range(len(images_np))
+            ],
+            **self._train_pred_preview,
+            "label_colors": PREVIEW_LABEL_COLORS,
+        }
+        self._train_pred_samples_info(info)
+        try:
+            tmp = os.path.join(out_dir, "samples.json.tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(info, f, indent=2)
+            os.replace(tmp, os.path.join(out_dir, "samples.json"))
+        except Exception as e:
+            print(f"WARNING: could not save the description of the training prediction samples ({e})")
         print(
             f"Tracking {len(images_np)} fixed sample(s) for periodic training predictions "
             f"(every {self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ} epochs) in: {out_dir}"
+            + (f" (from: {', '.join(str(x) for x in names)})" if names else "")
         )
+
+    @staticmethod
+    def _train_pred_sample_name(dataset, index: int) -> Optional[str]:
+        """File name of the image the ``index``-th sample of ``dataset`` is extracted from, if known."""
+        try:
+            X = dataset.X
+            sample = X.sample_list[index % len(X.sample_list)]
+            return os.path.basename(X.dataset_info[sample.fid].path)
+        except Exception:
+            return None
+
+    def _train_pred_samples_info(self, info: Dict):
+        """Add workflow-specific entries to samples.json."""
+        pass
+
+    def _predict_train_pred_batch(self):
+        """Predict the fixed batch in eval mode with a fixed seed (same MAE mask every epoch), restoring the RNG."""
+        was_training = self.model.training
+        self.model.eval()
+        cuda = [torch.cuda.current_device()] if self.device.type == "cuda" else []
+        try:
+            with torch.no_grad(), torch.random.fork_rng(devices=cuda):
+                torch.manual_seed(0)
+                return self.model_call_func(self._train_pred_sample_batch, is_train=False)
+        finally:
+            if was_training:
+                self.model.train(True)
 
     def _save_train_pred_samples(self, epoch: int):
         """Re-predict the fixed sample batch and save the current prediction to disk."""
         try:
-            was_training = self.model.training
-            self.model.eval()
-            with torch.no_grad():
-                pred_raw = self.model_call_func(self._train_pred_sample_batch, is_train=False)
-            if was_training:
-                self.model.train(True)
-
-            pred_np = self._train_pred_raw_to_numpy(pred_raw)
-            if pred_np is None:
-                return
-
+            pred_raw = self._predict_train_pred_batch()
             out_dir = os.path.join(self.cfg.PATHS.TRAIN_PRED_SAMPLES, "pred_epoch_{:04d}".format(epoch + 1))
-            save_tif(pred_np, out_dir, verbose=False)
+            pred_np = self._train_pred_raw_to_numpy(pred_raw)
+            if pred_np is not None:
+                save_tif(pred_np, out_dir, verbose=False)
+            self._save_train_pred_extra(pred_raw, out_dir)
 
             if self.cfg.TRAIN.SAVE_TRAIN_PREDS_SHOW:
-                self._display_train_pred_samples(epoch, pred_np)
+                self._display_train_pred_samples(epoch, pred_np, self._train_pred_sample_captions(pred_raw))
         except Exception as e:
             print(f"WARNING: could not save training prediction preview at epoch {epoch + 1} ({e})")
 
     def _train_pred_raw_to_numpy(self, pred_raw) -> Optional[NDArray]:
-        """Convert the raw model output into a numpy array to save/preview, or None to skip it."""
+        """Raw model output as a numpy array (class head appended as last channels), or None to skip it."""
         if isinstance(pred_raw, dict):
-            pred_raw = pred_raw["pred"] if "pred" in pred_raw else next(iter(pred_raw.values()))
+            if "pred" in pred_raw and "class" in pred_raw and pred_raw["class"].shape[2:] == pred_raw["pred"].shape[2:]:
+                pred_raw = torch.cat([pred_raw["pred"], pred_raw["class"]], dim=1)
+            else:
+                pred_raw = pred_raw["pred"] if "pred" in pred_raw else next(iter(pred_raw.values()))
         elif isinstance(pred_raw, list):
             pred_raw = pred_raw[0]
         return to_numpy_format(pred_raw, self.axes_order_back)
 
-    def _train_pred_sample_panels(
-        self, image: NDArray, target: Optional[NDArray], pred: NDArray
-    ) -> list[tuple[str, NDArray, str]]:
-        """Panels to preview for one sample. Default: per-channel; override per workflow."""
+    def _save_train_pred_extra(self, pred_raw, out_dir: str):
+        """Save non-image predictions (e.g. classification scores) in ``out_dir``."""
+        pass
+
+    def _train_pred_sample_captions(self, pred_raw) -> Optional[List[str]]:
+        """Notebook caption per tracked sample, or None."""
+        return None
+
+    def _train_pred_output_channels(self, n_pred: int) -> Tuple[Optional[List[str]], int]:
+        """Names of the prediction channels (None if unknown) and number of trailing class-head channels."""
         class_ch = 0
         if getattr(self, "separated_class_channel", False) and "class" in self.model_output_channel_info:
             class_ch = self.model_output_channels[self.model_output_channel_info.index("class")]
-        panels = build_preview_panels("input", image)
-        if target is not None:
-            panels += build_preview_panels("GT", target)
-        panels += build_preview_panels("pred", pred, class_channels=class_ch)
-        return panels
+        names = parse_model_output_channel_names(self.model_output_channel_info)
+        if len(names) + class_ch == n_pred:
+            return names + ["class"] * class_ch, class_ch
+        if 0 < class_ch < n_pred:
+            return None, class_ch
+        return None, 0
 
-    def _display_train_pred_samples(self, epoch: int, pred_np: NDArray):
+    def _train_pred_value_ranges(self, n_pred: int) -> List[Optional[Tuple[float, float]]]:
+        """Value range of each prediction channel, from its activation."""
+        if len(self.head_activations) != n_pred or not self.apply_activations:
+            return [None] * n_pred
+        return [activation_value_range(a) for a in self.head_activations]
+
+    def _train_pred_gt_channel_names(self, n_gt: int, n_pred: int) -> Optional[List[str]]:
+        """Names of the GT channels (None if unknown): the prediction ones with the class head as one channel."""
+        names, class_ch = self._train_pred_output_channels(n_pred)
+        if names is None:
+            return None
+        names = names[: len(names) - class_ch] + (["class"] if class_ch else [])
+        return names if len(names) == n_gt else None
+
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
         """
-        Render the tracked sample(s) inline as a new output each time, at most 3 panels per row.
-        Jupyter/Colab only; any failure disables 'TRAIN.SAVE_TRAIN_PREDS_SHOW'.
+        Preview panels (see :func:`build_preview_spec`) of the input, GT and prediction, used by the notebook
+        display and saved in samples.json (read by the Fiji plugin). Default: input composite, prediction
+        split per channel with the class head as one labels panel.
+        """
+        pred_names, class_ch = self._train_pred_output_channels(n_pred)
+        pred = build_preview_spec(
+            n_pred, "split", class_channels=class_ch, channel_names=pred_names,
+            value_ranges=self._train_pred_value_ranges(n_pred),
+        )
+        gt: List[Dict] = []
+        if n_gt:
+            gt = build_preview_spec(n_gt, "split", channel_names=self._train_pred_gt_channel_names(n_gt, n_pred))
+            gt = self._match_gt_preview_to_pred(gt, pred)
+        return {"input": build_preview_spec(n_input, "composite"), "gt": gt, "pred": pred}
+
+    def _composite_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Input, GT and prediction as composite images."""
+        pred = build_preview_spec(n_pred, "composite", value_ranges=self._train_pred_value_ranges(n_pred))
+        gt = self._match_gt_preview_to_pred(build_preview_spec(n_gt, "composite"), pred) if n_gt else []
+        return {"input": build_preview_spec(n_input, "composite"), "gt": gt, "pred": pred}
+
+    @staticmethod
+    def _match_gt_preview_to_pred(gt: List[Dict], pred: List[Dict]) -> List[Dict]:
+        """Give GT panels the mode/range of the prediction panel with the same key."""
+        by_key = {p["key"]: p for p in pred}
+        for g in gt:
+            p = by_key.get(g["key"])
+            if g["key"] in ("class", "instances") or (p is not None and p["mode"] == "labels"):
+                g["mode"], g["range"] = "labels", None
+            elif p is not None and g["mode"] == p["mode"]:
+                g["range"] = p["range"]
+        return gt
+
+    def _display_train_pred_samples(self, epoch: int, pred_np: Optional[NDArray], captions: Optional[List[str]] = None):
+        """
+        Render the tracked sample(s) inline (input | GT | prediction per row). Jupyter/Colab only; any failure
+        disables 'TRAIN.SAVE_TRAIN_PREDS_SHOW'.
         """
         try:
             from IPython import get_ipython
@@ -1155,37 +1285,42 @@ class Base_Workflow(metaclass=ABCMeta):
 
             images_np = self._train_pred_sample_images_np
             targets_np = self._train_pred_sample_targets_np
+            panels = self._train_pred_preview["panels"]
+            rows = self._train_pred_preview["rows"]
             is_3d = self.cfg.PROBLEM.NDIM == "3D"
             n_samples = len(images_np)
 
             def mid_slice(img: NDArray) -> NDArray:
                 return img[img.shape[0] // 2] if is_3d else img
 
-            sample_panels = []
-            for i in range(n_samples):
-                panels = self._train_pred_sample_panels(
-                    mid_slice(images_np[i]),
-                    mid_slice(targets_np[i]) if targets_np is not None else None,
-                    mid_slice(pred_np[i]),
-                )
-                if n_samples > 1:
-                    panels = [(f"s{i} {title}", img, cmap) for title, img, cmap in panels]
-                sample_panels.append(panels)
+            columns = [("input", images_np, "input")]
+            if targets_np is not None and panels["gt"]:
+                columns.append(("gt", targets_np, "GT"))
+            if pred_np is not None and panels["pred"]:
+                columns.append(("pred", pred_np, f"epoch {epoch + 1}"))
 
-            ncols = 3
-            rows_per_sample = [-(-len(p) // ncols) for p in sample_panels]
-            nrows = sum(rows_per_sample)
+            nrows = n_samples * len(rows)
+            ncols = len(columns)
             fig, axes = plt.subplots(nrows, ncols, figsize=(3 * ncols, 3 * nrows), squeeze=False)
             for ax in axes.ravel():
                 ax.axis("off")
-
-            row0 = 0
-            for panels, nrows_sample in zip(sample_panels, rows_per_sample):
-                for i, (title, img, cmap) in enumerate(panels):
-                    ax = axes[row0 + i // ncols][i % ncols]
-                    ax.imshow(img, cmap=cmap)
-                    ax.set_title(title, fontsize=8)
-                row0 += nrows_sample
+            for i in range(n_samples):
+                for r, row in enumerate(rows):
+                    for c, (kind, data, header) in enumerate(columns):
+                        if row[kind] is None:
+                            continue
+                        panel = panels[kind][row[kind]]
+                        img = render_preview_panel(mid_slice(data[i]), panel)
+                        ax = axes[i * len(rows) + r][c]
+                        if img.ndim == 2:
+                            vmin, vmax = panel["range"] if panel["range"] is not None else (None, None)
+                            ax.imshow(img, cmap="gray", vmin=vmin, vmax=vmax, interpolation="nearest")
+                        else:
+                            ax.imshow(img, interpolation="nearest")
+                        title = " ".join(t for t in (f"s{i}" if n_samples > 1 else "", header, panel["title"]) if t)
+                        if kind == "input" and captions is not None and i < len(captions):
+                            title += "\n" + captions[i]
+                        ax.set_title(title, fontsize=8)
             fig.suptitle(f"Epoch {epoch + 1}")
             fig.tight_layout(rect=(0, 0, 1, 0.96))
 

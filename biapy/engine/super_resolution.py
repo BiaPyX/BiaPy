@@ -17,7 +17,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from numpy.typing import NDArray
 
 
@@ -30,7 +30,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, crop_border_tensor, MetricLogger, build_preview_panels
+from biapy.utils.misc import to_pytorch_format, crop_border_tensor, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import loss_encapsulation, continuous_image_loss_registry, resolve_weighted_composite_loss
 from biapy.data.norm import undo_image_norm
@@ -128,13 +128,9 @@ class Super_resolution_Workflow(Base_Workflow):
 
         super().define_activations_and_channels()
 
-    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
-        """Show input/GT/pred as single composite images, not split by channel."""
-        panels = build_preview_panels("input", image, mode="composite")
-        if target is not None:
-            panels += build_preview_panels("GT", target, mode="composite")
-        panels += build_preview_panels("pred", pred, mode="composite")
-        return panels
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Composite images."""
+        return self._composite_preview_spec(n_input, n_gt, n_pred)
 
     def define_metrics(self):
         """

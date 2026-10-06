@@ -17,7 +17,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from numpy.typing import NDArray
 
 
@@ -40,9 +40,9 @@ from biapy.utils.misc import (
     crop_border_tensor,
     is_main_process,
     is_dist_avail_and_initialized,
-    build_preview_panels,
     MetricLogger,
     os_walk_clean,
+    build_preview_spec,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks, resize_images
@@ -147,13 +147,33 @@ class Self_supervised_Workflow(Base_Workflow):
 
         super().define_activations_and_channels()
 
-    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
-        """Show input/GT/pred as single composite images, not split by channel."""
-        panels = build_preview_panels("input", image, mode="composite")
-        if target is not None:
-            panels += build_preview_panels("GT", target, mode="composite")
-        panels += build_preview_panels("pred", pred, mode="composite")
-        return panels
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Composite images. With masking: reconstruction and masked input (see _train_pred_raw_to_numpy)."""
+        if not self._is_masking() or n_pred != 2 * n_input:
+            return self._composite_preview_spec(n_input, n_gt, n_pred)
+        spec = self._composite_preview_spec(n_input, n_gt, n_input)
+        for p in spec["pred"]:
+            p["title"] = "reconstruction"
+        masked = build_preview_spec(n_input, "composite", name="masked input")
+        for p in masked:
+            p["title"], p["key"] = "masked input", "masked input"
+            p["channels"] = [c + n_input for c in p["channels"]]
+        spec["pred"] += masked
+        return spec
+
+    def _is_masking(self) -> bool:
+        return self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking"
+
+    def _train_pred_raw_to_numpy(self, pred_raw) -> Optional[NDArray]:
+        """MAE outputs patch tokens: return the unpatchified reconstruction plus the masked input as extra channels."""
+        if not (self._is_masking() and isinstance(pred_raw, dict) and "mask" in pred_raw):
+            return super()._train_pred_raw_to_numpy(pred_raw)
+        mae = self.model_without_ddp
+        recon = mae.unpatchify(pred_raw["pred"])
+        mask = pred_raw["mask"].unsqueeze(-1).repeat(1, 1, pred_raw["pred"].shape[-1])
+        mask = mae.unpatchify(mask)  # 1: masked, 0: visible
+        x = to_pytorch_format(self._train_pred_sample_batch, self.axes_order, self.device)
+        return to_numpy_format(torch.cat([recon, x * (1 - mask)], dim=1), self.axes_order_back)
 
     def define_metrics(self):
         """

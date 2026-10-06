@@ -493,6 +493,27 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             )
             self.stardist_grid = tuple(int(g) for g in cfg_grid)
 
+    def _train_pred_gt_channel_names(self, n_gt: int, n_pred: int) -> Optional[List[str]]:
+        """GT channel names as built by ``labels_into_channels`` ("I" is dropped by the generator), class last."""
+        dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+        names: List[str] = []
+        for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            if channel in ("I", "E_sigma", "E_seediness"):
+                continue
+            if channel == "R":
+                names += ["R_{}".format(j) for j in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96))]
+            elif channel == "A":
+                names += affinity_channel_names(dst.get("A", {}))
+            elif channel == "E_offset":
+                names.append("instances")
+            else:
+                names.append(channel)
+        if self.separated_class_channel:
+            names.append("class")
+        if len(names) == n_gt:
+            return names
+        return super()._train_pred_gt_channel_names(n_gt, n_pred)
+
     def define_metrics(self):
         """
         Define the metrics to be used in the instance segmentation workflow.

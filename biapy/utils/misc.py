@@ -37,6 +37,7 @@ from functools import partial
 import collections.abc
 import gc
 from typing import (
+    Dict,
     Optional,
     Tuple,
     List,
@@ -733,38 +734,189 @@ def to_numpy_format(x, axes_order_back):
     return x.permute(axes_order_back).cpu().numpy()
 
 
-def build_preview_panels(
-    name: str, arr: NDArray, mode: str = "split", cmap: Optional[str] = None, class_channels: int = 0
-) -> List[Tuple[str, NDArray, str]]:
-    """
-    Build (title, 2D array, colormap) panels for a training-preview image, from a (H, W, C) array.
+# Colours of "labels" preview panels; label 0 is black
+PREVIEW_LABEL_COLORS = [
+    "#000000", "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+    "#bcbd22", "#17becf", "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5", "#c49c94", "#f7b6d2",
+    "#dbdb8d", "#9edae5",
+]
 
-    mode: "split" (one panel per channel; class_channels>0 argmaxes the last N channels into a
-    single labeled panel instead), "argmax" (one panel, argmax over channels), or "composite"
-    (one panel, all channels shown together, untouched).
+_ACTIVATION_RANGES = {
+    "sigmoid": (0.0, 1.0),
+    "ce_sigmoid": (0.0, 1.0),
+    "softmax": (0.0, 1.0),
+    "ce_softmax": (0.0, 1.0),
+    "tanh": (-1.0, 1.0),
+}
+
+
+def activation_value_range(activation: str) -> Optional[Tuple[float, float]]:
+    """Output range of ``activation``, or None if unbounded."""
+    return _ACTIVATION_RANGES.get(str(activation).lower())
+
+
+def preview_panel(
+    title: str,
+    channels: List[int],
+    mode: str = "gray",
+    value_range: Optional[Tuple[float, float]] = None,
+    key: Optional[str] = None,
+) -> Dict:
     """
-    if cmap is None:
-        cmap = "tab20" if mode == "argmax" else "gray"
+    Training-preview panel: a 2D view of some channels of a (H, W, C) image.
+
+    mode: "gray", "mean" (mean of the channels), "labels" (argmax, or the values of a single channel)
+    or "rgb". ``value_range`` fixes the contrast. ``key`` pairs GT and prediction panels (default: ``title``).
+    """
+    assert mode in ("gray", "mean", "labels", "rgb"), f"Unknown preview mode '{mode}'"
+    return {
+        "title": title,
+        "key": title if key is None else key,
+        "channels": [int(c) for c in channels],
+        "mode": mode,
+        "range": [float(v) for v in value_range] if value_range is not None else None,
+    }
+
+
+def _channel_family(name: str) -> Tuple[str, bool]:
+    """'R_12' -> ('R', False), 'Db_bin3' -> ('Db', True), 'B' -> ('B', False)."""
+    m = re.match(r"^(.*?)_(bin)?\d+$", name)
+    if m is None:
+        return name, False
+    return m.group(1), m.group(2) is not None
+
+
+def build_preview_spec(
+    n_channels: int,
+    mode: str = "split",
+    class_channels: int = 0,
+    channel_names: Optional[List[str]] = None,
+    value_ranges: Optional[List[Optional[Tuple[float, float]]]] = None,
+    name: str = "",
+) -> List[Dict]:
+    """
+    Panels to preview an image with ``n_channels`` channels.
+
+    mode:
+      - "split": a panel per channel. Channels named "<x>_<i>" are grouped: up to 4 split, more averaged,
+        "<x>_bin<i>" argmaxed. The last ``class_channels`` channels are argmaxed into a "class" panel.
+      - "argmax": one labels panel (or the channel itself if there is only one).
+      - "labels": a labels panel per channel.
+      - "composite": gray with 1 channel, RGB with 3, otherwise "split".
+    """
+    if n_channels <= 0:
+        return []
+    names = list(channel_names) if channel_names is not None and len(channel_names) == n_channels else None
+    ranges = list(value_ranges) if value_ranges is not None and len(value_ranges) == n_channels else [None] * n_channels
+
+    def title(c: int) -> str:
+        if names is not None:
+            return names[c]
+        return name if n_channels == 1 else f"ch{c}"
+
+    def common_range(chs: List[int]) -> Optional[Tuple[float, float]]:
+        rs = {tuple(ranges[c]) if ranges[c] is not None else None for c in chs}
+        return rs.pop() if len(rs) == 1 else None
 
     if mode == "composite":
-        img = arr[..., 0] if arr.shape[-1] == 1 else arr
-        return [(name, img, cmap)]
+        if n_channels == 1:
+            return [preview_panel(title(0), [0], "gray", ranges[0])]
+        if n_channels == 3:
+            return [preview_panel(name, [0, 1, 2], "rgb", common_range([0, 1, 2]))]
+        mode = "split"
 
     if mode == "argmax":
-        img = np.argmax(arr, axis=-1) if arr.shape[-1] > 1 else arr[..., 0]
-        return [(name, img, cmap)]
+        if n_channels == 1:
+            return [preview_panel(title(0), [0], "gray", ranges[0])]
+        return [preview_panel(name, list(range(n_channels)), "labels")]
 
-    if class_channels and 0 < class_channels <= arr.shape[-1]:
-        panels = []
-        if class_channels < arr.shape[-1]:
-            panels = build_preview_panels(name, arr[..., :-class_channels], mode="split")
-        panels += build_preview_panels(f"{name} class", arr[..., -class_channels:], mode="argmax")
-        return panels
+    if mode == "labels":
+        return [preview_panel(title(c), [c], "labels") for c in range(n_channels)]
 
-    n_ch = arr.shape[-1]
-    if n_ch == 1:
-        return [(name, arr[..., 0], cmap)]
-    return [(f"{name} ch{c}", arr[..., c], cmap) for c in range(n_ch)]
+    panels: List[Dict] = []
+    n_plain = n_channels - class_channels if 0 < class_channels <= n_channels else n_channels
+    c = 0
+    while c < n_plain:
+        family, is_bin = _channel_family(names[c]) if names is not None else (None, False)
+        end = c + 1
+        if family is not None:
+            while end < n_plain and _channel_family(names[end]) == (family, is_bin):
+                end += 1
+        chs = list(range(c, end))
+        if len(chs) == 1:
+            panels.append(preview_panel(title(c), chs, "gray", ranges[c]))
+        elif is_bin:
+            panels.append(preview_panel(family, chs, "labels"))
+        elif len(chs) <= 4:
+            panels += [preview_panel(title(k), [k], "gray", ranges[k]) for k in chs]
+        else:
+            panels.append(preview_panel(f"{family} (mean of {len(chs)})", chs, "mean", common_range(chs), key=family))
+        c = end
+    if n_plain < n_channels:
+        panels.append(preview_panel("class", list(range(n_plain, n_channels)), "labels"))
+    return panels
+
+
+def build_preview_rows(input_panels: List[Dict], gt_panels: List[Dict], pred_panels: List[Dict]) -> List[Dict]:
+    """
+    One row per prediction panel with its GT panel (same key, otherwise in order if the counts match).
+    Unmatched GT panels get their own rows; input panels fill the input column from the top.
+
+    Each row: ``{"label": str, "input": int|None, "gt": int|None, "pred": int|None}`` (panel indexes).
+    """
+    gt_for_pred: List[Optional[int]] = [None] * len(pred_panels)
+    used = set()
+    for i, p in enumerate(pred_panels):
+        for j, g in enumerate(gt_panels):
+            if j not in used and g["key"] == p["key"]:
+                gt_for_pred[i] = j
+                used.add(j)
+                break
+    free_pred = [i for i in range(len(pred_panels)) if gt_for_pred[i] is None]
+    free_gt = [j for j in range(len(gt_panels)) if j not in used]
+    if free_pred and len(free_pred) == len(free_gt):
+        for i, j in zip(free_pred, free_gt):
+            gt_for_pred[i] = j
+        free_gt = []
+
+    rows = [
+        {"label": p["title"] or (gt_panels[gt_for_pred[i]]["title"] if gt_for_pred[i] is not None else ""),
+         "input": None, "gt": gt_for_pred[i], "pred": i}
+        for i, p in enumerate(pred_panels)
+    ]
+    rows += [{"label": gt_panels[j]["title"], "input": None, "gt": j, "pred": None} for j in free_gt]
+    for k in range(len(input_panels)):
+        if k == len(rows):
+            rows.append({"label": "", "input": None, "gt": None, "pred": None})
+        rows[k]["input"] = k
+    for r in rows:
+        if r["pred"] is None and r["gt"] is None and r["input"] is not None and len(input_panels) > 1:
+            r["label"] = input_panels[r["input"]]["title"]
+    return rows
+
+
+def render_preview_panel(arr: NDArray, panel: Dict) -> NDArray:
+    """
+    Render a panel of a (H, W, C) slice: float (H, W) for "gray"/"mean", float RGB in [0, 1] for "rgb" and
+    uint8 RGB with ``PREVIEW_LABEL_COLORS`` for "labels".
+    """
+    chs = [c for c in panel["channels"] if c < arr.shape[-1]]
+    data = arr[..., chs].astype(np.float32)
+    mode = panel["mode"]
+    if mode == "gray":
+        return data[..., 0]
+    if mode == "mean":
+        return data.mean(axis=-1)
+    if mode == "rgb":
+        out = np.zeros(data.shape[:-1] + (3,), dtype=np.float32)
+        for k in range(min(3, data.shape[-1])):
+            lo, hi = panel["range"] if panel["range"] is not None else (float(data[..., k].min()), float(data[..., k].max()))
+            out[..., k] = np.clip((data[..., k] - lo) / (hi - lo if hi > lo else 1.0), 0, 1)
+        return out
+    labels = np.argmax(data, axis=-1) if data.shape[-1] > 1 else np.rint(data[..., 0]).astype(np.int64)
+    palette = np.array([[int(c[i : i + 2], 16) for i in (1, 3, 5)] for c in PREVIEW_LABEL_COLORS], dtype=np.uint8)
+    labels = np.where(labels > 0, (labels - 1) % (len(palette) - 1) + 1, 0)
+    return palette[labels]
 
 
 def crop_border_numpy(arr: NDArray, border: List[int], has_channel_axis: bool = False) -> NDArray:

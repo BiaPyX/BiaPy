@@ -18,7 +18,7 @@ from biapy.data.data_3D_manipulation import read_chunked_data
 from biapy.data.dataset import PatchCoords
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, crop_border_tensor, MetricLogger, build_preview_panels
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, crop_border_tensor, MetricLogger, build_preview_spec
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
@@ -404,13 +404,16 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
-    def _train_pred_sample_panels(self, image: NDArray, target: Optional[NDArray], pred: NDArray) -> list:
-        """Show pred as a single argmax label map instead of one panel per class."""
-        panels = build_preview_panels("input", image)
-        if target is not None:
-            panels += build_preview_panels("GT", target)
-        panels += build_preview_panels("pred", pred, mode="argmax")
-        return panels
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Prediction as one label map (argmax) and GT as labels; binary problems in gray [0, 1]."""
+        pred = build_preview_spec(n_pred, "argmax", value_ranges=self._train_pred_value_ranges(n_pred))
+        gt: List[Dict] = []
+        if n_gt:
+            if n_gt == 1 and self.cfg.DATA.N_CLASSES <= 2:
+                gt = build_preview_spec(1, "split", value_ranges=[(0.0, 1.0)])
+            else:
+                gt = build_preview_spec(n_gt, "argmax" if n_gt > 1 else "labels")
+        return {"input": build_preview_spec(n_input, "composite"), "gt": gt, "pred": pred}
 
     def prepare_targets(self, targets, batch):
         """

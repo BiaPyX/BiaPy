@@ -7,6 +7,7 @@ It handles data loading, model setup, metrics, predictions, and result saving fo
 single-label classification problems.
 """
 import os
+import json
 import torch
 import math
 import numpy as np
@@ -14,7 +15,7 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from torchmetrics import Accuracy
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from numpy.typing import NDArray
 
 from biapy.engine.base_workflow import Base_Workflow
@@ -24,7 +25,7 @@ from biapy.data.data_manipulation import (
     load_and_prepare_cls_test_data,
     prepare_in_memory_test_data,
 )
-from biapy.utils.misc import is_main_process, MetricLogger
+from biapy.utils.misc import is_main_process, MetricLogger, build_preview_spec, os_walk_clean
 from biapy.engine.metrics import loss_encapsulation
 
 
@@ -227,8 +228,74 @@ class Classification_Workflow(Base_Workflow):
         return out_metrics
 
     def _train_pred_raw_to_numpy(self, pred_raw) -> Optional[NDArray]:
-        """Classification predicts a per-class score vector, not an image; skip the preview."""
+        """Not an image: scores are saved by _save_train_pred_extra."""
         return None
+
+    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
+        """Only the input is an image; classes are shown as text."""
+        return {"input": build_preview_spec(n_input, "composite"), "gt": [], "pred": []}
+
+    def _train_pred_class_names(self) -> List[str]:
+        """Class names: the training data class folders."""
+        if getattr(self, "_train_pred_classes", None) is None:
+            try:
+                self._train_pred_classes = list(next(os_walk_clean(self.cfg.DATA.TRAIN.PATH))[1])
+            except Exception:
+                self._train_pred_classes = []
+            if len(self._train_pred_classes) != self.cfg.DATA.N_CLASSES:
+                self._train_pred_classes = [str(i) for i in range(self.cfg.DATA.N_CLASSES)]
+        return self._train_pred_classes
+
+    def _train_pred_samples_info(self, info: Dict):
+        """Add class names and each sample's GT class."""
+        info["class_names"] = self._train_pred_class_names()
+        targets = self._train_pred_sample_targets_raw
+        if targets is None:
+            return
+        targets = np.asarray(targets).reshape(len(targets), -1)
+        for sample, t in zip(info["samples"], targets):
+            sample["gt_class"] = int(np.argmax(t)) if t.size > 1 else int(t[0])
+
+    def _train_pred_scores(self, pred_raw) -> NDArray:
+        """(samples, classes) probabilities of the tracked samples."""
+        if isinstance(pred_raw, dict):
+            pred_raw = pred_raw["pred"]
+        return pred_raw.detach().float().cpu().numpy().reshape(len(pred_raw), -1)
+
+    def _save_train_pred_extra(self, pred_raw, out_dir: str):
+        """Save the class scores in scores.json."""
+        scores = self._train_pred_scores(pred_raw)
+        n = len(scores)
+        os.makedirs(out_dir, exist_ok=True)
+        tmp = os.path.join(out_dir, "scores.json.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(
+                {"samples": [
+                    {"file": str(k).zfill(len(str(n))) + ".tif", "pred_class": int(np.argmax(s)),
+                     "scores": [round(float(v), 4) for v in s]}
+                    for k, s in enumerate(scores)
+                ]},
+                f,
+                indent=2,
+            )
+        os.replace(tmp, os.path.join(out_dir, "scores.json"))
+
+    def _train_pred_sample_captions(self, pred_raw) -> Optional[List[str]]:
+        """"GT: <class> | pred: <class> (<prob>)" per sample."""
+        names = self._train_pred_class_names()
+        targets = self._train_pred_sample_targets_raw
+        gt = None
+        if targets is not None:
+            targets = np.asarray(targets).reshape(len(targets), -1)
+            gt = [int(np.argmax(t)) if t.size > 1 else int(t[0]) for t in targets]
+        captions = []
+        for k, s in enumerate(self._train_pred_scores(pred_raw)):
+            c = int(np.argmax(s))
+            text = f"pred: {names[c] if c < len(names) else c} ({100 * float(s[c]):.0f}%)"
+            if gt is not None and k < len(gt):
+                text = f"GT: {names[gt[k]] if gt[k] < len(names) else gt[k]} | " + text
+            captions.append(text)
+        return captions
 
     def prepare_targets(self, targets, batch):
         """

@@ -124,7 +124,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if "R" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
                     inst_creation_process = "stardist"
-                if "Gv" in instance_channels:
+                elif "Gv" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "gradient-flow"])
                     inst_creation_process = "gradient-flow"
                 elif "E_offset" in instance_channels:
