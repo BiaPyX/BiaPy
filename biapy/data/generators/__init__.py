@@ -7,6 +7,7 @@ It supports 2D and 3D data, chunked loading, distributed training, and advanced
 augmentation pipelines.
 """
 import os
+import cv2
 import torch
 from typing import List, Dict, Any, Tuple, Optional
 from torch.utils.data import (
@@ -47,8 +48,14 @@ def worker_init_fn(worker_id: int):
     Defined at module level (not inside the functions that create the DataLoaders) so it can be pickled:
     on Windows (and macOS) workers are started with "spawn", which pickles ``worker_init_fn``, and local
     functions cannot be pickled ("Can't pickle local object ... worker_init_fn").
+
+    OpenCV is also made single-threaded: on Linux workers are forked, and OpenCV's thread pool does not
+    survive the fork if the main process already used it, so a call that OpenCV parallelizes in a worker
+    (e.g. the ``cv2.remap`` of the elastic augmentation with patches of 512x512) waits forever for threads
+    that don't exist and the training hangs.
     """
     torch.set_num_threads(1)
+    cv2.setNumThreads(0)
 
 
 def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
