@@ -7,10 +7,9 @@ pred_dir can be flat (BiaPy's own per_image output, one file per raw z-slice nam
 input; Study/GT pairing recovered via --organelle) or nested (one Study_id subfolder per
 prediction, same layout as gt_dir).
 
-Reports two scales: plain mae/mse/ssim/psnr/pcc (matches test_results_metrics.csv columns, with
-PSNR/SSIM given a fixed data_range from the GT dtype instead of an inferred one - see the
-image_to_image.py fix), and *_norm (each image percentile-clipped 2/99.8 and rescaled to [0,1],
-data_range=1.0).
+All metrics are computed after percentile-clipping (2/99.8) each prediction and GT and rescaling
+them to [0,1] (data_range=1.0), so predictions saved in any intensity scale are comparable. The
+summary reports the mean per image (z-slice), per sample (image_id) and per study.
 
 Example:
     python calculate_lightmycells_metrics.py \
@@ -62,17 +61,6 @@ def to_tensor(arr: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(arr.astype(np.float32)).unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
 
 
-def fixed_range_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
-    data_range = float(np.iinfo(gt.dtype).max) if np.issubdtype(gt.dtype, np.integer) else None
-    pred_t, gt_t = to_tensor(pred), to_tensor(gt)
-    mae = MeanAbsoluteError()(pred_t, gt_t).item()
-    mse = MeanSquaredError()(pred_t, gt_t).item()
-    ssim = structural_similarity_index_measure(pred_t, gt_t, data_range=data_range).item()
-    psnr = peak_signal_noise_ratio(pred_t, gt_t, data_range=data_range).item()
-    pcc_val = PearsonCorrCoef()(pred_t.flatten(), gt_t.flatten()).item()
-    return {"mae": mae, "mse": mse, "ssim": ssim, "psnr": psnr, "pcc": pcc_val}
-
-
 def norm_scale_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     pred_c, _, _ = percentile_clip(pred.astype(np.float32), per_lower_bound=2.0, per_upper_bound=99.8)
     pred_n, _, _ = norm_range01(pred_c, div_using_max_and_scale=True, max_val_to_div=None, min_val_to_div=None)
@@ -84,7 +72,8 @@ def norm_scale_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     mse = MeanSquaredError()(pred_t, gt_t).item()
     ssim = structural_similarity_index_measure(pred_t, gt_t, data_range=1.0).item()
     psnr = peak_signal_noise_ratio(pred_t, gt_t, data_range=1.0).item()
-    return {"mae_norm": mae, "mse_norm": mse, "ssim_norm": ssim, "psnr_norm": psnr}
+    pcc_val = PearsonCorrCoef()(pred_t.flatten(), gt_t.flatten()).item()
+    return {"mae": mae, "mse": mse, "ssim": ssim, "psnr": psnr, "pcc": pcc_val}
 
 
 def collect_pairs(pred_dir: str, gt_dir: str, organelle: str | None):
@@ -135,12 +124,14 @@ def main():
         if pred.shape != gt.shape:
             pred = cv2.resize(pred, (gt.shape[1], gt.shape[0]), interpolation=cv2.INTER_LINEAR)
 
-        row = {"file": pred_fname}
-        row.update(fixed_range_metrics(pred, gt))
+        sample = STUDY_PREFIX_RE.match(pred_fname)
+        sample = sample.group(1) if sample is not None else os.path.basename(os.path.dirname(pred_path))
+        row = {"file": pred_fname, "sample": sample, "study": "_".join(sample.split("_")[:2])}
         row.update(norm_scale_metrics(pred, gt))
         rows.append(row)
 
-    cols = ["file", "mae", "mse", "ssim", "psnr", "pcc", "mae_norm", "mse_norm", "ssim_norm", "psnr_norm"]
+    metrics = ["mae", "mse", "ssim", "psnr", "pcc"]
+    cols = ["file", "sample", "study"] + metrics
     os.makedirs(os.path.dirname(args["output_csv"]) or ".", exist_ok=True)
     with open(args["output_csv"], "w") as f:
         f.write(",".join(cols) + "\n")
@@ -149,9 +140,14 @@ def main():
 
     print(f"\nWrote {len(rows)} rows to {args['output_csv']}\n")
     print("#############\n#  RESULTS  #\n#############")
-    for m in ["mae", "mse", "ssim", "psnr", "pcc", "mae_norm", "mse_norm", "ssim_norm", "psnr_norm"]:
-        vals = [row[m] for row in rows]
-        print(f"Mean {m}: {np.mean(vals)}")
+    # Image means are dominated by studies with many samples/z-slices, so also average per sample and per study
+    for level in ["file", "sample", "study"]:
+        groups: dict[str, list[dict]] = {}
+        for row in rows:
+            groups.setdefault(row[level], []).append(row)
+        print(f"Mean per {level} ({len(groups)} groups):")
+        for m in metrics:
+            print(f"  {m}: {np.mean([np.mean([r[m] for r in g]) for g in groups.values()])}")
 
 
 if __name__ == "__main__":
