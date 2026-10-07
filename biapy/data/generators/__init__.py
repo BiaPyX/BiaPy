@@ -430,6 +430,9 @@ def create_train_val_augmentors(
                 np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
             )
             dic["n2v_load_gt"] = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
+        if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ENABLE:
+            dic["balance_group_regex"] = cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.REGEX
+            dic["balance_alpha"] = cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ALPHA
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)  # type: ignore

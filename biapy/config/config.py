@@ -646,6 +646,13 @@ class Config:
         # for a real use case and a more detailed description:
         #   - https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html
         _C.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER = False
+        # Draw training samples balanced across groups (e.g. studies) read from the raw file names
+        _C.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ENABLE = False
+        # Regex applied to each raw file name; its first capture group is the group id
+        _C.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.REGEX = r"^(Study_\d+)_"
+        # P(group) is proportional to (its number of images)**ALPHA: 1 keeps the data distribution, 0 weighs all groups equally
+        _C.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ALPHA = 0.5
         # Activation function to be applied to the output channels of the model. It can be a string or a list of strings if
         # different activation functions are desired for different channels. Leave empty to use linear activation.
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT = []

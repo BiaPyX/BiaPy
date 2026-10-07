@@ -16,6 +16,9 @@ from typing import (
     Union,
 )
 import warnings
+import re
+import itertools
+from collections import Counter, defaultdict
 import numpy as np
 import random
 import torch
@@ -512,6 +515,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         convert_to_rgb: bool = False,
         preprocess_f=None,
         preprocess_cfg=None,
+        balance_group_regex: Optional[str] = None,
+        balance_alpha: float = 1.0,
     ):
         """
         Initialize the PairBaseDataGenerator.
@@ -945,6 +950,28 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         self.indexes = self.o_indexes.copy()
 
+        self.balance_cum_weights = None
+        if balance_group_regex is not None and not val:
+            self.balance_cum_weights = self.group_balanced_cum_weights(balance_group_regex, balance_alpha)
+
+    def group_balanced_cum_weights(self, regex: str, alpha: float) -> List[float]:
+        """Cumulative sampling weights making P(group) proportional to (its number of images)**alpha."""
+        pattern = re.compile(regex)
+        groups, units = [], []
+        for s in self.X.sample_list:
+            m = pattern.search(os.path.basename(self.X.dataset_info[s.fid].path))
+            groups.append(m.group(1) if m else "")
+            gt_id = s.get_gt_associated_id()
+            # An image is its GT when several raws share one, else the raw file itself
+            units.append(gt_id if gt_id is not None else s.fid)
+        unit_size = Counter(units)
+        group_units = defaultdict(set)
+        for g, u in zip(groups, units):
+            group_units[g].add(u)
+        weights = [len(group_units[g]) ** (alpha - 1) / unit_size[u] for g, u in zip(groups, units)]
+        print(f"Balancing training samples across {len(group_units)} groups (alpha={alpha})")
+        return list(itertools.accumulate(weights))
+
     @abstractmethod
     def save_aug_samples(
         self,
@@ -1315,6 +1342,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             _rng_state = (np.random.get_state(), random.getstate())
             random.seed(_seed)
             np.random.seed(_seed)
+        elif self.balance_cum_weights is not None:
+            index = random.choices(range(self.real_length), cum_weights=self.balance_cum_weights)[0]
 
         # Enlarge the extraction here; apply_transform warps and crops it back to the network size.
         img, mask = self.load_sample(index, geom_enlarge=True)

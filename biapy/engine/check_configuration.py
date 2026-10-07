@@ -1489,6 +1489,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
         )
 
+    balance = cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS
+    if balance.ENABLE:
+        if cfg.PROBLEM.TYPE != "IMAGE_TO_IMAGE":
+            raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS' can only be used when 'PROBLEM.TYPE' is 'IMAGE_TO_IMAGE'")
+        if not 0 <= balance.ALPHA <= 1:
+            raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ALPHA' must be in [0, 1]")
+        if re.compile(balance.REGEX).groups < 1:
+            raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.REGEX' needs a capture group with the group id")
+
     if cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH and cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
         raise ValueError(
             "'DATA.TRAIN.PROBABILITY_MAP' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"

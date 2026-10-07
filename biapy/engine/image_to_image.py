@@ -911,11 +911,12 @@ class Image_to_Image_Workflow(Base_Workflow):
             pred = pred.astype(np.float32)
 
         if per_image_target:
-            # Metrics in the per-image target space
+            # Metrics in a per-image [0,1] space whatever the target type, so data_range=1 holds
+            metric_norm = {**target_norm_override, "type": "scale_range"}
             self.test_data_range = 1.0
-            pred = self._per_image_target_norm(pred, target_norm_override)
+            pred = self._per_image_target_norm(pred, metric_norm)
             if self.current_sample["Y"] is not None:
-                self.current_sample["Y"] = self._per_image_target_norm(self.current_sample["Y"], target_norm_override)
+                self.current_sample["Y"] = self._per_image_target_norm(self.current_sample["Y"], metric_norm)
 
         if self.current_sample["Y"] is not None:
             if self.current_sample["Y"].dtype == np.dtype("uint16"):
