@@ -564,10 +564,11 @@ def build_model(
     # within the models, so the architectures stay self-contained (e.g. when they are exported to
     # the BioImage Model Zoo, where the weights shipped are the trained ones).
     vit_backbone = cfg.MODEL.UNETR_VIT_MODEL if modelname == "unetr" else cfg.MODEL.VIT_MODEL
-    if modelname in ["vit", "unetr", "dpt", "vit_readout"] and vit_backbone in ["sam3_vit", "celldino_vit"] and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
+    vit_backbone_names = {"sam3_vit": "SAM 3", "celldino_vit": "Cell-DINO", "dinov3_vit": "DINOv3"}
+    if modelname in ["vit", "unetr", "dpt", "vit_readout"] and vit_backbone in vit_backbone_names and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
         if cfg.MODEL.LOAD_CHECKPOINT:
             print(
-                f"Skipping the download of {'SAM 3' if vit_backbone == 'sam3_vit' else 'Cell-DINO'}'s pretrained "
+                f"Skipping the download of {vit_backbone_names[vit_backbone]}'s pretrained "
                 "weights, as 'MODEL.LOAD_CHECKPOINT' is enabled and the checkpoint loaded afterwards would "
                 "replace them"
             )
@@ -575,6 +576,10 @@ def build_model(
             from biapy.models.sam3_vit import load_sam3_pretrained_encoder
 
             load_sam3_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
+        elif vit_backbone == "dinov3_vit":
+            from biapy.models.dinov3_vit import load_dinov3_pretrained_encoder
+
+            load_dinov3_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
         else:
             from biapy.models.celldino_vit import load_celldino_pretrained_encoder
 

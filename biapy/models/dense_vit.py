@@ -14,7 +14,8 @@ it adds:
 
 The attribute names (``patch_embed.proj``, ``cls_token``, ``pos_embed``, ``blocks``, ``norm``) follow timm/DINOv2,
 so pretrained encoders (e.g. Cell-DINO through ``biapy.models.celldino_vit.load_celldino_pretrained_encoder``) load
-directly into them.
+directly into them. With "dinov3_vit" the blocks are DINOv3's ones (``biapy.models.dinov3_vit``): rotary position
+embeddings instead of ``pos_embed`` and register tokens (``reg_token``) between the class token and the patch tokens.
 """
 
 from functools import partial
@@ -28,6 +29,7 @@ from timm.layers import trunc_normal_
 
 from biapy.models.blocks import prepare_activation_layers
 from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
+from biapy.models.dinov3_vit import DINOV3_VIT_PARAMS, build_dinov3_blocks
 
 # Predefined ViT backbones. "custom" uses the values passed to the model; the rest are fully defined by the preset.
 # Optional "init_values" enables LayerScale and "norm_eps" sets the epsilon of the LayerNorms (1e-6 otherwise).
@@ -43,6 +45,15 @@ DENSE_VIT_MODELS = {
         mlp_ratio=CELLDINO_VIT_PARAMS["mlp_ratio"],
         init_values=CELLDINO_VIT_PARAMS["init_values"],
         norm_eps=CELLDINO_VIT_PARAMS["norm_eps"],
+    ),
+    "dinov3_vit": dict(
+        patch_size=DINOV3_VIT_PARAMS["patch_size"],
+        embed_dim=DINOV3_VIT_PARAMS["embed_dim"],
+        depth=DINOV3_VIT_PARAMS["depth"],
+        num_heads=DINOV3_VIT_PARAMS["num_heads"],
+        mlp_ratio=DINOV3_VIT_PARAMS["mlp_ratio"],
+        init_values=DINOV3_VIT_PARAMS["init_values"],
+        norm_eps=DINOV3_VIT_PARAMS["norm_eps"],
     ),
 }
 
@@ -165,22 +176,30 @@ class DenseViTBase(nn.Module):
         )
         self.grid_size = self.patch_embed.grid_size
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches + 1, embed_dim))
         drop_path = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]
-        self.blocks = nn.ModuleList(
-            [
-                Block(
-                    embed_dim,
-                    num_heads,
-                    mlp_ratio,
-                    qkv_bias=True,
-                    init_values=init_values,
-                    drop_path=drop_path[i],
-                    norm_layer=norm_layer,
-                )
-                for i in range(depth)
-            ]
-        )
+        if vit_model == "dinov3_vit":
+            # DINOv3: no position embedding (RoPE within the blocks) and register tokens after the class token
+            num_reg = DINOV3_VIT_PARAMS["num_register_tokens"]
+            self.reg_token = nn.Parameter(torch.zeros(1, num_reg, embed_dim))
+            self.pos_embed = None
+            self.blocks = build_dinov3_blocks((self.grid_size, self.grid_size), 1 + num_reg, drop_path)
+        else:
+            self.reg_token = None
+            self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches + 1, embed_dim))
+            self.blocks = nn.ModuleList(
+                [
+                    Block(
+                        embed_dim,
+                        num_heads,
+                        mlp_ratio,
+                        qkv_bias=True,
+                        init_values=init_values,
+                        drop_path=drop_path[i],
+                        norm_layer=norm_layer,
+                    )
+                    for i in range(depth)
+                ]
+            )
         self.norm = norm_layer(embed_dim)
         print(
             f"{type(self).__name__}'s ViT: {depth} blocks, {patch_size}x{patch_size} tokens with stride "
@@ -189,7 +208,10 @@ class DenseViTBase(nn.Module):
 
     def _init_encoder_weights(self):
         """Initialize the encoder as timm's ViT does (pretrained weights, if any, are loaded afterwards)."""
-        trunc_normal_(self.pos_embed, std=0.02)
+        if self.pos_embed is not None:
+            trunc_normal_(self.pos_embed, std=0.02)
+        if self.reg_token is not None:
+            nn.init.normal_(self.reg_token, std=0.02)
         nn.init.normal_(self.cls_token, std=1e-6)
 
         def _init(m):
@@ -219,11 +241,17 @@ class DenseViTBase(nn.Module):
         Returns
         -------
         List[torch.Tensor]
-            One ``(B, 1 + N, embed_dim)`` tensor per selected block, class token first, after the final norm.
+            One ``(B, 1 + N, embed_dim)`` tensor per selected block, class token first, after the final norm. The
+            register tokens, if any, are dropped.
         """
         B = x.shape[0]
         x = self.patch_embed(x)
-        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1) + self.pos_embed
+        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
+        if self.pos_embed is not None:
+            x = x + self.pos_embed
+        if self.reg_token is not None:
+            x = torch.cat((x[:, :1], self.reg_token.expand(B, -1, -1), x[:, 1:]), dim=1)
+        num_reg = 0 if self.reg_token is None else self.reg_token.shape[1]
         outs = []
         for i, blk in enumerate(self.blocks):
             if self.grad_checkpointing and self.training and torch.is_grad_enabled():
@@ -231,7 +259,8 @@ class DenseViTBase(nn.Module):
             else:
                 x = blk(x)
             if i + 1 in layers:
-                outs.append(self.norm(x))
+                y = self.norm(x)
+                outs.append(torch.cat((y[:, :1], y[:, 1 + num_reg :]), dim=1) if num_reg > 0 else y)
         return outs
 
     def tokens_to_map(self, tokens: torch.Tensor) -> torch.Tensor:

@@ -18,6 +18,7 @@ Functions:
 - ``vit_huge_patch14``: Factory function for a huge-sized ViT model with 14x14 patches.
 - ``sam3_vit``: Factory function for a ViT with SAM 3's image encoder as backbone.
 - ``celldino_vit``: Factory function for a ViT with Cell-DINO's channel-adaptive image encoder as backbone.
+- ``dinov3_vit``: Factory function for a ViT with DINOv3's ViT-L/16 image encoder as backbone.
 
 References:
 
@@ -37,6 +38,7 @@ from biapy.models.blocks import prepare_activation_layers
 from biapy.models.tr_layers import PatchEmbed
 from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
 from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
+from biapy.models.dinov3_vit import DINOV3_VIT_PARAMS, build_dinov3_blocks
 
 
 class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
@@ -119,8 +121,10 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
             bias=True,
         )
         num_patches = self.patch_embed.num_patches
-        embed_len = num_patches if self.no_embed_class else num_patches + self.num_prefix_tokens
-        self.pos_embed = nn.Parameter(torch.randn(1, embed_len, kwargs["embed_dim"]) * 0.02)
+        # Models built without position embedding (e.g. DINOv3's, which uses RoPE within its blocks) keep it that way
+        if self.pos_embed is not None:
+            embed_len = num_patches if self.no_embed_class else num_patches + self.num_prefix_tokens
+            self.pos_embed = nn.Parameter(torch.randn(1, embed_len, kwargs["embed_dim"]) * 0.02)
 
     def forward_features(self, x):
         """
@@ -150,7 +154,11 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
-        x = x + self.pos_embed
+        if self.pos_embed is not None:
+            x = x + self.pos_embed
+        # Register tokens (e.g. DINOv3's) go between the class token and the patch tokens
+        if self.reg_token is not None:
+            x = torch.cat((x[:, :1], self.reg_token.expand(B, -1, -1), x[:, 1:]), dim=1)
         x = self.pos_drop(x)
         # Normalization applied before the blocks. It is an identity unless the model was created
         # with 'pre_norm', which is the case of the SAM 3 backbone (its 'ln_pre' layer).
@@ -160,7 +168,7 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
             x = blk(x)
 
         if self.global_pool:
-            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+            x = x[:, self.num_prefix_tokens :, :].mean(dim=1)  # global pool without cls (and register) tokens
             outcome = self.fc_norm(x)
         else:
             x = self.norm(x)
@@ -365,5 +373,43 @@ def celldino_vit(**kwargs):
     print(
         f"Cell-DINO image encoder built with {params['depth']} blocks, {params['embed_dim']} "
         f"embedding dimensions and {params['patch_size']}x{params['patch_size']} tokens"
+    )
+    return model
+
+
+def dinov3_vit(**kwargs):
+    """
+    Create a ViT with DINOv3's ViT-L/16 image encoder as backbone.
+
+    The encoder is built as DINOv3's one (2D rotary position embeddings within the blocks instead of a learned
+    position embedding, 4 register tokens, LayerScale), so its pretrained weights can be loaded into it afterwards
+    with `biapy.models.dinov3_vit.load_dinov3_pretrained_encoder`. Every ViT parameter defining the architecture,
+    the token size included, is ignored, as it is set by the encoder itself.
+    """
+    params = DINOV3_VIT_PARAMS
+    if kwargs.get("ndim", 2) != 2:
+        raise ValueError("'dinov3_vit' can only be used with 2D data.")
+    for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "init_values"]:
+        kwargs.pop(k, None)
+
+    model = VisionTransformer(
+        patch_size=params["patch_size"],
+        embed_dim=params["embed_dim"],
+        # The blocks are replaced below by DINOv3's ones, so only one is created here
+        depth=1,
+        num_heads=params["num_heads"],
+        mlp_ratio=params["mlp_ratio"],
+        qkv_bias=params["qkv_bias"],
+        norm_layer=partial(nn.LayerNorm, eps=params["norm_eps"]),
+        reg_tokens=params["num_register_tokens"],
+        pos_embed="none",
+        **kwargs,
+    )
+    nn.init.normal_(model.reg_token, std=0.02)
+    grid_size = model.patch_embed.grid_size
+    model.blocks = build_dinov3_blocks((grid_size, grid_size), num_prefix_tokens=model.num_prefix_tokens)
+    print(
+        f"DINOv3 image encoder built with {params['depth']} blocks over a {grid_size}x{grid_size} token grid "
+        f"({params['patch_size']}x{params['patch_size']} tokens)"
     )
     return model

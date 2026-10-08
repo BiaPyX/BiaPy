@@ -41,6 +41,7 @@ from biapy.models.tr_layers import PatchEmbed
 from biapy.models.heads import ProjectionHead
 from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
 from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
+from biapy.models.dinov3_vit import DINOV3_VIT_PARAMS, build_dinov3_blocks
 
 # Predefined ViT backbones for UNETR's encoder. "custom" uses the values passed to the model; the
 # rest are fully defined by the preset. Optional "init_values" enables LayerScale and "norm_eps" sets the
@@ -64,6 +65,15 @@ UNETR_VIT_MODELS = {
         mlp_ratio=CELLDINO_VIT_PARAMS["mlp_ratio"],
         init_values=CELLDINO_VIT_PARAMS["init_values"],
         norm_eps=CELLDINO_VIT_PARAMS["norm_eps"],
+    ),
+    "dinov3_vit": dict(
+        patch_size=DINOV3_VIT_PARAMS["patch_size"],
+        embed_dim=DINOV3_VIT_PARAMS["embed_dim"],
+        depth=DINOV3_VIT_PARAMS["depth"],
+        num_heads=DINOV3_VIT_PARAMS["num_heads"],
+        mlp_ratio=DINOV3_VIT_PARAMS["mlp_ratio"],
+        init_values=DINOV3_VIT_PARAMS["init_values"],
+        norm_eps=DINOV3_VIT_PARAMS["norm_eps"],
     ),
 }
 
@@ -259,6 +269,8 @@ class UNETR(nn.Module):
                         f"'celldino_vit' needs {CELLDINO_VIT_PARAMS['in_chans']} input channel, "
                         f"'DATA.PATCH_SIZE' has {input_shape[-1]}."
                     )
+            if vit_model == "dinov3_vit" and len(input_shape) == 4:
+                raise ValueError("'dinov3_vit' can only be used with 2D data.")
             vit_params = UNETR_VIT_MODELS[vit_model]
             patch_size = vit_params["patch_size"]
             embed_dim = vit_params["embed_dim"]
@@ -357,8 +369,23 @@ class UNETR(nn.Module):
         self.pos_embed = nn.Parameter(
             torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False
         )  # fixed sin-cos embedding
+        self.reg_token = None
 
-        if vit_model == "sam3_vit":
+        if vit_model == "dinov3_vit":
+            # DINOv3's encoder: no position embedding (RoPE within its blocks) and register tokens after the
+            # class token
+            grid_size = self.patch_embed.grid_size
+            num_reg = DINOV3_VIT_PARAMS["num_register_tokens"]
+            self.pos_embed = None
+            self.reg_token = nn.Parameter(torch.zeros(1, num_reg, embed_dim))
+            nn.init.normal_(self.reg_token, std=0.02)
+            self.blocks = build_dinov3_blocks((grid_size, grid_size), num_prefix_tokens=1 + num_reg)
+            self.ln_pre = nn.Identity()
+            print(
+                f"DINOv3 encoder built with {depth} blocks over a {grid_size}x{grid_size} token grid "
+                f"({patch_size}x{patch_size} tokens)"
+            )
+        elif vit_model == "sam3_vit":
             # SAM 3's encoder: rotary position embeddings and window attention within its blocks,
             # plus a layer normalization applied to the tokens before them
             grid_size = self.patch_embed.grid_size
@@ -537,9 +564,15 @@ class UNETR(nn.Module):
         # Add class token and positional embeddings
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
-        x = x + self.pos_embed
+        if self.pos_embed is not None:
+            x = x + self.pos_embed
         # Identity unless SAM 3's encoder is used, where it is its 'ln_pre' layer
         x = self.ln_pre(x)
+        # DINOv3's register tokens go between the class token and the patch tokens
+        num_prefix = 1
+        if self.reg_token is not None:
+            x = torch.cat((x[:, :1], self.reg_token.expand(B, -1, -1), x[:, 1:]), dim=1)
+            num_prefix += self.reg_token.shape[1]
 
         # Collect skip connections from ViT blocks
         skip_connection_index = [self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)]
@@ -547,11 +580,11 @@ class UNETR(nn.Module):
         for i, blk in enumerate(self.blocks):
             x = blk(x)
             if (i + 1) in skip_connection_index:
-                skip_connections.insert(0, x[:, 1:, :])
+                skip_connections.insert(0, x[:, num_prefix:, :])
 
         # CNN Decoder
         # Bottleneck: Reshape ViT output (excluding class token) and apply transposed conv
-        x = self.bottleneck(self.proj_feat(x[:, 1:, :]))
+        x = self.bottleneck(self.proj_feat(x[:, num_prefix:, :]))
 
         # Decoder's upsampling path
         for i, layers in enumerate(zip(self.mid_blue_block, self.two_yellow_layers, self.up_green_layers)):

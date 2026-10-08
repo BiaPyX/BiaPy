@@ -1646,17 +1646,22 @@ class Config:
         # 5.1.2 Transformer-based architectures options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14",
-        # "sam3_vit" and "celldino_vit". "custom" uses the rest of the 'MODEL.VIT_*' variables; the rest set them
-        # automatically. "sam3_vit" (SAM 3's image encoder, 14x14 tokens) and "celldino_vit" (Cell-DINO's
+        # "sam3_vit", "celldino_vit" and "dinov3_vit". "custom" uses the rest of the 'MODEL.VIT_*' variables; the rest
+        # set them automatically. "sam3_vit" (SAM 3's image encoder, 14x14 tokens), "celldino_vit" (Cell-DINO's
         # channel-adaptive ViT-L/16, https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013828,
-        # 16x16 tokens, 1 input channel) are both 2D only and initializable via 'MODEL.VIT_PRETRAINED_WEIGHTS'.
+        # 16x16 tokens, 1 input channel) and "dinov3_vit" (DINOv3's ViT-L/16, https://arxiv.org/abs/2508.10104, 16x16
+        # tokens, RoPE and 4 register tokens) are 2D only and initializable via 'MODEL.VIT_PRETRAINED_WEIGHTS'.
         _C.MODEL.VIT_MODEL = "custom"
-        # Pretrained weights for the ViT backbone. Leave empty to train from scratch. Only used with "sam3_vit" or
-        # "celldino_vit":
+        # Pretrained weights for the ViT backbone. Leave empty to train from scratch. Only used with "sam3_vit",
+        # "celldino_vit" or "dinov3_vit":
         #   - "sam3_vit": a Hugging Face repo (e.g. "facebook/sam3") or local file path. Gated model: accept the
         #     license at https://huggingface.co/facebook/sam3 and authenticate ("hf auth login" or HF_TOKEN).
         #   - "celldino_vit": local path to the "channel_adaptive_dino_vitl16" checkpoint. Not on the HF Hub; request
         #     access at https://ai.meta.com/resources/models-and-libraries/cell-dino-downloads/ and download manually.
+        #   - "dinov3_vit": a Hugging Face repo ("facebook/dinov3-vitl16-pretrain-lvd1689m"), a URL or a local file
+        #     path (original "dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth" or HF "model.safetensors"). Gated model:
+        #     request access on its HF page and authenticate, or at https://ai.meta.com/resources/models-and-libraries/dinov3-downloads/.
+        #     Its RGB patch embedding is adapted to 1 channel by adding up its kernels; other channel counts need "".
         # Ignored when 'MODEL.LOAD_CHECKPOINT' is enabled.
         _C.MODEL.VIT_PRETRAINED_WEIGHTS = ""
         # Size of the patches (tokens) that are extracted from the input image. Only used when the ViT model selected

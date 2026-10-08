@@ -3159,6 +3159,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "vit_huge_patch14",
                 "sam3_vit",
                 "celldino_vit",
+                "dinov3_vit",
             ]
             if model_arch == "unetr":
                 vit_backbone, vit_backbone_var = cfg.MODEL.UNETR_VIT_MODEL, "MODEL.UNETR_VIT_MODEL"
@@ -3222,7 +3223,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if not check_value(cfg.MODEL.VIT_DROP_PATH_RATE):
                     raise ValueError("'MODEL.VIT_DROP_PATH_RATE' not in [0, 1] range")
                 if model_arch == "dpt":
-                    depth = cfg.MODEL.VIT_NUM_LAYERS if custom_vit else {"vit_base_patch16": 12, "vit_large_patch16": 24, "vit_huge_patch14": 32, "celldino_vit": 24}[vit_backbone]
+                    depth = cfg.MODEL.VIT_NUM_LAYERS if custom_vit else {"vit_base_patch16": 12, "vit_large_patch16": 24, "vit_huge_patch14": 32, "celldino_vit": 24, "dinov3_vit": 24}[vit_backbone]
                     layers = list(cfg.MODEL.DPT.LAYERS)
                     if len(layers) > 0 and (
                         len(layers) != 4
@@ -3285,10 +3286,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError(
                         f"'celldino_vit' needs 1 input channel, 'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}."
                     )
+            elif vit_backbone == "dinov3_vit":
+                if cfg.PROBLEM.NDIM == "3D":
+                    raise ValueError(f"'{vit_backbone_var}' can not be 'dinov3_vit' with 3D data.")
+                if cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "" and cfg.DATA.PATCH_SIZE[-1] not in [1, 3]:
+                    raise ValueError(
+                        "DINOv3's pretrained weights can only be loaded with 1 or 3 input channels, but "
+                        f"'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}. DINOv3 was trained on RGB images, and BiaPy "
+                        "can only adapt its patch embedding automatically when the input is grayscale (1 channel). "
+                        "Convert the data to 1 or 3 channels, or set 'MODEL.VIT_PRETRAINED_WEIGHTS' to '' to train "
+                        "from scratch."
+                    )
             elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
                 raise ValueError(
-                    "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit' or "
-                    f"'celldino_vit', as those are the only ones with pretrained weights available. "
+                    "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit', "
+                    f"'celldino_vit' or 'dinov3_vit', as those are the only ones with pretrained weights available. "
                     f"'{vit_backbone_var}' is set to '{vit_backbone}'."
                 )
         elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
