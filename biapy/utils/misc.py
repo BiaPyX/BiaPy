@@ -514,6 +514,97 @@ def get_checkpoint_path(cfg, jobname):
             raise NotImplementedError
     return resume
 
+# Layer renames done after BiaPy v3.6.8, when U-Net like models started to support separated decoders
+# per head (decoder layers are now wrapped in a list with one entry per decoder) and the output layers
+# were unified under 'heads'. Each entry is (regex of the old key, replacement).
+OLD_CHECKPOINT_KEY_RENAMES = [
+    (r"^up_path\.(\d+)\.", r"up_paths.0.\1."),
+    (r"^attentions\.(\d+)\.(?!\d)", r"attentions.0.\1."),
+    (r"^aspp_out\.(?!\d)", r"aspp_out.0."),
+    (r"^conv_out\.(?!\d)", r"conv_out.0."),
+    (r"^last_block\.(?!conv1\.|batchnorm\.)", r"heads.0."),
+    (r"^last_class_head\.", r"heads.1."),
+]
+
+
+def adapt_old_checkpoint_state_dict(
+    checkpoint_state_dict: Dict, model: torch.nn.Module, biapy_version: Optional[str] = None
+) -> Dict:
+    """
+    Adapt the state dict of a checkpoint created with an older BiaPy version to the current model definition.
+
+    It is intended to be called only when the checkpoint can not be loaded directly. The following changes are
+    handled:
+
+    - Layer renames listed in ``OLD_CHECKPOINT_KEY_RENAMES`` (e.g. ``up_path.N`` -> ``up_paths.0.N`` and
+      ``last_block`` -> ``heads.0``). A key is only renamed if the new name exists in the model with the
+      same shape.
+    - MultiResUNet's old output layer (``last_block``), a convolution followed by batch normalization, which
+      is folded into the current single convolution head (``heads.0``).
+
+    Parameters
+    ----------
+    checkpoint_state_dict : dict
+        State dict stored in the checkpoint.
+
+    model : nn.Module
+        Model (unwrapped if DDP is used) the weights are going to be loaded into.
+
+    biapy_version : str, optional
+        BiaPy version that created the checkpoint. Only used for printing.
+
+    Returns
+    -------
+    dict
+        Adapted state dict.
+    """
+    print(
+        "Trying to adapt the checkpoint (created with BiaPy {}) to the current model definition . . .".format(
+            biapy_version if biapy_version else "unknown version"
+        )
+    )
+    model_state_dict = model.state_dict()
+
+    def fits_model(key, value):
+        return key in model_state_dict and torch.is_tensor(value) and value.shape == model_state_dict[key].shape
+
+    adapted_state_dict = {}
+    renamed = 0
+    for k, v in checkpoint_state_dict.items():
+        new_k = k
+        for pattern, replacement in OLD_CHECKPOINT_KEY_RENAMES:
+            new_k = re.sub(pattern, replacement, new_k)
+        if new_k != k and k not in model_state_dict and fits_model(new_k, v):
+            renamed += 1
+        else:
+            new_k = k
+        adapted_state_dict[new_k] = v
+
+    # MultiResUNet: old output layer was 'Conv_batchnorm' (conv + batch norm, without activation). The batch
+    # norm in inference mode is an affine transformation so it can be folded into the convolution
+    bn_keys = ["last_block.batchnorm." + x for x in ["weight", "bias", "running_mean", "running_var"]]
+    if "last_block.conv1.weight" in adapted_state_dict and "heads.0.weight" in model_state_dict:
+        w = adapted_state_dict["last_block.conv1.weight"]
+        b = adapted_state_dict.get("last_block.conv1.bias", torch.zeros(w.shape[0], dtype=w.dtype, device=w.device))
+        if all(x in adapted_state_dict for x in bn_keys):
+            gamma, beta, mean, var = [adapted_state_dict[x] for x in bn_keys]
+            scale = gamma / torch.sqrt(var + 1e-5)
+            w = w * scale.view(-1, *([1] * (w.dim() - 1)))
+            b = (b - mean) * scale + beta
+            folded_keys = bn_keys + ["last_block.batchnorm.num_batches_tracked"]
+        else:
+            folded_keys = []
+        if fits_model("heads.0.weight", w) and fits_model("heads.0.bias", b):
+            for x in ["last_block.conv1.weight", "last_block.conv1.bias"] + folded_keys:
+                adapted_state_dict.pop(x, None)
+            adapted_state_dict["heads.0.weight"], adapted_state_dict["heads.0.bias"] = w, b
+            renamed += 1
+            print("Old MultiResUNet output layer converted into 'heads.0'")
+
+    print("{} layers renamed to match the current model definition".format(renamed))
+    return adapted_state_dict
+
+
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False) -> Tuple[int | CN | None, str | None]:
     """
     Load a model checkpoint from disk.
@@ -610,7 +701,21 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         checkpoint_state_dict = checkpoint
 
     if not skip_unmatched_layers:
-        model_without_ddp.load_state_dict(checkpoint_state_dict, strict=True)
+        try:
+            model_without_ddp.load_state_dict(checkpoint_state_dict, strict=True)
+        except RuntimeError as e:
+            # The checkpoint may come from an older BiaPy version where some layers had different names
+            print("The checkpoint could not be loaded directly into the model. It may have been created with an older BiaPy version.")
+            biapy_version = str(checkpoint["biapy_version"]) if "biapy_version" in checkpoint else None
+            adapted_state_dict = adapt_old_checkpoint_state_dict(checkpoint_state_dict, model_without_ddp, biapy_version)
+            try:
+                model_without_ddp.load_state_dict(adapted_state_dict, strict=True)
+            except RuntimeError as e2:
+                raise RuntimeError(
+                    "The checkpoint could not be loaded, even after trying to adapt it from an older BiaPy version. "
+                    "Errors after the adaptation:\n{}".format(e2)
+                ) from e
+            print("Checkpoint adapted successfully!")
     else:
         # Filter out layers with mismatched shapes
         filtered_state_dict = {}

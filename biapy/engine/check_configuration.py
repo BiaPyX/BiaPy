@@ -4328,8 +4328,19 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             old_cfg["MODEL"]["CONV_LAYERS"] = old_cfg["MODEL"]["CONVNEXT_LAYERS"]
             del old_cfg["MODEL"]["CONVNEXT_LAYERS"]
         if "UNETR_DEC_ACTIVATION" in old_cfg["MODEL"]:
-            old_cfg["MODEL"]["ACTIVATION"] = old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
+            # 'MODEL.UNETR_DEC_ACTIVATION' existed until v3.7.0 and only applied to UNETR (the rest of the
+            # models used 'MODEL.ACTIVATION'), so only in that case it replaces 'MODEL.ACTIVATION'
+            arch = str(old_cfg["MODEL"].get("ARCHITECTURE", "unet")).lower()
+            if arch == "unetr":
+                old_cfg["MODEL"]["ACTIVATION"] = old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
             del old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
+
+            # Before v3.7.0 these models ignored 'MODEL.LARGER_IO' and 'MODEL.ISOTROPY'
+            if arch in ["unet", "attention_unet", "resunet++"]:
+                if "LARGER_IO" in old_cfg["MODEL"]:
+                    old_cfg["MODEL"]["LARGER_IO"] = False
+                if "ISOTROPY" in old_cfg["MODEL"]:
+                    old_cfg["MODEL"]["ISOTROPY"] = [True] * len(old_cfg["MODEL"]["ISOTROPY"])
         if "UNETR_DEC_KERNEL_SIZE" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["KERNEL_SIZE"] = old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
             del old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
