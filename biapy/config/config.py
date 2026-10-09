@@ -1592,6 +1592,8 @@ class Config:
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
         # Downsampling to be made in XY. This value will be the first and second integer of the MaxPooling operation. When facing anysotropic datasets set it to get better 
         # performance. Works with 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unext_v1' and 'unext_v2' architectures.
+        # Except in 'multiresunet', a level can downsample Y and X differently with a [y, x] pair, e.g. [2, 2, [1, 2]] to
+        # downsample only X in the last level (useful for very elongated images).
         _C.MODEL.YX_DOWN = [0, 0, 0, 0]
         # For each level of the model (U-Net levels), set to true or false if the dimensions of the feature maps are isotropic. Works with 'unet', 'resunet', 'resunet++',
         # 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unext_v1' and 'unext_v2' architectures.

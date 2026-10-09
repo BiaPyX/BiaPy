@@ -62,3 +62,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ['biapy*']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

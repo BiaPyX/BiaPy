@@ -59,6 +59,8 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.data.data_manipulation import (
     read_img_as_ndarray,
+    read_points_csv,
+    pair_csv_with_images,
     load_data_from_dir,
     save_tif,
     decide_dtype,
@@ -3488,11 +3490,6 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
             "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids))
         )
 
-    if cfg.PROBLEM.NDIM == "2D":
-        req_columns = ["axis-0", "axis-1"] if channels == 1 else ["axis-0", "axis-1", "class"]
-    else:
-        req_columns = ["axis-0", "axis-1", "axis-2"] if channels == 1 else ["axis-0", "axis-1", "axis-2", "class"]
-
     cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
     ellipse_footprint = generate_ellipse_footprint(cpd)
 
@@ -3502,15 +3499,15 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
     it = range(rank, len(ids), world_size)
 
     print(f"Rank {rank}: Creating {data_type} detection masks . . .")
+    pairs = pair_csv_with_images(img_ids, ids)
     for i in tqdm(it, disable=not is_main_process()):
-        img_filename = os.path.splitext(ids[i])[0] + img_ext
+        img_filename, by_name = pairs[i]
         file_path = os.path.join(label_dir, ids[i])
         
-        if not os.path.exists(os.path.join(img_dir, img_filename)):
+        if not by_name:
             warnings.warn("No image found for CSV file: {}. Using the image that's in the same spot (within the CSV files list) where "
                 "the CSV file is in its own list of CSV files. Check if it is correct!".format(file_path)
             )
-            img_filename = img_ids[i]
 
         out_path = os.path.join(out_dir, img_filename)
 
@@ -3550,15 +3547,7 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
             mask = np.zeros(out_shape, dtype=dtype_str)
 
         # 3. Process CSV points
-        df = pd.read_csv(file_path).dropna()
-        df = df.rename(columns=lambda x: x.strip())
-        cols_not_in_file = [x for x in req_columns if x not in df.columns]
-        if len(cols_not_in_file) > 0:
-            if len(cols_not_in_file) == 1:
-                m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {file_path}"
-            else:
-                m = f"{cols_not_in_file} columns are not present in CSV file: {file_path}"
-            raise ValueError(m)
+        df = read_points_csv(file_path, is_3d=cfg.PROBLEM.NDIM == "3D", with_class=channels > 1)
 
         # Obtaining coords (axis-0: Z, axis-1: Y, axis-2: X)
         coords = [df["axis-0"].astype(int), df["axis-1"].astype(int)]

@@ -3783,6 +3783,152 @@ def imread(
         return imageio.imread(path), None
 
 
+# Microns per unit of the length units found in image metadata
+_UNIT_TO_MICRONS = {
+    "nm": 1e-3, "nanometer": 1e-3, "nanometers": 1e-3,
+    "um": 1.0, "\u00b5m": 1.0, "\u03bcm": 1.0, "micron": 1.0, "microns": 1.0, "micrometer": 1.0, "micrometers": 1.0,
+    "mm": 1e3, "millimeter": 1e3, "millimeters": 1e3,
+    "cm": 1e4, "centimeter": 1e4, "centimeters": 1e4,
+    "m": 1e6, "meter": 1e6, "meters": 1e6,
+}  # fmt: skip
+
+
+def voxel_size_from_meta(meta: Optional[Dict], is_3d: bool = False) -> Optional[Tuple[float, ...]]:
+    """
+    Physical size of the pixels/voxels of an image, in microns, from the metadata returned by
+    :func:`imread` (``load_meta=True``), ordered as :func:`read_img_as_ndarray` returns the image:
+    ``(z, y, x)`` for 3D and ``(y, x)`` for 2D.
+
+    OME-XML ``PhysicalSize*`` attributes are used when present; otherwise the TIFF ``XResolution`` /
+    ``YResolution`` tags with the unit of the ImageJ metadata (or a centimeter ``ResolutionUnit``) and, in
+    3D, ImageJ's ``spacing`` (which ImageJ omits when it is 1). Resolutions in inches are ignored on purpose:
+    that is the DPI many programs write, not a microscope calibration.
+
+    Parameters
+    ----------
+    meta : dict or None
+        Metadata as returned by :func:`imread` with ``load_meta=True``.
+    is_3d : bool, optional
+        Whether the image is 3D (a Z size is then needed).
+
+    Returns
+    -------
+    voxel_size : tuple of float or None
+        Size of each axis in microns, or ``None`` if the image is not calibrated.
+    """
+    if not meta:
+        return None
+    axes = "ZYX" if is_3d else "YX"
+
+    def factor(unit):
+        return None if unit is None else _UNIT_TO_MICRONS.get(str(unit).strip().lower().replace("\\u00b5", "\u00b5"))
+
+    ome = meta.get("ome_metadata")
+    if ome:
+        import xml.etree.ElementTree as ET
+
+        try:
+            root = ET.fromstring(ome)
+            pixels = next((e for e in root.iter() if e.tag.split("}")[-1] == "Pixels"), None)
+        except ET.ParseError:
+            pixels = None
+        if pixels is not None:
+            size = {}
+            for ax in axes:
+                v, f = pixels.get("PhysicalSize" + ax), factor(pixels.get("PhysicalSize" + ax + "Unit", "\u00b5m"))
+                if v is not None and f is not None and float(v) > 0:
+                    size[ax] = float(v) * f
+            if all(ax in size for ax in axes):
+                return tuple(size[ax] for ax in axes)
+
+    ij = meta.get("imagej_metadata") or {}
+    tags = meta.get("tags") or {}
+    f = factor(ij.get("unit"))
+    if f is None and str(tags.get("ResolutionUnit", "")).upper().endswith(("3", "CENTIMETER")):
+        f = 1e4
+    if f is None:
+        return None
+
+    def pixel_size(tag):
+        r = tags.get(tag)
+        if r is None:
+            return None
+        num, den = (r if isinstance(r, (tuple, list)) and len(r) == 2 else (r, 1))
+        return float(den) / float(num) * f if num else None
+
+    size = {"X": pixel_size("XResolution"), "Y": pixel_size("YResolution")}
+    if is_3d:
+        size["Z"] = float(ij.get("spacing", 1.0)) * f
+    if any(size.get(ax) is None for ax in axes):
+        return None
+    return tuple(size[ax] for ax in axes)
+
+
+def read_points_csv(path: str, is_3d: bool = False, with_class: bool = False) -> "pd.DataFrame":
+    """
+    Read a CSV file with points (BiaPy's detection targets): columns ``axis-0``, ``axis-1`` (and ``axis-2`` in
+    3D), i.e. (y, x) or (z, y, x), and optionally ``class``. Empty rows are dropped and column names stripped.
+
+    Parameters
+    ----------
+    path : str
+        CSV file.
+    is_3d : bool, optional
+        Whether the points are 3D.
+    with_class : bool, optional
+        Whether the ``class`` column is required.
+
+    Returns
+    -------
+    points : pandas.DataFrame
+
+    Raises
+    ------
+    ValueError
+        If a required column is missing.
+    """
+    import pandas as pd
+
+    df = pd.read_csv(path).dropna()
+    df = df.rename(columns=lambda x: x.strip())
+    req_columns = ["axis-0", "axis-1"] + (["axis-2"] if is_3d else []) + (["class"] if with_class else [])
+    cols_not_in_file = [x for x in req_columns if x not in df.columns]
+    if len(cols_not_in_file) == 1:
+        raise ValueError(f"'{cols_not_in_file[0]}' column is not present in CSV file: {path}")
+    if cols_not_in_file:
+        raise ValueError(f"{cols_not_in_file} columns are not present in CSV file: {path}")
+    return df
+
+
+def pair_csv_with_images(img_ids: List[str], csv_ids: List[str]) -> List[Tuple[str, bool]]:
+    """
+    Image of each CSV file of points (detection): the one with the same name (and the images' extension), or
+    the one in the same position of the list of images if there is none.
+
+    Parameters
+    ----------
+    img_ids : list of str
+        Image file names (as listed by :func:`os_walk_clean`).
+    csv_ids : list of str
+        CSV file names (same).
+
+    Returns
+    -------
+    pairs : list of tuple
+        For each CSV file, ``(image file name, matched_by_name)``.
+    """
+    img_ext = "." + img_ids[0].split(".")[-1] if img_ids else ""
+    names = set(img_ids)
+    pairs = []
+    for i, csv_id in enumerate(csv_ids):
+        name = os.path.splitext(csv_id)[0] + img_ext
+        if name in names:
+            pairs.append((name, True))
+        else:
+            pairs.append((img_ids[i] if i < len(img_ids) else name, False))
+    return pairs
+
+
 def imwrite(path: str, image: NDArray, meta: Optional[Dict] = None):
     """
     Write ``data`` in the given ``path``.

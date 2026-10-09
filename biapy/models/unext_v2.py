@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, List
 
-from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2, get_decoder_feature_maps, prepare_activation_layers, init_weights
+from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2, get_decoder_feature_maps, prepare_activation_layers, init_weights, pool_factors
 from torchvision.ops.misc import Permute
 from biapy.models.heads import ProjectionHead
 
@@ -113,7 +113,7 @@ class U_NeXt_V2(nn.Module):
             Its length should match the number of pooling stages (`len(feature_maps) - 1`).
             Defaults to `[2, 2, 2, 2]`.
 
-        yx_down : List[int], optional
+        yx_down : List of ints or of pairs of ints, optional
             A list of downsampling factors for the y and x dimensions at each pooling
             stage in the encoder. Its length should match the number of pooling stages (`len(feature_maps) - 1`).
             Defaults to `[2, 2, 2, 2]`.
@@ -286,7 +286,7 @@ class U_NeXt_V2(nn.Module):
             sd_probs.append(sd_probs_stage)
 
             # Downsampling
-            mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
+            mpool = pool_factors(self.ndim, z_down[i], yx_down[i])
             self.downsample_layers.append(
                 nn.Sequential(
                     pre_ln_permutation,

@@ -19,7 +19,25 @@ __version__ = "3.7.1"
 import argparse
 import os
 import sys
-from ._biapy import BiaPy, build_config
+
+# The engine (BiaPy, build_config) is imported on first use: importing it loads PyTorch and every workflow,
+# which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy"}
+__all__ = ["BiaPy", "build_config", "main", "__version__"]
+
+
+def __getattr__(name):
+    if name in _LAZY:
+        import importlib
+
+        value = getattr(importlib.import_module(_LAZY[name], __name__), name)
+        globals()[name] = value  # later accesses don't go through __getattr__
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(list(globals()) + list(_LAZY))
 
 
 def main():
@@ -136,6 +154,8 @@ def main():
         help="Backend to use in distributed mode",
     )
     args = parser.parse_args()
+
+    from ._biapy import BiaPy
 
     _biapy = BiaPy(**vars(args), verbose=True)
     _biapy.run_job()

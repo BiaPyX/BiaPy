@@ -22,6 +22,29 @@ from torchvision.ops.misc import Permute
 from typing import Optional, Type, List, Tuple
 
 
+def pool_factors(ndim: int, z_down: int, yx_down) -> Tuple[int, ...]:
+    """
+    Downsampling (or upsampling) factor of each axis of a U-Net level.
+
+    Parameters
+    ----------
+    ndim : int
+        Number of spatial dimensions (2 or 3).
+    z_down : int
+        Factor of the Z axis (ignored in 2D).
+    yx_down : int or sequence of 2 ints
+        Factor of the Y and X axes: one number for both, or ``(y, x)`` to downsample them differently (e.g. the
+        long axis of very elongated images only, as ``MODEL.YX_DOWN`` allows).
+
+    Returns
+    -------
+    factors : tuple of int
+        ``(z, y, x)`` or ``(y, x)``.
+    """
+    y, x = (yx_down[0], yx_down[1]) if isinstance(yx_down, (list, tuple)) else (yx_down, yx_down)
+    return (z_down, y, x) if ndim == 3 else (y, x)
+
+
 class PermInvariantChannelSetEncoder(nn.Module):
     """
     Permutation-invariant encoder for a group of "exchangeable" single-channel inputs.
@@ -616,7 +639,7 @@ class UpBlock(nn.Module):
         z_down : int
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3.
-        yx_down : int
+        yx_down : int or sequence of 2 ints
             Downsampling factor applied in the y and x dimensions during upsampling.
             For isotropic data, this should match `z_down`. For anisotropic data, set
             accordingly (e.g., `yx_down=2` and `z_down=1` for 2D-like anisotropic data).
@@ -657,7 +680,7 @@ class UpBlock(nn.Module):
         if in_size_bridge is None:
             in_size_bridge = out_size
         block = []
-        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
+        mpool = pool_factors(ndim, z_down, yx_down)
         if up_mode == "convtranspose":
             block.append(convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool))
         elif up_mode == "upsampling":
@@ -775,7 +798,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         z_down : int, optional
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3. Defaults to 2.
-        yx_down : int
+        yx_down : int or sequence of 2 ints
             Downsampling factor applied in the y and x dimensions during upsampling.
             For isotropic data, this should match `z_down`. For anisotropic data, set
             accordingly (e.g., `yx_down=2` and `z_down=1` for 2D-like anisotropic data).
@@ -817,7 +840,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         if in_size_bridge is None:
             in_size_bridge = out_size
         block = []
-        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
+        mpool = pool_factors(ndim, z_down, yx_down)
 
         if ndim == 3:
             pre_ln_permutation = Permute([0, 2, 3, 4, 1])
@@ -948,7 +971,7 @@ class UpConvNeXtBlock_V2(nn.Module):
         z_down : int, optional
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3. Defaults to 2.
-        yx_down : int, optional
+        yx_down : int or sequence of 2 ints, optional
             Downsampling factor applied in the y and x dimensions during upsampling.
             For isotropic data, this should match `z_down`. For anisotropic data, set
             accordingly (e.g., `yx_down=2` and `z_down=1` for 2D-like anisotropic data). Defaults to 2.
@@ -988,7 +1011,7 @@ class UpConvNeXtBlock_V2(nn.Module):
         if in_size_bridge is None:
             in_size_bridge = out_size
         block = []
-        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
+        mpool = pool_factors(ndim, z_down, yx_down)
 
         if ndim == 3:
             pre_ln_permutation = Permute([0, 2, 3, 4, 1])
@@ -1542,7 +1565,7 @@ class ResUpBlock(nn.Module):
     z_down : int, optional
         Downsampling factor applied in the z-dimension for 3D data during upsampling.
         Only relevant if `ndim` is 3. Defaults to 2.
-    yx_down : int, optional
+    yx_down : int or sequence of 2 ints, optional
         Downsampling factor applied in the y and x dimensions for 2D and 3D data during upsampling.
         Only relevant if `ndim` is 2 or 3. Defaults to 2.
     up_mode : str
@@ -1622,7 +1645,7 @@ class ResUpBlock(nn.Module):
         z_down : int, optional
             Downsampling factor applied in the z-dimension for 3D data during upsampling.
             Only relevant if `ndim` is 3. Defaults to 2.
-        yx_down : int, optional
+        yx_down : int or sequence of 2 ints, optional
             Downsampling factor applied in the y and x dimensions for 2D and 3D data during upsampling.
             Only relevant if `ndim` is 2 or 3. Defaults to 2.
         up_mode : str
@@ -1661,7 +1684,7 @@ class ResUpBlock(nn.Module):
         """
         super(ResUpBlock, self).__init__()
         self.ndim = ndim
-        mpool = (z_down, yx_down, yx_down) if ndim == 3 else (yx_down, yx_down)
+        mpool = pool_factors(ndim, z_down, yx_down)
         if up_mode == "convtranspose":
             self.up = convtranspose(in_size, in_size, kernel_size=mpool, stride=mpool)
         elif up_mode == "upsampling":
@@ -2252,7 +2275,7 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
     z_down : int, optional
         Downsampling factor for the z-dimension (depth) in 3D max-pooling.
         Only relevant if `conv` is `nn.Conv3d`. Defaults to 2.
-    yx_down : int, optional
+    yx_down : int or sequence of 2 ints, optional
         Downsampling factor for the y and x dimensions in 2D and 3D max-pooling. Defaults to 2.
     norm : str, optional
         Normalization layer type to use within the convolutional sub-blocks.
@@ -2292,7 +2315,7 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
             The desired number of channels for the intermediate feature maps.
         z_down : int, optional
             Downsampling factor for the z-dimension in 3D max-pooling. Defaults to 2.
-        yx_down : int, optional
+        yx_down : int or sequence of 2 ints, optional
             Downsampling factor for the y and x dimensions in 2D and 3D max-pooling. Defaults to 2.
         norm : str, optional
             Normalization layer type to use within the convolutional blocks. Defaults to "none".
@@ -2308,7 +2331,7 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         block += [
             nn.ReLU(),
             conv(input_encoder, output_dim, 3, padding=1),
-            maxpool((yx_down, yx_down)) if conv == nn.Conv2d else maxpool((z_down, yx_down, yx_down)),
+            maxpool(pool_factors(2 if conv == nn.Conv2d else 3, z_down, yx_down)),
         ]
         self.conv_encoder = nn.Sequential(*block)
 

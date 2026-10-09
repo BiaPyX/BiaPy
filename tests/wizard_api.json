@@ -1,0 +1,234 @@
+{
+ "API_VERSION": 1,
+ "results": [
+  "REPRESENTATIONS/A",
+  "REPRESENTATIONS/A/channels",
+  "REPRESENTATIONS/A/creation",
+  "REPRESENTATIONS/A/description",
+  "REPRESENTATIONS/A/name",
+  "REPRESENTATIONS/A/only_3d",
+  "REPRESENTATIONS/Db_R",
+  "REPRESENTATIONS/Db_R/channels",
+  "REPRESENTATIONS/Db_R/creation",
+  "REPRESENTATIONS/Db_R/description",
+  "REPRESENTATIONS/Db_R/name",
+  "REPRESENTATIONS/F_C",
+  "REPRESENTATIONS/F_C/channels",
+  "REPRESENTATIONS/F_C/description",
+  "REPRESENTATIONS/F_C/name",
+  "REPRESENTATIONS/F_Db",
+  "REPRESENTATIONS/F_Db/channels",
+  "REPRESENTATIONS/F_Db/description",
+  "REPRESENTATIONS/F_Db/name",
+  "REPRESENTATIONS/F_G",
+  "REPRESENTATIONS/F_G/channels",
+  "REPRESENTATIONS/F_G/channels_3d_extra",
+  "REPRESENTATIONS/F_G/creation",
+  "REPRESENTATIONS/F_G/description",
+  "REPRESENTATIONS/F_G/name",
+  "REPRESENTATIONS/F_HV",
+  "REPRESENTATIONS/F_HV/channels",
+  "REPRESENTATIONS/F_HV/channels_3d_extra",
+  "REPRESENTATIONS/F_HV/description",
+  "REPRESENTATIONS/F_HV/name",
+  "REPRESENTATIONS/F_P",
+  "REPRESENTATIONS/F_P/channels",
+  "REPRESENTATIONS/F_P/description",
+  "REPRESENTATIONS/F_P/extra",
+  "REPRESENTATIONS/F_P/extra/P",
+  "REPRESENTATIONS/F_P/extra/P/type",
+  "REPRESENTATIONS/F_P/name",
+  "REPRESENTATIONS/F_S",
+  "REPRESENTATIONS/F_S/channels",
+  "REPRESENTATIONS/F_S/description",
+  "REPRESENTATIONS/F_S/extra",
+  "REPRESENTATIONS/F_S/extra/P",
+  "REPRESENTATIONS/F_S/extra/P/type",
+  "REPRESENTATIONS/F_S/name",
+  "build_config/report/applied",
+  "build_config/report/lines",
+  "build_config/report/plan",
+  "build_config/report/spacing",
+  "build_config/report/spacing_source",
+  "check_folder(classification)/data_constraints",
+  "check_folder(classification)/data_constraints/DATA.N_CLASSES",
+  "check_folder(classification)/data_constraints/DATA.PATCH_SIZE_C",
+  "check_folder(classification)/data_constraints/DATA.TRAIN.PATH",
+  "check_folder(classification)/data_constraints/DATA.TRAIN.PATH_path",
+  "check_folder(classification)/error",
+  "check_folder(classification)/error_message",
+  "check_folder(classification)/sample_info",
+  "check_folder(classification)/sample_info/dir_name",
+  "check_folder(detection points)/data_constraints",
+  "check_folder(detection points)/data_constraints/DATA.TRAIN.GT_PATH",
+  "check_folder(detection points)/data_constraints/DATA.TRAIN.GT_PATH_path",
+  "check_folder(detection points)/error",
+  "check_folder(detection points)/error_message",
+  "check_folder(detection points)/sample_info",
+  "check_folder(detection points)/sample_info/dir_name",
+  "check_folder(detection points)/sample_info/fingerprint",
+  "check_folder(error)/data_constraints",
+  "check_folder(error)/error",
+  "check_folder(error)/error_message",
+  "check_folder(error)/sample_info",
+  "check_folder(instance masks)/data_constraints",
+  "check_folder(instance masks)/data_constraints/DATA.N_CLASSES",
+  "check_folder(instance masks)/data_constraints/DATA.TRAIN.GT_PATH",
+  "check_folder(instance masks)/data_constraints/DATA.TRAIN.GT_PATH_path",
+  "check_folder(instance masks)/data_constraints/DATA.TRAIN.GT_PATH_path_shapes",
+  "check_folder(instance masks)/error",
+  "check_folder(instance masks)/error_message",
+  "check_folder(instance masks)/sample_info",
+  "check_folder(instance masks)/sample_info/dir_name",
+  "check_folder(instance masks)/sample_info/fingerprint",
+  "check_folder(instance masks)/sample_info/fingerprint/morphology_summary",
+  "check_folder(instance masks)/sample_info/fingerprint/representations",
+  "check_folder(instance masks)/sample_info/fingerprint/representations/[]/available",
+  "check_folder(instance masks)/sample_info/fingerprint/representations/[]/id",
+  "check_folder(instance masks)/sample_info/fingerprint/representations/[]/reason",
+  "check_folder(instance masks)/sample_info/fingerprint/representations/[]/recommended",
+  "check_folder(raw images)/data_constraints",
+  "check_folder(raw images)/data_constraints/DATA.PATCH_SIZE_C",
+  "check_folder(raw images)/data_constraints/DATA.TRAIN.PATH",
+  "check_folder(raw images)/data_constraints/DATA.TRAIN.PATH_path",
+  "check_folder(raw images)/data_constraints/DATA.TRAIN.PATH_path_shapes",
+  "check_folder(raw images)/error",
+  "check_folder(raw images)/error_message",
+  "check_folder(raw images)/sample_info",
+  "check_folder(raw images)/sample_info/dir_name",
+  "check_folder(raw images)/sample_info/fingerprint",
+  "preview(detection points)/columns",
+  "preview(detection points)/notes",
+  "preview(detection points)/samples",
+  "preview(detection points)/samples/[]/raw_name",
+  "preview(detection points)/samples/[]/raw_png",
+  "preview(detection points)/samples/[]/target_name",
+  "preview(detection points)/samples/[]/target_png",
+  "preview(detection points)/warnings",
+  "preview(instance masks)/columns",
+  "preview(instance masks)/notes",
+  "preview(instance masks)/samples",
+  "preview(instance masks)/samples/[]/raw_name",
+  "preview(instance masks)/samples/[]/raw_png",
+  "preview(instance masks)/samples/[]/target_name",
+  "preview(instance masks)/samples/[]/target_png",
+  "preview(instance masks)/warnings"
+ ],
+ "signatures": {
+  "config_builder.WizardError": {
+   "kind": "class"
+  },
+  "config_builder.build_config": {
+   "kind": "function",
+   "parameters": [
+    [
+     "answers",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "gpus",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ]
+   ]
+  },
+  "config_builder.to_jsonable": {
+   "kind": "function",
+   "parameters": [
+    [
+     "obj",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ]
+   ]
+  },
+  "config_builder.write_config": {
+   "kind": "function",
+   "parameters": [
+    [
+     "cfg",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "report",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "yaml_file",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "tool",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ]
+   ]
+  },
+  "data_check.check_folder": {
+   "kind": "function",
+   "parameters": [
+    [
+     "folder",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "key",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "workflow",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "ndim",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "progress",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ]
+   ]
+  },
+  "instance_seg.REPRESENTATIONS": {
+   "kind": "dict"
+  },
+  "planning.query_gpus": {
+   "kind": "function",
+   "parameters": []
+  },
+  "preview.preview": {
+   "kind": "function",
+   "parameters": [
+    [
+     "workflow",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "ndim",
+     "POSITIONAL_OR_KEYWORD",
+     false
+    ],
+    [
+     "raw_folder",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ],
+    [
+     "target_folder",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ]
+   ]
+  }
+ }
+}

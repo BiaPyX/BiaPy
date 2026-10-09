@@ -2758,14 +2758,25 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             else:
                 raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
-    # Adjust YX_DOWN 
+    # Adjust YX_DOWN. Each level's factor is one number for Y and X, or a (y, x) pair in the U-Nets that accept it
+    yx_pairs_allowed = model_arch in [
+        "unet", "resunet", "resunet++", "seunet", "resunet_se", "attention_unet", "unext_v1", "unext_v2"
+    ]
     if all(x == 0 for x in cfg.MODEL.YX_DOWN):
         if model_arch == "multiresunet":
             opts.extend(["MODEL.YX_DOWN", (2, 2, 2, 2)])
         else:
             opts.extend(["MODEL.YX_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
-    elif any([False for x in cfg.MODEL.YX_DOWN if x != 1 and x != 2]):
-        raise ValueError("'MODEL.YX_DOWN' needs to be 1 or 2")
+    elif any(isinstance(x, (list, tuple)) for x in cfg.MODEL.YX_DOWN) and not yx_pairs_allowed:
+        raise ValueError(
+            "'MODEL.YX_DOWN' can only have (y, x) pairs with the 'unet', 'resunet', 'resunet++', 'seunet', "
+            "'resunet_se', 'attention_unet', 'unext_v1' and 'unext_v2' architectures"
+        )
+    elif any(
+        (len(x) != 2 or any(v not in (1, 2) for v in x)) if isinstance(x, (list, tuple)) else x not in (1, 2)
+        for x in cfg.MODEL.YX_DOWN
+    ):
+        raise ValueError("'MODEL.YX_DOWN' values need to be 1 or 2, or (y, x) pairs of them")
     else:
         if model_arch == "multiresunet" and len(cfg.MODEL.YX_DOWN) != 4:
             raise ValueError("'MODEL.YX_DOWN' length must be 4 when using 'multiresunet'")
@@ -3355,11 +3366,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # 2. Single loop to validate divisibility and simulate downsampling
             for i in range(num_downsamplings):
+                # One factor for Y and X, or a (y, x) pair
                 yx_factor = yx_down_schedule[i]
+                yx_factor = list(yx_factor) if isinstance(yx_factor, (list, tuple)) else [yx_factor, yx_factor]
                 z_factor = z_down_schedule[i] if is_3d else 1
 
                 # Check divisibility using clean generator expressions
-                yx_invalid = any(dim % yx_factor != 0 or dim <= 2 for dim in current_yx)
+                yx_invalid = any(dim % f != 0 or dim <= 2 for dim, f in zip(current_yx, yx_factor))
                 z_invalid = is_3d and (current_z % z_factor != 0 or current_z <= 2)
 
                 if yx_invalid or z_invalid:
@@ -3377,7 +3390,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError(m)
 
                 # Apply downsampling to prepare for the next level's check
-                current_yx = [dim // yx_factor for dim in current_yx]
+                current_yx = [dim // f for dim, f in zip(current_yx, yx_factor)]
                 current_z = current_z // z_factor
 
         if "hrnet" in model_arch:

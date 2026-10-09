@@ -22,6 +22,7 @@ from biapy.models.blocks import (
     get_norm_3d,
     prepare_activation_layers,
     init_weights,
+    pool_factors,
 )
 from biapy.models.heads import ProjectionHead
 
@@ -88,7 +89,7 @@ class U_Net(nn.Module):
         upsample_layer : str, optional
             Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".
 
-        yx_down : List of ints, optional
+        yx_down : List of ints or of pairs of ints, optional
             Downsampling used in y and x dimensions. Set it to ``1`` if the dataset is not isotropic.
 
         z_down : List of ints, optional
@@ -252,7 +253,7 @@ class U_Net(nn.Module):
                     order=conv_block_order,
                 )
             )
-            mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
+            mpool = pool_factors(self.ndim, z_down[i], yx_down[i])
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 

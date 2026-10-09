@@ -22,9 +22,12 @@ jobs:
       run: pip3 install torch==2.12.1 torchvision==0.27.1 --index-url https://download.pytorch.org/whl/cu126
     - name: Installing BiaPy
       run: pip install --editable .
-    - name: Installing dependencies for the run_checks.py script
-      run: pip install gdown
+    - name: Installing dependencies for the run_checks.py script and the unit tests
+      run: pip install gdown pytest
+    - name: Running the unit tests (tests/test_*.py, e.g. the wizard and its interface with the front-ends)
+      run: pytest -q
     - name: Checking BiaPy code consistency
+      if: always()
       run: |
           mkdir biapy_checks
           python -u tests/run_checks.py --out_folder biapy_checks --gpus "0,1"
