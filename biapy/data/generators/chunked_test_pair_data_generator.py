@@ -195,7 +195,9 @@ class chunked_test_pair_data_generator(IterableDataset):
             sample_to_process["img_file_to_close"] if "img_file_to_close" in sample_to_process else None
         )
         if sample_to_process["Y"] is not None:
-            self.Y_parallel_data = sample_to_process["Y"]
+            # Instance GT holds raw labels, not the model's channels, so it is not used per chunk: the instance
+            # metrics read it from the file after the whole prediction is done
+            self.Y_parallel_data = sample_to_process["Y"] if not instance_problem else None
             self.Y_parallel_file = (
                 sample_to_process["mask_file_to_close"] if "mask_file_to_close" in sample_to_process else None
             )
@@ -254,7 +256,7 @@ class chunked_test_pair_data_generator(IterableDataset):
             self.out_data_order = self.input_axes
 
         # Ensure the out axes match with the ground truth
-        if sample_to_process["Y"] is not None:
+        if self.Y_parallel_data is not None:
             assert (
                 self.mask_input_axes == self.out_data_order
             ), f"The expected mask axes do not match the order of the output data axes to be created ({self.mask_input_axes} vs {self.out_data_order})"

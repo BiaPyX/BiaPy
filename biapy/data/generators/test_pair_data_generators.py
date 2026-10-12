@@ -303,8 +303,8 @@ class test_pair_data_generator(Dataset):
             # Instance-seg / membrane-repair: expand the raw single-channel instance-label GT into the
             # full target channel stack in memory (never cached to disk) -- see the equivalent step in
             # PairBaseDataGenerator.load_sample. No augmentation runs at test time, so this only needs
-            # to happen once per sample, not per access.
-            if self.data_channels and mask is not None:
+            # to happen once per sample, not per access. Not by chunks, where the GT is kept as loaded.
+            if self.data_channels and mask is not None and not self.test_by_chunks:
                 mask = np.array(mask)
                 if self.n_classes > 2:
                     if mask.shape[-1] != 2:

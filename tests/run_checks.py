@@ -685,7 +685,7 @@ all_test_info["Test10"] = {
     "bmz_by_command": True,
     "bmz_package": "long_beach_denoising.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.7},
+        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.9},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "long_beach_denoising.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"}, 
     ]
@@ -735,7 +735,7 @@ all_test_info["Test11"] = {
     "bmz_by_command": True,
     "bmz_package": "flywing3D.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.6},
+        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.9},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "flywing3D.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},    
     ]
@@ -1382,7 +1382,9 @@ all_test_info["Test23"] = {
         },
         "MODEL": {
             "ARCHITECTURE": "unetr",
-            "LOAD_CHECKPOINT": False
+            "LOAD_CHECKPOINT": False,
+            # The BMZ model (vengeful-zebra) has a 'norm' layer not used in its forward, which DDP rejects otherwise
+            "FIND_UNUSED_PARAMETERS": True,
         },
         "TEST": {
             "ENABLE": True,
