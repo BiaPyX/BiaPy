@@ -124,7 +124,7 @@ def propose_representations(fp, ndim):
 
     Recommended, in this order: affinities for dense 3D instances, the skeleton for elongated or branched
     instances, StarDist for star-convex ones, Cellpose's flows for crowded instances that are not star-convex,
-    and foreground + contour otherwise.
+    and foreground + contour otherwise. Contours are not offered for dense instances (filling the image).
 
     Returns
     -------
@@ -154,10 +154,19 @@ def propose_representations(fp, ndim):
     flows_ok = m["branched_fraction"] < FLOWS_MAX_BRANCHED
     thin = m["inscribed_radius_median"] < THIN_RADIUS
 
+    fg = fp["foreground_fraction"]["median"]
+    dense = fg >= DENSE_FOREGROUND and touching >= DENSE_TOUCHING
+
     opts = {}
-    opts["F_C"] = (True, "Works for any shape." + (
-        " Your instances are very thin (median radius {:.1f} px), so contours will cover much of them.".format(
-            m["inscribed_radius_median"]) if thin else ""))
+    if dense:
+        # Instances filling the image (e.g. neurons in electron microscopy): the contours between them would be a
+        # large part of the image, and a missed piece of contour merges two instances
+        opts["F_C"] = (False, "Your instances are dense (they cover {} of the image and {} touch others): contours "
+                              "can't separate them reliably.".format(_pct(fg), _pct(touching)))
+    else:
+        opts["F_C"] = (True, "Works for any shape." + (
+            " Your instances are very thin (median radius {:.1f} px), so contours will cover much of them.".format(
+                m["inscribed_radius_median"]) if thin else ""))
     if compact and centroid_ok:
         opts["F_P"] = (True, "Your instances are compact ({}, {}) with the centroid inside.".format(solidity, elong))
     else:
@@ -182,8 +191,6 @@ def propose_representations(fp, ndim):
                     if compact and centroid_ok else
                     "Designed for compact instances such as nuclei ({}, {}).".format(solidity, elong))
 
-    fg = fp["foreground_fraction"]["median"]
-    dense = fg >= DENSE_FOREGROUND and touching >= DENSE_TOUCHING
     if ndim != 3:
         opts["A"] = (False, "Only for 3D data (dense instances such as neurons in electron microscopy).")
     elif dense:
@@ -201,8 +208,13 @@ def propose_representations(fp, ndim):
         rec = "Db_R"
     elif touching >= CROWDED and flows_ok:
         rec = "F_G"
-    else:
+    elif opts["F_C"][0]:
         rec = "F_C"
+    else:  # dense 2D instances: the first offered (flows, unless they are branched)
+        rec = next((rid for rid in ("F_G", "F_S", "Db_R") if opts[rid][0]), None)
+        if rec is None:  # nothing suits them: contours are offered anyway
+            rec = "F_C"
+            opts["F_C"] = (True, opts["F_C"][1] + " Offered as nothing else suits them better.")
     return [
         {"id": rid, "available": opts[rid][0], "recommended": rid == rec, "reason": opts[rid][1]} for rid in REPRESENTATIONS
     ]

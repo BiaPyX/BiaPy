@@ -470,8 +470,29 @@ def test_representations_affinities_dense_3d(tmp_path):
     fp = _fp(_dense_3d(tmp_path), "DATA.TRAIN.GT_PATH", "INSTANCE_SEG", "3D")
     reps = {r["id"]: r for r in fp["representations"]}
     assert reps["A"]["available"] and reps["A"]["recommended"]
+    # Contours can't separate instances that fill the volume
+    assert not reps["F_C"]["available"]
     assert instance_seg.representation_to_biapy("A", 3)[0] == ["A"]
     assert instance_seg.output_channels(["A"], 3, 2) == 3
+
+
+def test_representations_dense_2d(tmp_path):
+    # Dense instances in 2D: no contours nor affinities, and the recommended one is offered
+    folder = tmp_path / "dense2d"
+    folder.mkdir()
+    from scipy import ndimage
+
+    rng = np.random.default_rng(2)
+    for i in range(3):
+        seeds = np.zeros((128, 128), np.int32)
+        for j, (y, x) in enumerate(rng.uniform((0, 0), (128, 128), (40, 2)).astype(int), start=1):
+            seeds[y, x] = j
+        _, idx = ndimage.distance_transform_edt(seeds == 0, return_indices=True)
+        _write_2d(str(folder / "{}.tif".format(i)), seeds[tuple(idx)].astype(np.uint16))
+    reps = {r["id"]: r for r in _fp(str(folder), "DATA.TRAIN.GT_PATH", "INSTANCE_SEG", "2D")["representations"]}
+    assert not reps["F_C"]["available"] and not reps["A"]["available"]
+    rec = [r for r in reps.values() if r["recommended"]]
+    assert len(rec) == 1 and rec[0]["available"]
 
 
 def test_representations_no_affinities_2d(tmp_path):
