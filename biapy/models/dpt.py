@@ -56,16 +56,21 @@ class ResidualConvUnit(nn.Module):
 class FeatureFusionBlock(nn.Module):
     """
     DPT's fusion block: adds the (refined) skip features to the incoming ones, refines the sum and upsamples it.
+
+    The coarsest block has no skip features (``has_skip=False``), so it does not build the unit that refines them:
+    unused parameters would break DistributedDataParallel.
     """
 
-    def __init__(self, features: int, normalization: str, activation: str):
+    def __init__(self, features: int, normalization: str, activation: str, has_skip: bool = True):
         super().__init__()
-        self.res_conv_unit1 = ResidualConvUnit(features, normalization, activation)
+        self.res_conv_unit1 = ResidualConvUnit(features, normalization, activation) if has_skip else None
         self.res_conv_unit2 = ResidualConvUnit(features, normalization, activation)
         self.out_conv = nn.Conv2d(features, features, kernel_size=1)
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor | None, size) -> torch.Tensor:
         if skip is not None:
+            if self.res_conv_unit1 is None:
+                raise ValueError("This fusion block was built without skip features ('has_skip=False')")
             x = x + self.res_conv_unit1(skip)
         x = self.res_conv_unit2(x)
         x = F.interpolate(x, size=size, mode="bilinear", align_corners=True)
@@ -196,9 +201,9 @@ class DPT(DenseViTBase):
             [nn.Conv2d(c, features, kernel_size=3, padding=1, bias=False) for c in reassemble_channels]
         )
 
-        # 3. Fusion, from the coarsest level to the finest one
+        # 3. Fusion, from the coarsest level to the finest one (the coarsest, fusion[3], has no skip features)
         self.fusion = nn.ModuleList(
-            [FeatureFusionBlock(features, normalization, decoder_activation) for _ in range(4)]
+            [FeatureFusionBlock(features, normalization, decoder_activation, has_skip=i < 3) for i in range(4)]
         )
 
         # 4. Head (as DPT's depth head): to the input resolution
