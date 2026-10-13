@@ -2906,10 +2906,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             test_instance_mask_dir = self.cfg.DATA.TEST.PATH
 
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses":
-            print("###########################")
-            print("#  PREPARE INSTANCE DATA  #")
-            print("###########################")
-            self._preview_instance_channels()
+            if is_main_process():
+                self._preview_instance_channels()
             return self.cfg.DATA.TEST.PATH, test_instance_mask_dir
 
         opts = []
@@ -3047,6 +3045,10 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         Zarr/H5/co-located (``INPUT_ZARR_MULTIPLE_DATA``) ground truth, where building a preview would
         need the same chunked-read machinery as the real (per-patch, in-generator) channel expansion;
         it's purely a convenience check, not required for training/inference to work.
+
+        Only a ``DATA.PATCH_SIZE`` crop (centered on a foreground voxel) of the first ground truth file is
+        previewed, as some channels (e.g. ``Dn``) are computed per instance over the whole volume and
+        would take hours on large images. Must be called only from the main process.
         """
         cfg = self.cfg
         mode = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -3070,6 +3072,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 img = read_img_as_ndarray(img_path, is_3d=(cfg.PROBLEM.NDIM == "3D"))
             except (StopIteration, IndexError, OSError, ValueError):
                 continue
+            img = self._crop_preview_patch(img)
             if cfg.DATA.N_CLASSES > 2:
                 if img.shape[-1] != 2:
                     continue
@@ -3082,6 +3085,26 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 channel_extra_opts=extra_opts,
                 save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
             )
+
+    def _crop_preview_patch(self, img: NDArray) -> NDArray:
+        """
+        Crop a ``DATA.PATCH_SIZE`` region from ``img`` (``(y, x, c)`` or ``(z, y, x, c)``), centered on a
+        foreground voxel when there is one (found on a strided view to keep it cheap), else on the image center.
+        """
+        patch_shape = self.cfg.DATA.PATCH_SIZE[:-1]
+        spatial_shape = img.shape[:-1]
+        stride = 4
+        sub = img[(slice(None, None, stride),) * len(spatial_shape) + (0,)]
+        nz = np.flatnonzero(sub)
+        if nz.size > 0:
+            center = [int(c) * stride for c in np.unravel_index(nz[nz.size // 2], sub.shape)]
+        else:
+            center = [s // 2 for s in spatial_shape]
+        slices = []
+        for c, p, s in zip(center, patch_shape, spatial_shape):
+            start = int(np.clip(c - p // 2, 0, max(s - p, 0)))
+            slices.append(slice(start, start + p))
+        return img[tuple(slices)]
 
     def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """
