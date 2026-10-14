@@ -20,10 +20,10 @@ import argparse
 import os
 import sys
 
-# The engine (BiaPy, build_config) is imported on first use: importing it loads PyTorch and every workflow,
+# The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy"}
-__all__ = ["BiaPy", "build_config", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -39,6 +39,58 @@ def __getattr__(name):
 def __dir__():
     return sorted(list(globals()) + list(_LAZY))
 
+def _validate_config_cli(argv):
+    """
+    Validate a configuration file from the command line.
+
+    This function is intended to be used as a command-line utility to validate
+    a BiaPy configuration file without running anything: no data is loaded, no
+    model is built and nothing is written to disk. It prints ``OK`` if the
+    configuration is valid, or the first error found (naming the wrong key) otherwise.
+
+    Usage::
+
+        biapy validate-config <path_to_config_file>
+        biapy validate-config <path_to_config_file> --no-data-check
+
+    ``--no-data-check`` skips the check that the data paths exist, so a configuration
+    can be validated before the data is available.
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``validate-config``.
+
+    Exit codes
+    ----------
+    0
+        The configuration is valid.
+    1
+        The configuration is not valid (the error is printed to stderr).
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    from ._biapy import validate_config
+    parser = argparse.ArgumentParser(
+        prog="biapy validate-config",
+        description="Check a BiaPy YAML configuration without running anything.",
+    )
+    parser.add_argument("config", help="Path to the YAML configuration file")
+    parser.add_argument(
+        "--no-data-check",
+        action="store_true",
+        help="Skip the check that the data paths exist",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        cfg = validate_config(args.config, check_data_paths=not args.no_data_check)
+    except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"OK: {args.config} is a valid {cfg.PROBLEM.TYPE} {cfg.PROBLEM.NDIM} configuration")
+    sys.exit(0)      
 
 def main():
     r"""
@@ -99,6 +151,10 @@ def main():
     and calls its `run_job` method to start the workflow. The program exits
     with status 0 upon successful completion.
     """
+    # Subcommand: 'biapy validate-config ...' only checks a config; any other call runs a job
+    if len(sys.argv) > 1 and sys.argv[1] == "validate-config":
+        _validate_config_cli(sys.argv[2:])
+
     ##########################
     #   ARGS COMPROBATION    #
     ##########################
@@ -120,7 +176,10 @@ def main():
     #     --run_id $job_counter \
     #     --gpu 0,1
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        epilog="To check a configuration without running anything: biapy validate-config <config> [--no-data-check]",
+    )
+
     parser.add_argument("--config", required=True, help="Path to the configuration file")
     parser.add_argument(
         "--result_dir",

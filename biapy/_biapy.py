@@ -2112,3 +2112,35 @@ def build_config(
         _deep_merge(cfg, copy.deepcopy(extra_config))
 
     return cfg
+
+def validate_config(config: Union[str, dict, CN], check_data_paths: bool = True) -> CN:
+    """
+    Validate a BiaPy configuration without running anything.
+
+    Parameters
+    ----------
+    config: str or dict or CfgNode
+        Path to a YAML config file, or a dict/CfgNode with the confguration.
+    
+    check_data_paths: bool, optional
+        If True, check that the data paths exist. Default: True.
+
+    Returns
+    -------
+    CfgNode
+        The validated configuration.
+
+    Raises
+    ------
+    ValueError, AssertionError, FileNotFoundError, KeyError
+        If the configuration is not valid; the message names the wrong key.
+    """
+    raw_cfg = BiaPy._load_raw_config(config)
+
+    cfg_manager = Config("validate", "validate")
+    cfg_manager._C.merge_from_other_cfg(CN(convert_old_model_cfg_to_current_version(raw_cfg)))
+    update_dependencies(cfg_manager)
+
+    cfg = cfg_manager.get_cfg_defaults()
+    check_configuration(cfg, "validate", check_data_paths=check_data_paths)
+    return cfg

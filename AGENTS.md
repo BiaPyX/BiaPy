@@ -26,6 +26,8 @@ Pick the workflow from the task, prepare the data in its format and start from i
 
 Every workflow also has a 3D template with the same name, replacing `2d_` with `3d_`.
 
+Before running a config, check it with `biapy validate-config my_config.yaml`: it checks every option without loading data or training, and prints `OK` (exit code 0) or the error naming the wrong key (exit code 1). Add `--no-data-check` if the data is not available yet. From Python: `biapy.validate_config(cfg, check_data_paths=False)`.
+
 ## Repository layout
 
 | Path | What it contains |
