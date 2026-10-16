@@ -496,21 +496,20 @@ class multiple_metrics:
         else:
             _y_pred = y_pred
 
-        # Check multi-head
+        # Class prediction. With multiple outputs (deep supervision) only the first one, the main (full resolution)
+        # output, is used, as the class metrics are measured once and not averaged over the outputs
         if isinstance(y_pred, dict) and "class" in y_pred:
-            _y_pred_class = torch.argmax(y_pred["class"], dim=1)
+            _y_pred_class = y_pred["class"][0] if isinstance(y_pred["class"], list) else y_pred["class"]
+            _y_pred_class = torch.argmax(_y_pred_class, dim=1)
         else:      
-            # Just take the last channel as class prediction from the first output, which is assumed to be the main one
-            if isinstance(_y_pred, list):    
-                _y_pred_class = _y_pred[0][:, -1] 
-            else: 
-                _y_pred_class = _y_pred[:, -1]
-            
+            # Class already predicted (argmax) in the last channel
+            _y_pred_class = _y_pred[0][:, -1] if isinstance(_y_pred, list) else _y_pred[:, -1]
+
         if not isinstance(_y_pred, list):
             _y_pred = [_y_pred]
 
         res_metrics = {}
-        for pd in _y_pred:
+        for idx, pd in enumerate(_y_pred):
             _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
  
             db_val_type = ""
@@ -540,10 +539,16 @@ class multiple_metrics:
 
                 # Measure metric(s)
                 if self.metric_names[pred_ch_start] == "IoU (classes)":
+                    if idx > 0:
+                        continue
+                    # The class GT is always the last channel. Match it to the class prediction size, which can differ
+                    # from the one of 'pd' (e.g. separated class head)
+                    cls_size = tuple(_y_pred_class.shape[-self.ndim :])
+                    y_true_class = (
+                        y_true if tuple(y_true.shape[-self.ndim :]) == cls_size else scale_target(y_true, cls_size)
+                    )[:, -1]
                     for name, func in self.metric_func[pred_ch_start]:
-                        res_metrics.setdefault(name, []).append(
-                            _call_metric_safely(func, _y_pred_class, _y_true[:, 1])
-                        )
+                        res_metrics.setdefault(name, []).append(_call_metric_safely(func, _y_pred_class, y_true_class))
                 else:
                     y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
                     y_true_slice = _y_true[:, gt_ch_start:gt_ch_end].float()
