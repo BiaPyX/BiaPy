@@ -20,7 +20,9 @@ from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, crop_border_tensor, MetricLogger, build_preview_spec
 from biapy.engine.metrics import (
-    jaccard_index,
+    segmentation_metric,
+    normalize_seg_metric_names,
+    SEG_METRIC_DISPLAY_NAMES,
     CrossEntropyLoss_wrapper,
     DiceCELoss,
     DiceLoss,
@@ -161,34 +163,34 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         self.train_metrics = []
         self.train_metric_names = []
         self.train_metric_best = []
-        for metric in list(set(self.cfg.TRAIN.METRICS)):
-            if metric in ["iou", "jaccard_index"]:
-                self.train_metrics.append(
-                    jaccard_index(
-                        num_classes=self.cfg.DATA.N_CLASSES,
-                        device=self.device,
-                        model_source=self.cfg.MODEL.SOURCE,
-                        ndim=self.dims,
-                        ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                    )
+        for metric in normalize_seg_metric_names(self.cfg.TRAIN.METRICS):
+            self.train_metrics.append(
+                segmentation_metric(
+                    num_classes=self.cfg.DATA.N_CLASSES,
+                    device=self.device,
+                    metric=metric,
+                    model_source=self.cfg.MODEL.SOURCE,
+                    ndim=self.dims,
+                    ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                 )
-                self.train_metric_names.append("IoU")
-                self.train_metric_best.append("max")
+            )
+            self.train_metric_names.append(SEG_METRIC_DISPLAY_NAMES[metric])
+            self.train_metric_best.append("max")
 
         self.test_metrics = []
         self.test_metric_names = []
-        for metric in list(set(self.cfg.TEST.METRICS)):
-            if metric in ["iou", "jaccard_index"]:
-                self.test_metrics.append(
-                    jaccard_index(
-                        num_classes=self.cfg.DATA.N_CLASSES,
-                        device=self.test_device,
-                        model_source=self.cfg.MODEL.SOURCE,
-                        ndim=self.dims,
-                        ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                    )
+        for metric in normalize_seg_metric_names(self.cfg.TEST.METRICS):
+            self.test_metrics.append(
+                segmentation_metric(
+                    num_classes=self.cfg.DATA.N_CLASSES,
+                    device=self.test_device,
+                    metric=metric,
+                    model_source=self.cfg.MODEL.SOURCE,
+                    ndim=self.dims,
+                    ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                 )
-                self.test_metric_names.append("IoU")
+            )
+            self.test_metric_names.append(SEG_METRIC_DISPLAY_NAMES[metric])
 
         names = [str(n).upper() for n in self.cfg.LOSS.TYPE]
         weights = list(self.cfg.LOSS.WEIGHTS)

@@ -538,22 +538,19 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         self.loss : Function
             Loss function used during training and test.
         """
-        self.train_metrics = []
-        self.train_metric_names = []
-        self.train_metric_best = []
-        
+        # One entry per output channel. Binary channels ("IoU ...") are measured with the overlap metrics selected in
+        # TRAIN.METRICS/TEST.METRICS ('iou', 'dice', 'accuracy'), e.g. "IoU (F channel)" -> "Dice (F channel)", while
+        # the regression ones ("L1 ...") always use L1
+        channel_metric_names = []
         for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             if channel in ["B", "F", "P", "C", "T", "A", "M"]:
                 m = "IoU ({} channel)".format(channel) if channel != "A" else "IoU ({} channels)".format(channel)
-                self.train_metric_names += [m]
-                self.train_metric_best += ["max"]
+                channel_metric_names += [m]
             elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R", "Gv", "Gh", "Gz"]:
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
-                self.train_metric_names += [m]
-                self.train_metric_best += ["min"]
+                channel_metric_names += [m]
             elif channel == "E_offset":
-                self.train_metric_names += ["IoU"]
-                self.train_metric_best += ["max"]
+                channel_metric_names += ["IoU"]
             elif channel in ["E_sigma", "E_seediness"]:
                continue  # No metrics for these channels
             elif channel == "We":
@@ -563,21 +560,17 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
             # Extra channels for the synapse detection branch
             elif channel == "F_pre":
-                self.train_metric_names += ["IoU (pre-sites)"]
-                self.train_metric_best += ["max"]
+                channel_metric_names += ["IoU (pre-sites)"]
             elif channel == "F_post":
-                self.train_metric_names += ["IoU (post-sites)"]
-                self.train_metric_best += ["max"]
+                channel_metric_names += ["IoU (post-sites)"]
             elif channel == "F_cleft":
-                self.train_metric_names += ["IoU (clefts)"]
-                self.train_metric_best += ["max"]
+                channel_metric_names += ["IoU (clefts)"]
             else:
                 raise ValueError("Unknown channel: {}".format(channel))
         
         # Multi-head: instances + classification
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and self.separated_class_channel:
-            self.train_metric_names += ["IoU (classes)"]
-            self.train_metric_best += ["max"]
+            channel_metric_names += ["IoU (classes)"]
             # Used to calculate IoU with the classification results
             self.jaccard_index_matching = jaccard_index(
                 device=self.device, 
@@ -588,27 +581,31 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
         
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             # No metric for the embedding representation during training as the IoU is calculated together with the loss
-            self.train_metrics.append("none") 
+            self.train_metrics = ["none"]
+            self.train_metric_names = channel_metric_names.copy()
         else:
-            self.train_metrics.append(
+            self.train_metrics = [
                 multiple_metrics(
                     num_classes=self.cfg.DATA.N_CLASSES,
-                    metric_names=self.train_metric_names,
+                    metric_names=channel_metric_names,
                     device=self.device,
                     out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                     channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                     model_source=self.cfg.MODEL.SOURCE,
                     ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                     ndim=self.dims,
+                    seg_metrics=self.cfg.TRAIN.METRICS,
                 )
-            )
-    
-        self.test_metrics = []
-        self.test_metric_names = self.train_metric_names.copy()
+            ]
+            self.train_metric_names = self.train_metrics[0].output_names.copy()
+        self.train_metric_best = ["min" if x.startswith("L1") else "max" for x in self.train_metric_names]
+
+        test_channel_metric_names = channel_metric_names.copy()
 
         # Multi-head: instances + classification
         if self.separated_class_channel:
-            self.test_metric_names.append("IoU (classes)")
+            if "IoU (classes)" not in test_channel_metric_names:
+                test_channel_metric_names.append("IoU (classes)")
             # Used to calculate IoU with the classification results
             self.jaccard_index_matching = jaccard_index(
                 device=self.test_device, 
@@ -619,20 +616,23 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             # No metric for the embedding representation during training as the IoU is calculated together with the loss
-            self.test_metrics.append("none")
+            self.test_metrics = ["none"]
+            self.test_metric_names = test_channel_metric_names
         else:
-            self.test_metrics.append(
+            self.test_metrics = [
                 multiple_metrics(
                     num_classes=self.cfg.DATA.N_CLASSES,
-                    metric_names=self.test_metric_names,
+                    metric_names=test_channel_metric_names,
                     device=self.test_device,
                     out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                     channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                     model_source=self.cfg.MODEL.SOURCE,
                     ndim=self.dims,
                     ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                    seg_metrics=self.cfg.TEST.METRICS,
                 )
-            )
+            ]
+            self.test_metric_names = self.test_metrics[0].output_names.copy()
         
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
             self.test_extra_metrics = []
@@ -690,6 +690,18 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             self.loss = instance_loss
 
         super().define_metrics()
+
+    def loss_description(self) -> str:
+        """The loss of each channel, e.g. "BCE (Db) + L1 (R)" (``PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES``)."""
+        channels = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        if "E_offset" in channels:
+            return "EmbedSeg's spatial embedding loss"
+        channels = [c for c in channels if c not in ("We", "I")]  # as instance_segmentation_loss
+        losses = list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES)
+        if len(losses) != len(channels):
+            return super().loss_description()
+        return " + ".join("{} ({})".format(str(l).upper(), c) for c, l in zip(channels, losses)) + (
+            " + contrastive" if self.cfg.LOSS.CONTRAST.ENABLE else "")
 
     def metric_calculation(
         self,

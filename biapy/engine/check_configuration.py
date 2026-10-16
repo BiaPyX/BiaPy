@@ -1249,13 +1249,24 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if set_test_metrics:
             opts.extend(["TEST.METRICS", ["iou"]])
 
+        seg_metric_options = ["iou", "dice", "accuracy"]
         assert len(cfg.TRAIN.METRICS) == 0 or all(
-            [True if x.lower() in ["iou"] else False for x in cfg.TRAIN.METRICS]
-        ), f"'TRAIN.METRICS' needs to be 'iou' in {cfg.PROBLEM.TYPE} workflow"
+            [True if x.lower() in seg_metric_options else False for x in cfg.TRAIN.METRICS]
+        ), f"'TRAIN.METRICS' options are {seg_metric_options} in {cfg.PROBLEM.TYPE} workflow"
 
         assert len(cfg.TEST.METRICS) == 0 or all(
-            [True if x.lower() in ["iou"] else False for x in cfg.TEST.METRICS]
-        ), f"'TEST.METRICS' needs to be 'iou' in {cfg.PROBLEM.TYPE} workflow"
+            [True if x.lower() in seg_metric_options else False for x in cfg.TEST.METRICS]
+        ), f"'TEST.METRICS' options are {seg_metric_options} in {cfg.PROBLEM.TYPE} workflow"
+
+        if (
+            cfg.PROBLEM.TYPE == "INSTANCE_SEG"
+            and "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            and any(x.lower() != "iou" for x in list(cfg.TRAIN.METRICS) + list(cfg.TEST.METRICS))
+        ):
+            print(
+                "WARNING: with 'E_offset' channel (EmbedSeg) only the IoU is measured, so the other metrics set in "
+                "'TRAIN.METRICS'/'TEST.METRICS' will be ignored"
+            )
 
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",

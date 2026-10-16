@@ -13,7 +13,7 @@ import pandas as pd
 from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import precision_score, recall_score, f1_score
-from torchmetrics import JaccardIndex
+from torchmetrics import JaccardIndex, F1Score, Accuracy
 from torchmetrics.image import StructuralSimilarityIndexMeasure, LearnedPerceptualImagePatchSimilarity
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
@@ -144,9 +144,92 @@ def weight_binary_ratio(target, valid=None):
     return weight.float()
 
 
-class jaccard_index:
+# Overlap metrics that can be selected in 'TRAIN.METRICS'/'TEST.METRICS' for the semantic segmentation,
+# instance segmentation and detection workflows, together with the name used to report them.
+SEG_METRIC_DISPLAY_NAMES = {"iou": "IoU", "dice": "Dice", "accuracy": "Accuracy"}
+SEG_METRIC_ALIASES = {"jaccard_index": "iou"}
+# Name used when printing the results of the metrics that, in the binary case, are measured over the foreground
+FOREGROUND_METRIC_NAMES = {"IoU": "Foreground IoU", "Dice": "Foreground Dice"}
+
+
+def normalize_seg_metric_names(metrics: List[str]) -> List[str]:
     """
-    Jaccard index (IoU) metric for PyTorch tensors.
+    Lower-case, resolve aliases and remove duplicates (keeping the order) of a list of overlap metric names.
+
+    Parameters
+    ----------
+    metrics : list of str
+        Metric names, e.g. ``["IoU", "dice"]``.
+
+    Returns
+    -------
+    metrics : list of str
+        Normalized metric names, all of them keys of ``SEG_METRIC_DISPLAY_NAMES``. Unknown names are dropped.
+    """
+    out = []
+    for m in metrics:
+        m = SEG_METRIC_ALIASES.get(str(m).lower(), str(m).lower())
+        if m in SEG_METRIC_DISPLAY_NAMES and m not in out:
+            out.append(m)
+    return out
+
+
+def build_seg_metric(
+    metric: str,
+    num_classes: int,
+    device: torch.device,
+    t: float = 0.5,
+    ignore_index: Optional[int] = None,
+) -> nn.Module:
+    """
+    Create a torchmetrics overlap metric (IoU, Dice or pixel accuracy).
+
+    For the binary case (``num_classes <= 2``) the metrics are measured over the foreground. For the multiclass
+    case IoU and Dice are averaged over the classes (macro), as done by ``JaccardIndex`` by default, while the
+    accuracy is the fraction of correctly classified pixels/voxels (micro).
+
+    Parameters
+    ----------
+    metric : str
+        Metric to create. Options: ``"iou"``, ``"dice"`` and ``"accuracy"``.
+
+    num_classes : int
+        Number of classes.
+
+    device : Torch device
+        Device where the metric will be calculated.
+
+    t : float, optional
+        Threshold to be applied in the binary case.
+
+    ignore_index : int, optional
+        Value to ignore in the calculation.
+
+    Returns
+    -------
+    metric_fn : nn.Module
+        Torchmetrics metric.
+    """
+    if num_classes > 2:
+        kwargs = dict(task="multiclass", num_classes=num_classes, ignore_index=ignore_index)
+    else:
+        kwargs = dict(task="binary", threshold=t, ignore_index=ignore_index)
+
+    if metric == "iou":
+        metric_fn = JaccardIndex(**kwargs)
+    elif metric == "dice":
+        # Dice coefficient == F1 score when computed over all pixels/voxels
+        metric_fn = F1Score(average="macro", **kwargs)
+    elif metric == "accuracy":
+        metric_fn = Accuracy(average="micro", **kwargs)
+    else:
+        raise ValueError(f"Metric '{metric}' not recognized. Options: {list(SEG_METRIC_DISPLAY_NAMES.keys())}")
+    return metric_fn.to(device, non_blocking=True)
+
+
+class segmentation_metric:
+    """
+    Overlap metric (IoU, Dice or accuracy) for PyTorch tensors.
 
     Supports binary and multiclass segmentation, with optional thresholding and ignore index.
     """
@@ -155,13 +238,14 @@ class jaccard_index:
         self,
         num_classes: int,
         device: torch.device,
+        metric: str = "iou",
         t: float = 0.5,
         model_source: str = "biapy",
         ndim: int = 2,
         ignore_index: int = -1,
     ):
         """
-        Define Jaccard index.
+        Define the metric.
 
         Parameters
         ----------
@@ -171,6 +255,9 @@ class jaccard_index:
         device : Torch device
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
             "xpu", "xla" or "meta".
+
+        metric : str, optional
+            Metric to calculate. Options: "iou", "dice" and "accuracy".
 
         t : float, optional
             Threshold to be applied.
@@ -185,24 +272,19 @@ class jaccard_index:
             Value to ignore in the loss calculation. If not provided, no value will be ignored.
         """
         self.model_source = model_source
-        self.loss = torch.nn.CrossEntropyLoss()
         self.device = device
         self.num_classes = num_classes
+        self.metric = metric
         self.t = t
         self.ndim = ndim
         self.ignore_index = ignore_index if ignore_index != -1 else None
-        if self.num_classes > 2:
-            self.jaccard = JaccardIndex(
-                task="multiclass", threshold=self.t, num_classes=self.num_classes, ignore_index=self.ignore_index
-            ).to(self.device, non_blocking=True)
-        else:
-            self.jaccard = JaccardIndex(
-                task="binary", threshold=self.t, num_classes=self.num_classes, ignore_index=self.ignore_index
-            ).to(self.device, non_blocking=True)
+        self.metric_fn = build_seg_metric(
+            metric, num_classes=self.num_classes, device=self.device, t=self.t, ignore_index=self.ignore_index
+        )
 
     def __call__(self, y_pred, y_true):
         """
-        Calculate Jaccard index (intersection over union).
+        Calculate the metric.
 
         Parameters
         ----------
@@ -214,8 +296,8 @@ class jaccard_index:
 
         Returns
         -------
-        jaccard : torch.Tensor
-            Jaccard index value.
+        value : torch.Tensor
+            Metric value.
         """
         _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
 
@@ -227,7 +309,7 @@ class jaccard_index:
         if not isinstance(_y_pred, list):
             _y_pred = [_y_pred]
 
-        iou = 0
+        value = 0
         for j, pd in enumerate(_y_pred):
             _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
 
@@ -236,9 +318,32 @@ class jaccard_index:
                     _y_true = _y_true.squeeze()
                 if len(pd.shape) - 2 == len(_y_true.shape):
                     _y_true = _y_true.unsqueeze(0)
-            iou += self.jaccard(pd, _y_true.long() if _y_true.is_floating_point() else _y_true)
+            value += self.metric_fn(pd, _y_true.long() if _y_true.is_floating_point() else _y_true)
 
-        return iou/len(_y_pred)
+        return value/len(_y_pred)
+
+
+class jaccard_index(segmentation_metric):
+    """Jaccard index (IoU) metric for PyTorch tensors. See :class:`segmentation_metric`."""
+
+    def __init__(
+        self,
+        num_classes: int,
+        device: torch.device,
+        t: float = 0.5,
+        model_source: str = "biapy",
+        ndim: int = 2,
+        ignore_index: int = -1,
+    ):
+        super().__init__(
+            num_classes=num_classes,
+            device=device,
+            metric="iou",
+            t=t,
+            model_source=model_source,
+            ndim=ndim,
+            ignore_index=ignore_index,
+        )
 
 
 def flow_target_scale(channel_extra_opts: Optional[Dict]) -> float:
@@ -273,7 +378,7 @@ class multiple_metrics:
     """
     Compute multiple metrics for instance segmentation workflows.
 
-    Supports IoU, L1, and other metrics for multi-head or multi-channel outputs.
+    Supports IoU, Dice, accuracy and L1 metrics for multi-head or multi-channel outputs.
     """
 
     def __init__(
@@ -286,6 +391,7 @@ class multiple_metrics:
         ignore_index: int = -1,
         model_source: str = "biapy",
         ndim: int = 2,
+        seg_metrics: Optional[List[str]] = None,
     ):
         """
         Define instance segmentation workflow metrics.
@@ -296,7 +402,9 @@ class multiple_metrics:
             Number of classes.
 
         metric_names : list of str
-            Names of the metrics to use.
+            Names of the metrics to use, one per output channel (see ``out_channels``). Names starting with
+            "IoU" mark binary/class channels, on which the overlap metrics of ``seg_metrics`` are measured;
+            names starting with "L1" mark regression channels.
 
         device : Torch device
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
@@ -316,9 +424,17 @@ class multiple_metrics:
 
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+
+        seg_metrics : list of str, optional
+            Overlap metrics to measure on the channels whose name starts with "IoU". Options: "iou", "dice" and
+            "accuracy". Each one is reported replacing the "IoU" prefix of the channel name with the metric name,
+            e.g. "IoU (F channel)" -> "Dice (F channel)". Defaults to ``["iou"]`` (also when empty). The names of
+            all the reported metrics, in order, are available in ``output_names``.
         """
         self.num_classes = num_classes
         self.metric_names = metric_names
+        self.seg_metrics = normalize_seg_metric_names(seg_metrics if seg_metrics else ["iou"])
+        assert len(self.seg_metrics) > 0, f"No valid metric in {seg_metrics}. Options: {list(SEG_METRIC_DISPLAY_NAMES)}"
         self.device = device
         self.out_channels = out_channels.copy() if out_channels is not None else [".",]*len(metric_names)
         if self.num_classes > 2:
@@ -334,22 +450,29 @@ class multiple_metrics:
         # range here so the L1 metric compares like-for-like (see flow_target_scale).
         self.flow_target_scale = flow_target_scale(channel_extra_opts)
 
+        # One list of (reported name, metric function) per entry of 'metric_names'
         self.metric_func = []
+        self.output_names = []
         for i in range(len(metric_names)):
-            if "IoU (classes)" in metric_names[i]:
-                loss_func = JaccardIndex(
-                    task="multiclass", threshold=0.5, num_classes=self.num_classes, ignore_index=self.ignore_index
-                ).to(self.device, non_blocking=True)
-            elif "IoU" in metric_names[i]:
-                loss_func = JaccardIndex(
-                    task="binary", threshold=0.5, num_classes=2, ignore_index=self.ignore_index
-                ).to(self.device, non_blocking=True)
+            funcs = []
+            if "IoU" in metric_names[i]:
+                ncls = self.num_classes if "IoU (classes)" in metric_names[i] else 2
+                for m in self.seg_metrics:
+                    funcs.append(
+                        (
+                            metric_names[i].replace("IoU", SEG_METRIC_DISPLAY_NAMES[m], 1),
+                            build_seg_metric(m, num_classes=ncls, device=self.device, ignore_index=self.ignore_index),
+                        )
+                    )
             elif "L1" in metric_names[i]:
-                loss_func = torch.nn.L1Loss()
+                funcs.append((metric_names[i], torch.nn.L1Loss()))
             else:
                 raise ValueError(f"Metric {metric_names[i]} not recognized.")
 
-            self.metric_func.append(loss_func)
+            self.metric_func.append(funcs)
+            for name, _ in funcs:
+                if name not in self.output_names:
+                    self.output_names.append(name)
 
     def __call__(self, y_pred, y_true):
         """
@@ -415,14 +538,12 @@ class multiple_metrics:
                     pred_ch_end = pred_ch_start + 1
                     gt_ch_end = pred_ch_end
 
-                if self.metric_names[pred_ch_start] not in res_metrics:
-                    res_metrics[self.metric_names[pred_ch_start]] = []
-
-                # Measure metric
+                # Measure metric(s)
                 if self.metric_names[pred_ch_start] == "IoU (classes)":
-                    res_metrics[self.metric_names[pred_ch_start]].append(
-                        _call_metric_safely(self.metric_func[pred_ch_start], _y_pred_class, _y_true[:, 1])
-                    )
+                    for name, func in self.metric_func[pred_ch_start]:
+                        res_metrics.setdefault(name, []).append(
+                            _call_metric_safely(func, _y_pred_class, _y_true[:, 1])
+                        )
                 else:
                     y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
                     y_true_slice = _y_true[:, gt_ch_start:gt_ch_end].float()
@@ -431,9 +552,8 @@ class multiple_metrics:
                     if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
                         y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
                         y_true_slice = y_true_slice.float()
-                    res_metrics[self.metric_names[pred_ch_start]].append(
-                        _call_metric_safely(self.metric_func[pred_ch_start], y_pred_slice, y_true_slice)
-                    )
+                    for name, func in self.metric_func[pred_ch_start]:
+                        res_metrics.setdefault(name, []).append(_call_metric_safely(func, y_pred_slice, y_true_slice))
 
         # Mean of same metric values
         for key, value in res_metrics.items():

@@ -2111,9 +2111,13 @@ class Config:
         _C.TRAIN.PATIENCE = -1
         # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some
         # default metrics will be configured automatically:
-        #   * Semantic segmentation: 'iou' (called also Jaccard index)
-        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS).
-        #   * Detection: 'iou' (called also Jaccard index)
+        #   * Semantic segmentation: 'iou' (called also Jaccard index). Options: 'iou', 'dice' and 'accuracy'
+        #   * Instance segmentation: 'iou'. Options: 'iou', 'dice' and 'accuracy'. They are measured on each binary channel
+        #                            selected in PROBLEM.INSTANCE_SEG.DATA_CHANNELS (and on the class channel, if any),
+        #                            while L1 is always used for the regression channels (e.g. distances)
+        #   * Detection: 'iou' (called also Jaccard index). Options: 'iou', 'dice' and 'accuracy'
+        #   Note: in the binary case 'iou' and 'dice' are measured over the foreground, while in the multiclass case they
+        #         are averaged over the classes. 'accuracy' is the fraction of correctly classified pixels/voxels.
         #   * Denoising: 'mae', 'mse'
         #   * Super-resolution: "psnr", "mae", "mse", "ssim", "pcc"
         #   * Self-supervision: "psnr", "mae", "mse", "ssim", "pcc"
@@ -2219,10 +2223,13 @@ class Config:
         _C.TEST.FULL_IMG = False
         # Metrics to apply during test/inference. Depending on the workflow different ones can be applied. If empty, some
         # default metrics will be configured automatically:
-        #   * Semantic segmentation: 'iou' (called also Jaccard index)
-        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS).
-        #                            Instance metrics will be always calculated.
-        #   * Detection: 'iou' (called also Jaccard index)
+        #   * Semantic segmentation: 'iou' (called also Jaccard index). Options: 'iou', 'dice' and 'accuracy'
+        #   * Instance segmentation: 'iou'. Options: 'iou', 'dice' and 'accuracy'. They are measured on each binary channel
+        #                            selected in PROBLEM.INSTANCE_SEG.DATA_CHANNELS (and on the class channel, if any),
+        #                            while L1 is always used for the regression channels (e.g. distances). Instance
+        #                            metrics will be always calculated.
+        #   * Detection: 'iou' (called also Jaccard index). Options: 'iou', 'dice' and 'accuracy'. Detection metrics
+        #                (precision, recall, F1...) will be always calculated.
         #   * Denoising: 'mae', 'mse'
         #   * Super-resolution: "psnr", "mae", "mse", "ssim", "pcc". Additionally, if only if PROBLEM.NDIM == '2D', these
         #                       can also be selected:  "fid", "is", "lpips"

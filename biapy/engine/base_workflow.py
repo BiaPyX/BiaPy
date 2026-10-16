@@ -78,6 +78,7 @@ from biapy.utils.util import (
     PhaseProgress,
 )
 from biapy.engine.train_engine import train_one_epoch, evaluate
+from biapy.engine.metrics import FOREGROUND_METRIC_NAMES
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
@@ -625,6 +626,24 @@ class Base_Workflow(metaclass=ABCMeta):
             raise ValueError("'test_metric_names' needs to be defined. Correct define_metrics() function")
         if self.loss is None:
             raise ValueError("'loss' needs to be defined. Correct define_metrics() function")
+        # Read by the front-ends (e.g. the Fiji plugin's training charts) to name the loss
+        print("Loss function: {}".format(self.loss_description()))
+
+    def loss_description(self) -> str:
+        """
+        Human readable name of the loss, e.g. "Dice + cross-entropy" (from ``LOSS.TYPE`` and ``LOSS.WEIGHTS``).
+        Workflows whose loss is not set by ``LOSS.TYPE`` override it.
+        """
+        names = [str(n) for n in self.cfg.LOSS.TYPE]
+        if not names:
+            return type(self.loss).__name__
+        weights = list(self.cfg.LOSS.WEIGHTS) if len(self.cfg.LOSS.WEIGHTS) == len(names) else [1] * len(names)
+        readable = {"CE": "cross-entropy", "DICE": "Dice", "MAE": "MAE (L1)", "MSE": "MSE (L2)"}
+        terms = [
+            ("{:g} x ".format(w) if len(set(weights)) > 1 else "") + readable.get(n.upper(), n)
+            for n, w in zip(names, weights)
+        ]
+        return " + ".join(terms) + (" + contrastive" if self.cfg.LOSS.CONTRAST.ENABLE else "")
 
     @abstractmethod
     def metric_calculation(
@@ -1488,9 +1507,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.log_writer.update(test_loss=test_stats["loss"], head="perf", step=epoch)
                     for i in range(len(self.train_metric_names)):
                         self.log_writer.update(
-                            test_iou=test_stats[self.train_metric_names[i]],
                             head="perf",
                             step=epoch,
+                            **{"test_" + self.train_metric_names[i]: test_stats[self.train_metric_names[i]]},
                         )
 
                 log_stats = {
@@ -1929,9 +1948,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print("Train loss: {}".format(np.min(self.plot_values["loss"])))
 
                 for i in range(len(self.train_metric_names)):
-                    metric_name = (
-                        "Foreground IoU" if self.train_metric_names[i] == "IoU" else self.train_metric_names[i]
-                    )
+                    metric_name = FOREGROUND_METRIC_NAMES.get(self.train_metric_names[i], self.train_metric_names[i])
                     print(
                         "Train {}: {}".format(
                             metric_name,
@@ -1944,9 +1961,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                 print("Validation loss: {}".format(self.val_best_loss))
                 for i in range(len(self.train_metric_names)):
-                    metric_name = (
-                        "Foreground IoU" if self.train_metric_names[i] == "IoU" else self.train_metric_names[i]
-                    )
+                    metric_name = FOREGROUND_METRIC_NAMES.get(self.train_metric_names[i], self.train_metric_names[i])
                     print(
                         "Validation {}: {}".format(
                             metric_name,
@@ -2696,7 +2711,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 if len(self.stats["per_crop"]) > 0:
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["per_crop"]:
-                            metric_name = "Foreground IoU" if metric == "IoU" else metric
+                            metric_name = FOREGROUND_METRIC_NAMES.get(metric, metric)
                             self.test_metrics_message += (
                                 "Test {} (per patch): {}\n".format(
                                     metric_name,
@@ -2707,7 +2722,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 if len(self.stats["merge_patches"]) > 0:
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["merge_patches"]:
-                            metric_name = "Foreground IoU" if metric == "IoU" else metric
+                            metric_name = FOREGROUND_METRIC_NAMES.get(metric, metric)
                             self.test_metrics_message += (
                                 "Test {} (merge patches): {}\n".format(
                                     metric_name,
@@ -2718,7 +2733,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 if len(self.stats["full_image"]) > 0:
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["full_image"]:
-                            metric_name = "Foreground IoU" if metric == "IoU" else metric
+                            metric_name = FOREGROUND_METRIC_NAMES.get(metric, metric)
                             self.test_metrics_message += (
                                 "Test {} (per image): {}\n".format(
                                     metric_name,
@@ -2729,7 +2744,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.post_processing["per_image"] and len(self.stats["merge_patches_post"]) > 0:
                 for metric in self.test_metric_names:
                     if metric.lower() in self.stats["merge_patches_post"]:
-                        metric_name = "Foreground IoU" if metric == "IoU" else metric
+                        metric_name = FOREGROUND_METRIC_NAMES.get(metric, metric)
                         self.test_metrics_message += (
                             "Test {} (merge patches - post-processing): {}\n".format(
                                 metric_name,
@@ -2740,7 +2755,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.post_processing["as_3D_stack"] and len(self.stats["as_3D_stack_post"]) > 0:
                 for metric in self.test_metric_names:
                     if metric.lower() in self.stats["as_3D_stack_post"]:
-                        metric_name = "Foreground IoU" if metric == "IoU" else metric
+                        metric_name = FOREGROUND_METRIC_NAMES.get(metric, metric)
                         self.test_metrics_message += (
                             "Test {} (as 3D stack - post-processing): {}\n".format(
                                 metric_name,

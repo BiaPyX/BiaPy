@@ -208,50 +208,39 @@ class Detection_Workflow(Base_Workflow):
         self.loss : Function
             Loss function used during training and test.
         """
-        self.train_metrics = []
-        self.train_metric_names = []
-        self.train_metric_best = []
-        for metric in list(set(self.cfg.TRAIN.METRICS)):
-            if metric in ["iou", "jaccard_index"]:
-                self.train_metric_names.append("IoU")
-                self.train_metric_best.append("max")
-
-        # Multi-head: detection + classification
+        # One entry per output channel: the point channel and, in multi-head (detection + classification), the
+        # class channel. The overlap metrics selected in TRAIN.METRICS/TEST.METRICS ('iou', 'dice', 'accuracy')
+        # are measured on each of them, e.g. "IoU", "Dice", "IoU (classes)", "Dice (classes)"...
+        channel_metric_names = ["IoU"]
         if self.separated_class_channel:
-            self.train_metric_names.append("IoU (classes)")
-            self.train_metric_best += ["max"]
+            channel_metric_names.append("IoU (classes)")
 
-        self.train_metrics.append(
+        self.train_metrics = [
             multiple_metrics(
                 num_classes=self.cfg.DATA.N_CLASSES,
-                metric_names=self.train_metric_names,
+                metric_names=channel_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
                 ndim=self.dims,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                seg_metrics=self.cfg.TRAIN.METRICS,
             )
-        )
+        ]
+        self.train_metric_names = self.train_metrics[0].output_names.copy()
+        self.train_metric_best = ["max"] * len(self.train_metric_names)
 
-        self.test_metrics = []
-        self.test_metric_names = []
-        for metric in list(set(self.cfg.TEST.METRICS)):
-            if metric in ["iou", "jaccard_index"]:
-                self.test_metric_names.append("IoU")
-
-        # Multi-head: detection + classification
-        if self.separated_class_channel:
-            self.test_metric_names.append("IoU (classes)")
-
-        self.test_metrics.append(
+        self.test_metrics = [
             multiple_metrics(
                 num_classes=self.cfg.DATA.N_CLASSES,
-                metric_names=self.test_metric_names,
+                metric_names=channel_metric_names,
                 device=self.test_device,
                 model_source=self.cfg.MODEL.SOURCE,
                 ndim=self.dims,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                seg_metrics=self.cfg.TEST.METRICS,
             )
-        )
+        ]
+        self.test_metric_names = self.test_metrics[0].output_names.copy()
 
         # Workflow specific metrics calculated in a different way than calling metric_calculation(). These metrics are
         # always calculated
