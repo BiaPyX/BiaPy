@@ -1012,17 +1012,46 @@ class Config:
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", "train", "y_detection_masks")
         # Path to load/save SSL target prepared.
         _C.DATA.TRAIN.SSL_SOURCE_DIR = os.path.join("user_data", "train", "x_ssl_source")
-        # Take one random DATA.PATCH_SIZE crop per image each time it is sampled, at native resolution.
-        # If False, images are tiled beforehand into fixed patches.
-        _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH = False
-        # Create a probability map so the patches extracted will have a high probability of having an object in the middle
-        # of it. Useful to avoid extracting patches which no foreground class information. Use it only when
-        # 'PROBLEM.TYPE' is 'SEMANTIC_SEG', 'INSTANCE_SEG' or 'DETECTION'
-        _C.DATA.TRAIN.PROBABILITY_MAP = False  # Used when _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH=True
+        # How the training patches (of DATA.PATCH_SIZE) are taken from the images. Options:
+        #   * "tiles": each image is cut beforehand into patches (with DATA.TRAIN.OVERLAP and DATA.TRAIN.PADDING) and every
+        #     patch is used once per epoch. Covers all the data every epoch, always with the same patches; large images
+        #     weigh more (more patches).
+        #   * "random": one patch at a random place of each image each time it is used (DATA.TRAIN.REPLICATE times per
+        #     epoch). Every image weighs the same and the patches change every epoch, but small or scarce structures may be
+        #     missed. Their centres can be weighted with a probability map (DATA.TRAIN.PROBABILITY_MAP).
+        #   * "foreground_oversampling": as "random", but a share of the patches of each batch is centred on the foreground,
+        #     on a class chosen at random among the classes of the image (so rare classes appear as often as common ones),
+        #     as nnU-Net does (see DATA.TRAIN.FOREGROUND_OVERSAMPLING). Only for 'SEMANTIC_SEG', 'INSTANCE_SEG' and
+        #     'DETECTION'.
+        _C.DATA.TRAIN.PATCH_SAMPLING = "tiles"
+        # "random" patch sampling: weight the patch centres with a probability map, so most patches have foreground in
+        # their middle: all the foreground voxels together get W_FOREGROUND of the probability and the background ones
+        # W_BACKGROUND. The classes are not told apart. Only for 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION'. The maps
+        # are stored next to the targets, in "<DATA.TRAIN.GT_PATH>_prob_maps".
+        _C.DATA.TRAIN.PROBABILITY_MAP = False
         _C.DATA.TRAIN.W_FOREGROUND = 0.94  # Used when _C.DATA.TRAIN.PROBABILITY_MAP=True
         _C.DATA.TRAIN.W_BACKGROUND = 0.06  # Used when _C.DATA.TRAIN.PROBABILITY_MAP=True
-        # Extra train data generation: number of times to duplicate the train data. Useful when
-        # _C.DATA.TRAIN.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
+        # "foreground_oversampling" patch sampling.
+        _C.DATA.TRAIN.FOREGROUND_OVERSAMPLING = CN()
+        # Share of the patches centred on the foreground (nnU-Net: 0.33).
+        _C.DATA.TRAIN.FOREGROUND_OVERSAMPLING.PERCENT = 0.33
+        # True: in every batch the last "batch size - round(batch size * (1 - PERCENT))" patches are centred on the
+        # foreground, as nnU-Net (e.g. 1 of 2, 4 of 12). False: each patch is centred on it with probability PERCENT.
+        _C.DATA.TRAIN.FOREGROUND_OVERSAMPLING.PER_BATCH = True
+        # The voxels of each class are found once per image (and stored in the job's results folder) as a regular grid
+        # covering the class evenly with about this many points at most, plus one voxel of every object (connected
+        # component, or instance) so none is missed however small. Patches are centred anywhere in the grid cell of a
+        # point, so they don't repeat.
+        _C.DATA.TRAIN.FOREGROUND_OVERSAMPLING.MAX_LOCATIONS_PER_CLASS = 10000
+        # The patch is shifted at random so the chosen voxel lands up to this fraction of the patch size away from its
+        # middle (it always stays inside the patch). Avoids the network learning that the foreground is in the middle.
+        _C.DATA.TRAIN.FOREGROUND_OVERSAMPLING.CENTER_JITTER = 0.25
+        # Choose an object (connected component, or instance in 'INSTANCE_SEG') of the class first, then a voxel of it,
+        # so small objects are as likely as large ones. Otherwise every voxel of the class is equally likely, so large
+        # objects get more patches.
+        _C.DATA.TRAIN.FOREGROUND_OVERSAMPLING.BALANCE_OBJECTS = False
+        # Extra train data generation: number of times to duplicate the train data. With "random" and
+        # "foreground_oversampling" patch sampling it is the number of patches taken from each image per epoch.
         _C.DATA.TRAIN.REPLICATE = 0
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
         # The values must be floats between range [0, 1). It needs to be a 2D tuple when using _C.PROBLEM.NDIM='2D' and
@@ -1484,7 +1513,7 @@ class Config:
         _C.AUGMENTOR.ZOOM_IN_Z = False
         # Resize the whole image before the random crop so the patch covers a random fraction of the
         # field of view. Use it when test images are resized whole to the patch size (DATA.PREPROCESS.RESIZE).
-        # 2D only; requires DATA.TRAIN.EXTRACT_RANDOM_PATCH, and can't be combined with ZOOM or RANDOM_ROT.
+        # 2D only; requires DATA.TRAIN.PATCH_SAMPLING = 'random', and can't be combined with ZOOM or RANDOM_ROT.
         _C.AUGMENTOR.RANDOM_RESIZED_CROP = False
         # Area-fraction range of the whole image the crop should cover, e.g. (0.7, 0.95).
         _C.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE = (0.7, 0.95)
@@ -2700,6 +2729,9 @@ class Config:
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "charts")
         # Folder where TRAIN.SAVE_TRAIN_PREDS_FREQ previews are stored.
         _C.PATHS.TRAIN_PRED_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, "train_pred_samples")
+        # Folder where the class locations of DATA.TRAIN.PATCH_SAMPLING = "foreground_oversampling" are stored (a
+        # subfolder for the training data and another for the validation data).
+        _C.PATHS.CLASS_LOCATIONS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "class_locations")
         # Folder where samples of DA will be stored
         _C.PATHS.DA_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, "aug")
         # Folder where generator samples (X) will be stored

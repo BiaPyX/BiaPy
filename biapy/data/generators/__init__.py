@@ -21,6 +21,7 @@ from tqdm import tqdm
 from yacs.config import CfgNode as CN
 
 from biapy.data.pre_processing import calculate_volume_prob_map
+from biapy.data.patch_sampling import ForegroundOversamplingBatchSampler, compute_class_locations
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
 from biapy.data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
 from biapy.data.generators.membrane_repair_data_generator import (
@@ -188,7 +189,8 @@ def create_train_val_augmentors(
     """
     # Calculate the probability map per image
     prob_map = None
-    if cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH:
+    random_patches = cfg.DATA.TRAIN.PATCH_SAMPLING != "tiles"
+    if cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.DATA.TRAIN.PATCH_SAMPLING == "random":
         # Co-locate the cache next to the GT data it was derived from, following the same
         # "<GT dir>_<suffix>" naming convention as DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR and
         # DATA.TRAIN.DETECTION_MASK_DIR. DATA.TRAIN.GT_PATH already points to the workflow's
@@ -208,6 +210,28 @@ def create_train_val_augmentors(
                 cfg.DATA.TRAIN.W_FOREGROUND,
                 cfg.DATA.TRAIN.W_BACKGROUND,
                 save_dir=prob_map_dir,
+            )
+
+    # Foreground oversampling: where the voxels of each class are, found once per image (and stored in the job folder)
+    train_class_locations, val_class_locations, foreground_oversampling = None, None, None
+    if cfg.DATA.TRAIN.PATCH_SAMPLING == "foreground_oversampling":
+        fo = cfg.DATA.TRAIN.FOREGROUND_OVERSAMPLING
+        foreground_oversampling = {
+            "percent": fo.PERCENT,
+            "per_batch": fo.PER_BATCH,
+            "center_jitter": fo.CENTER_JITTER,
+            "balance_objects": fo.BALANCE_OBJECTS,
+        }
+        is_3d = cfg.PROBLEM.NDIM == "3D"
+        assert Y_train
+        train_class_locations = compute_class_locations(
+            Y_train, cfg.PROBLEM.TYPE, is_3d, os.path.join(cfg.PATHS.CLASS_LOCATIONS, "train"),
+            fo.MAX_LOCATIONS_PER_CLASS, cfg.SYSTEM.SEED,
+        )
+        if Y_val is not None and len(Y_val.sample_list) > 0:
+            val_class_locations = compute_class_locations(
+                Y_val, cfg.PROBLEM.TYPE, is_3d, os.path.join(cfg.PATHS.CLASS_LOCATIONS, "val"),
+                fo.MAX_LOCATIONS_PER_CLASS, cfg.SYSTEM.SEED,
             )
 
     membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
@@ -401,8 +425,10 @@ def create_train_val_augmentors(
             salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE,
             resolution=cfg.DATA.TRAIN.RESOLUTION,
-            random_crops_in_DA=cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
+            random_crops_in_DA=random_patches,
             prob_map=prob_map,
+            class_locations=train_class_locations,
+            foreground_oversampling=foreground_oversampling,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
@@ -476,7 +502,9 @@ def create_train_val_augmentors(
             Y=Y_val,
             da=False,
             shape=cfg.DATA.PATCH_SIZE,
-            random_crops_in_DA=cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
+            random_crops_in_DA=random_patches,
+            class_locations=val_class_locations,
+            foreground_oversampling=foreground_oversampling,
             val=True,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,
@@ -559,19 +587,35 @@ def create_train_val_augmentors(
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Train/val generators with {num_workers} workers")
     print("Effective batch size: %d" % total_batch_size)
-    print("Sampler_train = %s" % str(sampler_train))
-    train_dataset = DataLoader(
-        train_generator,
-        shuffle=DataLoader_shuffle,
-        sampler=sampler_train,
-        batch_size=cfg.TRAIN.BATCH_SIZE,
+    loader_kwargs = dict(
         num_workers=num_workers,
         pin_memory=(cfg.SYSTEM.PIN_MEM and cfg.SYSTEM.NUM_GPUS > 0),
-        drop_last=False,
         worker_init_fn=worker_init_fn,
         persistent_workers=(num_workers > 0),
         prefetch_factor=2 if num_workers > 0 else None,
     )
+    if foreground_oversampling is not None and foreground_oversampling["per_batch"]:
+        # The batches decide which of their samples are centred on the foreground (it depends on their position)
+        batch_sampler = ForegroundOversamplingBatchSampler(
+            training_samples,
+            cfg.TRAIN.BATCH_SIZE,
+            foreground_oversampling["percent"],
+            num_replicas=get_world_size(),
+            rank=get_rank(),
+            seed=cfg.SYSTEM.SEED,
+        )
+        print("Sampler_train = %s" % str(batch_sampler))
+        train_dataset = DataLoader(train_generator, batch_sampler=batch_sampler, **loader_kwargs)
+    else:
+        print("Sampler_train = %s" % str(sampler_train))
+        train_dataset = DataLoader(
+            train_generator,
+            shuffle=DataLoader_shuffle,
+            sampler=sampler_train,
+            batch_size=cfg.TRAIN.BATCH_SIZE,
+            drop_last=False,
+            **loader_kwargs,
+        )
 
     # Save a sample to export the model to BMZ
     bmz_input_sample = None

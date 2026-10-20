@@ -776,7 +776,7 @@ class Base_Workflow(metaclass=ABCMeta):
             ),
             filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
             norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
-            random_crops_in_DA=self.cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH,
+            random_crops_in_DA=self.cfg.DATA.TRAIN.PATCH_SAMPLING != "tiles",
             y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             gt_channels_expected=self.gt_channels_expected,
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
@@ -1400,7 +1400,11 @@ class Base_Workflow(metaclass=ABCMeta):
             print("~~~ Epoch {}/{} ~~~\n".format(epoch + 1, self.cfg.TRAIN.EPOCHS))
             e_start = time.time()
 
-            if self.args.distributed:
+            # A new order of the samples each epoch (the same in every process when distributed)
+            batch_sampler = getattr(self.train_generator, "batch_sampler", None)
+            if hasattr(batch_sampler, "set_epoch"):  # e.g. foreground oversampling's
+                batch_sampler.set_epoch(epoch)  # type: ignore
+            elif self.args.distributed:
                 self.train_generator.sampler.set_epoch(epoch)  # type: ignore
             # Epoch-dependent losses
             if isinstance(self.loss, torch.nn.Module):

@@ -1294,6 +1294,7 @@ def random_crop_pair(
     img_prob: Optional[NDArray] = None,
     weight_map: Optional[NDArray] = None,
     scale: Tuple[int, ...] = (1, 1),
+    center: Optional[Tuple[int, ...]] = None,
 ) -> Union[
     Tuple[NDArray, NDArray],
     Tuple[NDArray, NDArray, NDArray],
@@ -1332,6 +1333,10 @@ def random_crop_pair(
     scale : tuple of 2 ints, optional
         Scale factor the second image given. E.g. ``(2,2)``.
 
+    center : tuple of ints, optional
+        Centre of the crop, chosen by the caller (e.g. foreground oversampling) instead of at random. The crop is
+        kept inside the image as with ``img_prob``.
+
     Returns
     -------
     img : 2D Numpy array
@@ -1365,17 +1370,19 @@ def random_crop_pair(
     if val:
         y, x, oy, ox = 0, 0, 0, 0
     else:
-        if img_prob is not None:
-            prob = img_prob.ravel()
+        if img_prob is not None or center is not None:
+            if center is not None:  # chosen by the caller (e.g. foreground oversampling)
+                y, x = int(center[0]), int(center[1])
+            else:
+                prob = img_prob.ravel()
 
-            # Generate the random coordinates based on the distribution
-            choices = np.prod(img_prob.shape)
-            index = np.random.choice(choices, size=1, p=prob)
-            coordinates = np.unravel_index(index, img_prob.shape)
-            x = int(coordinates[1][0])
-            y = int(coordinates[0][0])
-            ox = int(coordinates[1][0])
-            oy = int(coordinates[0][0])
+                # Generate the random coordinates based on the distribution
+                choices = np.prod(img_prob.shape)
+                index = np.random.choice(choices, size=1, p=prob)
+                coordinates = np.unravel_index(index, img_prob.shape)
+                x = int(coordinates[1][0])
+                y = int(coordinates[0][0])
+            ox, oy = x, y
 
             # Adjust the coordinates to be the origin of the crop and control to
             # not be out of the image
@@ -1453,6 +1460,7 @@ def random_3D_crop_pair(
     weight_map: Optional[NDArray] = None,
     draw_prob_map_points: bool = False,
     scale: Tuple[int, ...] = (1, 1, 1),
+    center: Optional[Tuple[int, ...]] = None,
 ) -> Union[
     Tuple[NDArray, NDArray],
     Tuple[NDArray, NDArray, NDArray],
@@ -1491,6 +1499,10 @@ def random_3D_crop_pair(
 
     scale : tuple of 3 ints, optional
         Scale factor the second image given. E.g. ``(2,4,4)``.
+
+    center : tuple of ints, optional
+        Centre of the crop, chosen by the caller (e.g. foreground oversampling) instead of at random. The crop is
+        kept inside the image as with ``img_prob``.
 
     Returns
     -------
@@ -1534,19 +1546,20 @@ def random_3D_crop_pair(
     if val:
         x, y, z, ox, oy, oz = 0, 0, 0, 0, 0, 0
     else:
-        if img_prob is not None:
-            prob = img_prob.ravel()
+        if img_prob is not None or center is not None:
+            if center is not None:  # chosen by the caller (e.g. foreground oversampling)
+                z, y, x = int(center[0]), int(center[1]), int(center[2])
+            else:
+                prob = img_prob.ravel()
 
-            # Generate the random coordinates based on the distribution
-            choices = np.prod(img_prob.shape)
-            index = np.random.choice(choices, size=1, p=prob)
-            coordinates = np.unravel_index(index, shape=img_prob.shape)
-            x = int(coordinates[2][0])
-            y = int(coordinates[1][0])
-            z = int(coordinates[0][0])
-            ox = int(coordinates[2][0])
-            oy = int(coordinates[1][0])
-            oz = int(coordinates[0][0])
+                # Generate the random coordinates based on the distribution
+                choices = np.prod(img_prob.shape)
+                index = np.random.choice(choices, size=1, p=prob)
+                coordinates = np.unravel_index(index, shape=img_prob.shape)
+                x = int(coordinates[2][0])
+                y = int(coordinates[1][0])
+                z = int(coordinates[0][0])
+            ox, oy, oz = x, y, z
 
             # Adjust the coordinates to be the origin of the crop and control to
             # not be out of the volume

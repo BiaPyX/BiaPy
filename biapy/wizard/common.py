@@ -135,29 +135,24 @@ def warn_objects_larger_than_patch(objects, patch, lines, what="objects of class
 
 def foreground_oversampling(cfg, raw_fp, fg_fraction, patch, lines):
     """
-    nnU-Net's foreground oversampling with BiaPy's probability map: when the foreground is scarce, patches
-    are taken at random so that at least a third of them are centred on foreground.
+    nnU-Net's patch sampling (DATA.TRAIN.PATCH_SAMPLING = "foreground_oversampling"): random patches, a third of each
+    batch centred on the foreground (on a class chosen at random among the ones of the image). It needs a few images, as
+    random patches make BiaPy split the validation set by images; otherwise the images are tiled.
     """
-    if fg_fraction >= FOREGROUND_OVERSAMPLING:
-        return
     n_train = int(raw_fp["n_files"] * train_fraction(cfg))
     if n_train < MIN_IMAGES_RANDOM_PATCHES:
         lines.append(
-            "Foreground is scarce ({:.1%} of the voxels in the median image) but there are too few images to "
-            "sample patches at random (at least {} are needed for the validation split); the images are tiled "
-            "instead".format(fg_fraction, MIN_IMAGES_RANDOM_PATCHES)
+            "Patches: the images are tiled (at least {} training images are needed to sample patches at random, as "
+            "nnU-Net does, and split the validation set by images)".format(MIN_IMAGES_RANDOM_PATCHES)
         )
         return
-    w_fg = round(FOREGROUND_OVERSAMPLING + (1 - FOREGROUND_OVERSAMPLING) * fg_fraction, 2)
     tiles = float(np.prod([np.ceil(s / p) for s, p in zip(raw_fp["median_shape"], patch)]))
     dtrain = cfg["DATA"].setdefault("TRAIN", {})
-    dtrain["EXTRACT_RANDOM_PATCH"] = True
-    dtrain["PROBABILITY_MAP"] = True
-    dtrain["W_FOREGROUND"] = w_fg
-    dtrain["W_BACKGROUND"] = round(1 - w_fg, 2)
+    dtrain["PATCH_SAMPLING"] = "foreground_oversampling"
+    dtrain["FOREGROUND_OVERSAMPLING"] = {"PERCENT": FOREGROUND_OVERSAMPLING}
     # As many patches per epoch as tiles would have been extracted from the images
     dtrain["REPLICATE"] = max(1, int(round(tiles)))
     lines.append(
-        "Foreground is scarce ({:.1%} of the voxels in the median image): random patches, {:.0%} of them "
-        "centred on foreground".format(fg_fraction, w_fg)
+        "Patches: random, {:.0%} of each batch centred on the foreground, on a class chosen at random (nnU-Net's "
+        "sampling; foreground is {:.1%} of the voxels in the median image)".format(FOREGROUND_OVERSAMPLING, fg_fraction)
     )

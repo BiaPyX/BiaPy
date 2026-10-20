@@ -381,8 +381,9 @@ def test_plan_semantic_seg(tmp_path):
     assert cfg["MODEL"]["Z_DOWN"][0] == 1  # Z spacing 4 times XY's
     assert cfg["LOSS"]["TYPE"] == ["DICE", "CE"]
     assert cfg["AUGMENTOR"]["ELASTIC"] is False
-    # Scarce foreground and enough images: patches sampled around it
-    assert cfg["DATA"]["TRAIN"]["PROBABILITY_MAP"] is True
+    # Enough images: random patches, a third of them centred on the foreground (nnU-Net's sampling)
+    assert cfg["DATA"]["TRAIN"]["PATCH_SAMPLING"] == "foreground_oversampling"
+    assert cfg["DATA"]["TRAIN"]["FOREGROUND_OVERSAMPLING"]["PERCENT"] == 0.33
     assert any("labels [2]" in line for line in report["lines"])
 
 
@@ -658,6 +659,8 @@ def test_config_semantic_seg(tmp_path):
     cfg, report = build_config(answers, GPU)
     assert report["applied"], report
     assert cfg["MODEL"]["ARCHITECTURE"] == "unet" and cfg["DATA"]["N_CLASSES"] == 3
+    assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] == 1  # the front-ends show the predictions of every epoch
+    assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_NUM_SAMPLES"] == 2
     _biapy_check(cfg, tmp_path)
 
 

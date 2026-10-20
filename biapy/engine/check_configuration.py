@@ -1587,10 +1587,31 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if re.compile(balance.REGEX).groups < 1:
             raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.REGEX' needs a capture group with the group id")
 
-    if cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH and cfg.DATA.TRAIN.PROBABILITY_MAP and cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+    sampling = cfg.DATA.TRAIN.PATCH_SAMPLING
+    if sampling not in ["tiles", "random", "foreground_oversampling"]:
         raise ValueError(
-            "'DATA.TRAIN.PROBABILITY_MAP' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
+            "'DATA.TRAIN.PATCH_SAMPLING' must be one of ['tiles', 'random', 'foreground_oversampling'], got '{}'".format(sampling)
         )
+    if cfg.DATA.TRAIN.PROBABILITY_MAP:
+        if sampling != "random":
+            raise ValueError("'DATA.TRAIN.PROBABILITY_MAP' can only be used with DATA.TRAIN.PATCH_SAMPLING = 'random'")
+        if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+            raise ValueError(
+                "'DATA.TRAIN.PROBABILITY_MAP' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
+            )
+    if sampling == "foreground_oversampling":
+        if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+            raise ValueError(
+                "DATA.TRAIN.PATCH_SAMPLING = 'foreground_oversampling' can only be used when 'PROBLEM.TYPE' is in "
+                "['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
+            )
+        fo = cfg.DATA.TRAIN.FOREGROUND_OVERSAMPLING
+        if not (0 <= fo.PERCENT <= 1):
+            raise ValueError("'DATA.TRAIN.FOREGROUND_OVERSAMPLING.PERCENT' must be in [0, 1]")
+        if fo.MAX_LOCATIONS_PER_CLASS < 1:
+            raise ValueError("'DATA.TRAIN.FOREGROUND_OVERSAMPLING.MAX_LOCATIONS_PER_CLASS' must be at least 1")
+        if not (0 <= fo.CENTER_JITTER <= 0.5):
+            raise ValueError("'DATA.TRAIN.FOREGROUND_OVERSAMPLING.CENTER_JITTER' must be in [0, 0.5]")
 
     for item in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         if item not in ["weights", "norm", "model_arch", "optimizer", "epoch"]:
@@ -3709,8 +3730,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.AUGMENTOR.RANDOM_RESIZED_CROP:
             if dim_count != 2:
                 raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP is only supported in 2D")
-            if not cfg.DATA.TRAIN.EXTRACT_RANDOM_PATCH:
-                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP requires DATA.TRAIN.EXTRACT_RANDOM_PATCH")
+            if cfg.DATA.TRAIN.PATCH_SAMPLING != "random":
+                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP requires DATA.TRAIN.PATCH_SAMPLING = 'random'")
             if cfg.DATA.TRAIN.PROBABILITY_MAP:
                 raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP can't be combined with DATA.TRAIN.PROBABILITY_MAP")
             if cfg.AUGMENTOR.ZOOM or cfg.AUGMENTOR.RANDOM_ROT:
@@ -4267,6 +4288,11 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "W_BACKGROUND" in old_cfg["DATA"]:
             old_cfg["DATA"]["TRAIN"]["W_BACKGROUND"] = old_cfg["DATA"]["W_BACKGROUND"]
             del old_cfg["DATA"]["W_BACKGROUND"]
+        # DATA.TRAIN.EXTRACT_RANDOM_PATCH became DATA.TRAIN.PATCH_SAMPLING ("tiles" / "random")
+        if "TRAIN" in old_cfg["DATA"] and "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]["TRAIN"]:
+            random_patch = old_cfg["DATA"]["TRAIN"].pop("EXTRACT_RANDOM_PATCH")
+            if "PATCH_SAMPLING" not in old_cfg["DATA"]["TRAIN"]:
+                old_cfg["DATA"]["TRAIN"]["PATCH_SAMPLING"] = "random" if random_patch else "tiles"
         if "TRAIN" in old_cfg["DATA"]:
             if "MINIMUM_FOREGROUND_PER" in old_cfg["DATA"]["TRAIN"]:
                 min_fore = old_cfg["DATA"]["TRAIN"]["MINIMUM_FOREGROUND_PER"]

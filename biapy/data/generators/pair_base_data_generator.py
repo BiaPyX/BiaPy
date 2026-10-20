@@ -36,12 +36,17 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
+<<<<<<< Updated upstream
 from biapy.data.pre_processing import (
     labels_into_channels,
     channel_physical_offsets,
     instance_channel_needs_regen,
     resize_images,
 )
+=======
+from biapy.data.pre_processing import labels_into_channels, channel_physical_offsets, resize_images
+from biapy.data.patch_sampling import pick_center, shift_center
+>>>>>>> Stashed changes
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -324,6 +329,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         If it is an array, it should represent the probability map used to make random crops when
         ``random_crops_in_DA`` is set. If str given should be the path to read these maps from.
 
+    class_locations : biapy.data.patch_sampling.ClassLocations, optional
+        Where the voxels of each class of every sample are, to centre patches on the foreground
+        (``DATA.TRAIN.PATCH_SAMPLING = "foreground_oversampling"``).
+
+    foreground_oversampling : dict, optional
+        ``percent``, ``per_batch``, ``center_jitter`` and ``balance_objects`` of
+        ``DATA.TRAIN.FOREGROUND_OVERSAMPLING``. With ``per_batch`` the indexes come as ``(index, force_foreground)`` from
+        :class:`biapy.data.patch_sampling.ForegroundOversamplingBatchSampler`.
+
     val : bool, optional
         Advise the generator that the images will be to validate the model to not make random crops (as the val.
         data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
@@ -499,6 +513,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         shape: Tuple[int, int, int] = (256, 256, 1),
         resolution: Tuple[int, ...] = (-1,),
         prob_map: Optional[NDArray | str] = None,
+        class_locations=None,
+        foreground_oversampling: Optional[Dict] = None,
         val: bool = False,
         n_classes: int = 1,
         ignore_index: Optional[int] = None,
@@ -542,6 +558,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.convert_to_rgb = convert_to_rgb
         self.norm_module = norm_module.copy()
         self.random_crops_in_DA = random_crops_in_DA
+        self.class_locations = class_locations if random_crops_in_DA else None
+        self.foreground_oversampling = foreground_oversampling
         self.prob_map = None
         self.preprocess_f = preprocess_f
         self.preprocess_cfg = preprocess_cfg
@@ -1066,7 +1084,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         )
 
     def load_sample(
-        self, _idx: int, first_load: bool = False, geom_enlarge: bool = False
+        self, _idx: int, first_load: bool = False, geom_enlarge: bool = False, force_foreground: bool = False
     ) -> Tuple[NDArray, NDArray]:
         """
         Load one data sample given its corresponding index.
@@ -1078,6 +1096,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         first_load : bool, optional
             Whether its the first time a sample is loaded to prevent normalizing it.
+
+        force_foreground : bool, optional
+            Centre the patch on a voxel of a class of the image (see ``class_locations``). Only with random patches.
 
         geom_enlarge : bool, optional
             Whether to extract a patch larger than the network input so a later zoom-out / rotation
@@ -1269,12 +1290,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
             # Crop a bigger window when enlarging; bounded by the image, apply_transform crops it back.
             crop_spatial = self.aug_load_spatial if enlarge else self.shape[: self.ndim]
+            center = None
+            if force_foreground and self.class_locations is not None and not first_load:
+                rng = np.random.default_rng(np.random.randint(0, 2**31 - 1))  # follows the (seeded) global state
+                center = pick_center(
+                    self.class_locations.get(idx), rng, self.foreground_oversampling.get("balance_objects", False)
+                )
+                if center is not None:
+                    center = shift_center(
+                        center, self.shape[: self.ndim], self.foreground_oversampling.get("center_jitter", 0), rng
+                    )
             img, mask = self.random_crop_func(  # type: ignore
                 img,
                 mask,
                 crop_spatial,
                 self.crop_from_origin,
                 img_prob=img_prob,
+                center=center,
                 scale=self.random_crop_scale,
             )
 
@@ -1399,6 +1431,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # (like Cellpose reseeding to 42) and the val loss doesn't jitter with crop luck. Training keeps
         # fresh randomness. The global RNG state is restored before returning so fixed seeds don't leak
         # into training when SYSTEM.NUM_WORKERS=0 (shared process).
+        # Foreground oversampling: whether this patch is centred on the foreground. Given by the batch sampler (it
+        # depends on the position in the batch), or drawn here (seeded per index for validation, see below)
+        force_foreground = None
+        if isinstance(index, (tuple, list)):
+            index, force_foreground = int(index[0]), bool(index[1])
         _rng_state = None
         if self.val:
             _seed = (int(self.seed) + index) % (2**31 - 1)
@@ -1408,8 +1445,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         elif self.balance_cum_weights is not None:
             index = random.choices(range(self.real_length), cum_weights=self.balance_cum_weights)[0]
 
+        if force_foreground is None and self.class_locations is not None and self.foreground_oversampling:
+            force_foreground = np.random.uniform() < self.foreground_oversampling["percent"]
+
         # Enlarge the extraction here; apply_transform warps and crops it back to the network size.
-        img, mask = self.load_sample(index, geom_enlarge=True)
+        img, mask = self.load_sample(index, geom_enlarge=True, force_foreground=bool(force_foreground))
 
         # Apply transformations. Validation enters here too for the Cellpose rescale: with ``da`` off
         # every augmentation roll returns False (see ``_roll``), so only the rescale, crop-back and flow

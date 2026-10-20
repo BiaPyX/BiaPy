@@ -88,9 +88,10 @@ def set_default_config(cfg, sample_info):
     if cfg["TRAIN"]["ENABLE"]:
         cfg["TRAIN"]["EPOCHS"] = 150
         cfg["TRAIN"]["PATIENCE"] = 50
-        # Save a prediction of a fixed sample about 10 times along the training, so the front-ends can show
-        # how the model learns (TRAIN.SAVE_TRAIN_PREDS_FREQ: every N epochs; 15 for 150 epochs)
-        cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] = max(1, cfg["TRAIN"]["EPOCHS"] // 10)
+        # Save the prediction of a few fixed samples after every epoch, so the front-ends can show how the model
+        # learns (TRAIN.SAVE_TRAIN_PREDS_FREQ: every N epochs)
+        cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] = 1
+        cfg["TRAIN"]["SAVE_TRAIN_PREDS_NUM_SAMPLES"] = 2
         cfg["TRAIN"]["OPTIMIZER"] = ["ADAMW"]  # one per group of parameters (a single group)
         cfg["TRAIN"]["LR"] = [1.0e-4]
         cfg["TRAIN"].setdefault("LR_SCHEDULER", {})
