@@ -96,13 +96,31 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
         "derived_channels": list(mr.DERIVED_CHANNELS),
         "derived_channels_extra_opts": dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
         "slice_dropout_aug": _aug_cfg(mr.SLICE_DROPOUT_AUG),
-        "gap_aug": _aug_cfg(mr.GAP_AUG, "length_range", "thickness_range", "n_lines"),
-        "bridge_aug": _aug_cfg(mr.BRIDGE_AUG, "length_range", "thickness_range", "n_lines"),
+        "gap_aug": _aug_cfg(
+            mr.GAP_AUG, "length_range", "thickness_range", "n_lines", "raw_strength_range", scalar_keys=("raw_prob",)
+        ),
+        "bridge_aug": _aug_cfg(
+            mr.BRIDGE_AUG, "length_range", "thickness_range", "n_lines", "raw_strength_range", scalar_keys=("raw_prob",)
+        ),
         "artifact_aug": _aug_cfg(
             mr.ARTIFACT_AUG, "band_thickness_range", "blob_size_range", "blob_n_range",
             scalar_keys=("band_prob",),
         ),
         "skeleton_perturb_aug": _aug_cfg(mr.SKELETON_PERTURB_AUG, "radius_range"),
+        "internal_membrane_aug": _aug_cfg(
+            mr.INTERNAL_MEMBRANE_AUG, "n_range", "thresholds", "radius_range", "z_range", "thickness_range",
+            "keep_range", scalar_keys=("gap", "darker"),
+        ),
+        "ridge_membrane_aug": _aug_cfg(
+            mr.RIDGE_MEMBRANE_AUG, "n_range", "box_z_range", "box_xy_range", "threshold_range", "z_range",
+            "thickness_range",
+            scalar_keys=("z_sigma", "min_area"),
+        ),
+        "membrane_dust_aug": _aug_cfg(
+            mr.MEMBRANE_DUST_AUG, "n_regions", "radius_range", "density_range", "decay_range", "cloud_sigma_range",
+            "speck_sigma_range", "z_radius_range", "noise_z_sigma_range", "raw_strength_range",
+            scalar_keys=("speck_density", "ring_density", "raw_prob"),
+        ),
         "ignore_value": cfg.LOSS.IGNORE_INDEX if cfg.LOSS.IGNORE_INDEX != -1 else None,
         # Per-channel warp interpolation: nearest-neighbour for binary channels, linear for "raw".
         "img_type": ["image" if ch == "raw" else "mask" for ch in mr.SOURCE_CHANNELS],

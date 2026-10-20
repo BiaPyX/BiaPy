@@ -386,6 +386,7 @@ def load_and_prepare_train_data(
                 padding=train_padding,
                 is_mask=False,
                 is_3d=is_3d,
+                random_crops=random_crops_in_DA,
             )
         else:
             X_train = samples_from_image_list(
@@ -422,6 +423,7 @@ def load_and_prepare_train_data(
                     padding=train_padding,
                     is_mask=True,
                     is_3d=is_3d,
+                    random_crops=random_crops_in_DA,
                 )
             else:
 
@@ -1917,6 +1919,7 @@ def samples_from_zarr(
     padding: Tuple[int, ...],
     is_mask: bool = False,
     is_3d: bool = True,
+    random_crops: bool = False,
 ) -> BiaPyDataset:
     """
     Create dataset samples from the given list. This function does not load the data.
@@ -1952,6 +1955,11 @@ def samples_from_zarr(
 
     is_3d: bool, optional
         Whether the data to load is expected to be 3D or not.
+
+    random_crops : bool, optional
+        Register one sample per file without coordinates instead of tiling it, so the generator draws a random
+        patch within the file each time the sample is loaded (``DATA.TRAIN.EXTRACT_RANDOM_PATCH``), as with
+        non-Zarr images.
 
     Returns
     -------
@@ -1997,6 +2005,23 @@ def samples_from_zarr(
                     "Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(crop_shape[-1], channel)
                 )
+
+        if random_crops:
+            dataset_info.append(
+                DatasetFile(
+                    path=os.path.join(data_path, list_of_data[i]),
+                    shape=data.shape,
+                    parallel_data=True,
+                    input_axes=zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
+                )
+            )
+            sample_dict = DataSample(fid=i, coords=None)
+            if data_within_zarr_path:
+                sample_dict.path_in_zarr = data_within_zarr_path
+            sample_list.append(sample_dict)
+            if isinstance(file, h5py.File):
+                file.close()
+            continue
 
         # Get the total patches so we can use tqdm so the user can see the time
         obj = extract_3D_patch_with_overlap_and_padding_yield(

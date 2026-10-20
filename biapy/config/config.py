@@ -808,6 +808,10 @@ class Config:
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (0.3, 1.0)
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.THICKNESS_RANGE = (4, 9)
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.N_LINES = (1, 3)
+        # Probability, per painted slice, of also fading the raw membrane or covering it with a dark blob under the gap
+        # (so the raw ridge response agrees with the missing membrane), and its strength (0-1). Needs 'raw'.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.RAW_PROB = 0.0
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.RAW_STRENGTH_RANGE = (0.5, 1.0)
         # Inverse of GAP_AUG: paints bands instead of erasing (split error). Same options.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.ENABLE = False
@@ -815,6 +819,9 @@ class Config:
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.LENGTH_RANGE = (0.3, 1.0)
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.THICKNESS_RANGE = (4, 9)
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.N_LINES = (1, 3)
+        # Probability, per painted slice, of also darkening the raw image under the bridge, and its strength (0-1)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.RAW_PROB = 0.0
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.RAW_STRENGTH_RANGE = (0.2, 0.5)
         # Heavy acquisition artifact. With probability BAND_PROB: a border-to-border band
         # (BAND_THICKNESS_RANGE px) -- membrane channel set to 1 inside it, every other channel
         # blacked out; rest of the image untouched. Otherwise: BLOB_N_RANGE ink-blot blobs
@@ -831,13 +838,74 @@ class Config:
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.ENABLE = False
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.RADIUS_RANGE = (1, 2)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.RADIUS_RANGE = (1, 1)
         # Zeroes z-slices of each raw source channel (SOURCE_CHANNELS, e.g. membrane or raw)
         # independently with probability PROB (see 'slice_dropout' in
         # biapy/data/generators/membrane_augmentors.py).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG = CN()
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.ENABLE = False
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.PROB = 0.3
+        # Fake mitochondria membranes inside instances (predicted as neuron membranes by the upstream model) that trace
+        # the real ridge rings of 'raw'; targets are unchanged. Mito-like objects (areas enclosed by the ridge response
+        # inside one instance, detected at THRESHOLDS with ring gaps up to GAP px bridged, equivalent radius in
+        # RADIUS_RANGE and darker than the rest of the instance by DARKER, raw in [0, 1]) are linked across slices; with probability PROB per sample, N_RANGE of them get the ridge
+        # pixels around their outline painted over Z_RANGE consecutive slices. Needs 'raw' in SOURCE_CHANNELS.
+        # See 'internal_membranes' in biapy/data/generators/membrane_augmentors.py.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.PROB = 0.5
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.N_RANGE = (20, 40)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.THRESHOLDS = (0.5, 0.55, 0.6, 0.65, 0.7)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.GAP = 10
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.RADIUS_RANGE = (4, 50)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.DARKER = 0.05
+        # Painted slices per object, outline thickness (px) and fraction of the outline kept (an angular sector is left
+        # out, the same in all slices)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.Z_RANGE = (3, 8)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.THICKNESS_RANGE = (2, 4)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.KEEP_RANGE = (0.5, 1.0)
+        # Fake membranes inside instances where the raw image looks like a membrane (e.g. organelles); targets are
+        # unchanged. With probability PROB per sample, N_RANGE random 3D boxes: the Meijering response of 'raw' is
+        # smoothed along z (Z_SIGMA slices, also used by INTERNAL_MEMBRANE_AUG), thresholded (THRESHOLD_RANGE) inside
+        # instances, and its 3D components of at least MIN_AREA pixels per slice (on average) spanning Z_RANGE slices
+        # are painted as lines of THICKNESS_RANGE pixels. Needs 'raw' in SOURCE_CHANNELS.
+        # See 'ridge_membranes' in biapy/data/generators/membrane_augmentors.py.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.PROB = 0.3
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.N_RANGE = (6, 12)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.BOX_Z_RANGE = (8, 24)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.BOX_XY_RANGE = (48, 160)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.THRESHOLD_RANGE = (0.45, 0.6)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.Z_RANGE = (3, 8)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.THICKNESS_RANGE = (1, 3)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.Z_SIGMA = 1.0
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.MIN_AREA = 20
+        # Membrane "dust" around the membranes (porous clouds bleeding off them, specks and small rings), as the upstream
+        # model predicts in ambiguous areas; targets are unchanged. On each z-slice with probability PROB, N_REGIONS
+        # regions (Gaussian envelopes of RADIUS_RANGE px) are centred on membrane pixels, and a pixel at distance d
+        # from the membrane is painted with probability density * exp(-d / decay) (DENSITY_RANGE, DECAY_RANGE px),
+        # thresholding smoothed noise (CLOUD_SIGMA_RANGE px). Specks (SPECK_SIGMA_RANGE px) and rings reach twice
+        # as far, with SPECK_DENSITY/RING_DENSITY times that probability (0 disables them).
+        # See 'membrane_dust' in biapy/data/generators/membrane_augmentors.py.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG = CN()
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.ENABLE = False
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.PROB = 0.5
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.N_REGIONS = (2, 6)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RADIUS_RANGE = (15, 50)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.DENSITY_RANGE = (0.3, 0.8)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.DECAY_RANGE = (2, 8)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.CLOUD_SIGMA_RANGE = (1.5, 3.0)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.SPECK_SIGMA_RANGE = (0.7, 1.2)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.SPECK_DENSITY = 0.3
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RING_DENSITY = 0.3
+        # Z-coherent dust (3D only): z-extent (Gaussian sigma, slices) of each region and z-smoothing of the noise.
+        # With Z_RADIUS_RANGE above 0, PROB and N_REGIONS apply per volume instead of per slice. (0, 0): per-slice dust.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.Z_RADIUS_RANGE = (0, 0)
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.NOISE_Z_SIGMA_RANGE = (1.0, 3.0)
+        # Probability, per augmented slice (z-coherent mode: volume), of also darkening the raw image under the dust
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RAW_PROB = 0.0
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RAW_STRENGTH_RANGE = (0.2, 0.5)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3. Dataset

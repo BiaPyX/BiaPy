@@ -27,6 +27,10 @@ from biapy.data.membrane_channels import derive_membrane_input_channels, source_
 from biapy.data.pre_processing import channel_physical_offsets, labels_into_channels
 from biapy.data.generators.membrane_augmentors import (
     artifact_corruption,
+    internal_membranes,
+    membrane_dust,
+    ridge_membrane_response,
+    ridge_membranes,
     skeleton_perturbation,
     slice_dropout,
     spurious_bridge,
@@ -50,6 +54,9 @@ class MembraneRepairGeneratorMixin:
         bridge_aug: Dict = {},
         artifact_aug: Dict = {},
         skeleton_perturb_aug: Dict = {},
+        internal_membrane_aug: Dict = {},
+        ridge_membrane_aug: Dict = {},
+        membrane_dust_aug: Dict = {},
         ignore_value: Optional[int] = None,
         **kwargs,
     ):
@@ -79,6 +86,16 @@ class MembraneRepairGeneratorMixin:
             augmentor-specific range keys (see ``biapy.data.generators.membrane_augmentors``).
             ``artifact_aug``'s blob artifact affects every channel, not just the membrane channel.
 
+        internal_membrane_aug, ridge_membrane_aug : dict, optional
+            ``{"enable": bool, "prob": float, ...}``: fake membranes inside instances (mito-like shells / raw
+            ridges), see ``internal_membranes``/``ridge_membranes`` in ``biapy.data.generators.membrane_augmentors``.
+            Both are anchored on the ridge response of "raw" and need it in SOURCE_CHANNELS, plus the 'I' channel.
+
+        membrane_dust_aug : dict, optional
+            ``{"enable": bool, "prob": float, ...}``: dust (clouds, specks, rings) around the membranes, on each
+            z-slice independently with probability ``"prob"``, see ``membrane_dust`` in
+            ``biapy.data.generators.membrane_augmentors``.
+
         ignore_value : int, optional
             Ignore label (``LOSS.IGNORE_INDEX``) in the membrane channel. Fed to the model as 0; the
             affinities between two ignored voxels are set to this value.
@@ -104,6 +121,9 @@ class MembraneRepairGeneratorMixin:
         self.bridge_aug = dict(bridge_aug)
         self.artifact_aug = dict(artifact_aug)
         self.skeleton_perturb_aug = dict(skeleton_perturb_aug)
+        self.internal_membrane_aug = dict(internal_membrane_aug)
+        self.ridge_membrane_aug = dict(ridge_membrane_aug)
+        self.membrane_dust_aug = dict(membrane_dust_aug)
 
         self.channel_offsets = source_channel_offsets(self.source_channels, self.derived_channels)
         self.membrane_idx = self.channel_offsets.get("membrane")
@@ -116,9 +136,21 @@ class MembraneRepairGeneratorMixin:
             ("bridge_aug", self.bridge_aug),
             ("artifact_aug", self.artifact_aug),
             ("skeleton_perturb_aug", self.skeleton_perturb_aug),
+            ("internal_membrane_aug", self.internal_membrane_aug),
+            ("ridge_membrane_aug", self.ridge_membrane_aug),
+            ("membrane_dust_aug", self.membrane_dust_aug),
         ):
             if aug.get("enable") and self.membrane_idx is None:
                 raise ValueError(f"{name} requires 'membrane' in SOURCE_CHANNELS.")
+        for name, aug in (("internal_membrane_aug", self.internal_membrane_aug), ("ridge_membrane_aug", self.ridge_membrane_aug)):
+            if aug.get("enable") and self.instance_channel is None:
+                raise ValueError(f"{name} requires the 'I' channel in DATA_CHANNELS.")
+        for name, aug in (("internal_membrane_aug", self.internal_membrane_aug), ("ridge_membrane_aug", self.ridge_membrane_aug)):
+            if aug.get("enable") and "raw" not in self.channel_offsets:
+                raise ValueError(f"{name} requires 'raw' in SOURCE_CHANNELS.")
+        for name, aug in (("gap_aug", self.gap_aug), ("bridge_aug", self.bridge_aug), ("membrane_dust_aug", self.membrane_dust_aug)):
+            if aug.get("enable") and aug.get("raw_prob", 0) > 0 and "raw" not in self.channel_offsets:
+                raise ValueError(f"{name}'s RAW_PROB requires 'raw' in SOURCE_CHANNELS.")
 
         self.ignore_value = ignore_value
         self.ignore_mask_col = None
@@ -224,6 +256,38 @@ class MembraneRepairGeneratorMixin:
             mask = np.delete(mask, self.ignore_mask_col, axis=-1)
             mask = self._ignore_affinities(mask, ignored, sample_resolution)
 
+        # First, so the fake membranes also get perturbations/gaps
+        do_internal = self.internal_membrane_aug.get("enable") and self.da
+        do_ridge = self.ridge_membrane_aug.get("enable") and self.da
+        if do_internal or do_ridge:
+            # Ridge response of the raw image, shared by both augmentors
+            raw_idx = self.channel_offsets["raw"]
+            raw = image[..., raw_idx] if self.ndim == 3 else image[None, ..., raw_idx]
+            response = ridge_membrane_response(raw, float(self.ridge_membrane_aug.get("z_sigma", 1.0)))
+            labels = mask[..., self.instance_channel]
+        if do_internal:
+            opts = {k: v for k, v in self.internal_membrane_aug.items() if k != "enable"}
+            image = internal_membranes(image, self.membrane_idx, raw_idx, labels, self.ndim, response=response, **opts)
+        if do_ridge:
+            opts = {k: v for k, v in self.ridge_membrane_aug.items() if k not in ("enable", "z_sigma")}
+            image = ridge_membranes(image, self.membrane_idx, raw_idx, labels, self.ndim, response=response, **opts)
+
+        # Corruption order: fake membranes (above), geometry jitter of all membranes, dust around them, gap/bridge
+        # bands and the black-outs last (artifacts, slice dropout). So the jitter's dilation never refills gaps or
+        # grows bands, the dust keeps its shape, and nothing is painted into a blacked-out area.
+        if self.skeleton_perturb_aug.get("enable") and self.da:
+            image = skeleton_perturbation(
+                image,
+                self.membrane_idx,
+                self.ndim,
+                prob=float(self.skeleton_perturb_aug.get("prob", 0.3)),
+                radius_range=tuple(self.skeleton_perturb_aug.get("radius_range", (1, 2))),
+            )
+
+        if self.membrane_dust_aug.get("enable") and self.da:
+            opts = {k: v for k, v in self.membrane_dust_aug.items() if k != "enable"}
+            image = membrane_dust(image, self.membrane_idx, self.ndim, raw_idx=self.channel_offsets.get("raw"), **opts)
+
         if self.gap_aug.get("enable") and self.da:
             image = synthetic_gap(
                 image,
@@ -233,6 +297,9 @@ class MembraneRepairGeneratorMixin:
                 length_range=tuple(self.gap_aug.get("length_range", (0.3, 1.0))),
                 thickness_range=tuple(self.gap_aug.get("thickness_range", (4, 9))),
                 n_lines=tuple(self.gap_aug.get("n_lines", (1, 3))),
+                raw_idx=self.channel_offsets.get("raw"),
+                raw_prob=float(self.gap_aug.get("raw_prob", 0.0)),
+                raw_strength_range=tuple(self.gap_aug.get("raw_strength_range", (0.5, 1.0))),
             )
 
         if self.bridge_aug.get("enable") and self.da:
@@ -244,6 +311,9 @@ class MembraneRepairGeneratorMixin:
                 length_range=tuple(self.bridge_aug.get("length_range", (0.3, 1.0))),
                 thickness_range=tuple(self.bridge_aug.get("thickness_range", (4, 9))),
                 n_lines=tuple(self.bridge_aug.get("n_lines", (1, 3))),
+                raw_idx=self.channel_offsets.get("raw"),
+                raw_prob=float(self.bridge_aug.get("raw_prob", 0.0)),
+                raw_strength_range=tuple(self.bridge_aug.get("raw_strength_range", (0.2, 0.5))),
             )
 
         if self.artifact_aug.get("enable") and self.da:
@@ -256,15 +326,6 @@ class MembraneRepairGeneratorMixin:
                 band_thickness_range=tuple(self.artifact_aug.get("band_thickness_range", (50, 70))),
                 blob_size_range=tuple(self.artifact_aug.get("blob_size_range", (0.1, 0.3))),
                 blob_n_range=tuple(self.artifact_aug.get("blob_n_range", (1, 3))),
-            )
-
-        if self.skeleton_perturb_aug.get("enable") and self.da:
-            image = skeleton_perturbation(
-                image,
-                self.membrane_idx,
-                self.ndim,
-                prob=float(self.skeleton_perturb_aug.get("prob", 0.3)),
-                radius_range=tuple(self.skeleton_perturb_aug.get("radius_range", (1, 2))),
             )
 
         # Must run before 'derive' below: dropping a source channel after deriving would leave its

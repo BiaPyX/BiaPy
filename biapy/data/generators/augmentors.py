@@ -2979,9 +2979,12 @@ def elastic(
     cval: float = 0,
     mode: str = "constant",
     random_seed=None,
+    img_type: Union[str, List[str]] = "image",
 ) -> Tuple[NDArray, Optional[NDArray], Optional[NDArray]]:
     """
     Apply elastic deformation to an image (and optional mask/heatmap).
+
+    A single displacement field is drawn and applied to ``image``, ``mask`` and ``heat``, so they stay aligned.
 
     Parameters
     ----------
@@ -3012,6 +3015,11 @@ def elastic(
     random_seed : int, optional
         Random seed for reproducibility.
 
+    img_type : str or list of str, optional
+        How to treat ``image`` during interpolation: "image" (order 3) or "mask" (order 0, for a binary/label
+        channel). A single string applies to every channel; a list gives one type per channel
+        (``len(img_type) == image.shape[-1]``), for an ``image`` that mixes binary and continuous channels.
+
     Returns
     -------
     img : 3D/4D Numpy array
@@ -3031,27 +3039,10 @@ def elastic(
     if random_seed is not None:
         np.random.seed(random_seed)
 
-    def warp_with_new_displacement(
-        tensor: NDArray,
-        alpha: float,
-        sigma: float,
-        order: int,
-        cval: float,
-        mode: str
-    ) -> NDArray:
+    def displacement_field(H: int, W: int, alpha: float, sigma: float) -> Tuple[NDArray, NDArray]:
         """
-        Apply elastic deformation to a tensor.
-        Works for (H, W, C) and (Z, H, W, C). The displacement is generated in (H, W)
-        and broadcast to all channels (and all z-slices if 4D).
+        Random (H, W) displacement field, broadcast to all channels (and all z-slices if 4D) when warping.
         """
-        assert tensor.ndim in (3, 4), f"Expected 3D or 4D tensor, got {tensor.shape}"
-
-        # Pick spatial (H, W) depending on layout
-        if tensor.ndim == 3:             # (H, W, C)
-            H, W = tensor.shape[:2]
-        else:                             # (Z, H, W, C)
-            H, W = tensor.shape[1:3]
-
         # Choose padding kernel size based on sigma (same logic as before)
         if sigma < 3.0:
             ksize = 3.3 * sigma  # ~99% weight
@@ -3078,21 +3069,37 @@ def elastic(
         if padding > 0:
             dx = dx[padding:-padding, padding:-padding]
             dy = dy[padding:-padding, padding:-padding]
-
-        # Let _map_coordinates handle both 3D and 4D layouts
-        return _map_coordinates(tensor, dx, dy, order=order, cval=cval, mode=mode)
+        return dx, dy
 
     alphas, sigmas = _draw_samples(alpha, sigma, nb_images=1)
     alpha_val = alphas[0]
     sigma_val = sigmas[0]
 
-    img = warp_with_new_displacement(image, alpha_val, sigma_val, 3, cval, mode)
+    # Pick spatial (H, W) depending on layout: (H, W, C) or (Z, H, W, C)
+    H, W = image.shape[:2] if image.ndim == 3 else image.shape[1:3]
+    dx, dy = displacement_field(H, W, alpha_val, sigma_val)
+
+    # Per-channel interpolation order for the image (_map_coordinates handles both 3D and 4D layouts)
+    img_orders = (
+        [0 if t == "mask" else 3 for t in img_type] if isinstance(img_type, list)
+        else [0 if img_type == "mask" else 3] * image.shape[-1]
+    )
+    assert len(img_orders) == image.shape[-1], (
+        f"Per-channel 'img_type' has {len(img_orders)} entries but the image has {image.shape[-1]} channels"
+    )
+    if len(set(img_orders)) == 1:
+        img = _map_coordinates(image, dx, dy, order=img_orders[0], cval=cval, mode=mode)
+    else:
+        img = np.empty(image.shape, dtype=np.float32 if image.dtype.kind == "f" else image.dtype)
+        for order in set(img_orders):
+            chs = [c for c, o in enumerate(img_orders) if o == order]
+            img[..., chs] = _map_coordinates(image[..., chs], dx, dy, order=order, cval=cval, mode=mode)
     if mask is not None:
         mask_order = 0 if mask_type == "mask" else 1
-        mask = warp_with_new_displacement(mask, alpha_val, sigma_val, mask_order, cval, mode)
+        mask = _map_coordinates(mask, dx, dy, order=mask_order, cval=cval, mode=mode)
     if heat is not None:
         heat_mins, heat_maxes = np.min(heat, axis=tuple(range(heat.ndim - 1))), np.max(heat, axis=tuple(range(heat.ndim - 1)))
-        heat = warp_with_new_displacement(heat, alpha_val, sigma_val, 3, cval, mode)
+        heat = _map_coordinates(heat, dx, dy, order=3, cval=cval, mode=mode)
         np.clip(heat, heat_mins, heat_maxes, out=heat)
 
     return img, mask, heat

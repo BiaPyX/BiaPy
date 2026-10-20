@@ -34,7 +34,7 @@ from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process, os_walk_clean
 from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_patch_within_image, enlarge_coords
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
-from biapy.data.dataset import BiaPyDataset
+from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
 from biapy.data.pre_processing import (
     labels_into_channels,
@@ -1035,6 +1035,36 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Define the number of samples per epoch."""
         return self.length
 
+    def _random_patch_coords(self, file_info, size: Tuple[int, ...]) -> PatchCoords:
+        """
+        Random ``(z, y, x)`` patch of ``size`` within a Zarr/H5 file.
+
+        Parameters
+        ----------
+        file_info : DatasetFile
+            Dataset entry of the file (``shape`` and ``get_input_axes()``).
+
+        size : tuple of int
+            Spatial patch size, ``(z, y, x)``.
+
+        Returns
+        -------
+        coords : PatchCoords
+            Coordinates of the patch.
+        """
+        if self.ndim != 3:
+            raise ValueError("Random patches from Zarr/H5 files are only supported in 3D")
+        axes = file_info.get_input_axes()
+        starts = []
+        for ax, s in zip("ZYX", size):
+            dim = int(file_info.shape[axes.index(ax)])
+            starts.append(random.randint(0, max(0, dim - int(s))))
+        return PatchCoords(
+            z_start=starts[0], z_end=starts[0] + int(size[0]),
+            y_start=starts[1], y_end=starts[1] + int(size[1]),
+            x_start=starts[2], x_end=starts[2] + int(size[2]),
+        )
+
     def load_sample(
         self, _idx: int, first_load: bool = False, geom_enlarge: bool = False
     ) -> Tuple[NDArray, NDArray]:
@@ -1076,6 +1106,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             and any(self.aug_load_inc)
         )
 
+        # Zarr/H5 random patch (EXTRACT_RANDOM_PATCH): drawn for X, reused for Y
+        rand_coords = None
+        crop_spatial = self.aug_load_spatial if enlarge else self.shape[: self.ndim]
+
         # X data
         if sample.img_is_loaded():
             img = sample.img.copy()
@@ -1104,8 +1138,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             else:
                 coords = sample.coords
                 data_axes_order = self.X.dataset_info[sample.fid].get_input_axes()
-                assert coords is not None and data_axes_order is not None
-                if enlarge:
+                assert data_axes_order is not None
+                if coords is None:
+                    coords = rand_coords = self._random_patch_coords(self.X.dataset_info[sample.fid], crop_spatial)
+                elif enlarge:
                     # Lazy Zarr/H5 reads clamp over-range stops, so a large sentinel extent is safe.
                     coords = enlarge_coords(coords, self.aug_load_inc, (1 << 62,) * 3, is_3d=(self.ndim == 3))
                 img = extract_patch_from_efficient_file(img, coords, data_axes_order=data_axes_order)
@@ -1166,8 +1202,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 else:
                     coords = msample.coords
                     data_axes_order = self.Y.dataset_info[msample.fid].get_input_axes()
-                    assert coords is not None and data_axes_order is not None
-                    if enlarge:
+                    assert data_axes_order is not None
+                    if coords is None:
+                        if rand_coords is None:
+                            raise ValueError(
+                                "Random patches from a Zarr/H5 GT file need the raw image to be a Zarr/H5 file too"
+                            )
+                        coords = rand_coords
+                    elif enlarge:
                         # Lazy Zarr/H5 reads clamp over-range stops, so a large sentinel extent is safe.
                         coords = enlarge_coords(coords, self.aug_load_inc, (1 << 62,) * 3, is_3d=(self.ndim == 3))
                     mask = extract_patch_from_efficient_file(
@@ -1186,8 +1228,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         if mask_file and isinstance(mask_file, h5py.File):
                             mask_file.close()
 
+        if rand_coords is not None:
+            img = pad_to_shape(img, tuple(crop_spatial) + (img.shape[-1],), verbose=False, mode=self.affine_mode)
+            mask = pad_to_shape(mask, tuple(crop_spatial) + (mask.shape[-1],), verbose=False, mode=self.affine_mode)
+
         # Apply random crops if it is selected
-        if sample.coords is None:
+        if sample.coords is None and rand_coords is None:
             # Capture probability map
             if self.prob_map is not None:
                 # The list may hold file paths (directory-based prob maps) or raw ndarrays
@@ -1675,7 +1721,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 alpha=self.e_alpha,
                 sigma=self.e_sigma,
                 mask_type=self.norm_module["target_type"],
-                mode=self.e_mode
+                mode=self.e_mode,
+                img_type=self.img_type,
             ) # type: ignore
 
         if self.shear and self._roll("shear"):
