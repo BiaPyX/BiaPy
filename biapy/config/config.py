@@ -176,6 +176,11 @@ class Config:
         #          Options are 'thick', 'inner', 'outer', 'subpixel', and 'dense'. The 'dense' option labels as contour
         #          every pixel that is not part of the foreground. Default: 'thick'
         #   - 'H', 'V' and 'Z' channels. Possible options:
+        #       - 'type': str, reference point of the displacements: 'centroid' or 'skeleton' (displacement in voxels to
+        #         the nearest skeleton voxel of the instance, as SKOOTS). 'skeleton' ignores 'norm' and 'act' and is only
+        #         supported by PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR. Default: 'centroid'
+        #       - 'scale': list of floats, only with 'skeleton'. Voxels per axis ((z,) y, x) matching a tanh output of 1.
+        #         Default: [12, 60, 60] in 3D, [60, 60] in 2D
         #       - 'norm': bool, specifies whether signed displacements are normalized to [-1, 1] (centroid = 0). Default: True
         #       - 'act': str, specifies the activation function used in the model's final layer when this channel is selected.
         #          These channels are signed, so the activation must allow negative values: 'linear' (unbounded) or 'tanh'
@@ -738,11 +743,15 @@ class Config:
         # instance-label channel), the regeneration source that is dropped before the batch reaches the
         # model -- exactly as INSTANCE_SEG does for its own directional channels. 'A' (affinities) is the
         # actual training target.
+        # Supported targets ('I' aside): ['A'] (affinities) or 'F', 'P', 'H', 'V', 'Z' in any order (SKOOTS, 'Z' only
+        # in 3D, 'P' and 'H'/'V'/'Z' of type 'skeleton', LOSS.TYPE ['SKOOTS'], POSTPROCESS.METHOD 'skoots').
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS = ["A", "I"]
-        # Same shape/semantics as PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS's 'A' entry:
-        # 'z_affinities'/'y_affinities'/'x_affinities' (paired-by-index neighbour offset lists) and
-        # 'widen_borders'. E.g. [{'A': {'z_affinities': [1], 'y_affinities': [1], 'x_affinities': [1]}}]
+        # Same as PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS. E.g. [{'A': {'z_affinities': [1], 'y_affinities': [1],
+        # 'x_affinities': [1]}}] or [{'P': {'type': 'skeleton'}, 'H': {'type': 'skeleton'}}]
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS = [{}]
+        # Weight of each DATA_CHANNELS entry ('I' aside) in the loss. Only used by the SKOOTS target, where 'H', 'V' and
+        # 'Z' form one term and must share the same weight.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS = (1, 1)
         # Like PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS, but per affinity offset channel
         # instead of pooled across the whole 'A' stack. False = old pooled behavior (reproducibility).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_REBALANCE_WITHIN_CHANNELS = True
@@ -752,8 +761,14 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS = CN()
         # How to turn predicted affinities into instance labels at test time: 'watershed' or
-        # 'agglomeration' (see biapy/data/post_processing/affinity_agglomeration.py).
+        # 'agglomeration' (see biapy/data/post_processing/affinity_agglomeration.py). 'skoots' for the SKOOTS target.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD = "agglomeration"
+        # 'skoots' only: foreground ('F') threshold.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_FG_TH = 0.5
+        # 'skoots' only: skeleton ('P') threshold; its connected components are the instances.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_SKELETON_TH = 0.8
+        # 'skoots' only: times each voxel is moved by the predicted offsets.
+        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_N_STEPS = 2
         # 'watershed' only: seed threshold for watershed_by_channels's 'A'-only branch.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_SEED_TH = 0.5
         # 'watershed' only: growth-mask threshold. Equal to WATERSHED_SEED_TH gives plain
@@ -2053,7 +2068,7 @@ class Config:
         #   * IMAGE_TO_IMAGE/DENOISING also accept "BCE" or "HINGE" (adversarial term, mutually
         #     exclusive, needs a discriminator; knobs under LOSS.GAN below).
         #   * IMAGE_TO_IMAGE with PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: "BCE", "MALIS",
-        #     "CLDICE", "SVOX" (at least one positive weight).
+        #     "CLDICE", "SVOX" (at least one positive weight), or ["SKOOTS"] for the SKOOTS target (LOSS.SKOOTS).
         _C.LOSS.TYPE = []
         # Same length as LOSS.TYPE. Unlike the old "W_*" strings, weights don't need to sum to 1.
         _C.LOSS.WEIGHTS = []
@@ -2087,6 +2102,21 @@ class Config:
         # If True, scale the adversarial weight by the VQGAN adaptive weight (recon/adv
         # gradient-norm ratio) instead of using it as a fixed scalar.
         _C.LOSS.GAN.ADAPTIVE_GAN_WEIGHT = False
+
+        # "SKOOTS" loss options (membrane-repair SKOOTS target). Each channel term is a Tversky loss,
+        # 1 - TP / (TP + alpha * FP + beta * FN); the 'H'/'V'/'Z' term scores, with a Gaussian of width sigma, how
+        # close each moved voxel lands to its skeleton point.
+        _C.LOSS.SKOOTS = CN()
+        # Sigma per axis (z, y, x) at the first epoch, in voxels.
+        _C.LOSS.SKOOTS.INITIAL_SIGMA = (20.0, 20.0, 20.0)
+        # [multiplier, fraction] pairs: sigma is multiplied by 'multiplier' from epoch fraction * TRAIN.EPOCHS on.
+        _C.LOSS.SKOOTS.SIGMA_DECAY = [[0.66, 0.02], [0.66, 0.08], [0.66, 0.15]]
+        # (alpha, beta) of the Tversky loss of the 'F', 'P' and 'H'/'V'/'Z' terms.
+        _C.LOSS.SKOOTS.FOREGROUND_TVERSKY = (0.5, 0.5)
+        _C.LOSS.SKOOTS.SKELETON_TVERSKY = (0.5, 1.5)
+        _C.LOSS.SKOOTS.EMBED_TVERSKY = (0.25, 0.75)
+        # Fraction of TRAIN.EPOCHS after which the 'F', 'P' and 'H'/'V'/'Z' terms start being used.
+        _C.LOSS.SKOOTS.START_FRACTIONS = (0.0, 0.001, 0.0)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 7. Training phase options

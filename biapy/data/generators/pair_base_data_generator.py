@@ -36,7 +36,12 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
-from biapy.data.pre_processing import labels_into_channels, channel_physical_offsets, resize_images
+from biapy.data.pre_processing import (
+    labels_into_channels,
+    channel_physical_offsets,
+    instance_channel_needs_regen,
+    resize_images,
+)
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -693,6 +698,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 for col in range(a_start, a_start + a_width):
                     mpos = sum(1 for k in range(col) if per[k]["type"] not in ("no_bin", "flow"))
                     self.regen_mask_map.append((mpos, col))
+
+            # Other mask-group channels to regenerate (e.g. skeleton 'P')
+            regen_chs = [
+                ch for ch in self.data_channels
+                if ch not in ("A", "I") and instance_channel_needs_regen(ch, self.channel_extra_opts)
+            ]
+            for ch in regen_chs:
+                col = channel_physical_offsets(self.data_channels, self.channel_extra_opts)[ch]
+                if per[col]["type"] in ("no_bin", "flow"):
+                    continue
+                mpos = sum(1 for k in range(col) if per[k]["type"] not in ("no_bin", "flow"))
+                self.regen_mask_map.append((mpos, col))
 
             # Position of the instance channel inside the split-off ``mask`` array (non-heat channels
             # before it), the counterpart of ``heat_cols`` for the label group.

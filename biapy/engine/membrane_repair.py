@@ -30,16 +30,25 @@ from biapy.data.data_manipulation import check_binary_masks, read_img_as_ndarray
 from biapy.data.membrane_channels import derive_membrane_input_channels
 from biapy.data.post_processing.affinity_agglomeration import watershed_and_agglomerate_affinities
 from biapy.data.post_processing.post_processing import apply_label_refinement, watershed_by_channels
-from biapy.data.pre_processing import affinity_offsets_from_opts, load_resolution_stats
+from biapy.data.post_processing.skoots import skoots_instances
+from biapy.data.pre_processing import (
+    affinity_offsets_from_opts,
+    hvz_skeleton_scale,
+    is_skoots_channel_set,
+    load_resolution_stats,
+)
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.image_to_image import Image_to_Image_Workflow as _Image_to_Image_Workflow
 from biapy.engine.malis_loss import MalisLoss
 from biapy.engine.metrics import (
     CLDiceComponentPenaltyLoss,
+    SkootsLoss,
+    SkootsMetrics,
     WeightedBCEAffinityLoss,
     multiple_metrics,
     WeightedCompositeLoss,
     loss_encapsulation,
+    skoots_offset_axes,
 )
 from biapy.engine.supervoxel_loss import SupervoxelLoss
 from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matching_dataset_lazy
@@ -175,6 +184,18 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 )
 
     @staticmethod
+    def _target_channels(cfg) -> List[str]:
+        """``MEMBRANE_REPAIR.DATA_CHANNELS`` without the virtual 'I' channel, i.e. the model output order."""
+        return [ch for ch in cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS if ch != "I"]
+
+    @staticmethod
+    def _is_skoots(cfg) -> bool:
+        """Whether the target is SKOOTS's 'F'/'P'/'H'/'V'(/'Z')."""
+        return is_skoots_channel_set(
+            cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS, 3 if cfg.PROBLEM.NDIM == "3D" else 2
+        )
+
+    @staticmethod
     def _derive_membrane_repair_output_channels(cfg):
         """
         Compute ``PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS`` from ``DATA_CHANNELS_EXTRA_OPTS["A"]``.
@@ -183,6 +204,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         offset pair in 3D), so this is always derived, never a user-provided value.
         """
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+        if Membrane_Repair_Workflow._is_skoots(cfg):
+            cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = len(Membrane_Repair_Workflow._target_channels(cfg))
+            return
         a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
         channels_per_offset = 3 if cfg.PROBLEM.NDIM == "3D" else 2
         n_offsets = len(a_opts.get("z_affinities" if cfg.PROBLEM.NDIM == "3D" else "y_affinities", [1]))
@@ -262,9 +286,16 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         Force ``ce_sigmoid`` activation on every output channel, regardless of
         ``PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT``: skipped at training time (loss gets raw
         logits, for ``BCEWithLogitsLoss``'s numerically-stable convention) and applied as a real
-        sigmoid at inference.
+        sigmoid at inference. The SKOOTS target uses ``sigmoid`` ('F'/'P') and ``tanh`` (offsets)
+        instead, also in training.
         """
         super().define_activations_and_channels()
+        if self._is_skoots(self.cfg):
+            # Applied in training too: the SKOOTS loss needs probabilities and tanh offsets
+            self.head_activations = [
+                "sigmoid" if ch in ("F", "P") else "tanh" for ch in self._target_channels(self.cfg)
+            ]
+            return
         self.head_activations = ["ce_sigmoid"] * len(self.head_activations)
 
     def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
@@ -284,6 +315,9 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         """
         if not self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
             super().define_metrics()
+            return
+        if self._is_skoots(self.cfg):
+            self._define_skoots_metrics()
             return
 
         names = [str(n).upper() for n in self.cfg.LOSS.TYPE]
@@ -351,6 +385,38 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 ndim=self.dims,
             )
         ]
+
+    def _define_skoots_metrics(self):
+        """SKOOTS loss and metrics."""
+        cfg = self.cfg
+        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+        sk = cfg.LOSS.SKOOTS
+        channels = self._target_channels(cfg)
+        scale = hvz_skeleton_scale(dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]), self.dims)
+        epochs = cfg.TRAIN.EPOCHS
+        skoots_loss = SkootsLoss(
+            channels=channels,
+            ndim=self.dims,
+            scale=scale,
+            channel_weights=list(mr.DATA_CHANNEL_WEIGHTS),
+            initial_sigma=list(sk.INITIAL_SIGMA),
+            sigma_decay=[[m, int(f * epochs)] for m, f in sk.SIGMA_DECAY],
+            tversky={
+                "foreground": tuple(sk.FOREGROUND_TVERSKY),
+                "skeleton": tuple(sk.SKELETON_TVERSKY),
+                "embed": tuple(sk.EMBED_TVERSKY),
+            },
+            start_epochs=[int(f * epochs) for f in sk.START_FRACTIONS],
+        ).to(self.device)
+        self.loss = loss_encapsulation(
+            WeightedCompositeLoss([(float(cfg.LOSS.WEIGHTS[0]), skoots_loss)]).to(self.device)
+        )
+
+        self.train_metric_names = list(SkootsMetrics.names)
+        self.train_metric_best = list(SkootsMetrics.best)
+        self.train_metrics = [SkootsMetrics(channels, ndim=self.dims, scale=scale)]
+        self.test_metric_names = list(SkootsMetrics.names)
+        self.test_metrics = [SkootsMetrics(channels, ndim=self.dims, scale=scale)]
 
     def _malis_resolution(self) -> Tuple[float, ...]:
         """
@@ -542,11 +608,19 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
             original_x_norm = self.current_sample["X_norm"]
             n_out = cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
-            self.current_sample["X_norm"] = {
-                "type": "div",
-                "orig_dtype": "float32",
-                "per_channel_info": {str(c): {"max_val_to_div": 1, "min_val_to_div": 0} for c in range(n_out)},
-            }
+            if self._is_skoots(cfg):
+                # Identity without the [0, 1] clip, keeps the negative offsets
+                self.current_sample["X_norm"] = {
+                    "type": "zero_mean_unit_variance",
+                    "orig_dtype": "float32",
+                    "per_channel_info": {str(c): {"mean": 0, "std": 1} for c in range(n_out)},
+                }
+            else:
+                self.current_sample["X_norm"] = {
+                    "type": "div",
+                    "orig_dtype": "float32",
+                    "per_channel_info": {str(c): {"max_val_to_div": 1, "min_val_to_div": 0} for c in range(n_out)},
+                }
             self.return_prediction = True
             try:
                 result = super().process_test_sample()
@@ -671,7 +745,18 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         border_crop = list(cfg.TEST.EVAL_BORDER_CROP)
         eval_border_crop = (([0] + border_crop) if cfg.PROBLEM.NDIM == "2D" else border_crop) if border_crop else []
 
-        if pp.METHOD == "agglomeration":
+        if pp.METHOD == "skoots":
+            channels = self._target_channels(cfg)
+            pred_labels = skoots_instances(
+                foreground=pred[..., channels.index("F")],
+                skeleton=pred[..., channels.index("P")],
+                offsets=pred[..., [channels.index(c) for c in skoots_offset_axes(self.dims)]],
+                scale=hvz_skeleton_scale(dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]), self.dims),
+                fg_th=pp.SKOOTS_FG_TH,
+                skeleton_th=pp.SKOOTS_SKELETON_TH,
+                n_steps=pp.SKOOTS_N_STEPS,
+            ).astype(np.uint32)
+        elif pp.METHOD == "agglomeration":
             a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
             offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims, resolution=self.resolution)
             pred_labels = watershed_and_agglomerate_affinities(

@@ -2642,6 +2642,217 @@ class SpatialEmbLoss(nn.Module):
             "metrics": {"IoU": (iou / B).item()}  # single host sync per batch
         }
 
+def skoots_offset_axes(ndim: int) -> List[str]:
+    """SKOOTS offset channels in axis order (``(z,) y, x``)."""
+    return ["Z", "V", "H"] if ndim == 3 else ["V", "H"]
+
+
+def skoots_tversky(pred: torch.Tensor, gt: torch.Tensor, alpha: float, beta: float, eps: float = 1e-8) -> torch.Tensor:
+    """
+    SKOOTS's Tversky loss, ``1 - (TP + eps) / (TP + alpha * FP + beta * FN + eps)`` per sample, batch-averaged.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Probabilities, ``(B, 1, ...)``.
+
+    gt : torch.Tensor
+        Binary target, same shape as ``pred``.
+
+    alpha : float
+        False positive weight.
+
+    beta : float
+        False negative weight.
+
+    eps : float, optional
+        Stability term.
+
+    Returns
+    -------
+    loss : torch.Tensor
+        Scalar loss.
+    """
+    dims = tuple(range(1, pred.dim()))
+    tp = (pred * gt).sum(dims)
+    fp = ((1 - gt) * pred).sum(dims).add(1e-10) * alpha
+    fn = ((1 - pred) * gt).sum(dims) * beta
+    return (1 - (tp + eps) / (tp + fp + fn + eps)).mean()
+
+
+class SkootsLoss(nn.Module):
+    """
+    SKOOTS loss (`SKOOTS <https://github.com/indzhykulianlab/skoots>`__) for the 'F', 'P' and 'H'/'V'(/'Z') channels.
+
+    Sum of three Tversky terms: 'F' vs. GT 'F', 'P' vs. GT 'P', and, for 'H'/'V'/'Z', a Gaussian score of how close
+    each voxel moved by its predicted offsets lands to its GT skeleton point vs. GT 'F'.
+
+    Parameters
+    ----------
+    channels : list of str
+        Channel order of prediction and GT, e.g. ``["F", "P", "H", "V", "Z"]``.
+
+    ndim : int, optional
+        Number of spatial dimensions (2 or 3).
+
+    scale : list of float, optional
+        Voxels per axis (``(z,) y, x``) of a tanh output of 1.
+
+    channel_weights : list of float, optional
+        Weight per entry of ``channels``; 'H'/'V'/'Z' share one term, weighted by the 'H' weight.
+
+    initial_sigma : list of float, optional
+        Gaussian sigma per axis (``z, y, x``) at epoch 0, in voxels.
+
+    sigma_decay : list of [float, int], optional
+        ``[multiplier, epoch]`` pairs: sigma is multiplied by ``multiplier`` from ``epoch`` on.
+
+    tversky : dict, optional
+        ``(alpha, beta)`` of the ``"foreground"``, ``"skeleton"`` and ``"embed"`` terms.
+
+    start_epochs : list of int, optional
+        Epoch from which the 'F', 'P' and 'H'/'V'/'Z' terms are used.
+    """
+
+    def __init__(
+        self,
+        channels: List[str],
+        ndim: int = 3,
+        scale: List[float] = [12, 60, 60],
+        channel_weights: List[float] = [1.0, 1.0, 1.0, 1.0, 1.0],
+        initial_sigma: List[float] = [20.0, 20.0, 20.0],
+        sigma_decay: List[List[float]] = [],
+        tversky: Dict[str, Tuple[float, float]] = {
+            "foreground": (0.5, 0.5),
+            "skeleton": (0.5, 1.5),
+            "embed": (0.25, 0.75),
+        },
+        start_epochs: List[int] = [0, 0, 0],
+    ):
+        super().__init__()
+        self.ndim = ndim
+        self.f_idx = channels.index("F")
+        self.p_idx = channels.index("P")
+        self.off_idx = [channels.index(c) for c in skoots_offset_axes(ndim)]
+        self.w_fg = float(channel_weights[self.f_idx])
+        self.w_skel = float(channel_weights[self.p_idx])
+        self.w_embed = float(channel_weights[channels.index("H")])
+        self.register_buffer("scale", torch.tensor(list(scale)[-ndim:], dtype=torch.float32))
+        self.register_buffer("initial_sigma", torch.tensor(list(initial_sigma)[-ndim:], dtype=torch.float32))
+        self.sigma_decay = [(float(m), int(e)) for m, e in sigma_decay]
+        self.tversky = {k: (float(v[0]), float(v[1])) for k, v in tversky.items()}
+        self.start_fg, self.start_skel, self.start_embed = [int(s) for s in start_epochs]
+        self.epoch = 0
+        self._coord_cache: Dict = {}
+
+    def set_epoch(self, epoch: int):
+        """Set the current epoch (sigma schedule and start epochs)."""
+        self.epoch = int(epoch)
+
+    def sigma(self) -> torch.Tensor:
+        """Sigma per axis at the current epoch."""
+        multiplier = 1.0
+        for m, e in self.sigma_decay:
+            if self.epoch >= e:
+                multiplier *= m
+        return self.initial_sigma * multiplier
+
+    def _coords(self, shape: Tuple[int, ...], device) -> torch.Tensor:
+        key = (str(device), tuple(shape))
+        if key not in self._coord_cache:
+            axes = [torch.arange(s, device=device, dtype=torch.float32) for s in shape]
+            self._coord_cache[key] = torch.stack(torch.meshgrid(*axes, indexing="ij"), 0)
+        return self._coord_cache[key]
+
+    def forward(self, prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the loss.
+
+        Parameters
+        ----------
+        prediction : torch.Tensor
+            Activated output (sigmoid 'F'/'P', tanh offsets), ``(B, C, ...)``.
+
+        target : torch.Tensor
+            GT, ``(B, C, ...)``, same channel order.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Scalar loss.
+        """
+        pred = prediction.float()
+        target = target.float()
+        fg = (target[:, self.f_idx : self.f_idx + 1] > 0).float()
+
+        total = pred.new_zeros(())
+        if self.epoch >= self.start_fg and self.w_fg > 0:
+            total = total + self.w_fg * skoots_tversky(
+                pred[:, self.f_idx : self.f_idx + 1], fg, *self.tversky["foreground"]
+            )
+        if self.epoch >= self.start_skel and self.w_skel > 0:
+            skel = (target[:, self.p_idx : self.p_idx + 1] > 0).float()
+            total = total + self.w_skel * skoots_tversky(
+                pred[:, self.p_idx : self.p_idx + 1], skel, *self.tversky["skeleton"]
+            )
+        if self.epoch >= self.start_embed and self.w_embed > 0:
+            view = (1, self.ndim) + (1,) * self.ndim
+            moved = pred[:, self.off_idx] * self.scale.view(view)
+            coords = self._coords(pred.shape[2:], pred.device).unsqueeze(0)
+            # Background targets at -100, as SKOOTS
+            diff = torch.where(fg > 0, target[:, self.off_idx] - moved, coords - moved + 100)
+            sigma = self.sigma().to(pred.device).view(view)
+            prob = torch.exp(-(diff.pow(2) / (2 * sigma.pow(2))).sum(1, keepdim=True))
+            total = total + self.w_embed * skoots_tversky(prob, fg, *self.tversky["embed"])
+        return total + prediction.sum() * 0
+
+
+class SkootsMetrics:
+    """
+    SKOOTS metrics: IoU of 'F' and 'P', and mean absolute offset error in voxels on the foreground.
+
+    Parameters
+    ----------
+    channels : list of str
+        Channel order of prediction and GT.
+
+    ndim : int, optional
+        Number of spatial dimensions (2 or 3).
+
+    scale : list of float, optional
+        Same as in :class:`SkootsLoss`.
+    """
+
+    names = ["IoU (F channel)", "IoU (P channel)", "L1 (H/V/Z channels, voxels)"]
+    best = ["max", "max", "min"]
+
+    def __init__(self, channels: List[str], ndim: int = 3, scale: List[float] = [12, 60, 60]):
+        self.ndim = ndim
+        self.f_idx = channels.index("F")
+        self.p_idx = channels.index("P")
+        self.off_idx = [channels.index(c) for c in skoots_offset_axes(ndim)]
+        self.scale = torch.tensor(list(scale)[-ndim:], dtype=torch.float32)
+
+    @staticmethod
+    def _iou(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
+        p, g = pred > 0.5, gt > 0
+        return (p & g).sum() / (p | g).sum().clamp(min=1)
+
+    def __call__(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> Dict[str, torch.Tensor]:
+        if isinstance(y_pred, dict):
+            y_pred = y_pred["pred"]
+        y_pred, y_true = y_pred.float(), y_true.float()
+        fg = y_true[:, self.f_idx] > 0
+        view = (1, self.ndim) + (1,) * self.ndim
+        err = (y_pred[:, self.off_idx] * self.scale.to(y_pred.device).view(view) - y_true[:, self.off_idx]).abs()
+        err = err.mean(1)[fg]
+        return {
+            self.names[0]: self._iou(y_pred[:, self.f_idx], y_true[:, self.f_idx]),
+            self.names[1]: self._iou(y_pred[:, self.p_idx], y_true[:, self.p_idx]),
+            self.names[2]: err.mean() if err.numel() > 0 else y_pred.new_zeros(()),
+        }
+
+
 def pcc_loss(pred, target, eps=1e-8):
     """``1 - Pearson correlation coefficient``, per sample, averaged over the batch.
 

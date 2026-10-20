@@ -1402,6 +1402,11 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.args.distributed:
                 self.train_generator.sampler.set_epoch(epoch)  # type: ignore
+            # Epoch-dependent losses
+            if isinstance(self.loss, torch.nn.Module):
+                for module in self.loss.modules():
+                    if hasattr(module, "set_epoch"):
+                        module.set_epoch(epoch)
             if self.log_writer:
                 self.log_writer.set_step(epoch * self.num_training_steps_per_epoch)
 

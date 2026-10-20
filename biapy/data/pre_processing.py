@@ -24,6 +24,7 @@ from scipy.ndimage import (
     uniform_filter,
     binary_fill_holes,
     find_objects,
+    distance_transform_edt,
     binary_dilation as binary_dilation_scipy
 )
 from skimage.morphology import disk, dilation, erosion, skeletonize
@@ -35,7 +36,7 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
-from typing import List, Optional, Dict, Tuple, Sequence, Union
+from typing import Callable, List, Optional, Dict, Tuple, Sequence, Union
 from scipy.spatial import cKDTree
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import shortest_path, connected_components
@@ -1058,6 +1059,31 @@ def unique_labels_fast(a: np.ndarray):
 _DIRECTIONAL_CHANNELS = frozenset({"Gv", "Gh", "Gz", "H", "V", "Z", "R", "A"})
 
 
+def is_skoots_channel_set(channels: Sequence[str], ndim: int) -> bool:
+    """Whether ``channels`` ('I' aside) are exactly SKOOTS's 'F', 'P' and 'H'/'V'(/'Z'), in any order."""
+    expected = {"F", "P", "V", "H"} | ({"Z"} if ndim == 3 else set())
+    targets = [ch for ch in channels if ch != "I"]
+    return len(targets) == len(expected) and set(targets) == expected
+
+
+def hvz_skeleton_scale(channel_extra_opts: Dict = {}, ndim: int = 3) -> List[float]:
+    """Voxels per axis ``((z,) y, x)`` of a tanh output of 1 for 'H'/'V'/'Z' of type 'skeleton'."""
+    opts = channel_extra_opts or {}
+    for ch in ("Z", "V", "H"):
+        if "scale" in opts.get(ch, {}):
+            return [float(v) for v in opts[ch]["scale"]]
+    return [12.0, 60.0, 60.0] if ndim == 3 else [60.0, 60.0]
+
+
+def hvz_reference_type(channel_extra_opts: Dict = {}) -> str:
+    """Reference point of the 'H'/'V'/'Z' channels: ``"centroid"`` (default) or ``"skeleton"``."""
+    opts = channel_extra_opts or {}
+    for ch in ("Z", "V", "H"):
+        if "type" in opts.get(ch, {}):
+            return opts[ch]["type"]
+    return "centroid"
+
+
 def instance_channel_needs_regen(ch: str, channel_extra_opts: Dict = {}) -> bool:
     """Whether a channel's GT must be recomputed from the augmented labels (vs. warped).
 
@@ -1068,6 +1094,9 @@ def instance_channel_needs_regen(ch: str, channel_extra_opts: Dict = {}) -> bool
     opts = (channel_extra_opts or {}).get(ch, {})
     if ch in _DIRECTIONAL_CHANNELS:
         return True
+    if ch == "P":
+        # Must match the regenerated H/V/Z skeleton offsets
+        return opts.get("type", "centroid") == "skeleton" and hvz_reference_type(channel_extra_opts) == "skeleton"
     if ch == "Db":
         return opts.get("val_type", "norm") in ("raw", "omnipose")
     if ch in ("Dc", "Dn"):
@@ -1332,19 +1361,32 @@ def labels_into_channels(
     fg_mask = (vol > 0).astype(np.uint8)
     bg_mask = (vol == 0).astype(np.uint8)
 
+    # Shared by 'P', 'Dc' and 'H'/'V'/'Z'
+    _skel_cache: Dict[int, NDArray] = {}
+
+    def _instance_skeleton(i: int, sub: NDArray) -> NDArray:
+        if i not in _skel_cache:
+            _skel_cache[i] = skeletonize(sub)
+        return _skel_cache[i]
+
     # Precompute horizontal/vertical/depth channels if any of H/V/Z is requested
     if any(ch in mode for ch in ("Z", "V", "H")):
-        norm_flag = True
-        for ch in ("Z", "V", "H"): 
-            if ch in channel_extra_opts and "norm" in channel_extra_opts[ch]:
-                norm_flag = bool(channel_extra_opts[ch]["norm"])
-                break
-        hv_channels = create_HoVe_channels(
-            vol,
-            ref_point="center",
-            normalize_values=norm_flag,
-            calc_props=props_tbl,
-        )
+        if hvz_reference_type(channel_extra_opts) == "skeleton":
+            hv_channels = create_skeleton_offset_channels(
+                vol, props_tbl, resolution=resolution, get_skeleton=_instance_skeleton
+            )
+        else:
+            norm_flag = True
+            for ch in ("Z", "V", "H"):
+                if ch in channel_extra_opts and "norm" in channel_extra_opts[ch]:
+                    norm_flag = bool(channel_extra_opts[ch]["norm"])
+                    break
+            hv_channels = create_HoVe_channels(
+                vol,
+                ref_point="center",
+                normalize_values=norm_flag,
+                calc_props=props_tbl,
+            )
 
     # ---------- Foreground (F) ----------
     if "F" in mode:
@@ -1413,7 +1455,7 @@ def labels_into_channels(
         p_opts = channel_extra_opts.get("P", {})
         p_type = p_opts.get("type", "centroid")
         p_dil  = p_opts.get("dilation", 1)
-        p_ero  = p_opts.get("erosion", 1)
+        p_ero  = p_opts.get("erosion", 0)
 
         p_skel_mode = p_opts.get("skeleton_mode", "full")
         p_out = np.zeros_like(fg_mask, dtype=np.uint8)
@@ -1421,7 +1463,7 @@ def labels_into_channels(
             for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
                 slc = slice_from_props(props_tbl, i, vol.ndim)
                 sub = (vol[slc] == lb)
-                sk = skeletonize(sub)
+                sk = _instance_skeleton(i, sub)
                 if p_skel_mode == "main":
                     sk = skeleton_main_branch(sk)
                 p_out[slc] += sk
@@ -1493,7 +1535,7 @@ def labels_into_channels(
                 continue
 
             if dc_type == "skeleton":
-                sk = skeletonize(sub)              
+                sk = _instance_skeleton(i, sub)
                 dist_to_sk = edt.edt(~sk, anisotropy=resolution, parallel=-1)
                 dc_channel[slc][sub] = dist_to_sk[sub]
             else: 
@@ -3190,8 +3232,68 @@ def _process_synapses_by_chunks_of_data(
                     target = mask[tuple(data_slices)]
                     mask[tuple(data_slices)] = target + patch.astype(target.dtype) * (target == 0)
 
-    if isinstance(fid_mask, h5py.File): 
+    if isinstance(fid_mask, h5py.File):
         fid_mask.close()
+
+def create_skeleton_offset_channels(
+    vol: NDArray,
+    props_tbl: Dict,
+    resolution: Sequence[int | float] = (1, 1, 1),
+    get_skeleton: Optional[Callable[[int, NDArray], NDArray]] = None,
+) -> NDArray:
+    """
+    Create the SKOOTS offsets: ``voxel - s`` per axis, ``s`` being the nearest skeleton voxel of the voxel's instance.
+
+    As in SKOOTS's ``bake_skeleton``, ``s`` is searched in physical units, averaged over the 3x3(x3) foreground
+    neighbourhood, and falls back to the centroid when the skeleton is empty. Background is 0.
+
+    Parameters
+    ----------
+    vol : 2D/3D Numpy array
+        Instance labels. E.g. ``(z, y, x)``.
+
+    props_tbl : dict
+        ``regionprops_table`` of ``vol`` with ``label``, ``bbox`` and ``centroid``.
+
+    resolution : sequence of int/float, optional
+        ``(z, y, x)`` voxel size; only the last ``vol.ndim`` values are used.
+
+    get_skeleton : callable, optional
+        ``get_skeleton(i, sub)`` returning the skeleton of instance ``i`` from its bbox mask ``sub``.
+        Defaults to ``skimage.morphology.skeletonize``.
+
+    Returns
+    -------
+    offsets : 3D/4D Numpy array
+        Offsets with one channel per axis, ordered as the axes (``(z,) y, x``).
+    """
+    ndim = vol.ndim
+    sampling = tuple(float(r) for r in resolution)[-ndim:]
+    fg = vol > 0
+    target = np.zeros(vol.shape + (ndim,), dtype=np.float32)
+    for i, lb in enumerate(props_tbl["label"]):
+        slc = slice_from_props(props_tbl, i, ndim)
+        sub = vol[slc] == lb
+        if not sub.any():
+            continue
+        sk = get_skeleton(i, sub) if get_skeleton is not None else skeletonize(sub)
+        if sk.any():
+            idx = distance_transform_edt(~sk, sampling=sampling, return_distances=False, return_indices=True)
+            for a in range(ndim):
+                target[slc + (a,)][sub] = idx[a][sub] + slc[a].start
+        else:
+            for a in range(ndim):
+                target[slc + (a,)][sub] = props_tbl[f"centroid-{a}"][i]
+
+    # Foreground-only neighbourhood mean
+    count = uniform_filter(fg.astype(np.float32), size=3, mode="constant")
+    count = np.maximum(count, 1e-12)
+    offsets = np.zeros_like(target)
+    for a in range(ndim):
+        smoothed = uniform_filter(target[..., a], size=3, mode="constant") / count
+        coord = np.arange(vol.shape[a], dtype=np.float32).reshape([-1 if d == a else 1 for d in range(ndim)])
+        offsets[..., a] = np.where(fg, coord - smoothed, 0)
+    return offsets
 
 def create_HoVe_channels(
     data: NDArray, 
