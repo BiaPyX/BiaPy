@@ -119,6 +119,7 @@ def load_and_prepare_train_data(
     reflect_to_complete_shape: bool = False,
     convert_to_rgb: bool = False,
     is_y_mask: bool = False,
+    super_resolution: bool = False,
     is_3d: bool = False,
     train_zarr_data_information: Optional[Dict] = None,
     val_zarr_data_information: Optional[Dict] = None,
@@ -287,6 +288,9 @@ def load_and_prepare_train_data(
 
     is_y_mask : bool, optional
         Whether the data are masks. It is used to control the preprocessing of the data.
+
+    super_resolution : bool, optional
+        Whether it is the super-resolution workflow (to explain the errors of raw images and targets that don't match).
 
     is_3d : bool, optional
         Whether if the expected images to read are 3D or not.
@@ -481,15 +485,15 @@ def load_and_prepare_train_data(
     # Check that the shape of all images match
     if train_mask_path and Y_train:
         print("Checking training raw and label images' shapes . . .")
-        if not multiple_raw_images and len(X_train.sample_list) != len(Y_train.sample_list):
-            mistmatch_message = shape_mismatch_message(X_train, Y_train)
-            m = (
-                "Mistmatch between number of raw samples ({}) and number of corresponding masks ({}). Please, check that the raw"
-                "format and labels have same shape. {}".format(
-                    len(X_train.sample_list), len(Y_train.sample_list), mistmatch_message
+        if not multiple_raw_images and (
+            len(X_train.sample_list) != len(Y_train.sample_list)
+            or mismatched_raw_target_files(X_train, Y_train, y_upscaling)
+        ):
+            raise ValueError(
+                raw_target_mismatch_message(
+                    X_train, Y_train, train_path, train_mask_path, y_upscaling, is_y_mask, super_resolution
                 )
             )
-            raise ValueError(m)
 
         for i in range(len(X_train.sample_list)):
             xshape = X_train.sample_list[i].get_shape()
@@ -518,7 +522,13 @@ def load_and_prepare_train_data(
                     xshape[1] * y_upscaling[1],
                 )
             if upsampled_x_shape != yshape[: len(upsampled_x_shape)]:
-                filepath = X_train.dataset_info[X_train.sample_list[i].fid]
+                if not multiple_raw_images:
+                    raise ValueError(
+                        raw_target_mismatch_message(
+                            X_train, Y_train, train_path, train_mask_path, y_upscaling, is_y_mask, super_resolution
+                        )
+                    )
+                filepath = X_train.dataset_info[X_train.sample_list[i].fid].path
                 raise ValueError(
                     f"There is a mismatch between input image and its corresponding ground truth ({upsampled_x_shape} vs "
                     f"{yshape}). Please check the images. Specifically, the sample that doesn't match is within "
@@ -772,6 +782,15 @@ def load_and_prepare_train_data(
         # Check that the shape of all images match
         if val_mask_path and Y_val:
             print("Checking validation raw and label images' shapes . . .")
+            if not multiple_raw_images and (
+                len(X_val.sample_list) != len(Y_val.sample_list)
+                or mismatched_raw_target_files(X_val, Y_val, y_upscaling)
+            ):
+                raise ValueError(
+                    raw_target_mismatch_message(
+                        X_val, Y_val, val_path, val_mask_path, y_upscaling, is_y_mask, super_resolution, "VAL"
+                    )
+                )
             for i in range(len(X_val.sample_list)):
                 xshape = X_val.sample_list[i].get_shape()
                 gt_associated_id = X_val.sample_list[i].get_gt_associated_id()
@@ -799,7 +818,13 @@ def load_and_prepare_train_data(
                         xshape[1] * y_upscaling[1],
                     )
                 if upsampled_x_shape != yshape[: len(upsampled_x_shape)]:
-                    filepath = X_val.dataset_info[X_val.sample_list[i].fid]
+                    if not multiple_raw_images:
+                        raise ValueError(
+                            raw_target_mismatch_message(
+                                X_val, Y_val, val_path, val_mask_path, y_upscaling, is_y_mask, super_resolution, "VAL"
+                            )
+                        )
+                    filepath = X_val.dataset_info[X_val.sample_list[i].fid].path
                     raise ValueError(
                         f"There is a mismatch between input image and its corresponding ground truth ({upsampled_x_shape} vs "
                         f"{yshape}). Please check the images. Specifically, the sample that doesn't match is within "
@@ -4313,42 +4338,158 @@ def check_binary_masks(
         raise ValueError(m)
 
 
-def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
+def mismatched_raw_target_files(
+    X_data: BiaPyDataset, Y_data: BiaPyDataset, y_upscaling: Tuple[int, ...]
+) -> List[Tuple[DatasetFile, DatasetFile, Tuple[int, ...], Tuple[int, ...], Tuple[int, ...]]]:
     """
-    Build an error message with the shape mismatch between two provided data ``X_data`` and ``Y_data``.
+    Pairs of raw image and target files (paired by order) whose shapes don't match: the target's must be the raw
+    image's times ``y_upscaling``. Files of unknown shape (Zarr/H5) are not compared.
 
     Parameters
     ----------
     X_data : BiaPyDataset
-        X data.
+        Raw images.
 
     Y_data : BiaPyDataset
-        Y data.
+        Their targets.
+
+    y_upscaling : tuple of int
+        Upscaling of the targets (``PROBLEM.SUPER_RESOLUTION.UPSCALING``; ones in the other workflows).
 
     Returns
     -------
-    mistmatch_message : str
-        Message containing which samples mismatch.
+    pairs : list of tuple
+        Raw image file, target file, their spatial shapes and the target shape expected.
     """
-    mistmatch_message = ""
-    for xsample, ysample in zip(X_data.sample_list, Y_data.sample_list):
-        xshape = xsample.get_shape()
-        yshape = ysample.get_shape()
-        if xshape and yshape:
-            if xshape[:-1] != yshape[:-1]:
-                mistmatch_message += "\n"
-                mistmatch_message += "Raw file: '{}'\n".format(X_data.dataset_info[xsample.fid].path)
-                mistmatch_message += "Corresponding label file: '{}'\n".format(Y_data.dataset_info[ysample.fid].path)
-                mistmatch_message += "Raw shape: {}\n".format(xsample.get_shape())
-                mistmatch_message += "Label shape: {}\n".format(ysample.get_shape())
-                mistmatch_message += "--\n"
+    ndim = len(y_upscaling)
 
-    if mistmatch_message != "":
-        mistmatch_message = (
-            f"Here is a list of the pair raw and label that does not match in shape:\n{mistmatch_message}"
+    def spatial(info):
+        # Shape of the whole image, channels last (Zarr/H5 data may have its axes in any order)
+        shape = info.shape
+        if info.is_parallel() or shape is None or len(shape) != ndim + 1:
+            return None
+        return tuple(int(v) for v in shape[:ndim])
+
+    pairs = []
+    if len(X_data.dataset_info) != len(Y_data.dataset_info):
+        return pairs
+    for xf, yf in zip(X_data.dataset_info, Y_data.dataset_info):
+        xs, ys = spatial(xf), spatial(yf)
+        if xs is None or ys is None:
+            continue
+        expected = tuple(a * int(u) for a, u in zip(xs, y_upscaling))
+        if ys != expected:
+            pairs.append((xf, yf, xs, ys, expected))
+    return pairs
+
+
+def raw_target_mismatch_message(
+    X_data: BiaPyDataset,
+    Y_data: BiaPyDataset,
+    raw_path: str,
+    target_path: str,
+    y_upscaling: Tuple[int, ...],
+    is_y_mask: bool = False,
+    super_resolution: bool = False,
+    phase: str = "TRAIN",
+    max_pairs: int = 5,
+) -> str:
+    """
+    Build the error message for raw images and targets that do not match: the pairs of files whose shapes don't
+    (the target's must be the raw image's times ``y_upscaling``), a hint of why and the folders read.
+
+    Parameters
+    ----------
+    X_data : BiaPyDataset
+        Raw images.
+
+    Y_data : BiaPyDataset
+        Their targets, paired by file order.
+
+    raw_path : str
+        Folder of the raw images.
+
+    target_path : str
+        Folder of the targets.
+
+    y_upscaling : tuple of int
+        Upscaling of the targets (``PROBLEM.SUPER_RESOLUTION.UPSCALING``; ones in the other workflows).
+
+    is_y_mask : bool, optional
+        Whether the targets are masks (only changes how they are called).
+
+    super_resolution : bool, optional
+        Whether it is the super-resolution workflow.
+
+    phase : str, optional
+        "TRAIN" or "VAL": the data the variables of the folders are for.
+
+    max_pairs : int, optional
+        Maximum number of pairs listed.
+
+    Returns
+    -------
+    message : str
+        Error message.
+    """
+    which = "training" if phase == "TRAIN" else "validation"
+    targets, target = ("masks", "mask") if is_y_mask else ("targets", "target")
+    upscaling = tuple(int(u) for u in y_upscaling)
+
+    def size(shape):
+        return "x".join(str(int(v)) for v in shape)
+
+    if super_resolution:
+        rule = (
+            f"In super-resolution each target must be its raw image upscaled by PROBLEM.SUPER_RESOLUTION.UPSCALING, "
+            f"which is {upscaling} (e.g. a {size((64,) * len(upscaling))} raw image needs a "
+            f"{size(64 * u for u in upscaling)} target)"
         )
+    else:
+        rule = f"Each raw image must have a {target} of its same size"
+    check = "Check that both folders hold the right images: they are paired by file order."
 
-    return mistmatch_message
+    hint = check
+    if len(X_data.dataset_info) != len(Y_data.dataset_info):
+        problem = (
+            f"There are {len(X_data.dataset_info)} {which} raw images but {len(Y_data.dataset_info)} {targets}: each "
+            f"raw image needs its {target}."
+        )
+    else:
+        pairs = mismatched_raw_target_files(X_data, Y_data, upscaling)
+        if pairs:
+            listed = [
+                f"    - raw image '{os.path.basename(xf.path)}': {size(xs)}  ->  its {target} "
+                f"'{os.path.basename(yf.path)}': {size(ys)}, but {size(expected)} was expected"
+                for xf, yf, xs, ys, expected in pairs[:max_pairs]
+            ]
+            if len(pairs) > max_pairs:
+                listed.append(f"    ... and {len(pairs) - max_pairs} more")
+            problem = f"{rule}, but these {which} pairs do not match:\n" + "\n".join(listed)
+        else:
+            # Shapes unknown: only the number of patches extracted is known
+            problem = (
+                f"{rule}, but {len(X_data.sample_list)} patches were extracted from the {which} raw images and "
+                f"{len(Y_data.sample_list)} from their {targets}."
+            )
+        ratios = [tuple(b / a for a, b in zip(xs, ys)) for _, _, xs, ys, _ in pairs]
+        if super_resolution and ratios:
+            if any(r < 1 for rs in ratios for r in rs):
+                hint = (
+                    "Some targets are smaller than their raw images: in super-resolution the raw images are the "
+                    "low-resolution ones and the targets the high-resolution ones. Are both folders swapped?"
+                )
+            elif len(set(ratios)) == 1 and all(r % 1 == 0 for r in ratios[0]):
+                factor = tuple(int(r) for r in ratios[0])
+                hint = (
+                    f"All these targets are their raw images upscaled by {factor}: if that is right, set "
+                    f"PROBLEM.SUPER_RESOLUTION.UPSCALING to {factor}. If not, {check[0].lower() + check[1:]}"
+                )
+    return (
+        f"The {which} raw images and their {targets} do not match.\n{problem}\n{hint}\nFolders read:\n"
+        f"    - raw images (DATA.{phase}.PATH): {raw_path}\n"
+        f"    - {targets} (DATA.{phase}.GT_PATH): {target_path}"
+    )
 
 
 def save_tif(

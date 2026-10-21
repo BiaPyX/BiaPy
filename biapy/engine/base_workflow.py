@@ -782,6 +782,7 @@ class Base_Workflow(metaclass=ABCMeta):
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
             convert_to_rgb=self.cfg.DATA.FORCE_RGB,
             is_y_mask=self.is_y_mask,
+            super_resolution=(self.cfg.PROBLEM.TYPE == "SUPER_RESOLUTION"),
             is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
             train_zarr_data_information=train_zarr_data_information,
             val_zarr_data_information=val_zarr_data_information,
