@@ -36,17 +36,13 @@ from biapy.data.data_manipulation import pad_to_shape, load_img_data, extract_pa
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
-<<<<<<< Updated upstream
 from biapy.data.pre_processing import (
     labels_into_channels,
     channel_physical_offsets,
     instance_channel_needs_regen,
     resize_images,
 )
-=======
-from biapy.data.pre_processing import labels_into_channels, channel_physical_offsets, resize_images
 from biapy.data.patch_sampling import pick_center, shift_center
->>>>>>> Stashed changes
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
