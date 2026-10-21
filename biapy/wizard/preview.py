@@ -211,16 +211,25 @@ def _check_image_targets(workflow, targets, warnings):
 
 
 def _check_shapes(workflow, shapes, warnings, notes):
-    bad, ratios = [], set()
+    bad, smaller, ratios = [], [], set()
     for name, rs, ts in shapes:
         if workflow == "SUPER_RESOLUTION":
             r = tuple(t / s for s, t in zip(rs, ts))
-            if any(v % 1 for v in r):
+            if any(v < 1 for v in r):
+                smaller.append((name, rs, ts))
+            elif any(v % 1 for v in r):
                 bad.append((name, rs, ts))
             else:
                 ratios.add(tuple(int(v) for v in r))
         elif tuple(rs) != tuple(ts):
             bad.append((name, rs, ts))
+    if smaller:
+        name, rs, ts = smaller[0]
+        warnings.append(
+            "The target of '{}' ({}) is smaller than its raw image ({}): in super-resolution the raw images are the "
+            "low-resolution ones and the targets the high-resolution ones. Are the raw and target folders swapped?".format(
+                name, "x".join(map(str, ts)), "x".join(map(str, rs)))
+        )
     if bad:
         name, rs, ts = bad[0]
         what = "an integer upscaling of the raw image" if workflow == "SUPER_RESOLUTION" else "the size of the raw image"

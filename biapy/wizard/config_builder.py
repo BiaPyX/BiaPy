@@ -207,6 +207,95 @@ class WizardError(Exception):
     pass
 
 
+def _size(shape):
+    """Image size as "512x512" (ZxYxX in 3D), from its shape without channels."""
+    return "x".join(str(int(v)) for v in shape)
+
+
+def _factor(ratios):
+    """Upsampling factor as "x2", or "x(1, 2, 2)" when it differs per axis."""
+    ratios = ["{:g}".format(r) for r in ratios]
+    return "x" + ratios[0] if len(set(ratios)) == 1 else "x(" + ", ".join(ratios) + ")"
+
+
+def _check_target_shapes(workflow, phase, raw, targets, upscaling=None):
+    """
+    Checks that each target has the shape of its raw image or, in super-resolution, the shape of the raw image
+    upsampled by an integer factor: the same factor for all the images, training and test.
+
+    Parameters
+    ----------
+    workflow : str
+        ``PROBLEM.TYPE``.
+    phase : str
+        "TRAIN" or "TEST".
+    raw, targets : tuple
+        Shapes of the raw images and of the targets (channels last) and the folder they are in.
+    upscaling : dict, optional
+        Super-resolution: the factor found so far (``factor``) and in which images (``found``).
+
+    Returns
+    -------
+    upscaling : dict or None
+        Super-resolution: the factor (``factor``, one per axis) and in which images it was found (``found``).
+    """
+    from biapy.wizard.data_check import list_files
+
+    which = "training" if phase == "TRAIN" else "test"
+    (raw_shapes, raw_folder), (target_shapes, target_folder) = raw, targets
+    raw_names, target_names = list_files(raw_folder or ""), list_files(target_folder or "")
+
+    for i, (x, y) in enumerate(zip(raw_shapes, target_shapes)):
+        x, y = tuple(x[:-1]), tuple(y[:-1])
+        # File names, in the order the data check read them (if the folders have not changed since)
+        raw_name = raw_names[i] if len(raw_names) == len(raw_shapes) else "number {}".format(i + 1)
+        target_name = target_names[i] if len(target_names) == len(target_shapes) else "number {}".format(i + 1)
+
+        def pair():
+            return "\n    - raw image {}: {}  (in {})\n    - its target {}: {}  (in {})".format(
+                raw_name, _size(x), raw_folder, target_name, _size(y), target_folder
+            )
+
+        if workflow != "SUPER_RESOLUTION":
+            if x != y:
+                raise WizardError(
+                    "Each {} target must have the same size as its raw image, but this pair does not:{}\n"
+                    "Check that both folders hold the right images (they are paired by file order).".format(which, pair())
+                )
+            continue
+
+        ratios = [b / a for a, b in zip(x, y)]
+        if any(r < 1 for r in ratios):
+            raise WizardError(
+                "In super-resolution the raw images are the low-resolution ones and their targets the high-resolution "
+                "ones (e.g. 512x512 raw images and 1024x1024 targets for a x2 upsampling), but the {} targets are smaller "
+                "than their raw images:{}\nCheck that the {} raw images folder holds the low-resolution images and the "
+                "target folder the high-resolution ones: they may be swapped.".format(which, pair(), which)
+            )
+        if any(r % 1 != 0 for r in ratios):
+            raise WizardError(
+                "In super-resolution each target must be its raw image upsampled by a whole factor (e.g. 512x512 raw "
+                "images and 1024x1024 targets for a x2 upsampling), but in this {} pair the target is {} larger:{}\n"
+                "Check that both folders hold the right images (they are paired by file order).".format(
+                    which, _factor(ratios), pair()
+                )
+            )
+        factor = tuple(int(r) for r in ratios)
+        if upscaling is None:
+            upscaling = {"factor": factor, "found": "the {} data (e.g. raw image {}: {}, its target: {})".format(
+                which, raw_name, _size(x), _size(y))}
+        elif factor != upscaling["factor"]:
+            raise WizardError(
+                "In super-resolution all the targets must be their raw images upsampled by the same factor, in the "
+                "training and the test data. It is {} in {}, but {} in this {} pair:{}\nCheck that "
+                "the {} raw images are the low-resolution ones and their targets the high-resolution ones.".format(
+                    _factor(upscaling["factor"]), upscaling["found"], _factor(factor), which, pair(),
+                    which,
+                )
+            )
+    return upscaling
+
+
 def build_config_from_answers(answers):
     """
     Configuration dictionary from the wizard's answers, checking that they are consistent (BiaPy-GUI's
@@ -272,6 +361,7 @@ def build_config_from_answers(answers):
     del biapy_cfg["data_constraints"]["DATA.PATCH_SIZE_C"]
 
     dc = biapy_cfg["data_constraints"]
+    upscaling = None  # super-resolution: the same in the training and test data
     for phase in ["TRAIN", "TEST"]:
         if biapy_cfg["{}.ENABLE".format(phase)] and "DATA.{}.GT_PATH".format(phase) in dc:
             if dc["DATA.{}.GT_PATH".format(phase)] != dc["DATA.{}.PATH".format(phase)]:
@@ -287,35 +377,15 @@ def build_config_from_answers(answers):
                 )
             x_key, y_key = "DATA.{}.PATH_path_shapes".format(phase), "DATA.{}.GT_PATH_path_shapes".format(phase)
             if x_key in dc and y_key in dc:
-                y_upscaling = -1
-                for x, y in zip(dc[x_key], dc[y_key]):
-                    if y_upscaling == -1 and biapy_cfg["PROBLEM.TYPE"] == "SUPER_RESOLUTION":
-                        y_upscaling = []
-                        for i in range(len(x[:-1])):
-                            div = y[i] / x[i]
-                            if div % 1 != 0:
-                                raise WizardError(
-                                    "The shapes of the raw images and their corresponding targets do not have an integer ratio. "
-                                    "Remember that in the super-resolution workflow an upsampled version of the raw images "
-                                    "is expected as target. For instance, if the raw image shape is 512x512 the expected "
-                                    "target image shape needs to be 1024x1024 in a x2 upsampling. Here we found {} and {} "
-                                    "shapes for the raw images and targets respectively. Check the data to proceed.".format(x, y)
-                                )
-                            y_upscaling.append(int(div))
-                        y_upscaling = tuple(y_upscaling)
-                        biapy_cfg["PROBLEM.SUPER_RESOLUTION.UPSCALING"] = y_upscaling
-
-                    if biapy_cfg["PROBLEM.TYPE"] == "SUPER_RESOLUTION":
-                        expected_y_shape = tuple(x[i] * y_upscaling[i] for i in range(len(y_upscaling))) + (x[-1],)
-                    else:
-                        expected_y_shape = x
-                    if tuple(y[:-1]) != tuple(expected_y_shape[:-1]):
-                        raise WizardError(
-                            "Raw images and their corresponding targets do not seem to match in shape. Expected {} and {}. "
-                            "Found {} and {} for the raw images and targets respectively.".format(
-                                x[:-1], expected_y_shape[:-1], x[:-1], y[:-1]
-                            )
-                        )
+                upscaling = _check_target_shapes(
+                    biapy_cfg["PROBLEM.TYPE"],
+                    phase,
+                    (dc[x_key], dc.get("DATA.{}.PATH_path".format(phase))),
+                    (dc[y_key], dc.get("DATA.{}.GT_PATH_path".format(phase))),
+                    upscaling,
+                )
+                if biapy_cfg["PROBLEM.TYPE"] == "SUPER_RESOLUTION":
+                    biapy_cfg["PROBLEM.SUPER_RESOLUTION.UPSCALING"] = upscaling["factor"]
 
         for suffix in ["PATH_path_shapes", "GT_PATH_path_shapes", "PATH", "PATH_path", "GT_PATH", "GT_PATH_path"]:
             dc.pop("DATA.{}.{}".format(phase, suffix), None)

@@ -1089,6 +1089,39 @@ def update_bmz_model_kwargs_to_biapy(new_biapy_model_kwargs: Dict, model: ModelD
             bmz_model_kwargs[k] = v
     return bmz_model_kwargs
 
+def load_bmz_model_description(source: str) -> ModelDescr_v0_4 | ModelDescr_v0_5:
+    """
+    Description of a BioImage Model Zoo model (its id, e.g. "affable-shark", URL or file), checked: when it can't be
+    validated (e.g. a file failed to download, or the model needs a newer bioimageio.spec) bioimageio returns an
+    invalid description instead of failing, which would only break later. Here it fails with the reason.
+
+    Parameters
+    ----------
+    source : str
+        Model to load (``MODEL.BMZ.SOURCE_MODEL_ID``).
+
+    Returns
+    -------
+    model : ModelDescr
+        The model's description.
+    """
+    import bioimageio.spec
+
+    description = load_description(source)
+    if not isinstance(description, (ModelDescr_v0_4, ModelDescr_v0_5)):
+        try:
+            details = description.validation_summary.format()
+        except Exception:
+            details = str(description)
+        raise ValueError(
+            "The BioImage Model Zoo model '{}' could not be loaded (bioimageio.spec {}). If a file failed to download, "
+            "run it again; otherwise the model may need another version of bioimageio.spec. Details:\n{}".format(
+                source, bioimageio.spec.__version__, details
+            )
+        )
+    return description
+
+
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
     Build a model from Bioimage Model Zoo (BMZ).
@@ -1320,6 +1353,51 @@ def check_bmz_args(
         raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{compat['reason_message']}\n")
 
     return compat["preproc_info"], compat["opts"], compat["workflow_info"]
+
+
+# BioImage Model Zoo models that pass the checks of check_bmz_model_compatibility() for a workflow they are not meant
+# for (e.g. tagged just "segmentation"), so they are not offered nor used for it. Keyed by the model's nickname, each
+# with the workflows (PROBLEM.TYPE, or "all") it is excluded from and why.
+BMZ_MODEL_BLACKLIST: Dict[str, Dict[str, str]] = {
+    "wild-whale": {
+        "SEMANTIC_SEG": "it predicts the affinities of the cells' boundaries, to be used to create instances "
+        "(instance segmentation), but it is only tagged as 'segmentation'",
+    },
+}
+
+
+def bmz_model_blacklist_reason(model_rdf: Dict, workflow: str) -> Optional[str]:
+    """
+    Why the model can't be used in the workflow, if it is in :data:`BMZ_MODEL_BLACKLIST`.
+
+    Parameters
+    ----------
+    model_rdf : dict
+        Model as listed by :func:`find_bmz_models` or its RDF.
+
+    workflow : str
+        Workflow (``PROBLEM.TYPE``).
+
+    Returns
+    -------
+    reason : str or None
+        The reason, or ``None`` if the model is not excluded from the workflow.
+    """
+    m = (model_rdf.get("raw") or {}).get("manifest") or model_rdf
+    # The nickname is in different places depending on where the description comes from and its format version
+    names = {
+        model_rdf.get("nickname"),
+        model_rdf.get("alias"),
+        ((m.get("config") or {}).get("bioimageio") or {}).get("nickname"),
+        str(m.get("id") or "").split("/")[-1],
+    }
+    for name in names:
+        excluded = BMZ_MODEL_BLACKLIST.get(name) if name else None
+        if excluded:
+            reason = excluded.get(workflow, excluded.get("all"))
+            if reason:
+                return f"Model '{name}' is excluded from the {workflow} workflow in BiaPy: {reason}"
+    return None
 
 
 def check_bmz_model_compatibility(
@@ -1554,6 +1632,11 @@ def check_bmz_model_compatibility(
     else:
         reason_message = f"[{specific_workflow}] no workflow tag recognized in {tags}.\n"
         return _result(True, reason_message)
+
+    # --------- Models known not to fit the workflow found ---------
+    blacklisted = bmz_model_blacklist_reason(model_rdf, workflow_info["workflow_type"])
+    if blacklisted:
+        return _result(True, f"[{specific_workflow}] {blacklisted}\n")
 
     # --------- Axes checks ---------
     axes_order = g(inputs[0], "axes")

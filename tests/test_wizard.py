@@ -593,6 +593,12 @@ def test_preview_shape_mismatch(tmp_path):
     assert any("should be the size of the raw image" in w for w in warnings)
 
 
+def test_preview_super_resolution_targets_smaller(tmp_path):
+    raw, tgt = _sr_pairs(tmp_path, "test", 64, 32, n=1)
+    warnings = preview("SUPER_RESOLUTION", "2D", raw, tgt)["warnings"]
+    assert any("smaller than its raw image (64x64)" in w and "swapped" in w for w in warnings)
+
+
 def test_preview_detection_points_outside(tmp_path):
     raw, _ = _pairs(tmp_path, ["a.tif"], ["a.tif"])
     csv = tmp_path / "csv"
@@ -724,3 +730,65 @@ def test_config_mismatched_folders(tmp_path):
     answers["data_constraints"]["DATA.TRAIN.GT_PATH"] = 5
     with pytest.raises(WizardError, match="do not match"):
         build_config(answers, GPU)
+
+
+def _sr_pairs(tmp_path, name, raw_size, target_size, n=2):
+    raw, target = tmp_path / (name + "_raw"), tmp_path / (name + "_target")
+    raw.mkdir()
+    target.mkdir()
+    rng = np.random.default_rng(0)
+    for i in range(n):
+        _write_2d(str(raw / "{}.tif".format(i)), rng.integers(0, 255, (raw_size, raw_size), dtype=np.uint8))
+        _write_2d(str(target / "{}.tif".format(i)), rng.integers(0, 255, (target_size, target_size), dtype=np.uint8))
+    return str(raw), str(target)
+
+
+def _sr_answers(tmp_path, train, test):
+    checks = [("DATA.TRAIN.PATH", train[0]), ("DATA.TRAIN.GT_PATH", train[1])]
+    if test:
+        checks += [("DATA.TEST.PATH", test[0]), ("DATA.TEST.GT_PATH", test[1])]
+    return _answers("SUPER_RESOLUTION", "2D", checks, **{"TEST.ENABLE": bool(test), "DATA.TEST.LOAD_GT": bool(test)})
+
+
+def test_config_super_resolution(tmp_path):
+    train, test = _sr_pairs(tmp_path, "train", 64, 128), _sr_pairs(tmp_path, "test", 64, 128)
+    cfg, _ = build_config(_sr_answers(tmp_path, train, test), GPU)
+    assert cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] == "(2, 2)"
+
+
+@pytest.mark.parametrize(
+    "test_sizes,message",
+    [
+        # High-resolution test images as raw images: their targets look smaller
+        ((128, 64), r"test targets are smaller than their raw images:\n    - raw image 0.tif: 128x128"),
+        ((64, 96), r"target is x1.5 larger"),
+        # High-resolution images in both test folders: x1 instead of the training's x2
+        ((128, 128), r"It is x2 in the training data \(e.g. raw image 0.tif: 64x64, its target: 128x128\), but x1"),
+    ],
+)
+def test_config_super_resolution_wrong_test_data(tmp_path, test_sizes, message):
+    train, test = _sr_pairs(tmp_path, "train", 64, 128), _sr_pairs(tmp_path, "test", *test_sizes)
+    with pytest.raises(WizardError, match=message):
+        build_config(_sr_answers(tmp_path, train, test), GPU)
+
+
+def test_bmz_blacklist():
+    from biapy.models import bmz_model_blacklist_reason, check_bmz_model_compatibility
+
+    # As BMZ lists wild-whale (only tagged "segmentation"): excluded from semantic segmentation
+    manifest = {
+        "id": "10.5281/zenodo.6079314/7695872",
+        "config": {"bioimageio": {"nickname": "wild-whale"}},
+        "tags": ["segmentation", "unet"],
+        "weights": {"pytorch_state_dict": {"kwargs": {"out_channels": 8}}},
+        "inputs": [{"axes": "bcyx", "shape": {"min": [1, 1, 64, 64]}}],
+    }
+    listed = {"nickname": "wild-whale", "alias": "wild-whale", "raw": {"manifest": manifest}}
+    for model in (listed, manifest):  # as find_bmz_models() lists it and its RDF alone
+        assert "wild-whale" in bmz_model_blacklist_reason(model, "SEMANTIC_SEG")
+        assert bmz_model_blacklist_reason(model, "INSTANCE_SEG") is None
+        r = check_bmz_model_compatibility(model, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
+        assert r["error"] and "excluded" in r["reason_message"]
+    manifest["config"]["bioimageio"]["nickname"] = "other-model"
+    r = check_bmz_model_compatibility(manifest, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
+    assert not r["error"], r["reason_message"]

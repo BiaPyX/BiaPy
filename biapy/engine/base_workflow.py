@@ -25,12 +25,12 @@ from yacs.config import CfgNode as CN
 import pandas as pd
 
 import biapy
-from bioimageio.spec import load_description
 
 from biapy.models import (
     build_model,
     build_torchvision_model,
     build_bmz_model,
+    load_bmz_model_description,
     is_biapy_model,
     get_bmz_model_kwargs,
     check_bmz_args,
@@ -375,7 +375,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     option_list.append(val)
 
             print("Loading BioImage Model Zoo pretrained model . . .")
-            self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
+            self.bmz_config["original_bmz_config"] = load_bmz_model_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
             self.cfg.merge_from_list(option_list)
 
