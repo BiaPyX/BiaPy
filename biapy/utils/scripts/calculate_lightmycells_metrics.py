@@ -1,5 +1,5 @@
 """
-Compute MAE/MSE/SSIM/PSNR/PCC for LightMyCells predictions vs. GT. GT is laid out as BiaPy's
+Compute MAE/MSE/SSIM/PSNR/PCC/E_dist/C_dist for LightMyCells predictions vs. GT. GT is laid out as BiaPy's
 MULTIPLE_RAW_ONE_TARGET_LOADER test sets: one GT tif per Study folder, e.g.
 <gt_dir>/<Study_id>_<Organelle>/<Study_id>_<Organelle>.ome.tiff
 
@@ -8,7 +8,9 @@ input; Study/GT pairing recovered via --organelle) or nested (one Study_id subfo
 prediction, same layout as gt_dir).
 
 All metrics are computed after percentile-clipping (2/99.8) each prediction and GT and rescaling
-them to [0,1] (data_range=1.0), so predictions saved in any intensity scale are comparable. The
+them to [0,1] (data_range=1.0), so predictions saved in any intensity scale are comparable.
+E_dist/C_dist follow the challenge's evaluate.py instead: (x - p2) / (p99.8 - p2) without clipping,
+then the Euclidean and cosine distances between the flattened images. The
 summary reports the mean per image (z-slice), per sample (image_id) and per study.
 
 Example:
@@ -25,6 +27,7 @@ import re
 import cv2
 import numpy as np
 import torch
+from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError, PearsonCorrCoef
 from torchmetrics.functional.image import peak_signal_noise_ratio, structural_similarity_index_measure
 from tqdm import tqdm
@@ -33,7 +36,7 @@ from biapy.data.data_manipulation import read_img_as_ndarray
 from biapy.data.norm import norm_range01, percentile_clip
 
 parser = argparse.ArgumentParser(
-    description="Calculate I2I metrics (MAE/MSE/SSIM/PSNR/PCC) for LightMyCells-style predictions",
+    description="Calculate I2I metrics (MAE/MSE/SSIM/PSNR/PCC/E_dist/C_dist) for LightMyCells-style predictions",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument("-pred_dir", "--pred_dir", required=True, help="Dir of predicted tifs (flat or Study_id subfolders)")
@@ -74,6 +77,20 @@ def norm_scale_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     psnr = peak_signal_noise_ratio(pred_t, gt_t, data_range=1.0).item()
     pcc_val = PearsonCorrCoef()(pred_t.flatten(), gt_t.flatten()).item()
     return {"mae": mae, "mse": mse, "ssim": ssim, "psnr": psnr, "pcc": pcc_val}
+
+
+def challenge_percentile_norm(img: np.ndarray) -> np.ndarray:
+    # Same as the challenge's evaluate.py: no clipping, constant images left untouched
+    low, high = np.percentile(img, 2), np.percentile(img, 99.8)
+    return img.astype(np.float64) if low == high else (img - low) / (high - low)
+
+
+def challenge_distances(pred: np.ndarray, gt: np.ndarray) -> dict:
+    pred_n = challenge_percentile_norm(pred).reshape(1, -1)
+    gt_n = challenge_percentile_norm(gt).reshape(1, -1)
+    e_dist = euclidean_distances(gt_n, pred_n)[0, 0]
+    c_dist = np.abs(cosine_distances(gt_n, pred_n)[0, 0])
+    return {"e_dist": e_dist, "c_dist": c_dist}
 
 
 def collect_pairs(pred_dir: str, gt_dir: str, organelle: str | None):
@@ -128,9 +145,10 @@ def main():
         sample = sample.group(1) if sample is not None else os.path.basename(os.path.dirname(pred_path))
         row = {"file": pred_fname, "sample": sample, "study": "_".join(sample.split("_")[:2])}
         row.update(norm_scale_metrics(pred, gt))
+        row.update(challenge_distances(pred, gt))
         rows.append(row)
 
-    metrics = ["mae", "mse", "ssim", "psnr", "pcc"]
+    metrics = ["mae", "mse", "ssim", "psnr", "pcc", "e_dist", "c_dist"]
     cols = ["file", "sample", "study"] + metrics
     os.makedirs(os.path.dirname(args["output_csv"]) or ".", exist_ok=True)
     with open(args["output_csv"], "w") as f:
