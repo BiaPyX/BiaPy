@@ -4333,28 +4333,23 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                         ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
 
-                if (
-                    "LOWER_VALUE" in old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] 
-                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"], list)
-                ):
-                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"] = [old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"]]
-
-                if (
-                    "UPPER_VALUE" in old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] 
-                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"], list)
-                ):
-                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"] = [old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"]]
-            if "ZERO_MEAN_UNIT_VAR" in old_cfg["DATA"]["NORMALIZATION"]:
-                if (
-                    "MEAN_VAL" in old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]
-                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"], list)
-                ):
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = [old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"]]
-                if (
-                    "STD_VAL" in old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]
-                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"], list)
-                ):
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = [old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"]]   
+            # These were single values; now they are lists (one value, or one per channel). The wizard passes them
+            # as tuples, and configurations it wrote before handling that have them nested ([[-1.0]])
+            for group, key in [
+                ("PERC_CLIP", "LOWER_VALUE"),
+                ("PERC_CLIP", "UPPER_VALUE"),
+                ("ZERO_MEAN_UNIT_VAR", "MEAN_VAL"),
+                ("ZERO_MEAN_UNIT_VAR", "STD_VAL"),
+            ]:
+                node = old_cfg["DATA"]["NORMALIZATION"].get(group)
+                if not isinstance(node, dict) or key not in node:
+                    continue
+                val = node[key]
+                if not isinstance(val, (list, tuple)):
+                    val = [val]
+                if len(val) == 1 and isinstance(val[0], (list, tuple)):
+                    val = val[0]
+                node[key] = list(val)
             if "MEASURE_BY" in old_cfg["DATA"]["NORMALIZATION"]:
                 del old_cfg["DATA"]["NORMALIZATION"]["MEASURE_BY"]
 

@@ -1113,6 +1113,15 @@ def load_bmz_model_description(source: str) -> ModelDescr_v0_4 | ModelDescr_v0_5
             details = description.validation_summary.format()
         except Exception:
             details = str(description)
+        if "'index_key' is expected" in details:  # bioimageio.spec < 0.5.14.3 with pydantic 2.14+
+            import pydantic
+
+            raise ValueError(
+                "The BioImage Model Zoo model '{}' could not be loaded: pydantic {} is not compatible with "
+                "bioimageio.spec {}. Install an older pydantic with: pip install \"pydantic<2.14\"".format(
+                    source, pydantic.VERSION, bioimageio.spec.__version__
+                )
+            )
         raise ValueError(
             "The BioImage Model Zoo model '{}' could not be loaded (bioimageio.spec {}). If a file failed to download, "
             "run it again; otherwise the model may need another version of bioimageio.spec. Details:\n{}".format(

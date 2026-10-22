@@ -35,6 +35,9 @@ dependencies = [
     "h5py>=3.9.0",
     "zarr>=3.1.5",
     "bioimageio.core==0.9.6",
+    # bioimageio.spec 0.5.7.4 (required by bioimageio.core 0.9.6) fails to load any model with pydantic 2.14+
+    # ("'index_key' is expected to be an integer or a string"); fixed in bioimageio.spec 0.5.14.3
+    "pydantic<2.14",
     "imagecodecs>=2024.1.1",
     "pooch>=1.8.1",
     "xarray==2025.1.*",
