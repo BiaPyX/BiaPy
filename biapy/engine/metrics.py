@@ -117,10 +117,11 @@ def weight_binary_ratio(target, valid=None):
     min_ratio = 5e-2
     label = target.clone()  # copy of target label
 
-    label = (label != 0).double()  # foreground
+    # float32, not float64: Apple Silicon's GPU (MPS) has no float64
+    label = (label != 0).float()  # foreground
 
     if valid is None:
-        ww = label.sum() / torch.prod(torch.tensor(label.shape, dtype=torch.double))
+        ww = label.sum() / label.numel()
     else:
         ww = label[valid].sum() / valid.sum()
 

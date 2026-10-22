@@ -229,6 +229,14 @@ def init_devices(args, cfg):
             # so the gpu_number is only used to know if we want to use GPU or not
             device = torch.device(f"cuda")
             print(f"**** Using GPU: '{device}' for training")
+        elif str(args.gpu).strip().lower() == "mps":
+            # Apple Silicon's GPU ("--gpu mps"). Before, it fell to 'SYSTEM.DEVICE' ("cpu" by default) and ran on the CPU
+            if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+                device = torch.device("mps")
+                print(f"**** Using Apple Silicon GPU: '{device}' for training")
+            else:
+                device = torch.device(cfg.SYSTEM.DEVICE)
+                print(f"WARNING: the Apple Silicon GPU ('mps') is not available in this PyTorch installation. Using '{device}'")
         else:
             device = torch.device(cfg.SYSTEM.DEVICE)  # e.g. "cpu"
             print(f"**** Using '{device}' for training")

@@ -15,7 +15,7 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from torchmetrics import Accuracy
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from numpy.typing import NDArray
 
 from biapy.engine.base_workflow import Base_Workflow
@@ -245,6 +245,19 @@ class Classification_Workflow(Base_Workflow):
             if len(self._train_pred_classes) != self.cfg.DATA.N_CLASSES:
                 self._train_pred_classes = [str(i) for i in range(self.cfg.DATA.N_CLASSES)]
         return self._train_pred_classes
+
+    def _select_train_pred_samples(self, items: List[Any], n: int) -> List[int]:
+        """Samples of as many classes as possible: one of each class in turn, in dataset order."""
+        by_class: Dict[int, List[int]] = {}
+        for k, item in enumerate(items):
+            t = np.asarray(item[1].cpu() if torch.is_tensor(item[1]) else item[1]).reshape(-1)
+            by_class.setdefault(int(np.argmax(t)) if t.size > 1 else int(t[0]), []).append(k)
+        chosen: List[int] = []
+        while len(chosen) < min(n, len(items)):
+            for ks in by_class.values():
+                if ks and len(chosen) < n:
+                    chosen.append(ks.pop(0))
+        return chosen
 
     def _train_pred_samples_info(self, info: Dict):
         """Add class names and each sample's GT class."""

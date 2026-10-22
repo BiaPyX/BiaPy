@@ -1093,8 +1093,8 @@ class Base_Workflow(metaclass=ABCMeta):
         sample_ids: List[int] = []
         try:
             if dataset is not None and len(dataset) > 0:
-                sample_ids = list(range(min(n, len(dataset))))
-                images, targets = source_generator.collate_fn([dataset[i] for i in sample_ids])
+                sample_ids, items = self._pick_train_pred_samples(dataset, n)
+                images, targets = source_generator.collate_fn(items)
             else:
                 images, targets = next(iter(source_generator))
                 images = images[:n]
@@ -1167,6 +1167,55 @@ class Base_Workflow(metaclass=ABCMeta):
             f"(every {self.cfg.TRAIN.SAVE_TRAIN_PREDS_FREQ} epochs) in: {out_dir}"
             + (f" (from: {', '.join(str(x) for x in names)})" if names else "")
         )
+
+    # Samples considered to choose the ones followed by 'TRAIN.SAVE_TRAIN_PREDS_FREQ', and the time spent reading them
+    # at most (they are read as in training, which with big images not loaded in memory takes a while)
+    TRAIN_PRED_CANDIDATES = 32
+    TRAIN_PRED_PICK_SECONDS = 15
+
+    def _pick_train_pred_samples(self, dataset, n: int) -> Tuple[List[int], List[Any]]:
+        """
+        The ``n`` samples to follow in the training predictions: the most informative (see
+        :meth:`_select_train_pred_samples`) among up to ``TRAIN_PRED_CANDIDATES`` spread over the dataset, so they
+        show what the model learns (e.g. foreground, not only background). Returns their indexes in the dataset
+        and their items, in dataset order.
+        """
+        total = len(dataset)
+        candidates = sorted({int(i) for i in np.linspace(0, total - 1, min(total, max(n, self.TRAIN_PRED_CANDIDATES)))})
+        start = time.time()
+        ids, items = [], []
+        for i in candidates:
+            ids.append(i)
+            items.append(dataset[i])
+            if len(items) >= n and time.time() - start > self.TRAIN_PRED_PICK_SECONDS:
+                break
+        try:
+            chosen = sorted(self._select_train_pred_samples(items, n))
+        except Exception as e:
+            print(f"WARNING: could not choose the training prediction samples ({e}). Using the first ones")
+            chosen = list(range(min(n, len(items))))
+        return [ids[k] for k in chosen], [items[k] for k in chosen]
+
+    def _select_train_pred_samples(self, items: List[Any], n: int) -> List[int]:
+        """
+        Positions in ``items`` (dataset items, i.e. ``(input, target)``) of the ``n`` samples to follow. By default
+        the ones whose target varies the most (mean standard deviation of its channels): a mask with foreground and
+        background, or with several classes, before one with only background, and a detailed image before a flat one.
+        Without targets, the input's.
+        """
+        def variation(x) -> float:
+            a = x.detach().cpu().numpy() if torch.is_tensor(x) else np.asarray(x)
+            a = a.astype(np.float32, copy=False)
+            if a.ndim == 0 or a.size == 0:
+                return 0.0
+            return float(np.mean([np.std(a[..., c]) for c in range(a.shape[-1])]))
+
+        scores = []
+        for item in items:
+            target = item[1] if isinstance(item, (tuple, list)) and len(item) > 1 else None
+            has_target = target is not None and (torch.is_tensor(target) or isinstance(target, np.ndarray)) and target.ndim > 1
+            scores.append(variation(target if has_target else item[0]))
+        return sorted(range(len(items)), key=lambda k: -scores[k])[:n]
 
     @staticmethod
     def _train_pred_sample_name(dataset, index: int) -> Optional[str]:
