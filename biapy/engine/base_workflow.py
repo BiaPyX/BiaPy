@@ -1114,12 +1114,14 @@ class Base_Workflow(metaclass=ABCMeta):
         self._train_pred_sample_targets_raw = None
         save_tif(images_np, os.path.join(out_dir, "input"), verbose=False)
         try:
+            targets_np = None
             if targets is not None:
                 targets_np = targets.cpu().numpy() if torch.is_tensor(targets) else np.asarray(targets)
                 self._train_pred_sample_targets_raw = targets_np
-                if targets_np.ndim == images_np.ndim:
-                    save_tif(targets_np, os.path.join(out_dir, "gt"), verbose=False)
-                    self._train_pred_sample_targets_np = targets_np
+            targets_np = self._train_pred_shown_targets(images_np, targets_np)
+            if targets_np is not None and targets_np.ndim == images_np.ndim:
+                save_tif(targets_np, os.path.join(out_dir, "gt"), verbose=False)
+                self._train_pred_sample_targets_np = targets_np
         except Exception as e:
             print(f"WARNING: could not save ground-truth preview for TRAIN.SAVE_TRAIN_PREDS_FREQ ({e})")
 
@@ -1137,6 +1139,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self._train_pred_preview = {
             "panels": panels,
             "rows": build_preview_rows(panels["input"], panels["gt"], panels["pred"]),
+            "columns": self._train_pred_columns(),
         }
 
         names = [self._train_pred_sample_name(dataset, i) for i in sample_ids]
@@ -1178,6 +1181,17 @@ class Base_Workflow(metaclass=ABCMeta):
     def _train_pred_samples_info(self, info: Dict):
         """Add workflow-specific entries to samples.json."""
         pass
+
+    def _train_pred_shown_targets(self, images_np: NDArray, targets_np: Optional[NDArray]) -> Optional[NDArray]:
+        """What the GT column of the training prediction samples shows (default: the targets)."""
+        return targets_np
+
+    def _train_pred_columns(self) -> Dict[str, Dict[str, str]]:
+        """
+        Columns ("input"/"gt") that show something else than their default: ``{"title": str, "info": str}`` each,
+        the info explaining it to the user (e.g. ``{"gt": {"title": "Masked input", "info": "..."}}``).
+        """
+        return {}
 
     def _predict_train_pred_batch(self):
         """Predict the fixed batch in eval mode with a fixed seed (same MAE mask every epoch), restoring the RNG."""
@@ -1313,9 +1327,10 @@ class Base_Workflow(metaclass=ABCMeta):
             def mid_slice(img: NDArray) -> NDArray:
                 return img[img.shape[0] // 2] if is_3d else img
 
-            columns = [("input", images_np, "input")]
+            titles = {k: v["title"] for k, v in self._train_pred_preview.get("columns", {}).items()}
+            columns = [("input", images_np, titles.get("input", "input"))]
             if targets_np is not None and panels["gt"]:
-                columns.append(("gt", targets_np, "GT"))
+                columns.append(("gt", targets_np, titles.get("gt", "GT")))
             if pred_np is not None and panels["pred"]:
                 columns.append(("pred", pred_np, f"epoch {epoch + 1}"))
 

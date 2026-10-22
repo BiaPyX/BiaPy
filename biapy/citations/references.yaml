@@ -1,0 +1,1138 @@
+# Works to cite when using BiaPy, and when each of them applies. Read by biapy.citations, which gives the
+# citations of a configuration to the BiaPy runs (CITATIONS.md and citations.bib in the results folder), to the
+# BioImage Model Zoo export (the model's "cite" field and its documentation) and to the front-ends (Fiji
+# plugin, BiaPy-GUI).
+#
+# references: one entry per work, by id.
+#   type     article | inproceedings | preprint | software
+#   title, authors ("Family, Given"), year, venue (journal, conference or "arXiv"/"bioRxiv")
+#   volume, pages, doi, arxiv, url   (optional; a DOI or an arXiv id is preferred to an URL)
+#   code     (optional) repository BiaPy's implementation is adapted from
+#
+# rules: in order (it is the order of the citations), each one with
+#   reason   why the works are cited, shown to the user (e.g. "Model architecture: U-Net")
+#   cite     ids of the references
+#   when     (optional, always if missing) condition on the configuration:
+#              {KEY: value, ...}  all of them must hold. KEY is the variable's path, e.g. MODEL.ARCHITECTURE,
+#                                 with numbers for list items (e.g. PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS.0)
+#              value: a value (equal; texts ignore case), a list (any of them), or an operator:
+#                {contains: x} / {contains_any: [x, y]}  the variable (a list) has x / any of them
+#                {not_in: [x, y]}  none of them (also true when the variable is missing)
+#                {startswith: x}
+#              {any: [condition, ...]}  at least one of them holds
+#              {not: condition}
+
+references:
+  biapy:
+    type: article
+    title: "BiaPy: accessible deep learning on bioimages"
+    authors:
+      - "Franco-Barranco, Daniel"
+      - "Andrés-San Román, Jesús A."
+      - "Hidalgo-Cenalmor, Ivan"
+      - "Backová, Lenka"
+      - "González-Marfil, Aitor"
+      - "Caporal, Clément"
+      - "Chessel, Anatole"
+      - "Gómez-Gálvez, Pedro"
+      - "Escudero, Luis M."
+      - "Wei, Donglai"
+      - "Muñoz-Barrutia, Arrate"
+      - "Arganda-Carreras, Ignacio"
+    year: 2025
+    venue: "Nature Methods"
+    volume: "22"
+    pages: "1124-1126"
+    doi: "10.1038/s41592-025-02699-y"
+  biapy_instance_seg:
+    type: article
+    title: "Current Progress and Challenges in Large-Scale 3D Mitochondria Instance Segmentation"
+    authors:
+      - "Franco-Barranco, Daniel"
+      - "Lin, Zudi"
+      - "Jang, Won-Dong"
+      - "Wang, Xueying"
+      - "Shen, Qijia"
+      - "Yin, Wenjie"
+      - "Fan, Yutian"
+      - "Li, Mingxing"
+      - "Chen, Chang"
+      - "Xiong, Zhiwei"
+      - "Xin, Rui"
+      - "Liu, Hao"
+      - "Chen, Huai"
+      - "Li, Zhili"
+      - "Zhao, Jie"
+      - "Chen, Xuejin"
+      - "Pape, Constantin"
+      - "Conrad, Ryan"
+      - "Nightingale, Luke"
+      - "de Folter, Joost"
+      - "Jones, Martin L."
+      - "Liu, Yanling"
+      - "Ziaei, Dorsa"
+      - "Huschauer, Stephan"
+      - "Arganda-Carreras, Ignacio"
+      - "Pfister, Hanspeter"
+      - "Wei, Donglai"
+    year: 2023
+    venue: "IEEE Transactions on Medical Imaging"
+    volume: "42"
+    pages: "3956-3971"
+    doi: "10.1109/tmi.2023.3320497"
+  biapy_unet_architectures:
+    type: article
+    title: "Stable Deep Neural Network Architectures for Mitochondria Segmentation on Electron Microscopy Volumes"
+    authors:
+      - "Franco-Barranco, Daniel"
+      - "Muñoz-Barrutia, Arrate"
+      - "Arganda-Carreras, Ignacio"
+    year: 2022
+    venue: "Neuroinformatics"
+    volume: "20"
+    pages: "437-450"
+    doi: "10.1007/s12021-021-09556-1"
+  unet:
+    type: inproceedings
+    title: "U-Net: Convolutional Networks for Biomedical Image Segmentation"
+    authors:
+      - "Ronneberger, Olaf"
+      - "Fischer, Philipp"
+      - "Brox, Thomas"
+    year: 2015
+    venue: "Medical Image Computing and Computer Assisted Intervention (MICCAI)"
+    pages: "234-241"
+    doi: "10.1007/978-3-319-24574-4_28"
+  resunet:
+    type: article
+    title: "Road Extraction by Deep Residual U-Net"
+    authors:
+      - "Zhang, Zhengxin"
+      - "Liu, Qingjie"
+      - "Wang, Yunhong"
+    year: 2018
+    venue: "IEEE Geoscience and Remote Sensing Letters"
+    volume: "15"
+    pages: "749-753"
+    doi: "10.1109/lgrs.2018.2802944"
+  resunet_plus_plus:
+    type: inproceedings
+    title: "ResUNet++: An Advanced Architecture for Medical Image Segmentation"
+    authors:
+      - "Jha, Debesh"
+      - "Smedsrud, Pia H."
+      - "Riegler, Michael A."
+      - "Johansen, Dag"
+      - "Lange, Thomas De"
+      - "Halvorsen, Pål"
+      - "D. Johansen, Håvard"
+    year: 2019
+    venue: "2019 IEEE International Symposium on Multimedia (ISM)"
+    pages: "225-2255"
+    doi: "10.1109/ism46123.2019.00049"
+  attention_unet:
+    type: preprint
+    title: "Attention U-Net: Learning Where to Look for the Pancreas"
+    authors:
+      - "Oktay, Ozan"
+      - "Schlemper, Jo"
+      - "Folgoc, Loic Le"
+      - "Lee, Matthew"
+      - "Heinrich, Mattias"
+      - "Misawa, Kazunari"
+      - "Mori, Kensaku"
+      - "McDonagh, Steven"
+      - "Hammerla, Nils Y"
+      - "Kainz, Bernhard"
+      - "Glocker, Ben"
+      - "Rueckert, Daniel"
+    year: 2018
+    venue: "arXiv"
+    arxiv: "1804.03999"
+  squeeze_excitation:
+    type: inproceedings
+    title: "Squeeze-and-Excitation Networks"
+    authors:
+      - "Hu, Jie"
+      - "Shen, Li"
+      - "Sun, Gang"
+    year: 2018
+    venue: "2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+    pages: "7132-7141"
+    doi: "10.1109/cvpr.2018.00745"
+  multiresunet:
+    type: article
+    title: "MultiResUNet : Rethinking the U-Net architecture for multimodal biomedical image segmentation"
+    authors:
+      - "Ibtehaz, Nabil"
+      - "Rahman, M. Sohel"
+    year: 2020
+    venue: "Neural Networks"
+    volume: "121"
+    pages: "74-87"
+    doi: "10.1016/j.neunet.2019.08.025"
+  unetr:
+    type: inproceedings
+    title: "UNETR: Transformers for 3D Medical Image Segmentation"
+    authors:
+      - "Hatamizadeh, Ali"
+      - "Tang, Yucheng"
+      - "Nath, Vishwesh"
+      - "Yang, Dong"
+      - "Myronenko, Andriy"
+      - "Landman, Bennett"
+      - "Roth, Holger R."
+      - "Xu, Daguang"
+    year: 2022
+    venue: "2022 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)"
+    pages: "1748-1758"
+    doi: "10.1109/wacv51458.2022.00181"
+  convnext:
+    type: inproceedings
+    title: "A ConvNet for the 2020s"
+    authors:
+      - "Liu, Zhuang"
+      - "Mao, Hanzi"
+      - "Wu, Chao-Yuan"
+      - "Feichtenhofer, Christoph"
+      - "Darrell, Trevor"
+      - "Xie, Saining"
+    year: 2022
+    venue: "IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "2201.03545"
+  convnext_v2:
+    type: inproceedings
+    title: "ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders"
+    authors:
+      - "Woo, Sanghyun"
+      - "Debnath, Shoubhik"
+      - "Hu, Ronghang"
+      - "Chen, Xinlei"
+      - "Liu, Zhuang"
+      - "Kweon, In So"
+      - "Xie, Saining"
+    year: 2023
+    venue: "IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "2301.00808"
+  hrnet:
+    type: article
+    title: "Deep High-Resolution Representation Learning for Visual Recognition"
+    authors:
+      - "Wang, Jingdong"
+      - "Sun, Ke"
+      - "Cheng, Tianheng"
+      - "Jiang, Borui"
+      - "Deng, Chaorui"
+      - "Zhao, Yang"
+      - "Liu, Dong"
+      - "Mu, Yadong"
+      - "Tan, Mingkui"
+      - "Wang, Xinggang"
+      - "Liu, Wenyu"
+      - "Xiao, Bin"
+    year: 2021
+    venue: "IEEE Transactions on Pattern Analysis and Machine Intelligence"
+    volume: "43"
+    pages: "3349-3364"
+    doi: "10.1109/tpami.2020.2983686"
+    code: "https://github.com/tfzhou/ContrastiveSeg"
+  pixel_contrast:
+    type: inproceedings
+    title: "Exploring Cross-Image Pixel Contrast for Semantic Segmentation"
+    authors:
+      - "Wang, Wenguan"
+      - "Zhou, Tianfei"
+      - "Yu, Fisher"
+      - "Dai, Jifeng"
+      - "Konukoglu, Ender"
+      - "Gool, Luc Van"
+    year: 2021
+    venue: "IEEE/CVF International Conference on Computer Vision (ICCV)"
+    arxiv: "2101.11939"
+    code: "https://github.com/tfzhou/ContrastiveSeg"
+  ocr_head:
+    type: inproceedings
+    title: "Object-Contextual Representations for Semantic Segmentation"
+    authors:
+      - "Yuan, Yuhui"
+      - "Chen, Xiaokang"
+      - "Chen, Xilin"
+      - "Wang, Jingdong"
+    year: 2020
+    venue: "European Conference on Computer Vision (ECCV)"
+    arxiv: "1909.11065"
+  deeplabv3:
+    type: preprint
+    title: "Rethinking Atrous Convolution for Semantic Image Segmentation"
+    authors:
+      - "Chen, Liang-Chieh"
+      - "Papandreou, George"
+      - "Schroff, Florian"
+      - "Adam, Hartwig"
+    year: 2017
+    venue: "arXiv"
+    arxiv: "1706.05587"
+  pspnet:
+    type: inproceedings
+    title: "Pyramid Scene Parsing Network"
+    authors:
+      - "Zhao, Hengshuang"
+      - "Shi, Jianping"
+      - "Qi, Xiaojuan"
+      - "Wang, Xiaogang"
+      - "Jia, Jiaya"
+    year: 2017
+    venue: "IEEE Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "1612.01105"
+  stunet:
+    type: preprint
+    title: "STU-Net: Scalable and Transferable Medical Image Segmentation Models Empowered by Large-Scale Supervised Pre-training"
+    authors:
+      - "Huang, Ziyan"
+      - "Wang, Haoyu"
+      - "Deng, Zhongying"
+      - "Ye, Jin"
+      - "Su, Yanzhou"
+      - "Sun, Hui"
+      - "He, Junjun"
+      - "Gu, Yun"
+      - "Gu, Lixu"
+      - "Zhang, Shaoting"
+      - "Qiao, Yu"
+    year: 2023
+    venue: "arXiv"
+    arxiv: "2304.06716"
+    code: "https://github.com/yanchaoz/OrgMIM"
+  nafnet:
+    type: inproceedings
+    title: "Simple Baselines for Image Restoration"
+    authors:
+      - "Chen, Liangyu"
+      - "Chu, Xiaojie"
+      - "Zhang, Xiangyu"
+      - "Sun, Jian"
+    year: 2022
+    venue: "European Conference on Computer Vision (ECCV)"
+    arxiv: "2204.04676"
+    code: "https://github.com/GolpedeRemo37/NafNet-in-AI4Life-Microscopy-Supervised-Denoising-Challenge"
+  rdbm:
+    type: preprint
+    title: "Residual Diffusion Bridge Model for Image Restoration"
+    authors:
+      - "Wang, Hebaixu"
+      - "Zhang, Jing"
+      - "Chen, Haoyang"
+      - "Guo, Haonan"
+      - "Wang, Di"
+      - "Ma, Jiayi"
+      - "Du, Bo"
+    year: 2025
+    venue: "arXiv"
+    arxiv: "2510.23116"
+    code: "https://github.com/MiliLab/RDBM"
+  dpt:
+    type: inproceedings
+    title: "Vision Transformers for Dense Prediction"
+    authors:
+      - "Ranftl, René"
+      - "Bochkovskiy, Alexey"
+      - "Koltun, Vladlen"
+    year: 2021
+    venue: "IEEE/CVF International Conference on Computer Vision (ICCV)"
+    arxiv: "2103.13413"
+    code: "https://github.com/isl-org/DPT"
+  cellpose_sam:
+    type: preprint
+    title: "Cellpose-SAM: superhuman generalization for cellular segmentation"
+    authors:
+      - "Pachitariu, Marius"
+      - "Rariden, Michael"
+      - "Stringer, Carsen"
+    year: 2025
+    venue: "bioRxiv"
+    doi: "10.1101/2025.04.28.651001"
+    code: "https://github.com/MouseLand/cellpose"
+  edsr:
+    type: inproceedings
+    title: "Enhanced Deep Residual Networks for Single Image Super-Resolution"
+    authors:
+      - "Lim, Bee"
+      - "Son, Sanghyun"
+      - "Kim, Heewon"
+      - "Nah, Seungjun"
+      - "Lee, Kyoung Mu"
+    year: 2017
+    venue: "IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)"
+    arxiv: "1707.02921"
+    code: "https://keras.io/examples/vision/edsr"
+  rcan:
+    type: inproceedings
+    title: "Image Super-Resolution Using Very Deep Residual Channel Attention Networks"
+    authors:
+      - "Zhang, Yulun"
+      - "Li, Kunpeng"
+      - "Li, Kai"
+      - "Wang, Lichen"
+      - "Zhong, Bineng"
+      - "Fu, Yun"
+    year: 2018
+    venue: "European Conference on Computer Vision (ECCV)"
+    arxiv: "1807.02758"
+    code: "https://github.com/yjn870/RCAN-pytorch"
+  dfcan:
+    type: article
+    title: "Evaluation and development of deep neural networks for image super-resolution in optical microscopy"
+    authors:
+      - "Qiao, Chang"
+      - "Li, Di"
+      - "Guo, Yuting"
+      - "Liu, Chong"
+      - "Jiang, Tao"
+      - "Dai, Qionghai"
+      - "Li, Dong"
+    year: 2021
+    venue: "Nature Methods"
+    volume: "18"
+    pages: "194-202"
+    doi: "10.1038/s41592-020-01048-5"
+    code: "https://github.com/L0-zhang/DFCAN-pytorch"
+  wdsr:
+    type: preprint
+    title: "Wide Activation for Efficient and Accurate Image Super-Resolution"
+    authors:
+      - "Yu, Jiahui"
+      - "Fan, Yuchen"
+      - "Yang, Jianchao"
+      - "Xu, Ning"
+      - "Wang, Zhaowen"
+      - "Wang, Xinchao"
+      - "Huang, Thomas"
+    year: 2018
+    venue: "arXiv"
+    arxiv: "1808.08718"
+    code: "https://github.com/yjn870/WDSR-pytorch"
+  wavelettention:
+    type: preprint
+    title: "Training Transformer Models by Wavelet Losses Improves Quantitative and Visual Performance in Single Image Super-Resolution"
+    authors:
+      - "Korkmaz, Cansu"
+      - "Tekalp, A. Murat"
+    year: 2024
+    venue: "arXiv"
+    arxiv: "2404.11273"
+    code: "https://github.com/mandalinadagi/Wavelettention"
+  mae:
+    type: inproceedings
+    title: "Masked Autoencoders Are Scalable Vision Learners"
+    authors:
+      - "He, Kaiming"
+      - "Chen, Xinlei"
+      - "Xie, Saining"
+      - "Li, Yanghao"
+      - "Dollár, Piotr"
+      - "Girshick, Ross"
+    year: 2022
+    venue: "IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "2111.06377"
+  vit:
+    type: inproceedings
+    title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+    authors:
+      - "Dosovitskiy, Alexey"
+      - "Beyer, Lucas"
+      - "Kolesnikov, Alexander"
+      - "Weissenborn, Dirk"
+      - "Zhai, Xiaohua"
+      - "Unterthiner, Thomas"
+      - "Dehghani, Mostafa"
+      - "Minderer, Matthias"
+      - "Heigold, Georg"
+      - "Gelly, Sylvain"
+      - "Uszkoreit, Jakob"
+      - "Houlsby, Neil"
+    year: 2021
+    venue: "International Conference on Learning Representations (ICLR)"
+    arxiv: "2010.11929"
+  efficientnet:
+    type: inproceedings
+    title: "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks"
+    authors:
+      - "Tan, Mingxing"
+      - "Le, Quoc V."
+    year: 2019
+    venue: "International Conference on Machine Learning (ICML)"
+    arxiv: "1905.11946"
+  sam3:
+    type: preprint
+    title: "SAM 3: Segment Anything with Concepts"
+    authors:
+      - "Carion, Nicolas"
+      - "Gustafson, Laura"
+      - "Hu, Yuan-Ting"
+      - "Debnath, Shoubhik"
+      - "Hu, Ronghang"
+      - "Suris, Didac"
+      - "Ryali, Chaitanya"
+      - "Alwala, Kalyan Vasudev"
+      - "Khedr, Haitham"
+      - "Huang, Andrew"
+      - "Lei, Jie"
+      - "Ma, Tengyu"
+      - "Guo, Baishan"
+      - "Kalla, Arpit"
+      - "Marks, Markus"
+      - "Greer, Joseph"
+      - "Wang, Meng"
+      - "Sun, Peize"
+      - "Rädle, Roman"
+      - "Afouras, Triantafyllos"
+      - "Mavroudi, Effrosyni"
+      - "Xu, Katherine"
+      - "Wu, Tsung-Han"
+      - "Zhou, Yu"
+      - "Momeni, Liliane"
+      - "Hazra, Rishi"
+      - "Ding, Shuangrui"
+      - "Vaze, Sagar"
+      - "Porcher, Francois"
+      - "Li, Feng"
+      - "Li, Siyuan"
+      - "Kamath, Aishwarya"
+      - "Cheng, Ho Kei"
+      - "Dollár, Piotr"
+      - "Ravi, Nikhila"
+      - "Saenko, Kate"
+      - "Zhang, Pengchuan"
+      - "Feichtenhofer, Christoph"
+    year: 2025
+    venue: "arXiv"
+    arxiv: "2511.16719"
+  dinov3:
+    type: preprint
+    title: "DINOv3"
+    authors:
+      - "Siméoni, Oriane"
+      - "Vo, Huy V."
+      - "Seitzer, Maximilian"
+      - "Baldassarre, Federico"
+      - "Oquab, Maxime"
+      - "Jose, Cijo"
+      - "Khalidov, Vasil"
+      - "Szafraniec, Marc"
+      - "Yi, Seungeun"
+      - "Ramamonjisoa, Michaël"
+      - "Massa, Francisco"
+      - "Haziza, Daniel"
+      - "Wehrstedt, Luca"
+      - "Wang, Jianyuan"
+      - "Darcet, Timothée"
+      - "Moutakanni, Théo"
+      - "Sentana, Leonel"
+      - "Roberts, Claire"
+      - "Vedaldi, Andrea"
+      - "Tolan, Jamie"
+      - "Brandt, John"
+      - "Couprie, Camille"
+      - "Mairal, Julien"
+      - "Jégou, Hervé"
+      - "Labatut, Patrick"
+      - "Bojanowski, Piotr"
+    year: 2025
+    venue: "arXiv"
+    arxiv: "2508.10104"
+  celldino:
+    type: article
+    title: "Cell-DINO: Self-supervised image-based embeddings for cell fluorescent microscopy"
+    authors:
+      - "Moutakanni, Théo"
+      - "Couprie, Camille"
+      - "Yi, Seungeun"
+      - "Doron, Michael"
+      - "Chen, Zitong S."
+      - "Moshkov, Nikita"
+      - "Gardes, Elouan"
+      - "Caron, Mathilde"
+      - "Touvron, Hugo"
+      - "Joulin, Armand"
+      - "Bojanowski, Piotr"
+      - "Pernice, Wolfgang M."
+      - "Caicedo, Juan C."
+    year: 2025
+    venue: "PLOS Computational Biology"
+    volume: "21"
+    pages: "e1013828"
+    doi: "10.1371/journal.pcbi.1013828"
+  noise2void:
+    type: inproceedings
+    title: "Noise2Void - Learning Denoising From Single Noisy Images"
+    authors:
+      - "Krull, Alexander"
+      - "Buchholz, Tim-Oliver"
+      - "Jug, Florian"
+    year: 2019
+    venue: "2019 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    pages: "2124-2132"
+    doi: "10.1109/cvpr.2019.00223"
+    code: "https://github.com/juglab/n2v"
+  structn2v:
+    type: inproceedings
+    title: "Removing Structured Noise with Self-Supervised Blind-Spot Networks"
+    authors:
+      - "Broaddus, Coleman"
+      - "Krull, Alexander"
+      - "Weigert, Martin"
+      - "Schmidt, Uwe"
+      - "Myers, Gene"
+    year: 2020
+    venue: "2020 IEEE 17th International Symposium on Biomedical Imaging (ISBI)"
+    pages: "159-163"
+    doi: "10.1109/isbi45749.2020.9098336"
+  stardist:
+    type: inproceedings
+    title: "Cell Detection with Star-Convex Polygons"
+    authors:
+      - "Schmidt, Uwe"
+      - "Weigert, Martin"
+      - "Broaddus, Coleman"
+      - "Myers, Gene"
+    year: 2018
+    venue: "Medical Image Computing and Computer Assisted Intervention (MICCAI)"
+    pages: "265-273"
+    doi: "10.1007/978-3-030-00934-2_30"
+    code: "https://github.com/stardist/stardist"
+  stardist_3d:
+    type: inproceedings
+    title: "Star-convex Polyhedra for 3D Object Detection and Segmentation in Microscopy"
+    authors:
+      - "Weigert, Martin"
+      - "Schmidt, Uwe"
+      - "Haase, Robert"
+      - "Sugawara, Ko"
+      - "Myers, Gene"
+    year: 2020
+    venue: "2020 IEEE Winter Conference on Applications of Computer Vision (WACV)"
+    pages: "3655-3662"
+    doi: "10.1109/wacv45572.2020.9093435"
+    code: "https://github.com/stardist/stardist"
+  cellpose:
+    type: article
+    title: "Cellpose: a generalist algorithm for cellular segmentation"
+    authors:
+      - "Stringer, Carsen"
+      - "Wang, Tim"
+      - "Michaelos, Michalis"
+      - "Pachitariu, Marius"
+    year: 2021
+    venue: "Nature Methods"
+    volume: "18"
+    pages: "100-106"
+    doi: "10.1038/s41592-020-01018-x"
+  omnipose:
+    type: article
+    title: "Omnipose: a high-precision morphology-independent solution for bacterial cell segmentation"
+    authors:
+      - "Cutler, Kevin J."
+      - "Stringer, Carsen"
+      - "Lo, Teresa W."
+      - "Rappez, Luca"
+      - "Stroustrup, Nicholas"
+      - "Brook Peterson, S."
+      - "Wiggins, Paul A."
+      - "Mougous, Joseph D."
+    year: 2022
+    venue: "Nature Methods"
+    volume: "19"
+    pages: "1438-1448"
+    doi: "10.1038/s41592-022-01639-4"
+  hovernet:
+    type: article
+    title: "Hover-Net: Simultaneous segmentation and classification of nuclei in multi-tissue histology images"
+    authors:
+      - "Graham, Simon"
+      - "Vu, Quoc Dang"
+      - "Raza, Shan E Ahmed"
+      - "Azam, Ayesha"
+      - "Tsang, Yee Wah"
+      - "Kwak, Jin Tae"
+      - "Rajpoot, Nasir"
+    year: 2019
+    venue: "Medical Image Analysis"
+    volume: "58"
+    pages: "101563"
+    doi: "10.1016/j.media.2019.101563"
+  embedseg:
+    type: article
+    title: "EmbedSeg: Embedding-based Instance Segmentation for Biomedical Microscopy Data"
+    authors:
+      - "Lalit, Manan"
+      - "Tomancak, Pavel"
+      - "Jug, Florian"
+    year: 2022
+    venue: "Medical Image Analysis"
+    volume: "81"
+    pages: "102523"
+    doi: "10.1016/j.media.2022.102523"
+    code: "https://github.com/juglab/EmbedSeg"
+  synapse_partners:
+    type: article
+    title: "Automatic detection of synaptic partners in a whole-brain Drosophila electron microscopy data set"
+    authors:
+      - "Buhmann, Julia"
+      - "Sheridan, Arlo"
+      - "Malin-Mayor, Caroline"
+      - "Schlegel, Philipp"
+      - "Gerhard, Stephan"
+      - "Kazimiers, Tom"
+      - "Krause, Renate"
+      - "Nguyen, Tri M."
+      - "Heinrich, Larissa"
+      - "Lee, Wei-Chung Allen"
+      - "Wilson, Rachel"
+      - "Saalfeld, Stephan"
+      - "Jefferis, Gregory S. X. E."
+      - "Bock, Davi D."
+      - "Turaga, Srinivas C."
+      - "Cook, Matthew"
+      - "Funke, Jan"
+    year: 2021
+    venue: "Nature Methods"
+    volume: "18"
+    pages: "771-774"
+    doi: "10.1038/s41592-021-01183-7"
+  mala:
+    type: article
+    title: "Large Scale Image Segmentation with Structured Loss Based Deep Learning for Connectome Reconstruction"
+    authors:
+      - "Funke, Jan"
+      - "Tschopp, Fabian"
+      - "Grisaitis, William"
+      - "Sheridan, Arlo"
+      - "Singh, Chandan"
+      - "Saalfeld, Stephan"
+      - "Turaga, Srinivas C."
+    year: 2019
+    venue: "IEEE Transactions on Pattern Analysis and Machine Intelligence"
+    volume: "41"
+    pages: "1669-1680"
+    doi: "10.1109/tpami.2018.2835450"
+    code: "https://github.com/funkey/waterz"
+  malis:
+    type: inproceedings
+    title: "Maximin affinity learning of image segmentation"
+    authors:
+      - "Turaga, Srinivas C."
+      - "Briggman, Kevin L."
+      - "Helmstaedter, Moritz"
+      - "Denk, Winfried"
+      - "Seung, H. Sebastian"
+    year: 2009
+    venue: "Advances in Neural Information Processing Systems (NeurIPS)"
+    arxiv: "0911.5372"
+  skoots:
+    type: article
+    title: "SKOOTS: Skeleton‐Oriented Object Segmentation for Mitochondria in High‐Resolution Cochlear EM Datasets"
+    authors:
+      - "Buswinka, Christopher J."
+      - "Osgood, Richard T."
+      - "Nitta, Hidetomi"
+      - "Indzhykulian, Artur A."
+    year: 2026
+    venue: "Advanced Science"
+    volume: "13"
+    doi: "10.1002/advs.202517738"
+    code: "https://github.com/indzhykulianlab/skoots"
+  cldice:
+    type: inproceedings
+    title: "clDice -- A Novel Topology-Preserving Loss Function for Tubular Structure Segmentation"
+    authors:
+      - "Shit, Suprosanna"
+      - "Paetzold, Johannes C."
+      - "Sekuboyina, Anjany"
+      - "Ezhov, Ivan"
+      - "Unger, Alexander"
+      - "Zhylka, Andrey"
+      - "Pluim, Josien P. W."
+      - "Bauer, Ulrich"
+      - "Menze, Bjoern H."
+    year: 2021
+    venue: "IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "2003.07311"
+  supervoxel_loss:
+    type: inproceedings
+    title: "Efficient Connectivity-Preserving Instance Segmentation with Supervoxel-Based Loss Function"
+    authors:
+      - "Grim, Anna"
+      - "Chandrashekar, Jayaram"
+      - "Sumbul, Uygar"
+    year: 2025
+    venue: "AAAI Conference on Artificial Intelligence"
+    arxiv: "2501.01022"
+    code: "https://github.com/AllenNeuralDynamics/supervoxel-loss"
+  nnunet:
+    type: article
+    title: "nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation"
+    authors:
+      - "Isensee, Fabian"
+      - "Jaeger, Paul F."
+      - "Kohl, Simon A. A."
+      - "Petersen, Jens"
+      - "Maier-Hein, Klaus H."
+    year: 2021
+    venue: "Nature Methods"
+    volume: "18"
+    pages: "203-211"
+    doi: "10.1038/s41592-020-01008-z"
+  cutout:
+    type: preprint
+    title: "Improved Regularization of Convolutional Neural Networks with Cutout"
+    authors:
+      - "DeVries, Terrance"
+      - "Taylor, Graham W."
+    year: 2017
+    venue: "arXiv"
+    arxiv: "1708.04552"
+  cutblur:
+    type: inproceedings
+    title: "Rethinking Data Augmentation for Image Super-resolution: A Comprehensive Analysis and a New Strategy"
+    authors:
+      - "Yoo, Jaejun"
+      - "Ahn, Namhyuk"
+      - "Sohn, Kyung-Ah"
+    year: 2020
+    venue: "IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "2004.00448"
+    code: "https://github.com/clovaai/cutblur"
+  cutmix:
+    type: inproceedings
+    title: "CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Features"
+    authors:
+      - "Yun, Sangdoo"
+      - "Han, Dongyoon"
+      - "Oh, Seong Joon"
+      - "Chun, Sanghyuk"
+      - "Choe, Junsuk"
+      - "Yoo, Youngjoon"
+    year: 2019
+    venue: "IEEE/CVF International Conference on Computer Vision (ICCV)"
+    arxiv: "1905.04899"
+  gridmask:
+    type: preprint
+    title: "GridMask Data Augmentation"
+    authors:
+      - "Chen, Pengguang"
+      - "Liu, Shu"
+      - "Zhao, Hengshuang"
+      - "Wang, Xingquan"
+      - "Jia, Jiaya"
+    year: 2020
+    venue: "arXiv"
+    arxiv: "2001.04086"
+  pytorch_connectomics:
+    type: preprint
+    title: "PyTorch Connectomics: A Scalable and Flexible Segmentation Framework for EM Connectomics"
+    authors:
+      - "Lin, Zudi"
+      - "Wei, Donglai"
+      - "Lichtman, Jeff"
+      - "Pfister, Hanspeter"
+    year: 2021
+    venue: "arXiv"
+    arxiv: "2112.05754"
+    code: "https://github.com/zudi-lin/pytorch_connectomics"
+  perceptual_loss:
+    type: inproceedings
+    title: "Perceptual Losses for Real-Time Style Transfer and Super-Resolution"
+    authors:
+      - "Johnson, Justin"
+      - "Alahi, Alexandre"
+      - "Fei-Fei, Li"
+    year: 2016
+    venue: "European Conference on Computer Vision (ECCV)"
+    arxiv: "1603.08155"
+  lpips:
+    type: inproceedings
+    title: "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric"
+    authors:
+      - "Zhang, Richard"
+      - "Isola, Phillip"
+      - "Efros, Alexei A."
+      - "Shechtman, Eli"
+      - "Wang, Oliver"
+    year: 2018
+    venue: "IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "1801.03924"
+  pix2pix:
+    type: inproceedings
+    title: "Image-to-Image Translation with Conditional Adversarial Networks"
+    authors:
+      - "Isola, Phillip"
+      - "Zhu, Jun-Yan"
+      - "Zhou, Tinghui"
+      - "Efros, Alexei A."
+    year: 2017
+    venue: "IEEE Conference on Computer Vision and Pattern Recognition (CVPR)"
+    arxiv: "1611.07004"
+  bioimage_model_zoo:
+    type: preprint
+    title: "BioImage Model Zoo: A Community-Driven Resource for Accessible Deep Learning in BioImage Analysis"
+    authors:
+      - "Ouyang, Wei"
+      - "Beuttenmueller, Fynn"
+      - "Gómez-de-Mariscal, Estibaliz"
+      - "Pape, Constantin"
+      - "Burke, Tom"
+      - "Garcia-López-de-Haro, Carlos"
+      - "Russell, Craig"
+      - "Moya-Sans, Lucía"
+      - "de-la-Torre-Gutiérrez, Cristina"
+      - "Schmidt, Deborah"
+      - "Kutra, Dominik"
+      - "Novikov, Maksim"
+      - "Weigert, Martin"
+      - "Schmidt, Uwe"
+      - "Bankhead, Peter"
+      - "Jacquemet, Guillaume"
+      - "Sage, Daniel"
+      - "Henriques, Ricardo"
+      - "Muñoz-Barrutia, Arrate"
+      - "Lundberg, Emma"
+      - "Jug, Florian"
+      - "Kreshuk, Anna"
+    year: 2022
+    venue: "bioRxiv"
+    doi: "10.1101/2022.06.07.495102"
+  torchvision:
+    type: software
+    title: "TorchVision: PyTorch's Computer Vision library"
+    authors:
+      - "TorchVision maintainers and contributors"
+    year: 2016
+    venue: "GitHub repository"
+    url: "https://github.com/pytorch/vision"
+
+rules:
+  - reason: "BiaPy"
+    cite: [biapy]
+
+  # Model architectures (BiaPy's own models)
+  - reason: "BiaPy's U-Net-like architectures"
+    cite: [biapy_unet_architectures]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [unet, resunet, seunet, resunet_se, attention_unet]}
+  - reason: "Model architecture: U-Net"
+    cite: [unet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [unet, seunet, unext_v1, unext_v2]}
+  - reason: "Model architecture: Residual U-Net"
+    cite: [resunet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [resunet, resunet_se]}
+  - reason: "Model architecture: Squeeze-and-Excitation blocks"
+    cite: [squeeze_excitation]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [seunet, resunet_se]}
+  - reason: "Model architecture: ResUNet++"
+    cite: [resunet_plus_plus]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: resunet++}
+  - reason: "Model architecture: Attention U-Net"
+    cite: [attention_unet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: attention_unet}
+  - reason: "Model architecture: MultiResUNet"
+    cite: [multiresunet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: multiresunet}
+  - reason: "Model architecture: UNETR"
+    cite: [unetr]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: unetr}
+  - reason: "Model architecture: ConvNeXt blocks (U-NeXt V1)"
+    cite: [convnext]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: unext_v1}
+  - reason: "Model architecture: ConvNeXt V2 blocks (U-NeXt V2)"
+    cite: [convnext_v2]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: unext_v2}
+  - reason: "Model architecture: HRNet"
+    cite: [hrnet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: hrnet}
+  - reason: "Model head: OCR"
+    cite: [ocr_head]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: hrnet, MODEL.HRNET.HEAD_TYPE: OCR}
+  - reason: "Model head: ASPP (DeepLabv3)"
+    cite: [deeplabv3]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: hrnet, MODEL.HRNET.HEAD_TYPE: ASPP}
+  - reason: "Model head: pyramid pooling (PSPNet)"
+    cite: [pspnet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: hrnet, MODEL.HRNET.HEAD_TYPE: PSP}
+  - reason: "Model architecture: STU-Net"
+    cite: [stunet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: stunet}
+  - reason: "Model architecture: NAFNet"
+    cite: [nafnet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: nafnet}
+  - reason: "Model architecture: Residual Diffusion Bridge Model"
+    cite: [rdbm]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: rdbm}
+  - reason: "Model architecture: Dense Prediction Transformer (DPT)"
+    cite: [dpt]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: dpt}
+  - reason: "Model architecture: ViT readout (as in Cellpose-SAM)"
+    cite: [cellpose_sam]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: vit_readout}
+  - reason: "Model architecture: EDSR"
+    cite: [edsr]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: edsr}
+  - reason: "Model architecture: RCAN"
+    cite: [rcan]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: rcan}
+  - reason: "Model architecture: DFCAN"
+    cite: [dfcan]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: dfcan}
+  - reason: "Model architecture: WDSR"
+    cite: [wdsr]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: wdsr}
+  - reason: "Model architecture: Wavelettention"
+    cite: [wavelettention]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: wavelettention}
+  - reason: "Model architecture: Vision Transformer (ViT)"
+    cite: [vit]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: vit}
+  - reason: "Model architecture: masked autoencoder (MAE)"
+    cite: [mae]
+    when:
+      any:
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: mae}
+        - {PROBLEM.TYPE: SELF_SUPERVISED, PROBLEM.SELF_SUPERVISED.PRETEXT_TASK: masking}
+  - reason: "Model architecture: EfficientNet"
+    cite: [efficientnet]
+    when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: {startswith: efficientnet}}
+
+  # Pretrained ViT backbones ('MODEL.VIT_MODEL', or 'MODEL.UNETR_VIT_MODEL' for UNETR)
+  - reason: "Model backbone: SAM 3 image encoder"
+    cite: [sam3]
+    when:
+      any:
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [vit, dpt, vit_readout], MODEL.VIT_MODEL: sam3_vit}
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: unetr, MODEL.UNETR_VIT_MODEL: sam3_vit}
+  - reason: "Model backbone: DINOv3"
+    cite: [dinov3]
+    when:
+      any:
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [vit, dpt, vit_readout], MODEL.VIT_MODEL: dinov3_vit}
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: unetr, MODEL.UNETR_VIT_MODEL: dinov3_vit}
+  - reason: "Model backbone: Cell-DINO"
+    cite: [celldino]
+    when:
+      any:
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: [vit, dpt, vit_readout], MODEL.VIT_MODEL: celldino_vit}
+        - {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: unetr, MODEL.UNETR_VIT_MODEL: celldino_vit}
+
+  # Models from other sources (cite also the model's own references, on its page)
+  - reason: "Pretrained model from the BioImage Model Zoo"
+    cite: [bioimage_model_zoo]
+    when: {MODEL.SOURCE: bmz}
+  - reason: "Pretrained model from TorchVision"
+    cite: [torchvision]
+    when: {MODEL.SOURCE: torchvision}
+
+  # Instance segmentation
+  - reason: "Instance segmentation: BiaPy's bottom-up approach"
+    cite: [biapy_instance_seg]
+    when: {PROBLEM.TYPE: INSTANCE_SEG}
+  - reason: "Instance representation: star-convex distances (StarDist)"
+    cite: [stardist]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: R}}
+  - reason: "Instance representation: star-convex distances in 3D (StarDist)"
+    cite: [stardist_3d]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.NDIM: 3D, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: R}}
+  - reason: "Instance representation: gradient flows (Cellpose)"
+    cite: [cellpose]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: Gv}}
+  - reason: "Instance representation: gradient flows (Omnipose)"
+    cite: [omnipose]
+    when:
+      PROBLEM.TYPE: INSTANCE_SEG
+      PROBLEM.INSTANCE_SEG.TYPE: regular
+      PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: Gv}
+      PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS.0.Gv.gradient_type: omnipose
+  - reason: "Instance representation: horizontal and vertical distances (HoVer-Net)"
+    cite: [hovernet]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains_any: [H, V, Z]}}
+  - reason: "Instance representation: pixel embeddings (EmbedSeg)"
+    cite: [embedseg]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: E}}
+  - reason: "Instance representation: affinities, agglomerated as waterz does"
+    cite: [mala]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: A}}
+  - reason: "Synapse detection: pre- and postsynaptic sites"
+    cite: [synapse_partners]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: synapses}
+  - reason: "Instance matching metrics (code adapted from StarDist)"
+    cite: [stardist]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, TEST.ENABLE: true, TEST.MATCHING_STATS: true}
+
+  # Denoising
+  - reason: "Self-supervised denoising: Noise2Void"
+    cite: [noise2void]
+    when: {PROBLEM.TYPE: DENOISING, MODEL.ARCHITECTURE: {not_in: [nafnet]}}
+  - reason: "Self-supervised denoising of structured noise: structN2V"
+    cite: [structn2v]
+    when: {PROBLEM.TYPE: DENOISING, MODEL.ARCHITECTURE: {not_in: [nafnet]}, PROBLEM.DENOISING.N2V_STRUCTMASK: true}
+
+  # Membrane repair (image to image)
+  - reason: "Membrane repair: affinity agglomeration as waterz does"
+    cite: [mala]
+    when: {PROBLEM.TYPE: IMAGE_TO_IMAGE, PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: true, PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD: agglomeration}
+  - reason: "Membrane repair: SKOOTS target and post-processing"
+    cite: [skoots]
+    when:
+      PROBLEM.TYPE: IMAGE_TO_IMAGE
+      PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: true
+      any:
+        - {LOSS.TYPE: {contains: SKOOTS}}
+        - {PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD: skoots}
+
+  # Losses
+  - reason: "Loss: MALIS"
+    cite: [malis]
+    when: {TRAIN.ENABLE: true, LOSS.TYPE: {contains: MALIS}}
+  - reason: "Loss: clDice"
+    cite: [cldice]
+    when: {TRAIN.ENABLE: true, LOSS.TYPE: {contains: CLDICE}}
+  - reason: "Loss: supervoxel-based"
+    cite: [supervoxel_loss]
+    when: {TRAIN.ENABLE: true, LOSS.TYPE: {contains: SVOX}}
+  - reason: "Loss: perceptual (VGG features)"
+    cite: [perceptual_loss]
+    when: {TRAIN.ENABLE: true, LOSS.TYPE: {contains: VGG}}
+  - reason: "Loss: LPIPS"
+    cite: [lpips]
+    when: {TRAIN.ENABLE: true, LOSS.TYPE: {contains: LPIPS}}
+  - reason: "Loss: adversarial, with a PatchGAN discriminator"
+    cite: [pix2pix]
+    when:
+      TRAIN.ENABLE: true
+      PROBLEM.TYPE: [IMAGE_TO_IMAGE, DENOISING]
+      PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: false
+      LOSS.TYPE: {contains_any: [BCE, HINGE]}
+  - reason: "Loss: pixel contrast"
+    cite: [pixel_contrast]
+    when: {TRAIN.ENABLE: true, LOSS.CONTRAST.ENABLE: true}
+
+  # Training data
+  - reason: "Training patches: foreground oversampling (as nnU-Net)"
+    cite: [nnunet]
+    when: {TRAIN.ENABLE: true, DATA.TRAIN.PATCH_SAMPLING: foreground_oversampling}
+  - reason: "Data augmentation: Cutout"
+    cite: [cutout]
+    when: {TRAIN.ENABLE: true, AUGMENTOR.ENABLE: true, AUGMENTOR.CUTOUT: true}
+  - reason: "Data augmentation: CutBlur"
+    cite: [cutblur]
+    when: {TRAIN.ENABLE: true, AUGMENTOR.ENABLE: true, AUGMENTOR.CUTBLUR: true}
+  - reason: "Data augmentation: CutMix"
+    cite: [cutmix]
+    when: {TRAIN.ENABLE: true, AUGMENTOR.ENABLE: true, AUGMENTOR.CUTMIX: true}
+  - reason: "Data augmentation: GridMask"
+    cite: [gridmask]
+    when: {TRAIN.ENABLE: true, AUGMENTOR.ENABLE: true, AUGMENTOR.GRIDMASK: true}
+  - reason: "Data augmentation: misalignment and missing sections (code adapted from PyTorch Connectomics)"
+    cite: [pytorch_connectomics]
+    when:
+      TRAIN.ENABLE: true
+      AUGMENTOR.ENABLE: true
+      any:
+        - {AUGMENTOR.MISALIGNMENT: true}
+        - {AUGMENTOR.MISSING_SECTIONS: true}

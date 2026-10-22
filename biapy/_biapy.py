@@ -18,6 +18,7 @@ import numpy as np
 import importlib
 from yacs.config import CfgNode as CN
 from typing import (
+    Any,
     Optional,
     Dict,
     List,
@@ -1764,7 +1765,8 @@ class BiaPy:
         else:
             doc = self.workflow.bmz_config["original_bmz_config"].documentation
 
-        # Cite
+        # Cite: the ones given (or the original model's), then the works to cite for this configuration
+        # (biapy/citations/references.yaml: BiaPy, the architecture, the methods used...) that are not there yet
         citations = []
         if not reuse_original_bmz_config:
             for cite in bmz_cfg["cite"]:
@@ -1787,15 +1789,22 @@ class BiaPy:
                 else:
                     citations.append(cite)
 
-        # Add BiaPy citation if it's not there
-        if not any([True for cite in citations if "biapy" in cite.text.lower()]):
-            citations.append(
-                CiteEntry(
-                    text="BiaPy: accessible deep learning on bioimages",
-                    doi=Doi("10.1038/s41592-025-02699-y"),
-                    url=HttpUrl("https://www.nature.com/articles/s41592-025-02699-y"),
-                )
-            )
+        from biapy.citations import get_citations
+
+        cited = {(str(c.doi).lower() if c.doi else c.text.lower()) for c in citations}
+        for c in get_citations(self.cfg):
+            if (c.doi or c.title.lower()) in cited or c.title.lower() in cited:
+                continue
+            # The title as the text: BiaPy's own is how the Model Zoo models trained with BiaPy are recognized
+            # (biapy.models.is_biapy_model)
+            args = dict(text=c.title)
+            if c.doi:
+                args["doi"] = Doi(c.doi)
+            elif c.url:
+                args["url"] = HttpUrl(c.url)
+            else:
+                continue
+            citations.append(CiteEntry(**args))
 
         # Cover
         covers = []
@@ -1932,6 +1941,51 @@ class BiaPy:
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
 
+    def citations(self) -> List[Dict[str, Any]]:
+        """
+        Works to cite for this job (BiaPy, the model architecture, the methods used...), from
+        ``biapy/citations/references.yaml``, and the references of the BioImage Model Zoo model it uses, if any.
+        Each one as a dict (see :meth:`biapy.citations.Citation.to_dict`).
+        """
+        from biapy.citations import get_citations
+
+        return [c.to_dict() for c in get_citations(self.cfg, extra=self._bmz_model_citations())]
+
+    def save_citations(self):
+        """Writes the works to cite for this job (CITATIONS.md and citations.bib) in its results folder and lists them."""
+        try:
+            from biapy.citations import citations_summary, get_citations, write_citations
+
+            out_dir = self.cfg.PATHS.RESULT_DIR.PATH
+            if self.save_files:
+                citations = write_citations(self.cfg, out_dir, extra=self._bmz_model_citations())
+                where = " (details in {})".format(os.path.join(out_dir, "CITATIONS.md"))
+            else:
+                citations = get_citations(self.cfg, extra=self._bmz_model_citations())
+                where = ""
+            print("If you use these results in your work, please cite{}:\n{}".format(where, citations_summary(citations)))
+        except Exception as e:
+            print("WARNING: could not gather the works to cite for this job ({})".format(e))
+
+    def _bmz_model_citations(self) -> List[Dict[str, Any]]:
+        """References of the BioImage Model Zoo model the job uses (none for BiaPy's own models)."""
+        bmz_config = getattr(getattr(self, "workflow", None), "bmz_config", None) or {}
+        if "original_bmz_config" not in bmz_config:
+            return []
+        out = []
+        for cite in getattr(bmz_config["original_bmz_config"], "cite", None) or []:
+            text = getattr(cite, "text", None)
+            if text:
+                out.append(
+                    {
+                        "text": str(text),
+                        "doi": str(cite.doi) if getattr(cite, "doi", None) else None,
+                        "url": str(cite.url) if getattr(cite, "url", None) else None,
+                        "reason": "Pretrained model from the BioImage Model Zoo: its own references",
+                    }
+                )
+        return out
+
     def wait_and_stop_ddp(self):
         if is_dist_avail_and_initialized():
             dist.barrier()
@@ -1966,6 +2020,9 @@ class BiaPy:
 
         # # Wait until the main process is done
         # self.wait_and_stop_ddp()
+
+        if is_main_process():
+            self.save_citations()
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
 

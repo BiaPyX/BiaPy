@@ -540,6 +540,11 @@ def create_train_val_augmentors(
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic["n2v_manipulator"] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
             dic["n2v_neighborhood_radius"] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
+            # As in training: the generator's defaults are structN2V on and the input's values as targets
+            dic["n2v_structMask"] = (
+                np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
+            )
+            dic["n2v_load_gt"] = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
         val_generator = f_name(**dic)  # type: ignore
 

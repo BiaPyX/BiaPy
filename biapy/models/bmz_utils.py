@@ -10,7 +10,6 @@ It includes functionalities for:
 """
 import os
 import re
-import warnings
 import biapy
 import yaml
 import numpy as np
@@ -551,6 +550,19 @@ def create_model_doc(
     biapy_cfg = biapy_obj.cfg # type: ignore
     workflow = biapy_obj.workflow # type: ignore
 
+    # References: the works to cite for this configuration (biapy/citations/references.yaml), then the ones given
+    from biapy.citations import Citation, get_citations, load_references
+
+    citations = get_citations(biapy_cfg, extra=bmz_cfg.get("cite") or [])
+
+    def ref(ref_id: str, reason: str) -> str:
+        """"[n]": the number of a work in the references (added if the configuration does not cite it)."""
+        for i, c in enumerate(citations, start=1):
+            if c.id == ref_id:
+                return f"[{i}]"
+        citations.append(Citation(ref_id, [reason], load_references()["references"][ref_id]))
+        return f"[{len(citations)}]"
+
     # Workflow name
     if biapy_cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         workflow_name = "Semantic segmentation"
@@ -560,7 +572,7 @@ def create_model_doc(
         workflow_name = "Instance segmentation"
         workflow_tag = "instance_segmentation"
         metrics_used = "- Intersection over Union (IoU), also referred as the [Jaccard index](https://en.wikipedia.org/wiki/Jaccard_index), is essentially a method to quantify the percent of overlap between the target mask and the prediction output. In this workflow, as in BiaPy a botton-down approach is used to generate the final instances, IoU is used to measure the model output with the mask created out of the instances."
-        metrics_used += "\n- Matching metrics, which focus on quantifying correctly predicted instances, transforming instance segmentation results into an object detection framework. In this paradigm, the emphasis shifts from uniquely labeled instances to detecting the presence or absence of instances. This transformation is achieved by establishing a criterion for instance overlap, commonly measured through IoU. Unlike traditional segmentation evaluations that rely on nuanced pixel-level overlaps, this approach simplifies assessment by classifying instances as successful true positives (TP) based on a predefined IoU threshold. In BiaPy, the following metrics are implemented: false positives (FP), true positives (TP), false negatives (FN), [precision](https://en.wikipedia.org/wiki/Precision_and_recall), [recall](https://en.wikipedia.org/wiki/Precision_and_recall), [accuracy](https://en.wikipedia.org/wiki/Accuracy_and_precision#In_binary_classification), [F1-score](https://en.wikipedia.org/wiki/Precision_and_recall#F-measure), mean_true_score (mean IoUs of matched true positives but normalized by the total number of GT objects) and panoptic_quality, which is defined as in Eq. 1 of [Kirillov et al. 'Panoptic Segmentation', CVPR 2019](https://openaccess.thecvf.com/content_CVPR_2019/papers/Kirillov_Panoptic_Segmentation_CVPR_2019_paper.pdf). You can find more information of these matching metrics in [3]."
+        metrics_used += "\n- Matching metrics, which focus on quantifying correctly predicted instances, transforming instance segmentation results into an object detection framework. In this paradigm, the emphasis shifts from uniquely labeled instances to detecting the presence or absence of instances. This transformation is achieved by establishing a criterion for instance overlap, commonly measured through IoU. Unlike traditional segmentation evaluations that rely on nuanced pixel-level overlaps, this approach simplifies assessment by classifying instances as successful true positives (TP) based on a predefined IoU threshold. In BiaPy, the following metrics are implemented: false positives (FP), true positives (TP), false negatives (FN), [precision](https://en.wikipedia.org/wiki/Precision_and_recall), [recall](https://en.wikipedia.org/wiki/Precision_and_recall), [accuracy](https://en.wikipedia.org/wiki/Accuracy_and_precision#In_binary_classification), [F1-score](https://en.wikipedia.org/wiki/Precision_and_recall#F-measure), mean_true_score (mean IoUs of matched true positives but normalized by the total number of GT objects) and panoptic_quality, which is defined as in Eq. 1 of [Kirillov et al. 'Panoptic Segmentation', CVPR 2019](https://openaccess.thecvf.com/content_CVPR_2019/papers/Kirillov_Panoptic_Segmentation_CVPR_2019_paper.pdf). You can find more information of these matching metrics in " + ref("biapy_instance_seg", "Matching metrics") + "."
     elif biapy_cfg.PROBLEM.TYPE == "DETECTION":
         workflow_name = "Object detection"
         workflow_tag = "detection"
@@ -693,7 +705,7 @@ def create_model_doc(
     message += "\n"
     message += "## Training details\n"
     message += "\n"
-    message += f"This model was trained using [BiaPy](https://biapyx.github.io/) [1]. Complete information on how to train this model can be found in BiaPy's documentation, specifically under [{workflow_name.lower()} workflow](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html) description. If you want to reproduce this model training please use the configuration described below (Technical specification section).\n"
+    message += f"This model was trained using [BiaPy](https://biapyx.github.io/) {ref('biapy', 'BiaPy')}. Complete information on how to train this model can be found in BiaPy's documentation, specifically under [{workflow_name.lower()} workflow](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html) description. If you want to reproduce this model training please use the configuration described below (Technical specification section).\n"
     message += "\n"
     message += "### Training Data\n"
     message += "\n"
@@ -735,7 +747,7 @@ def create_model_doc(
                     message += f"- {line}\n"
         message += "\n**Clarifications on the terminology:**\n"
         if "merge patches" in workflow.test_metrics_message:
-            message += "As discussed in [2], it is common to divide the images into smaller patches for processing (and even more when working with 3D images). This approach can lead to discrepancies in metric calculations depending on whether they are computed on individual patches or on the reconstructed full images. To address this, we provide metrics calculated in different manners. Normally the metrics reported are 'merge patches'. Below are explanations for the terms used:\n"
+            message += "As discussed in " + ref("biapy_unet_architectures", "Metrics on patches and on complete images") + ", it is common to divide the images into smaller patches for processing (and even more when working with 3D images). This approach can lead to discrepancies in metric calculations depending on whether they are computed on individual patches or on the reconstructed full images. To address this, we provide metrics calculated in different manners. Normally the metrics reported are 'merge patches'. Below are explanations for the terms used:\n"
             message += "- Metrics labeled as 'per patch' are calculated on the patches extracted from the images\n"
             message += "- Metrics labeled as 'merge patches' are calculated on the complete images after reconstructing them from the patches\n"
         else: # full image case
@@ -769,47 +781,9 @@ def create_model_doc(
     message += f"{author_mes}\n"
     message += "\n"
     message += "## References\n"
-    message += "[1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
-    ref_count = 2
-    if model_arch in ["unet", "resunet", "seunet", "resunet_se", "attention_unet"]:
-        message += f"[{ref_count}] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"
-    elif model_arch  == "dfcan":
-        message += f"[{ref_count}] Qiao, Chang, et al. \"Evaluation and development of deep neural networks for image super-resolution in optical microscopy.\" Nature methods 18.2 (2021): 194-202.\n"
-    elif model_arch == "edsr":
-        message += f"[{ref_count}] Lim, Bee, et al. \"Enhanced deep residual networks for single image super-resolution.\" Proceedings of the IEEE conference on computer vision and pattern recognition workshops. 2017.\n"
-    elif model_arch == "efficientnet":
-        message += f"[{ref_count}] Tan, Mingxing, and Quoc Le. \"Efficientnet: Rethinking model scaling for convolutional neural networks.\" International conference on machine learning. PMLR, 2019.\n"
-    elif "hrnet" in model_arch:
-        message += f"[{ref_count}] Wang, Jingdong, et al. \"Deep high-resolution representation learning for visual recognition.\" IEEE transactions on pattern analysis and machine intelligence 43.10 (2020): 3349-3364.\n"
-    elif model_arch == "mae":
-        message += f"[{ref_count}] He, Kaiming, et al. \"Masked autoencoders are scalable vision learners.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2022.\n"
-    elif model_arch == "multiresunet":
-        message += f"[{ref_count}] Ibtehaz, Nabil, and M. Sohel Rahman. \"MultiResUNet: Rethinking the U-Net architecture for multimodal biomedical image segmentation.\" Neural networks 121 (2020): 74-87.\n"
-    elif model_arch == "rcan":
-        message += f"[{ref_count}] Zhang, Yulun, et al. \"Image super-resolution using very deep residual channel attention networks.\" Proceedings of the European conference on computer vision (ECCV). 2018.\n"
-    elif model_arch == "resunet++":
-        message += f"[{ref_count}] Jha, Debesh, et al. \"Resunet++: An advanced architecture for medical image segmentation.\" 2019 IEEE international symposium on multimedia (ISM). IEEE, 2019.\n"
-    elif model_arch in ["resunet_se", "seunet"]:
-        message += f"[{ref_count}] Hu, Jie, Li Shen, and Gang Sun. \"Squeeze-and-excitation networks.\" Proceedings of the IEEE conference on computer vision and pattern recognition. 2018.\n"
-    elif model_arch == "unet":
-        message += f"[{ref_count}] Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. \"U-net: Convolutional networks for biomedical image segmentation.\" International Conference on Medical image computing and computer-assisted intervention. Cham: Springer international publishing, 2015.\n"
-    elif model_arch == "unetr":
-        message += f"[{ref_count}] Hatamizadeh, Ali, et al. \"Unetr: Transformers for 3d medical image segmentation.\" Proceedings of the IEEE/CVF winter conference on applications of computer vision. 2022.\n"
-    elif model_arch == "dpt":
-        message += f"[{ref_count}] Ranftl, René, Alexey Bochkovskiy, and Vladlen Koltun. \"Vision transformers for dense prediction.\" Proceedings of the IEEE/CVF international conference on computer vision. 2021.\n"
-    elif model_arch == "vit_readout":
-        message += f"[{ref_count}] Pachitariu, Marius, Michael Rariden, and Carsen Stringer. \"Cellpose-SAM: superhuman generalization for cellular segmentation.\" bioRxiv (2025).\n"
-    elif model_arch == "unext_v1":
-        message += f"[{ref_count}] Liu, Zhuang, et al. \"A convnet for the 2020s.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2022.\n"
-    elif model_arch == "unext_v2":
-        message += f"[{ref_count}] Woo, Sanghyun, et al. \"Convnext v2: Co-designing and scaling convnets with masked autoencoders.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2023.\n"
-    else:
-        warnings.warn(f"No reference available for model architecture '{model_arch}'")
-        ref_count -= 1  # No reference added
-    ref_count += 1
-    if biapy_cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        message += f"[{ref_count}] Franco-Barranco, Daniel, et al. \"Current progress and challenges in large-scale 3d mitochondria instance segmentation.\" IEEE transactions on medical imaging 42.12 (2023): 3956-3971.\n"
-        ref_count += 1
+    message += "\n"
+    for i, c in enumerate(citations, start=1):
+        message += f"[{i}] {c.text()}\n\n"
     f = open(doc_output_path, "w")
     f.write(message)
     f.close()
