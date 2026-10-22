@@ -137,6 +137,63 @@ class Denoising_Workflow(Base_Workflow):
             n_gt = None
         return self._composite_preview_spec(n_input, n_gt, n_pred)
 
+    def _prepare_train_pred_sample_batch(self):
+        """
+        Noise2Void: follow the samples without its masking, so the input shown is the image as the user knows it
+        and the prediction is the one of that image, as when the model is used.
+        """
+        generator = self.val_generator if self.val_generator else self.train_generator
+        dataset = getattr(generator, "dataset", None)
+        if not getattr(dataset, "n2v", False):
+            return super()._prepare_train_pred_sample_batch()
+        self._train_pred_n2v_dataset = dataset
+        dataset.n2v = False
+        try:
+            super()._prepare_train_pred_sample_batch()
+        finally:
+            dataset.n2v = True
+
+    def _n2v_structmask_preview(self) -> bool:
+        """Whether the training prediction samples show the input masked with ``PROBLEM.DENOISING.N2V_STRUCTMASK``."""
+        dataset = getattr(self, "_train_pred_n2v_dataset", None)
+        return dataset is not None and dataset.n2v_structMask is not None
+
+    def _train_pred_shown_targets(self, images_np: NDArray, targets_np: Optional[NDArray]) -> Optional[NDArray]:
+        """
+        Noise2Void: the ground truth, if loaded. With ``PROBLEM.DENOISING.N2V_STRUCTMASK``, the input masked as the
+        network sees it in training instead, as its lines of random values can't be told apart from the image in
+        the input itself.
+        """
+        dataset = getattr(self, "_train_pred_n2v_dataset", None)
+        if dataset is None:
+            return targets_np
+        # Without the ground truth the targets are the input itself; N2V targets ([values, mask]) only if the
+        # masking could not be disabled
+        if not dataset.n2v_load_gt or (targets_np is not None and targets_np.shape[-1] != images_np.shape[-1]):
+            targets_np = None
+        if not self._n2v_structmask_preview():
+            return targets_np
+        # prepare_n2v reseeds the global RNG for validation data
+        rng = np.random.get_state()
+        try:
+            gt = targets_np if targets_np is not None else images_np
+            return np.stack([dataset.prepare_n2v(images_np[i], gt[i])[0] for i in range(len(images_np))])
+        finally:
+            np.random.set_state(rng)
+
+    def _train_pred_columns(self) -> Dict[str, Dict[str, str]]:
+        if not self._n2v_structmask_preview():
+            return {}
+        return {
+            "gt": {
+                "title": "Masked input",
+                "info": "What the network sees during training. Noise2Void learns to remove the noise by hiding some "
+                "pixels of the input and predicting them from their neighbors (with N2V_STRUCTMASK it also hides a "
+                "short line around each of them, for noise that is correlated along the rows). The predictions are "
+                "made on the input without masking, as when the model is used.",
+            }
+        }
+
     def define_metrics(self):
         """
         Define the metrics to be used during training and test/inference.
