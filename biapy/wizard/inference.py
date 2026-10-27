@@ -159,16 +159,21 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
     """
     Sets how the test images are predicted so that BiaPy fits in the RAM (see the module's description), and adds
     what was decided to ``lines``.
+
+    Returns
+    -------
+    estimate : dict or None
+        ``mode`` ("whole", "reduce" or "chunks") and ``bytes``, the RAM estimated for it; None if not estimated.
     """
     if not cfg.get("TEST", {}).get("ENABLE"):
-        return
+        return None
     fp = common.fingerprint(sample_info, "DATA.TEST.PATH", "images")
     if fp is None:
-        return
+        return None
     ram = host_ram_bytes() if ram_bytes is None else ram_bytes
     if not ram:
         lines.append("Test: the memory of this computer could not be read, so the test images are predicted whole")
-        return
+        return None
     budget = ram * RAM_FRACTION
     workflow = cfg["PROBLEM"]["TYPE"]
     shape = fp["max_shape"]
@@ -198,7 +203,7 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
     whole = estimate_bytes("whole", voxels, in_ch, out_ch, factor, image_bytes)
     if whole <= budget and not (chunks_possible and chunked_files):
         lines.append("Test: images predicted whole ({}: about {} of the {} of RAM)".format(size, gib(whole), gib(ram)))
-        return
+        return {"mode": "whole", "bytes": whole}
     test = cfg["TEST"]
     reduce = estimate_bytes("reduce", voxels, in_ch, out_ch, factor, image_bytes)
     if (reduce <= budget and not chunked_files) or not chunks_possible:
@@ -212,7 +217,7 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
                 "WARNING: the test images may not fit in the memory even so: crop them into smaller images, or use "
                 "a computer with more RAM"
             )
-        return
+        return {"mode": "reduce", "bytes": reduce}
 
     chunks = estimate_bytes("chunks", voxels, in_ch, out_ch, factor, 0 if chunked_files else image_bytes)
     by_chunks = test.setdefault("BY_CHUNKS", {})
@@ -242,3 +247,4 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
             "WARNING: even by chunks the test images may not fit in the memory, as TIF images are read whole: save "
             "them as Zarr or H5, which BiaPy reads by chunks"
         )
+    return {"mode": "chunks", "bytes": chunks}

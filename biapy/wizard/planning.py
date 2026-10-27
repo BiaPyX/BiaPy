@@ -86,9 +86,18 @@ def plan_config(cfg, sample_info, gpus, training_length="full"):
         apply_checkpoint_settings(cfg, report)
     if patch_size_unset(cfg):
         set_unplanned_patch_size(cfg, report)
-    from .inference import plan_inference
+    from .inference import host_ram_bytes, plan_inference
+    from .resources import estimate_resources
 
-    plan_inference(cfg, sample_info, report.setdefault("lines", []))
+    lines = report.setdefault("lines", [])
+    ram = host_ram_bytes()
+    test_estimate = plan_inference(cfg, sample_info, lines, ram_bytes=ram)
+    vram = vram_for_planning(gpus)[0] if gpus else None
+    try:  # only informative: the configuration does not depend on it
+        report["resources"] = estimate_resources(cfg, sample_info, report, test_estimate, ram, vram)
+        lines += ["Estimated resources: " + line for line in report["resources"]["lines"]]
+    except Exception as e:
+        lines.append("The resources the job needs could not be estimated ({})".format(e))
     return report
 
 

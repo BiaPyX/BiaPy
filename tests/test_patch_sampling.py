@@ -17,12 +17,26 @@ from biapy.data.generators.augmentors import random_3D_crop_pair, random_crop_pa
 from biapy.data.patch_sampling import (
     ClassLocations,
     ForegroundOversamplingBatchSampler,
+    _slab_unique,
     class_locations_from_mask,
     compute_class_locations,
     forced_in_batch,
     pick_center,
     shift_center,
 )
+
+
+def test_slab_unique_matches_np_unique():
+    # The class locations find the classes and the first voxel of each object slab by slab, so large volumes are not
+    # sorted whole: the same values and first indices as np.unique, whatever the slabs
+    rng = np.random.default_rng(0)
+    for arr in (rng.integers(0, 50, (7, 13, 11)).astype(np.uint16), rng.integers(0, 3, (31, 17)).astype(np.uint8),
+                np.zeros((4, 5), np.int32)):
+        values, index = np.unique(arr, return_index=True)
+        for slab in (1, 10, 100, arr.size):
+            v, i = _slab_unique(arr, return_index=True, slab_voxels=slab)
+            assert np.array_equal(v, values) and np.array_equal(i, index)
+            assert np.array_equal(_slab_unique(arr, slab_voxels=slab)[0], values)
 
 
 def _semantic_mask():

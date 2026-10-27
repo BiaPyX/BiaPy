@@ -491,6 +491,44 @@ def test_inference_channels_and_overlap(tmp_path):
     assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"]
 
 
+def test_resources_estimated(tmp_path):
+    # What the job needs, for the front-ends to show before running it (and in the YAML's header)
+    x, y = _semantic_3d(tmp_path)
+    answers = _answers("SEMANTIC_SEG", "3D", [("DATA.TRAIN.PATH", x), ("DATA.TRAIN.GT_PATH", y), ("DATA.TEST.PATH", x)])
+    answers["TEST.ENABLE"] = True
+    cfg, report = build_config(answers, GPU)
+    r = report["resources"]
+    assert r["ram_train"] > 0 and r["ram_test"] > 0 and r["gpu_train"] > 0
+    what = [d["what"] for d in r["disk"]]
+    assert {"model checkpoint", "test predictions", "test segmentations"} <= set(what)
+    assert r["disk_total"] == sum(d["bytes"] for d in r["disk"])
+    assert [l for l in report["lines"] if l.startswith("Estimated resources: Disk")]
+    # The checkpoint: 12 bytes per parameter of the planned U-Net
+    from biapy.wizard import unet
+    from biapy.wizard.inference import output_channels
+
+    params = unet.count_parameters(report["plan"], 1, output_channels(cfg), report["plan"]["feature_maps"])
+    assert next(d["bytes"] for d in r["disk"] if d["what"] == "model checkpoint") == 12 * params
+
+
+def test_training_ram_measured():
+    from biapy.wizard.resources import estimate_resources
+
+    # The training peaks measured on Lucchi++ volumes (uint8, 3 workers): 9.1 GiB to read the statistics of a 495 MiB
+    # volume (tiles), 3.2 GiB with twelve 124 MiB ones (foreground oversampling)
+    def ram(shape, n, sampling):
+        fp = {"kind": "images", "n_files": n, "channels": 1, "max_shape": list(shape), "dtype": ["uint8"]}
+        si = {"DATA.TRAIN.PATH": {"fingerprint": fp}, "DATA.TRAIN.GT_PATH": {"fingerprint": {"kind": "semantic_masks"}}}
+        cfg = _cfg()
+        cfg["TEST"]["ENABLE"] = False
+        cfg["SYSTEM"] = {"NUM_WORKERS": 3}
+        cfg["DATA"]["TRAIN"]["PATCH_SAMPLING"] = sampling
+        return estimate_resources(cfg, si, {})["ram_train"] / 2**30
+
+    assert 9.1 <= ram((330, 1536, 1024), 1, "tiles") <= 9.1 * 1.1
+    assert 3.16 <= ram((165, 768, 1024), 12, "foreground_oversampling") <= 3.16 * 1.1
+
+
 def test_inference_by_chunks_for_h5_zarr(tmp_path):
     from biapy.wizard.inference import plan_inference
 

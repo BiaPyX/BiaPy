@@ -50,23 +50,31 @@ def class_locations_from_mask(
         (``(n,)`` int32, the object each point belongs to) and ``step`` (grid step, in voxels).
     """
     rng = rng if rng is not None else np.random.default_rng()
+    # Large volumes: nothing is copied or sorted whole (np.unique would sort an int64 copy, ~23 bytes per voxel);
+    # the classes and the first voxel of each object are found slab by slab (see _slab_unique)
     first = mask[..., 0]
     if workflow == "SEMANTIC_SEG":
         classes_map = first
         objects_map = None  # connected components, per class
     else:
         foreground = first > 0
-        classes_map = np.where(foreground, mask[..., 1], 0) if mask.shape[-1] > 1 else foreground.astype(np.uint8)
+        if mask.shape[-1] > 1:
+            classes_map = np.where(foreground, mask[..., 1], 0)
+        else:
+            classes_map = foreground.view(np.uint8)  # 0/1, without a copy
         objects_map = first if workflow == "INSTANCE_SEG" else None
     out: Dict = {"shape": list(first.shape), "classes": {}}
-    for c in np.unique(classes_map):
+    classes, _ = _slab_unique(classes_map)
+    for c in classes:
         if c <= 0:
             continue
         in_class = classes_map == c
-        if objects_map is not None:
-            objects = np.where(in_class, objects_map, 0).astype(np.int64)
-        else:
+        if objects_map is None:
             objects, _ = ndimage.label(in_class)
+        elif mask.shape[-1] > 1:
+            objects = np.where(in_class, objects_map, 0)  # in the ids' own type
+        else:
+            objects = objects_map  # a single class: all the instances
         n = int(in_class.sum())
         step = max(1, int(math.ceil((n / max(1, max_locations)) ** (1.0 / in_class.ndim))))
         # Regular grid with a random offset, so different images (and runs) don't share the same grid
@@ -75,10 +83,10 @@ def class_locations_from_mask(
         coords = np.argwhere(grid) * step + np.array(offset)
         if len(coords) > max_locations:  # unevenly shaped classes may exceed it slightly
             coords = coords[np.sort(rng.choice(len(coords), max_locations, replace=False))]
+        del in_class, grid
         # One voxel of every object, so objects smaller than the grid step are not missed. They are not grid points:
         # patches are centred exactly on them (moving them within a grid cell could leave the object)
-        flat = objects.ravel()
-        ids, first_index = np.unique(flat, return_index=True)
+        ids, first_index = _slab_unique(objects, return_index=True)
         keep = ids > 0
         extra = np.stack(np.unravel_index(first_index[keep], objects.shape), axis=1)
         on_grid = np.concatenate([np.ones(len(coords), bool), np.zeros(len(extra), bool)])
@@ -92,6 +100,51 @@ def class_locations_from_mask(
             "step": step,
         }
     return out
+
+
+# Voxels np.unique works on at a time in _slab_unique (it needs about 20 bytes per voxel)
+SLAB_VOXELS = 2**22
+
+
+def _slab_unique(arr: NDArray, return_index: bool = False, slab_voxels: Optional[int] = None):
+    """
+    ``np.unique(arr, return_index=...)`` of the flattened array, computed on slabs of the first axis so that its memory
+    (a sorted copy and, with ``return_index``, int64 indices) is bounded by ``slab_voxels`` (:data:`SLAB_VOXELS` by
+    default) instead of the whole array.
+
+    The first occurrence of a value in C order is in the first slab that has it, at its first position there, so the
+    indices are the same as np.unique's.
+
+    Returns
+    -------
+    values : NDArray
+        Sorted unique values.
+    first_index : NDArray or None
+        Flat index (C order) of the first occurrence of each value; None unless ``return_index``.
+    """
+    if arr.ndim == 0 or arr.size == 0:
+        values, index = np.unique(arr, return_index=True)
+        return values, (index if return_index else None)
+    row = int(np.prod(arr.shape[1:])) if arr.ndim > 1 else 1
+    rows = max(1, (slab_voxels or SLAB_VOXELS) // max(1, row))
+    values, indices = [], []
+    for start in range(0, arr.shape[0], rows):
+        if return_index:
+            v, i = np.unique(arr[start : start + rows], return_index=True)
+            indices.append(i.astype(np.int64) + start * row)
+        else:
+            v = np.unique(arr[start : start + rows])
+        values.append(v)
+    values = np.concatenate(values)
+    if not return_index:
+        return np.unique(values), None
+    indices = np.concatenate(indices)
+    # Slabs are in C order, so for repeated values the one of the earliest slab (smallest index) is the first
+    order = np.lexsort((indices, values))
+    values, indices = values[order], indices[order]
+    first = np.ones(len(values), bool)
+    first[1:] = values[1:] != values[:-1]
+    return values[first], indices[first]
 
 
 def pick_center(
