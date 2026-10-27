@@ -453,15 +453,42 @@ def test_inference_fits_in_memory(tmp_path):
     # A smaller volume is saved as TIF too (the front-ends show TIFs)
     cfg = _cfg()
     cfg["DATA"]["TEST"]["PATH"] = folder
-    si["DATA.TEST.PATH"]["fingerprint"]["max_shape"] = [700, 1000, 1000]
+    si["DATA.TEST.PATH"]["fingerprint"]["max_shape"] = [900, 1000, 1000]
     plan_inference(cfg, si, [], ram_bytes=32 * gb)
     assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"] and cfg["TEST"]["BY_CHUNKS"]["SAVE_OUT_TIF"]
     si["DATA.TEST.PATH"]["fingerprint"]["max_shape"] = [1500, 1000, 1000]
-    # With more RAM, REDUCE_MEMORY is enough: semantic about 66 GB whole and 44 GB with it, 58 GB usable of 96
+    # With more RAM, REDUCE_MEMORY is enough: semantic about 41 GB whole and 36 GB with it, 38 GB usable of 64
     cfg = _cfg()
     cfg["DATA"]["TEST"]["PATH"] = folder
-    plan_inference(cfg, si, [], ram_bytes=96 * gb)
+    plan_inference(cfg, si, [], ram_bytes=64 * gb)
     assert cfg["TEST"].get("REDUCE_MEMORY") and "BY_CHUNKS" not in cfg["TEST"]
+
+
+def test_inference_channels_and_overlap(tmp_path):
+    from biapy.wizard.inference import patch_factor, plan_inference
+
+    # BiaPy cuts the image into overlapping patches: (8, 9, 8) patches of 32x128x192 for a 165x768x1024 volume with a
+    # padding of (5, 21, 32), i.e. 3.49 times its voxels; without padding (6, 6, 6), 1.31 times
+    assert round(patch_factor((165, 768, 1024), (32, 128, 192), (5, 21, 32)), 2) == 3.49
+    assert round(patch_factor((165, 768, 1024), (32, 128, 192), (0, 0, 0)), 2) == 1.31
+
+    # A 145x1364x1364 volume with 3 uint16 channels, 18x160x160 patches and the Wizard's padding (1/6 of the patch),
+    # which a 33 GB computer could not predict whole (estimated 13 GB counting one channel and no overlap)
+    folder, si = _test_images(tmp_path, ["a.tif"], (145, 1364, 1364))
+    si["DATA.TEST.PATH"]["fingerprint"].update(channels=3, dtype=["uint16"])
+    cfg = _cfg()
+    cfg["DATA"]["PATCH_SIZE"] = "(18, 160, 160, 3)"
+    cfg["DATA"]["TEST"].update(PATH=folder, PADDING="(3, 26, 26)")
+    lines = []
+    plan_inference(cfg, si, lines, ram_bytes=33.3e9)
+    assert cfg["TEST"]["REDUCE_MEMORY"] and "BY_CHUNKS" not in cfg["TEST"]  # about 27 GB whole, 18 GB reduced
+    assert "with 3 channels" in lines[0]
+    # Instance segmentation (F, C): 34 GB whole, 23 GB reduced, so by chunks
+    cfg["PROBLEM"]["TYPE"] = "INSTANCE_SEG"
+    cfg["PROBLEM"]["INSTANCE_SEG"] = {"DATA_CHANNELS": ["F", "C"]}
+    cfg["TEST"] = {"ENABLE": True}
+    plan_inference(cfg, si, [], ram_bytes=33.3e9)
+    assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"]
 
 
 def test_inference_by_chunks_for_h5_zarr(tmp_path):
