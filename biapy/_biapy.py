@@ -1972,6 +1972,7 @@ class BiaPy:
         bmz_config = getattr(getattr(self, "workflow", None), "bmz_config", None) or {}
         if "original_bmz_config" not in bmz_config:
             return []
+        model_id = self.cfg.MODEL.BMZ.SOURCE_MODEL_ID
         out = []
         for cite in getattr(bmz_config["original_bmz_config"], "cite", None) or []:
             text = getattr(cite, "text", None)
@@ -1982,6 +1983,9 @@ class BiaPy:
                         "doi": str(cite.doi) if getattr(cite, "doi", None) else None,
                         "url": str(cite.url) if getattr(cite, "url", None) else None,
                         "reason": "Pretrained model from the BioImage Model Zoo: its own references",
+                        # Shown together: their texts are often just their roles (e.g. "training library", "data")
+                        "group": "The references of the BioImage Model Zoo model '{}'".format(model_id),
+                        "group_url": "https://bioimage.io/#/artifacts/{}".format(model_id),
                     }
                 )
         return out

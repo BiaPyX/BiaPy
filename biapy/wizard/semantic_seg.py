@@ -9,17 +9,19 @@ What is set, following nnU-Net:
 * Foreground oversampling: when the foreground is scarce, patches are sampled so that at least a third of
   them are centred on foreground (nnU-Net forces a third of the patches of each batch to contain it).
 * The number of classes, from all the labels found in the masks.
+* Amount of training: nnU-Net's 1000 epochs of 250 iterations, or 20 for a quick training, with DATA.TRAIN.REPLICATE
+  making an epoch about 250 iterations whatever the number and size of the images (see common.training_budget).
 * No elastic deformations (nnU-Net v2 does not use them either). Besides, BiaPy 3.7.1's (cv2.remap) can
   deadlock the data loader workers with patches of 512x512 or larger.
 
 What is kept from the BiaPy defaults: normalization (z-score per image after percentile clipping, which is
-what nnU-Net does for non-CT images), optimizer, learning rate schedule, epochs and the other augmentations
+what nnU-Net does for non-CT images), optimizer, learning rate schedule and the other augmentations
 (BiaPy's 3D rotations are in-plane and its zoom leaves Z alone, as nnU-Net's for anisotropic data).
 """
 from . import common
 
 
-def plan_semantic_seg(cfg, sample_info, vram_bytes, vram_source):
+def plan_semantic_seg(cfg, sample_info, vram_bytes, vram_source, training_length="full"):
     """
     Applies the strategy to ``cfg`` (the dictionary that becomes the YAML).
 
@@ -61,4 +63,8 @@ def plan_semantic_seg(cfg, sample_info, vram_bytes, vram_source):
 
     common.warn_objects_larger_than_patch(mask_fp.get("objects"), plan["patch_size"], lines)
     common.foreground_oversampling(cfg, raw_fp, mask_fp["foreground_fraction"]["median"], plan["patch_size"], lines)
-    return {"applied": True, "lines": lines, "plan": plan, "spacing": spacing, "spacing_source": spacing_source}
+    common.training_budget(cfg, raw_fp, plan["patch_size"], lines, training_length)
+    return {
+        "applied": True, "training_planned": True, "lines": lines, "plan": plan, "spacing": spacing,
+        "spacing_source": spacing_source,
+    }

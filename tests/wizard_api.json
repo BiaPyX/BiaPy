@@ -50,6 +50,7 @@
   "build_config/report/plan",
   "build_config/report/spacing",
   "build_config/report/spacing_source",
+  "build_config/report/training_planned",
   "check_folder(classification)/data_constraints",
   "check_folder(classification)/data_constraints/DATA.N_CLASSES",
   "check_folder(classification)/data_constraints/DATA.PATCH_SIZE_C",
@@ -115,6 +116,9 @@
   "preview(instance masks)/warnings"
  ],
  "signatures": {
+  "config_builder.TRAINING_LENGTHS": {
+   "kind": "tuple"
+  },
   "config_builder.WizardError": {
    "kind": "class"
   },

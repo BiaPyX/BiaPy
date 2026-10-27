@@ -629,6 +629,91 @@ def build_model(
     return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride  # type: ignore
 
 
+# Variables outside MODEL that also shape the network: its output heads (how many, their channels, one decoder each),
+# the classes, the upsampling and the contrastive projection head. Per PROBLEM.TYPE, plus "all".
+ARCH_KEYS_OUTSIDE_MODEL = {
+    "all": ["LOSS.CONTRAST.ENABLE", "LOSS.CONTRAST.PROJ_DIM"],
+    "SEMANTIC_SEG": ["DATA.N_CLASSES"],
+    "INSTANCE_SEG": [
+        "DATA.N_CLASSES",
+        "PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO",
+        "PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD",
+        "PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS",
+    ],
+    "DETECTION": [
+        "DATA.N_CLASSES",
+        "PROBLEM.DETECTION.SEPARATED_DECODERS_PER_HEAD",
+        "PROBLEM.DETECTION.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS",
+    ],
+    "IMAGE_TO_IMAGE": [
+        "PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS",
+        "PROBLEM.IMAGE_TO_IMAGE.CHANNELS_PER_HEAD_INFO",
+        "PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_PER_HEAD",
+        "PROBLEM.IMAGE_TO_IMAGE.SEPARATED_DECODERS_DIVIDE_FEATURE_MAPS",
+    ],
+    "SUPER_RESOLUTION": ["PROBLEM.SUPER_RESOLUTION.UPSCALING"],
+    "CLASSIFICATION": ["DATA.N_CLASSES"],
+}
+# MODEL variables that are about this job, not the architecture: kept when the architecture is loaded from a checkpoint
+JOB_KEYS_IN_MODEL = ["BMZ", "OUT_CHECKPOINT_FORMAT", "SKIP_UNMATCHED_LAYERS"]
+
+
+def load_model_arch_from_checkpoint(cfg: CN, checkpoint_cfg: CN):
+    """
+    Sets in ``cfg`` the model architecture of a checkpoint ("model_arch" in MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT), so the
+    network is built as it was trained (e.g. with its two heads) whatever ``cfg`` says: MODEL (but
+    :data:`JOB_KEYS_IN_MODEL`) and the variables outside it that shape the network (:data:`ARCH_KEYS_OUTSIDE_MODEL`).
+    A different value of these in ``cfg`` is replaced, with a warning; with MODEL.SKIP_UNMATCHED_LAYERS they are kept
+    instead (e.g. to train new heads).
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration of the job, modified in place.
+
+    checkpoint_cfg : YACS CN object
+        Configuration the checkpoint was trained with, in the current BiaPy version's format.
+    """
+    from biapy.utils.misc import update_dict_with_existing_keys
+
+    job_keys = {k: cfg.MODEL[k].clone() if isinstance(cfg.MODEL[k], CN) else cfg.MODEL[k] for k in JOB_KEYS_IN_MODEL}
+    update_dict_with_existing_keys(cfg["MODEL"], checkpoint_cfg["MODEL"])
+    for k, v in job_keys.items():
+        cfg["MODEL"][k] = v
+
+    def plain(v):
+        return [plain(x) for x in v] if isinstance(v, (list, tuple)) else v
+
+    def lookup(c, key):
+        for p in key.split("."):
+            c = c[p]
+        return c
+
+    keys = ARCH_KEYS_OUTSIDE_MODEL["all"] + ARCH_KEYS_OUTSIDE_MODEL.get(cfg.PROBLEM.TYPE, [])
+    for key in keys:
+        try:
+            saved = lookup(checkpoint_cfg, key)
+        except (KeyError, TypeError):
+            continue  # older checkpoint without it
+        current = lookup(cfg, key)
+        if plain(saved) == plain(current):
+            continue
+        if isinstance(current, tuple) and isinstance(saved, list):
+            saved = tuple(saved)
+        if cfg.MODEL.SKIP_UNMATCHED_LAYERS:
+            print(
+                "WARNING: '{}' is {} here but {} in the checkpoint. As MODEL.SKIP_UNMATCHED_LAYERS is set, this "
+                "configuration's value is kept: the layers that do not match are not loaded".format(key, current, saved)
+            )
+            continue
+        print(
+            "WARNING: '{}' is {} here but {} in the checkpoint: the checkpoint's value is used, as the model "
+            "architecture is loaded from it (MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT)".format(key, current, saved)
+        )
+        *path, last = key.split(".")
+        lookup(cfg, ".".join(path))[last] = saved
+
+
 def init_embedding_output(model: nn.Module, n_sigma: int = 2, output_channel_info: Optional[List[str]] = None) -> None:
     """
     Initialize the embedding output head(s), mirroring EmbedSeg's ``BranchedERFNet.init_output``.

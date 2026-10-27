@@ -216,6 +216,15 @@ class chunked_test_pair_data_generator(IterableDataset):
         # will index past the end of the shape tuple.
         if "T" in input_axes and len(input_axes) != self.X_parallel_data.ndim:
             input_axes = input_axes.replace("T", "")
+        # Loaded fully, the data is always (Z, Y, X, C), and the rest of the process reads the declared order
+        if isinstance(self.X_parallel_data, np.ndarray) and input_axes != "ZYXC":
+            raise ValueError(
+                "'{}' is not an H5/Zarr file, so it is read whole, in (Z, Y, X, C) order: set "
+                "'DATA.TEST.INPUT_IMG_AXES_ORDER' (and 'DATA.TEST.INPUT_MASK_AXES_ORDER' for its masks) to 'ZYXC' to "
+                "process it with 'TEST.BY_CHUNKS' (they are '{}' and '{}')".format(
+                    self.sample_to_process["X_filename"], input_axes, mask_input_axes
+                )
+            )
         if (
             self.Y_parallel_data is not None
             and "T" in mask_input_axes

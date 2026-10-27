@@ -387,6 +387,121 @@ def test_plan_semantic_seg(tmp_path):
     assert any("labels [2]" in line for line in report["lines"])
 
 
+def test_quick_training(tmp_path):
+    x, y = _semantic_3d(tmp_path)
+    answers = _answers("SEMANTIC_SEG", "3D", [("DATA.TRAIN.PATH", x), ("DATA.TRAIN.GT_PATH", y)], training_length="quick")
+    cfg, report = build_config(answers, GPU)
+    assert "training_length" not in cfg  # not a BiaPy variable
+    # 20 epochs of about 250 iterations, without early stopping, the learning rate warming up in the first one
+    line = next(l for l in report["lines"] if "training:" in l)
+    assert line.startswith("Quick training: {} epochs".format(cfg["TRAIN"]["EPOCHS"]))
+    iterations = int(line.split(" epochs of ")[1].split()[0])
+    assert 0.9 * 5000 <= cfg["TRAIN"]["EPOCHS"] * iterations <= 1.1 * 5000
+    assert cfg["TRAIN"]["PATIENCE"] == -1 and cfg["TRAIN"]["LR_SCHEDULER"]["WARMUP_COSINE_DECAY_EPOCHS"] == 1
+    assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] == 1
+    _biapy_check(cfg, tmp_path)
+
+
+def test_quick_training_not_planned(tmp_path):
+    # Workflows without a strategy (and pretrained models): a fifth of the default epochs
+    x = tmp_path / "x"
+    x.mkdir()
+    for i in range(3):
+        _write_2d(str(x / "{}.tif".format(i)), np.zeros((64, 64), np.uint8))
+    answers = _answers("DENOISING", "2D", [("DATA.TRAIN.PATH", str(x))], training_length="quick")
+    cfg, report = build_config(answers, GPU)
+    assert cfg["TRAIN"]["EPOCHS"] == 30 and cfg["TRAIN"]["PATIENCE"] == -1
+    assert "Quick training: 30 epochs" in report["lines"]
+    _, full = build_config(_answers("DENOISING", "2D", [("DATA.TRAIN.PATH", str(x))]), GPU)
+    assert not any("Quick" in l for l in full.get("lines", []))
+
+
+def _test_images(tmp_path, names, shape, ndim="3D"):
+    """A test folder (empty files with these names) and the fingerprint of its images, as checked by the wizard."""
+    folder = tmp_path / "test_x"
+    folder.mkdir()
+    for n in names:
+        (folder / n).write_bytes(b"")
+    fp = {"kind": "images", "n_files": len(names), "channels": 1, "max_shape": list(shape), "dtype": ["uint8"]}
+    return str(folder), {"DATA.TEST.PATH": {"fingerprint": fp}}
+
+
+def test_inference_fits_in_memory(tmp_path):
+    from biapy.wizard.inference import plan_inference
+
+    gb = 1e9
+    # Small images: predicted whole, as BiaPy does by default
+    folder, si = _test_images(tmp_path, ["a.tif"], (100, 512, 512))
+    cfg = _cfg()
+    cfg["DATA"]["TEST"]["PATH"] = folder
+    lines = []
+    plan_inference(cfg, si, lines, ram_bytes=32 * gb)
+    assert "BY_CHUNKS" not in cfg["TEST"] and "REDUCE_MEMORY" not in cfg["TEST"]
+    assert lines[0].startswith("Test: images predicted whole")
+
+    # A 1.5 GB volume on a 32 GB laptop (which ran out of memory): by chunks, read whole as it is a TIF
+    cfg = _cfg()
+    cfg["DATA"]["TEST"]["PATH"] = folder
+    si["DATA.TEST.PATH"]["fingerprint"]["max_shape"] = [1500, 1000, 1000]
+    lines = []
+    plan_inference(cfg, si, lines, ram_bytes=32 * gb)
+    assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"] and cfg["TEST"]["BY_CHUNKS"]["WORKFLOW_PROCESS"]["TYPE"] == "chunk_by_chunk"
+    assert cfg["DATA"]["TEST"]["INPUT_IMG_AXES_ORDER"] == "ZYXC"
+    # About 4.6 GB by chunks, but 24 GB more to write the result as TIF too: only the Zarr
+    assert not cfg["TEST"]["BY_CHUNKS"]["SAVE_OUT_TIF"]
+    assert lines[0].startswith("Test: by chunks") and not any(l.startswith("WARNING") for l in lines)
+    # A smaller volume is saved as TIF too (the front-ends show TIFs)
+    cfg = _cfg()
+    cfg["DATA"]["TEST"]["PATH"] = folder
+    si["DATA.TEST.PATH"]["fingerprint"]["max_shape"] = [700, 1000, 1000]
+    plan_inference(cfg, si, [], ram_bytes=32 * gb)
+    assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"] and cfg["TEST"]["BY_CHUNKS"]["SAVE_OUT_TIF"]
+    si["DATA.TEST.PATH"]["fingerprint"]["max_shape"] = [1500, 1000, 1000]
+    # With more RAM, REDUCE_MEMORY is enough: semantic about 66 GB whole and 44 GB with it, 58 GB usable of 96
+    cfg = _cfg()
+    cfg["DATA"]["TEST"]["PATH"] = folder
+    plan_inference(cfg, si, [], ram_bytes=96 * gb)
+    assert cfg["TEST"].get("REDUCE_MEMORY") and "BY_CHUNKS" not in cfg["TEST"]
+
+
+def test_inference_by_chunks_for_h5_zarr(tmp_path):
+    from biapy.wizard.inference import plan_inference
+
+    # BiaPy reads H5/Zarr test images only by chunks, whatever their size; their axes order is left to the user
+    folder, si = _test_images(tmp_path, ["a.zarr", "b.h5"], (20, 64, 64))
+    cfg = _cfg()
+    cfg["DATA"]["TEST"]["PATH"] = folder
+    plan_inference(cfg, si, [], ram_bytes=32e9)
+    assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"] and "INPUT_IMG_AXES_ORDER" not in cfg["DATA"]["TEST"]
+
+
+def test_inference_2d_reduce_memory(tmp_path):
+    from biapy.wizard.inference import plan_inference
+
+    # No chunks in 2D: REDUCE_MEMORY, with a warning if even so it does not fit
+    folder, si = _test_images(tmp_path, ["a.tif"], (40000, 40000), "2D")
+    cfg = _cfg("2D")
+    cfg["DATA"]["TEST"]["PATH"] = folder
+    lines = []
+    plan_inference(cfg, si, lines, ram_bytes=32e9)
+    assert cfg["TEST"]["REDUCE_MEMORY"] and "BY_CHUNKS" not in cfg["TEST"]
+    assert any(l.startswith("WARNING") for l in lines)
+
+
+def test_config_by_chunks_is_valid(tmp_path):
+    from biapy.wizard.inference import plan_inference
+
+    x, y = _semantic_3d(tmp_path)
+    answers = _answers("SEMANTIC_SEG", "3D", [("DATA.TRAIN.PATH", x), ("DATA.TRAIN.GT_PATH", y)])
+    cfg, report = build_config(answers, GPU)
+    folder, si = _test_images(tmp_path, ["a.tif"], (1500, 1000, 1000))
+    cfg["TEST"]["ENABLE"] = True
+    cfg["DATA"].setdefault("TEST", {})["PATH"] = folder
+    plan_inference(cfg, si, [], ram_bytes=32e9)
+    assert cfg["TEST"]["BY_CHUNKS"]["ENABLE"]
+    _biapy_check(cfg, tmp_path)
+
+
 def test_no_plan_for_pretrained_models():
     cfg = _cfg()
     cfg["MODEL"]["SOURCE"] = "bmz"
@@ -665,8 +780,15 @@ def test_config_semantic_seg(tmp_path):
     cfg, report = build_config(answers, GPU)
     assert report["applied"], report
     assert cfg["MODEL"]["ARCHITECTURE"] == "unet" and cfg["DATA"]["N_CLASSES"] == 3
-    assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] == 1  # the front-ends show the predictions of every epoch
     assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_NUM_SAMPLES"] == 2
+    # nnU-Net's amount of training (1000 epochs of 250 iterations) whatever the size of the data, and the predictions
+    # the front-ends show saved at most 100 times
+    epochs = cfg["TRAIN"]["EPOCHS"]
+    assert any(line.startswith("Complete training: {} epochs".format(epochs)) for line in report["lines"])
+    iterations = int(next(l for l in report["lines"] if "training:" in l).split(" epochs of ")[1].split()[0])
+    assert 0.9 * 250000 <= epochs * iterations <= 1.1 * 250000
+    assert cfg["TRAIN"]["PATIENCE"] == 100
+    assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] == -(-epochs // 100)
     _biapy_check(cfg, tmp_path)
 
 

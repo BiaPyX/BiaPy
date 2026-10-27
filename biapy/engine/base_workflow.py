@@ -35,6 +35,7 @@ from biapy.models import (
     get_bmz_model_kwargs,
     check_bmz_args,
     get_last_layer_info,
+    load_model_arch_from_checkpoint,
 )
 from biapy.models.blocks import get_activation
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -334,15 +335,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     if "model_arch" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
                         print("Model architecture will be loaded from checkpoint.")
-                        # Save current model config
-                        tmp_BMZ_config = self.cfg.MODEL.clone()
-
-                        update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
-
-                        # Restore some model config
-                        self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config["BMZ"]
-                        self.cfg["MODEL"]["OUT_CHECKPOINT_FORMAT"] = tmp_BMZ_config["OUT_CHECKPOINT_FORMAT"]
-                        self.cfg["MODEL"]["SKIP_UNMATCHED_LAYERS"] = tmp_BMZ_config["SKIP_UNMATCHED_LAYERS"]
+                        load_model_arch_from_checkpoint(self.cfg, tmp_cfg)
 
                         # Check if the merge is coherent
                         self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True

@@ -203,6 +203,11 @@ def set_default_config(cfg, sample_info):
     return cfg
 
 
+# How long to train ("training_length" answer, not a BiaPy variable): "quick", to check that everything works or to
+# show how BiaPy works (e.g. in a workshop), or "full", as long as nnU-Net trains (see biapy.wizard.planning)
+TRAINING_LENGTHS = ("quick", "full")
+
+
 class WizardError(Exception):
     pass
 
@@ -308,6 +313,7 @@ def build_config_from_answers(answers):
     # Instance representation chosen in the wizard (not a BiaPy variable): translated into BiaPy's channels.
     # Only asked for models trained from scratch (an answer given before changing that may remain).
     representation = biapy_cfg.pop("instance_representation", -1)
+    biapy_cfg.pop("training_length", None)  # used when planning (build_config)
     if (
         representation != -1
         and biapy_cfg.get("PROBLEM.TYPE") == "INSTANCE_SEG"
@@ -423,7 +429,8 @@ def build_config(answers, gpus=None):
     answers : dict
         The wizard's answers, ``{variable: value}`` (e.g. ``"PROBLEM.TYPE": "SEMANTIC_SEG"``) with -1 for the
         questions not answered, plus ``data_constraints`` and ``sample_info`` gathered from the data checks
-        (:func:`biapy.wizard.data_check.check_folder`) and ``instance_representation`` if it was asked.
+        (:func:`biapy.wizard.data_check.check_folder`), and ``instance_representation`` and ``training_length``
+        (one of :data:`TRAINING_LENGTHS`, "full" by default) if they were asked.
     gpus : list of dict, optional
         GPUs to plan for (``index``, ``name``, ``memory_mb``). Queried with nvidia-smi if not given.
 
@@ -446,7 +453,11 @@ def build_config(answers, gpus=None):
 
     cfg = build_config_from_answers(answers)
     try:
-        report = plan_config(cfg, answers.get("sample_info", {}), query_gpus() if gpus is None else gpus)
+        training_length = answers.get("training_length", "full")
+        report = plan_config(
+            cfg, answers.get("sample_info", {}), query_gpus() if gpus is None else gpus,
+            training_length if training_length in TRAINING_LENGTHS else "full",
+        )
     except Exception:  # the configuration is valid without the plan
         print(traceback.format_exc(), flush=True)
         report = {"applied": False, "reason": "planning failed, see the log"}

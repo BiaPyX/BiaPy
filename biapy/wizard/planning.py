@@ -11,7 +11,8 @@ import ast
 import importlib
 import os
 
-# Strategy of each workflow: "module:function" called as function(cfg, sample_info, vram_bytes, vram_source)
+# Strategy of each workflow: "module:function" called as function(cfg, sample_info, vram_bytes, vram_source,
+# training_length)
 PLANNERS = {
     "SEMANTIC_SEG": "semantic_seg:plan_semantic_seg",
     "INSTANCE_SEG": "instance_seg:plan_instance_seg",
@@ -55,9 +56,15 @@ def vram_for_planning(gpus):
     return DEFAULT_VRAM_MB * 1024**2, "no NVIDIA GPU found, {} MB assumed".format(DEFAULT_VRAM_MB)
 
 
-def plan_config(cfg, sample_info, gpus):
+# Quick trainings whose amount is not planned from the data (workflows without a strategy, pretrained models): this
+# share of the epochs BiaPy-GUI's defaults set
+UNPLANNED_QUICK_FRACTION = 0.2
+
+
+def plan_config(cfg, sample_info, gpus, training_length="full"):
     """
-    Adapts ``cfg`` (the configuration dictionary built from the Wizard answers) to the data.
+    Adapts ``cfg`` (the configuration dictionary built from the Wizard answers) to the data. ``training_length``:
+    "quick" or "full" (see :data:`biapy.wizard.config_builder.TRAINING_LENGTHS`).
 
     Returns
     -------
@@ -70,14 +77,30 @@ def plan_config(cfg, sample_info, gpus):
         module, function = PLANNERS[workflow].split(":")
         planner = getattr(importlib.import_module("biapy.wizard." + module), function)
         vram, source = vram_for_planning(gpus)
-        report = planner(cfg, sample_info, vram, source)
+        report = planner(cfg, sample_info, vram, source, training_length)
     else:
         report = {"applied": False, "reason": "no strategy for {} yet".format(workflow)}
+    if cfg["TRAIN"].get("ENABLE") and not report.get("training_planned") and training_length == "quick":
+        shorten_unplanned_training(cfg, report)
     if cfg["MODEL"].get("LOAD_CHECKPOINT"):
         apply_checkpoint_settings(cfg, report)
     if patch_size_unset(cfg):
         set_unplanned_patch_size(cfg, report)
+    from .inference import plan_inference
+
+    plan_inference(cfg, sample_info, report.setdefault("lines", []))
     return report
+
+
+def shorten_unplanned_training(cfg, report):
+    """A quick training when its amount is not planned from the data: a fraction of the default epochs."""
+    train = cfg["TRAIN"]
+    epochs = max(1, int(round(train.get("EPOCHS", 150) * UNPLANNED_QUICK_FRACTION)))
+    train["EPOCHS"] = epochs
+    train["PATIENCE"] = -1
+    if "WARMUP_COSINE_DECAY_EPOCHS" in train.get("LR_SCHEDULER", {}):
+        train["LR_SCHEDULER"]["WARMUP_COSINE_DECAY_EPOCHS"] = max(1, epochs // 10)
+    report.setdefault("lines", []).append("Quick training: {} epochs".format(epochs))
 
 
 def patch_size_unset(cfg):

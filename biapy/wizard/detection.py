@@ -59,7 +59,7 @@ def _relative_spacing(spacing):
     return tuple(round(float(s) / float(spacing[-1]), 3) for s in spacing)
 
 
-def plan_detection(cfg, sample_info, vram_bytes, vram_source):
+def plan_detection(cfg, sample_info, vram_bytes, vram_source, training_length="full"):
     """Applies the strategy to ``cfg``. Returns a report as plan_semantic_seg()."""
     ndim = 3 if cfg["PROBLEM"]["NDIM"] == "3D" else 2
     lines = []
@@ -114,4 +114,8 @@ def plan_detection(cfg, sample_info, vram_bytes, vram_source):
         disk = float(np.prod([2 * r + 1 for r in (dist["dilation"] if ndim == 3 else dist["dilation"][-2:])]))
         fg = min(1.0, ppi["median"] * disk / float(np.prod(raw_fp["median_shape"])))
         common.foreground_oversampling(cfg, raw_fp, fg, plan["patch_size"], lines)
-    return {"applied": True, "lines": lines, "plan": plan, "spacing": spacing, "spacing_source": spacing_source}
+    common.training_budget(cfg, raw_fp, plan["patch_size"], lines, training_length)
+    return {
+        "applied": True, "training_planned": True, "lines": lines, "plan": plan, "spacing": spacing,
+        "spacing_source": spacing_source,
+    }

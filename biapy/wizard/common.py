@@ -8,6 +8,16 @@ from . import unet
 
 # nnU-Net forces 1/3 of the patches to contain foreground
 FOREGROUND_OVERSAMPLING = 0.33
+# nnU-Net's training (nnUNetTrainer): 1000 epochs of 250 iterations (batches)
+NNUNET_EPOCHS = 1000
+NNUNET_ITERATIONS_PER_EPOCH = 250
+# A quick training (to check that everything works, or to show how BiaPy works): epochs of the same 250 iterations,
+# 2% of nnU-Net's. About 20 min in 2D and 35 min in 3D on an RTX 2080 Ti with the Wizard's plans (DSB2018, Lucchi++)
+QUICK_EPOCHS = 20
+# Epochs without improvement of the validation loss before stopping (nnU-Net always trains all the epochs)
+PATIENCE_EPOCHS = 100
+# The training predictions (TRAIN.SAVE_TRAIN_PREDS_FREQ) are saved at most this many times (a folder each)
+MAX_TRAIN_PRED_SAVES = 100
 # Random patches make BiaPy split the validation set by images, so they need a few of them
 MIN_IMAGES_RANDOM_PATCHES = 10
 # Spacing estimated from the shape of the objects: minimum number of objects and anisotropy to use it
@@ -146,13 +156,57 @@ def foreground_oversampling(cfg, raw_fp, fg_fraction, patch, lines):
             "nnU-Net does, and split the validation set by images)".format(MIN_IMAGES_RANDOM_PATCHES)
         )
         return
-    tiles = float(np.prod([np.ceil(s / p) for s, p in zip(raw_fp["median_shape"], patch)]))
     dtrain = cfg["DATA"].setdefault("TRAIN", {})
     dtrain["PATCH_SAMPLING"] = "foreground_oversampling"
     dtrain["FOREGROUND_OVERSAMPLING"] = {"PERCENT": FOREGROUND_OVERSAMPLING}
-    # As many patches per epoch as tiles would have been extracted from the images
-    dtrain["REPLICATE"] = max(1, int(round(tiles)))
     lines.append(
         "Patches: random, {:.0%} of each batch centred on the foreground, on a class chosen at random (nnU-Net's "
         "sampling; foreground is {:.1%} of the voxels in the median image)".format(FOREGROUND_OVERSAMPLING, fg_fraction)
+    )
+
+
+def training_budget(cfg, raw_fp, patch, lines, training_length="full"):
+    """
+    Amount of training. "full": nnU-Net's, 1000 epochs of 250 iterations, i.e. 250000 batches. "quick":
+    :data:`QUICK_EPOCHS` epochs of 250 iterations. DATA.TRAIN.REPLICATE makes a BiaPy epoch about 250 iterations, so
+    its epochs are comparable with nnU-Net's whatever the size of the dataset; only with more data than that per
+    epoch (REPLICATE can't go below 1) there are fewer, longer epochs. Call it after the patch sampling is chosen
+    (:func:`foreground_oversampling`).
+
+    Samples per epoch with REPLICATE = 1: with random patches one per training image; with tiles, every tile of the
+    training images (the validation tiles are taken from the same images).
+    """
+    dtrain = cfg["DATA"].setdefault("TRAIN", {})
+    batch = int(cfg["TRAIN"]["BATCH_SIZE"])
+    if dtrain.get("PATCH_SAMPLING", "tiles") == "tiles":
+        tiles = float(np.prod([np.ceil(s / p) for s, p in zip(raw_fp["median_shape"], patch)]))
+        samples = max(1, int(raw_fp["n_files"] * tiles * train_fraction(cfg)))
+        what = "tiles"
+    else:
+        samples = max(1, int(raw_fp["n_files"] * train_fraction(cfg)))
+        what = "images"
+    target = NNUNET_ITERATIONS_PER_EPOCH * batch
+    replicate = max(1, int(round(target / samples)))
+    iterations = int(np.ceil(samples * replicate / batch))
+    quick = training_length == "quick"
+    planned_epochs = QUICK_EPOCHS if quick else NNUNET_EPOCHS
+    epochs = max(1, int(round(planned_epochs * NNUNET_ITERATIONS_PER_EPOCH / iterations)))
+    dtrain["REPLICATE"] = replicate
+    cfg["TRAIN"]["EPOCHS"] = epochs
+    cfg["TRAIN"]["PATIENCE"] = -1 if quick else min(PATIENCE_EPOCHS, epochs)
+    # The learning rate warms up during 1% of the training (the Wizard's 10 epochs of 1000)
+    if "WARMUP_COSINE_DECAY_EPOCHS" in cfg["TRAIN"].get("LR_SCHEDULER", {}):
+        cfg["TRAIN"]["LR_SCHEDULER"]["WARMUP_COSINE_DECAY_EPOCHS"] = max(1, int(round(epochs / 100)))
+    # A folder of predictions per save: not after every one of so many epochs
+    cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] = max(1, int(np.ceil(epochs / MAX_TRAIN_PRED_SAVES)))
+    lines.append(
+        "{} training: {} epochs of {} iterations (batches of {}), {} patches per epoch from {} training {} ({} each), "
+        "{}".format(
+            "Quick" if quick else "Complete", epochs, iterations, batch, samples * replicate, samples, what, replicate,
+            "{:.0%} of nnU-Net's {}x{}".format(planned_epochs / NNUNET_EPOCHS, NNUNET_EPOCHS, NNUNET_ITERATIONS_PER_EPOCH)
+            if quick
+            else "as nnU-Net's {}x{}; it stops earlier if the validation loss does not improve in {} epochs".format(
+                NNUNET_EPOCHS, NNUNET_ITERATIONS_PER_EPOCH, cfg["TRAIN"]["PATIENCE"]
+            ),
+        )
     )

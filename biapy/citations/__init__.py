@@ -53,11 +53,20 @@ class Citation:
     entry : dict
         Its fields in ``references.yaml``: ``type``, ``title``, ``authors``, ``year``, ``venue``, ``volume``,
         ``pages``, ``doi``, ``arxiv``, ``url``, ``code``. Extra citations may only have ``text`` and ``doi``/``url``.
+
+    group : str, optional
+        For extra citations that go together, shown as one item: e.g. "The references of the BioImage Model Zoo
+        model 'affable-shark'", whose ``text`` are then their roles (e.g. "training library", "data").
+
+    group_url : str, optional
+        Where to read about the group (e.g. the model's page).
     """
 
     id: str
     reasons: List[str] = field(default_factory=list)
     entry: Dict[str, Any] = field(default_factory=dict)
+    group: Optional[str] = None
+    group_url: Optional[str] = None
 
     @property
     def title(self) -> str:
@@ -136,7 +145,7 @@ class Citation:
         return "\n".join(lines)
 
     def to_dict(self) -> Dict[str, Any]:
-        """For the front-ends (JSON): id, reasons, title, text, url, doi, code and bibtex."""
+        """For the front-ends (JSON): id, reasons, title, text, url, doi, code, bibtex, group and group_url."""
         return {
             "id": self.id,
             "reasons": list(self.reasons),
@@ -146,6 +155,8 @@ class Citation:
             "doi": self.doi,
             "code": self.entry.get("code"),
             "bibtex": self.bibtex(),
+            "group": self.group,
+            "group_url": self.group_url,
         }
 
 
@@ -181,7 +192,8 @@ def get_citations(
 
     extra : list of dicts, optional
         Citations given apart, added at the end unless they are already there (same DOI or title): e.g. the
-        references of a BioImage Model Zoo model, as ``{"text": ..., "doi": ..., "url": ..., "reason": ...}``.
+        references of a BioImage Model Zoo model, as ``{"text": ..., "doi": ..., "url": ..., "reason": ...}``, plus
+        ``"group"`` and ``"group_url"`` for the ones shown together (see :class:`Citation`).
 
     path : str, optional
         Another references file (by default the one of BiaPy).
@@ -211,8 +223,25 @@ def get_citations(
             entry["doi"] = doi
         if e.get("url"):
             entry["url"] = str(e["url"])
-        citations.append(Citation(f"extra_{i}", [e.get("reason") or "Reference of the model"], entry))
+        citations.append(
+            Citation(f"extra_{i}", [e.get("reason") or "Reference of the model"], entry, e.get("group"), e.get("group_url"))
+        )
     return citations
+
+
+def _items(citations: Sequence[Citation]) -> List[List[Citation]]:
+    """The citations as the items to show: alone, or together with the rest of their group (where its first is)."""
+    items: List[List[Citation]] = []
+    groups: Dict[str, List[Citation]] = {}
+    for c in citations:
+        if c.group is None:
+            items.append([c])
+        elif c.group in groups:
+            groups[c.group].append(c)
+        else:
+            groups[c.group] = [c]
+            items.append(groups[c.group])
+    return items
 
 
 def citations_to_bibtex(citations: Sequence[Citation]) -> str:
@@ -235,7 +264,13 @@ def citations_to_markdown(citations: Sequence[Citation], title: str = "How to ci
         "citations.bib):",
         "",
     ]
-    for i, c in enumerate(citations, start=1):
+    for i, item in enumerate(_items(citations), start=1):
+        c = item[0]
+        if c.group is not None:
+            lines.append(f"{i}. {c.group}" + (f": {c.group_url}" if c.group_url else ""))
+            # Their texts are usually their roles (e.g. "training library"): "role: link"
+            lines += [f"    - {g.title}: {g.url}" if g.url and "title" not in g.entry else f"    - {g.text()}" for g in item]
+            continue
         lines.append(f"{i}. {c.text()}")
         lines.append(f"    - Cited for: {'; '.join(c.reasons)}")
         if c.entry.get("code"):
@@ -244,8 +279,16 @@ def citations_to_markdown(citations: Sequence[Citation], title: str = "How to ci
 
 
 def citations_summary(citations: Sequence[Citation]) -> str:
-    """Short text for the console: a line per work with why it is cited."""
-    return "\n".join(f"  - {c.title} ({'; '.join(c.reasons)})" for c in citations)
+    """Short text for the console: a line per work with why it is cited, and one per group of works."""
+    lines = []
+    for item in _items(citations):
+        c = item[0]
+        if c.group is None:
+            lines.append(f"  - {c.title} ({'; '.join(c.reasons)})")
+        else:
+            n = "{} work{}".format(len(item), "s" if len(item) > 1 else "")
+            lines.append(f"  - {c.group} ({n}" + (f": {c.group_url})" if c.group_url else ")"))
+    return "\n".join(lines)
 
 
 def write_citations(

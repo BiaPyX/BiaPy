@@ -20,6 +20,7 @@ INTERFACE = (
     "config_builder.build_config",
     "config_builder.write_config",
     "config_builder.WizardError",
+    "config_builder.TRAINING_LENGTHS",
     "config_builder.to_jsonable",
     "planning.query_gpus",
     "instance_seg.REPRESENTATIONS",

@@ -250,7 +250,7 @@ def output_channels(channels, ndim, n_classes):
     return n + (n_classes if n_classes > 2 else 0)
 
 
-def plan_instance_seg(cfg, sample_info, vram_bytes, vram_source):
+def plan_instance_seg(cfg, sample_info, vram_bytes, vram_source, training_length="full"):
     """Applies the strategy to ``cfg``. Returns a report as plan_semantic_seg()."""
     reason = common.not_plannable_reason(cfg)
     if reason:
@@ -295,4 +295,8 @@ def plan_instance_seg(cfg, sample_info, vram_bytes, vram_source):
     lines.append("Losses: BiaPy's default for each channel; no elastic deformations")
     common.warn_objects_larger_than_patch(mask_fp.get("objects"), plan["patch_size"], lines, what="{}")
     common.foreground_oversampling(cfg, raw_fp, mask_fp["foreground_fraction"]["median"], plan["patch_size"], lines)
-    return {"applied": True, "lines": lines, "plan": plan, "spacing": spacing, "spacing_source": spacing_source}
+    common.training_budget(cfg, raw_fp, plan["patch_size"], lines, training_length)
+    return {
+        "applied": True, "training_planned": True, "lines": lines, "plan": plan, "spacing": spacing,
+        "spacing_source": spacing_source,
+    }
