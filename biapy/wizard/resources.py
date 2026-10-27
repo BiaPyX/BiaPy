@@ -179,9 +179,5 @@ def _lines(r, train, test):
             )
         )
     if r["disk"]:
-        lines.append(
-            "Disk: about {} in the job's folder ({})".format(
-                _gb(r["disk_total"]), ", ".join("{} {}".format(d["what"], _gb(d["bytes"])) for d in r["disk"])
-            )
-        )
+        lines.append("Disk: about {} in the job's folder".format(_gb(r["disk_total"])))
     return lines
