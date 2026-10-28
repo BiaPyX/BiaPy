@@ -72,6 +72,7 @@ from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoord
 from biapy.data.norm import normalize_image, normalize_mask, gt_stats_norm_module
 from biapy.utils.misc import is_main_process, os_walk_clean, get_rank, get_world_size, is_dist_avail_and_initialized
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
+from biapy.data.ome_zarr import resolve_axes, report_ome_zarr_images, image_info, to_biapy_order
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     extract_3D_patch_with_overlap_and_padding_yield,
@@ -1964,6 +1965,7 @@ def samples_from_zarr(
             * ``"multiple_data_within_zarr"``: Whether if your input Zarr contains the raw images and labels together or not.
             * ``"input_img_axes"``: order of the axes of the images.
             * ``"input_mask_axes"``: order of the axes of the masks.
+            * ``"use_ome_metadata"`` (optional): whether to take the axes of OME-Zarr images from their metadata instead.
 
     crop_shape : 3D/4D int tuple
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
@@ -1995,6 +1997,7 @@ def samples_from_zarr(
     sample_list = []
     dataset_info = []
     channel_expected = -1
+    ome_images = {}
     for i in range(len(list_of_data)):
         sample_path = os.path.join(data_path, list_of_data[i])
         data_within_zarr_path = None
@@ -2005,9 +2008,16 @@ def samples_from_zarr(
                 data_within_zarr_path = zarr_data_info["gt_path"] if zarr_data_info["use_gt_path"] else None
 
         data, file = load_img_data(sample_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
-        key_to_check = "input_img_axes" if not is_mask else "input_mask_axes"
-        if "C" in zarr_data_info[key_to_check]:
-            pos = zarr_data_info[key_to_check].index("C")
+        axes, ome_info = resolve_axes(
+            sample_path,
+            zarr_data_info["input_img_axes" if not is_mask else "input_mask_axes"],
+            data_path=data_within_zarr_path or "",
+            use_metadata=zarr_data_info.get("use_ome_metadata", True),
+        )
+        if ome_info is not None:
+            ome_images[list_of_data[i]] = ome_info
+        if "C" in axes:
+            pos = axes.index("C")
             channel = data.shape[pos] if pos < len(data.shape) else 1
         else:
             channel = 1
@@ -2037,7 +2047,7 @@ def samples_from_zarr(
                     path=os.path.join(data_path, list_of_data[i]),
                     shape=data.shape,
                     parallel_data=True,
-                    input_axes=zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
+                    input_axes=axes,
                 )
             )
             sample_dict = DataSample(fid=i, coords=None)
@@ -2052,7 +2062,7 @@ def samples_from_zarr(
         obj = extract_3D_patch_with_overlap_and_padding_yield(
             data,
             crop_shape[:-1] + (channel,),
-            zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
+            axes,
             overlap=ov,
             padding=padding,
             total_ranks=1,
@@ -2073,7 +2083,7 @@ def samples_from_zarr(
         for_img_cond = extract_3D_patch_with_overlap_and_padding_yield(
             data,
             crop_shape[:-1] + (channel,),
-            zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
+            axes,
             overlap=ov,
             padding=padding,
             total_ranks=1,
@@ -2086,7 +2096,7 @@ def samples_from_zarr(
                 path=os.path.join(data_path, list_of_data[i]),
                 shape=data.shape,
                 parallel_data=True,
-                input_axes=zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
+                input_axes=axes,
             )
         )
         for obj in tqdm(for_img_cond, total=total_patches, disable=not is_main_process()):  # type: ignore
@@ -2120,6 +2130,11 @@ def samples_from_zarr(
         if isinstance(file, h5py.File):
             file.close()
 
+    report_ome_zarr_images(
+        ome_images,
+        data_path,
+        ["DATA.*.INPUT_MASK_AXES_ORDER" if is_mask else "DATA.*.INPUT_IMG_AXES_ORDER", "DATA.*.RESOLUTION"],
+    )
     return BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
 
 
@@ -3307,27 +3322,29 @@ def load_images_to_dataset(
                     )
             data, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
-            # Disable channel checking if it is not present. Can happen with a Zarr/H5 dataset, as in the load_img_data()
-            # the axis were not checked to not have the data loaded in memory
-            check_channel = True
-            key = "input_img_axes" if not is_mask else "input_mask_axes"
-            if zarr_data_information and "C" not in zarr_data_information[key]:
-                check_channel = False
+            # Axes of the Zarr/H5 data, which is not loaded in memory (the rest is read as (z, )y, x, c). Disable
+            # channel checking if they have no channel
+            axes = None
+            if zarr_data_information:
+                key = "input_img_axes" if not is_mask else "input_mask_axes"
+                axes = dataset.dataset_info[sample.fid].get_input_axes() or zarr_data_information[key]
+            channels = data.shape[axes.index("C")] if axes and "C" in axes else data.shape[-1]
+            check_channel = axes is None or "C" in axes
 
             # Channel check within dataset images
             if channel_expected == -1:
-                channel_expected = data.shape[-1] if not convert_to_rgb else 3
-            if check_channel and not convert_to_rgb and data.shape[-1] != channel_expected:
+                channel_expected = channels if not convert_to_rgb else 3
+            if check_channel and not convert_to_rgb and channels != channel_expected:
                 raise ValueError(
                     f"All images need to have the same number of channels and represent same information to "
                     "ensure the deep learning model can be trained correctly. However, the current image (with "
                     f"{channel_expected} channels) appears to have a different number of channels than the first image"
-                    f" (with {data.shape[-1]} channels) in the folder. Current image: {img_path}"
+                    f" (with {channels} channels) in the folder. Current image: {img_path}"
                 )
 
             # Channel check compared with crop_shape
             if check_channel and crop_shape and not is_mask:
-                channel_to_compare = data.shape[-1] if not convert_to_rgb else 3
+                channel_to_compare = channels if not convert_to_rgb else 3
                 if crop_shape[-1] != channel_to_compare:
                     if not convert_to_rgb:
                         raise ValueError(
@@ -3383,11 +3400,11 @@ def load_images_to_dataset(
                     slice(None),
                 )
 
-            if zarr_data_information:
+            if axes:
                 data_ordered_slices = order_dimensions(
                     xslices,
                     input_order="TZYXC",
-                    output_order=zarr_data_information[key],
+                    output_order=axes,
                     default_value=0,
                 )
             else:
@@ -3396,8 +3413,9 @@ def load_images_to_dataset(
             # Extract the patch within the image
             img = data[data_ordered_slices]  # type: ignore
 
-            if zarr_data_information:
-                img = ensure_3d_shape(img.squeeze(), path=filepath)
+            if axes:
+                # The time axis was removed by the slicing
+                img = ensure_3d_shape(np.array(img), path=filepath, data_axes_order=axes.replace("T", ""))
         else:
             img = data
 
@@ -3673,8 +3691,8 @@ def load_img_data(
 
     load_meta : bool, optional
         Whether to load and return image metadata as a third return value.
-        Only populated for standard image formats (e.g. TIFF); returns ``None``
-        for Zarr/HDF5 paths. See :func:`imread` for the structure of the dict.
+        Populated for standard image formats (e.g. TIFF), see :func:`imread` for the structure of the dict, and
+        for OME-Zarr images (``{"ome_zarr": OmeZarrImage}``); ``None`` for other Zarr/HDF5 paths.
 
     Returns
     -------
@@ -3699,7 +3717,8 @@ def load_img_data(
         else:
             file, data = read_chunked_data(path)
         if load_meta:
-            return data, file, None  # type: ignore
+            info = image_info(path, data_within_zarr_path or "")
+            return data, file, {"ome_zarr": info} if info is not None else None  # type: ignore
     else:
         if load_meta:
             data, metadata = read_img_as_ndarray(path, is_3d=is_3d, load_meta=True)  # type: ignore
@@ -3758,6 +3777,13 @@ def read_img_as_ndarray(
 
             _, img = read_chunked_data(path)
             img = np.array(img)
+            ome_info = image_info(path)
+            if ome_info is not None:
+                # The axes are known: no need to guess them from the shape
+                img = to_biapy_order(img, ome_info.axes, is_3d)
+                if load_meta:
+                    return img, {"ome_zarr": ome_info}
+                return img
         else:
             if load_meta:
                 img, axes_position, metadata = imread(path, load_meta=True)
@@ -3869,6 +3895,9 @@ def voxel_size_from_meta(meta: Optional[Dict], is_3d: bool = False) -> Optional[
     if not meta:
         return None
     axes = "ZYX" if is_3d else "YX"
+    if meta.get("ome_zarr") is not None:
+        voxel_size = meta["ome_zarr"].voxel_size(axes)
+        return voxel_size if all(v is not None for v in voxel_size) else None  # type: ignore
 
     def factor(unit):
         return None if unit is None else _UNIT_TO_MICRONS.get(str(unit).strip().lower().replace("\\u00b5", "\u00b5"))

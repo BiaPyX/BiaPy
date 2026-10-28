@@ -50,7 +50,7 @@ def sample_indices(n, max_n=MAX_FILES):
     return sorted(set(np.linspace(0, n - 1, max_n).round().astype(int).tolist()))
 
 
-def _shape_stats(spatial_shapes):
+def shape_stats(spatial_shapes):
     shapes = np.array(spatial_shapes, dtype=float)
     return {
         "median_shape": [int(round(v)) for v in np.median(shapes, axis=0)],
@@ -97,7 +97,7 @@ class ImagesFingerprint:
 
     def result(self):
         fp = {"kind": "images", "n_files": self.n_files, "channels": self.channels, "n_analyzed": len(self.values)}
-        fp.update(_shape_stats(self.shapes))
+        fp.update(shape_stats(self.shapes))
         found = np.array(self.voxel_sizes, dtype=float)
         fp["n_calibrated"] = int(len(found))
         fp["spacing"] = None
@@ -173,7 +173,7 @@ class SemanticMasksFingerprint:
 
     def result(self):
         fp = {"kind": "semantic_masks", "n_files": self.n_files, "n_analyzed": self.n_analyzed}
-        fp.update(_shape_stats(self.shapes))
+        fp.update(shape_stats(self.shapes))
         if self.error:
             fp["error"] = self.error
             return fp
@@ -336,7 +336,7 @@ class InstanceMasksFingerprint:
 
     def result(self):
         fp = {"kind": "instance_masks", "n_files": self.n_files, "n_analyzed": self.n_analyzed}
-        fp.update(_shape_stats(self.shapes))
+        fp.update(shape_stats(self.shapes))
         fp["instances_per_image"] = {"median": float(np.median(self.counts)), "max": int(max(self.counts))}
         fg = np.array(self.fg_fractions)
         fp["foreground_fraction"] = {

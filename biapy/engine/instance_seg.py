@@ -56,7 +56,7 @@ from biapy.engine.metrics import (
     ContrastCELoss,
     SpatialEmbLoss,
 )
-import zarr
+from biapy.data.ome_zarr import open_array, resolve_axes, ngff_axes_order
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.util import PhaseProgress
 from biapy.engine.workflow_utils.cellpose import CellposeTestPhaseMixin
@@ -1212,14 +1212,22 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 print(f"Its respective image seems to be: {test_file}")
 
                 if test_file.endswith(".zarr") or test_file.endswith(".n5"):
+                    gt_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH
                     if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
-                        _, _Y = read_chunked_nested_data(
-                            test_file,
-                            self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
-                        )
+                        _, _Y = read_chunked_nested_data(test_file, gt_path)
                     else:
                         _, _Y = read_chunked_data(test_file)
-                    _Y = np.array(_Y).squeeze()
+                    _Y = np.array(_Y)
+                    # OME-Zarr labels: put their channels last as the rest of the GT
+                    gt_axes, gt_info = resolve_axes(
+                        test_file,
+                        self.cfg.DATA.TEST.INPUT_MASK_AXES_ORDER,
+                        data_path=gt_path if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else "",
+                        use_metadata=not self.cfg.DATA.OME_ZARR.IGNORE_METADATA,
+                    )
+                    if gt_info is not None:
+                        _Y = ensure_3d_shape(_Y, test_file, data_axes_order=gt_axes)
+                    _Y = _Y.squeeze()
                 else:
                     _Y = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D").squeeze()
 
@@ -1940,25 +1948,15 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 if not run_pass_a and not run_merging:
                     return
 
-                save_out_tif = self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF
-
                 if run_pass_a:
-                    # Temporarily suppress TIF creation inside the base-class pass.
-                    # The base class would save it after Pass A with un-merged local IDs,
-                    # which is wrong. We create the final TIF ourselves after Pass E.
-                    if save_out_tif:
-                        self.cfg.defrost()
-                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
-                        self.cfg.freeze()
+                    # The base class would finish the output (TIF, pyramid) after Pass A with un-merged
+                    # local IDs, which is wrong. We finish it ourselves after Pass E.
+                    self.defer_chunked_output_finish = True
 
                     # ---- Pass A: per-chunk instance labelling (base-class loop, all ranks) ----
                     print(f"[Rank {get_rank()} ({os.getpid()})] Pass A: creating per-chunk instance labels . . .")
                     super().after_all_chunk_prediction_workflow_process()
-
-                    if save_out_tif:
-                        self.cfg.defrost()
-                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF = True
-                        self.cfg.freeze()
+                    self.defer_chunked_output_finish = False
 
                     # Retrieve grid parameters from the generator
                     from biapy.data.generators.chunked_workflow_process_generator import (
@@ -1986,10 +1984,6 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         f"[Rank {get_rank()} ({os.getpid()})] Pass A skipped ('instance_creation' not in PHASES), "
                         "reusing existing instance label Zarr."
                     )
-                    if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
-                        axes_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
-                    else:
-                        axes_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
                     base_filename = os.path.splitext(self.current_sample["X_filename"])[0]
                     zarr_path = os.path.join(
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, base_filename + ".zarr"
@@ -1998,7 +1992,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         raise FileNotFoundError(
                             f"Pass A was skipped but the instance Zarr was not found: {zarr_path}"
                         )
-                    _existing = zarr.open(zarr_path, mode="r", zarr_format=3)
+                    axes_order = self.chunked_output_axes(zarr_path)
+                    _existing = open_array(zarr_path)
                     _, z_dim, _, y_dim, x_dim = order_dimensions(_existing.shape, axes_order)
                     assert isinstance(z_dim, int) and isinstance(y_dim, int) and isinstance(x_dim, int)
                     grid = chunked_tile_grid(
@@ -2031,7 +2026,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
                 my_chunk_indices = list(range(rank, total_chunks, world_size))
 
-                zarr_data = zarr.open(zarr_path, mode="r+", zarr_format=3)
+                zarr_data = open_array(zarr_path, mode="r+")
 
                 # ---- Pass B1: collect per-chunk max ID (all ranks, disjoint) ----
                 print(
@@ -2290,27 +2285,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
 
                 print(f"[Rank {get_rank()} ({os.getpid()})] Chunk-by-chunk instance merging complete. Result: {zarr_path}")
 
-                # Save TIF of the final merged labels if requested.
-                if save_out_tif:
-                    if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                        dist.barrier()
-                    if is_main_process():
-                        if not run_pass_a:
-                            # tgen was not created when skipping Pass A — save directly.
-                            data = np.array(zarr.open(zarr_path, mode="r", zarr_format=3))
-                            data = ensure_3d_shape(data)
-                            out_filename = os.path.splitext(os.path.basename(zarr_path))[0] + ".tif"
-                            if self.save_to_disk:
-                                save_tif(
-                                    np.expand_dims(data, 0),
-                                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                                    [out_filename],
-                                    verbose=True,
-                                )
-                        else:
-                            tgen.save_parallel_data_as_tif()
-                    if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                        dist.barrier()
+                # Save TIF of the final merged labels if requested, and create the pyramid of the OME-Zarr image
+                self.finish_chunked_output(zarr_path)
 
             else:
                 pass
@@ -2403,11 +2379,11 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 )
                 # Load H5/Zarr and convert it into numpy array
                 pred_file, pred = read_chunked_data(fpath)
-                pred = np.squeeze(np.array(pred, dtype=self.dtype))
+                pred = ensure_3d_shape(
+                    np.array(pred, dtype=self.dtype), fpath, data_axes_order=self.chunked_output_axes(fpath)
+                )
                 if isinstance(pred_file, h5py.File):
                     pred_file.close()
-
-                pred = ensure_3d_shape(pred, fpath)
 
                 self.after_merge_patches(np.expand_dims(pred, 0))
         else:
@@ -2420,11 +2396,11 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(filename)[0] + ".zarr"
                     )
                     pred_file, pred = read_chunked_data(fpath)
-                    pred = np.squeeze(np.array(pred, dtype=self.dtype))
+                    pred = ensure_3d_shape(
+                        np.array(pred, dtype=self.dtype), fpath, data_axes_order=self.chunked_output_axes(fpath)
+                    )
                     if isinstance(pred_file, h5py.File):
                         pred_file.close()
-
-                    pred = ensure_3d_shape(pred, fpath)
 
                     self.after_merge_patches(np.expand_dims(pred, 0))
                     print("TODO: synful support")
@@ -2514,6 +2490,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                                 bin_th=th_global,
                                 resolution=gt_info["resolution"],
                                 channel_to_look_into=1, # post channel
+                                data_axes_order=self.chunked_output_axes(fpath),
                                 ndim=self.dims,
                                 return_drops=True,
                             )
@@ -2944,9 +2921,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             # Change the value of DATA.TRAIN.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't
             # know the data order that is created.
             if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
-                out_data_order = self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER
-                if "C" not in self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER:
-                    out_data_order += "C"
+                # The masks are created with the axes of the labels ordered as OME-Zarr requires
+                out_data_order = ngff_axes_order(self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER)
                 print(
                     "DATA.TRAIN.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
                         self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER, out_data_order
@@ -2971,9 +2947,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             # Change the value of DATA.VAL.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't
             # know the data order that is created.
             if self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
-                out_data_order = self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER
-                if "C" not in self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER:
-                    out_data_order += "C"
+                # The masks are created with the axes of the labels ordered as OME-Zarr requires
+                out_data_order = ngff_axes_order(self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER)
                 print(
                     "DATA.VAL.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
                         self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER, out_data_order
@@ -2999,9 +2974,8 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             # Change the value of DATA.TEST.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't
             # know the data order that is created.
             if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
-                out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-                if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
-                    out_data_order += "C"
+                # The masks are created with the axes of the labels ordered as OME-Zarr requires
+                out_data_order = ngff_axes_order(self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER)
                 print(
                     "DATA.TEST.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
                         self.cfg.DATA.TEST.INPUT_MASK_AXES_ORDER, out_data_order

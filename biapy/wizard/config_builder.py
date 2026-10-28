@@ -396,6 +396,14 @@ def build_config_from_answers(answers):
         for suffix in ["PATH_path_shapes", "GT_PATH_path_shapes", "PATH", "PATH_path", "GT_PATH", "GT_PATH_path"]:
             dc.pop("DATA.{}.{}".format(phase, suffix), None)
 
+    # Targets read from the raw images' Zarr files (e.g. the label images of OME-Zarr images): their variables are
+    # only written when used
+    for phase in ["TRAIN", "TEST"]:
+        key = "DATA.{}.INPUT_ZARR_MULTIPLE_DATA".format(phase)
+        if not dc.get(key, True):
+            for k in [k for k in dc if k.startswith(key)]:
+                del dc[k]
+
     for key, value in dc.items():
         biapy_cfg[key] = value
     del biapy_cfg["data_constraints"]

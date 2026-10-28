@@ -11,7 +11,7 @@ import re
 
 import numpy as np
 
-from biapy.wizard.data_check import list_files
+from biapy.wizard.data_check import list_files, preview_image
 from biapy.wizard.fingerprint import sample_indices
 
 
@@ -34,11 +34,13 @@ TARGET_KIND = {
 }
 
 
-def read_image(path, is_3d):
-    """Image as BiaPy reads it: ``(y, x, c)`` or ``(z, y, x, c)``."""
-    from biapy.data.data_manipulation import read_img_as_ndarray
-
-    return read_img_as_ndarray(path, is_3d=is_3d)
+def read_image(path, is_3d, data_path=""):
+    """
+    Image as BiaPy reads it, ``(y, x, c)`` or ``(z, y, x, c)``, and its shape. Large Zarr/H5 images are read on a
+    central block (see data_check.preview_image). ``data_path``: path of the image within a Zarr/H5 file.
+    """
+    img, shape = preview_image(path, is_3d, data_path)
+    return img, shape or img.shape
 
 
 ###############
@@ -256,16 +258,17 @@ def _classification_preview(raw_folder, is_3d):
         files = list_files(os.path.join(raw_folder, c))
         if not files:
             continue
-        img = read_image(os.path.join(raw_folder, c, files[0]), is_3d)
+        img = read_image(os.path.join(raw_folder, c, files[0]), is_3d)[0]
         samples.append({"raw_name": os.path.join(c, files[0]), "raw_png": _png(_resize(_intensity_rgb(_plane(img)), 1)),
                         "target_name": "class '{}'".format(c), "target_text": c})
     notes.append("{} classes: {}".format(len(classes), ", ".join(classes[:10]) + (" ..." if len(classes) > 10 else "")))
     return {"samples": samples, "warnings": [], "notes": notes, "columns": ["Image", "Class"]}
 
 
-def preview(workflow, ndim, raw_folder=None, target_folder=None):
+def preview(workflow, ndim, raw_folder=None, target_folder=None, target_data_path=""):
     """
-    Few raw/target pairs as PNG thumbnails (base64) and warnings.
+    Few raw/target pairs as PNG thumbnails (base64) and warnings. ``target_data_path``: path of the targets within
+    the Zarr files of ``target_folder``, e.g. "labels.mito" for the label images of OME-Zarr images.
 
     Returns
     -------
@@ -305,9 +308,12 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None):
         _check_names([pairs[i] for i in idx], warnings)
 
     samples, raws, targets, shapes = [], [], [], []
+    cropped = False  # large Zarr/H5 images read on a central block
     for i in idx:
         raw_name, tgt_name = pairs[i]
-        raw = read_image(os.path.join(raw_folder, raw_name), is_3d) if raw_name else None
+        raw, raw_shape = read_image(os.path.join(raw_folder, raw_name), is_3d) if raw_name else (None, None)
+        raw_cropped = raw is not None and tuple(raw.shape) != tuple(raw_shape)
+        cropped |= raw_cropped
         s = {}
         if raw is not None:
             raws.append(raw)
@@ -318,21 +324,27 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None):
             if workflow == "DETECTION":
                 pts = _read_points(path, is_3d)
                 if raw is not None:
-                    spatial = raw.shape[:-1]
+                    spatial = raw_shape[:-1]
                     out = np.sum(np.any((pts < 0) | (pts >= np.array(spatial)), axis=1)) if len(pts) else 0
                     if out:
                         warnings.append("{} points of '{}' are outside its image ({}).".format(
                             out, tgt_name, "x".join(map(str, spatial))))
-                    s["target_png"] = _png(_resize(_points_rgb(_plane(raw), pts, raw.shape[0] // 2 if is_3d else None), 1))
+                    if raw_cropped:  # the points are not drawn on a part of the image
+                        s["target_text"] = "{} points".format(len(pts))
+                    else:
+                        s["target_png"] = _png(
+                            _resize(_points_rgb(_plane(raw), pts, raw.shape[0] // 2 if is_3d else None), 1)
+                        )
                 else:
                     s["target_text"] = "{} points".format(len(pts))
                 if len(pts) == 0:
                     notes.append("'{}' has no points.".format(tgt_name))
             else:
-                tgt = read_image(path, is_3d)
+                tgt, tgt_shape = read_image(path, is_3d, target_data_path)
+                cropped |= tuple(tgt.shape) != tuple(tgt_shape)
                 targets.append(tgt)
                 if raw is not None:
-                    shapes.append((raw_name, raw.shape[:-1], tgt.shape[:-1]))
+                    shapes.append((raw_name, raw_shape[:-1], tgt_shape[:-1]))
                 if workflow in ("SEMANTIC_SEG", "INSTANCE_SEG"):
                     rgb = _labels_rgb(_plane(tgt), semantic=workflow == "SEMANTIC_SEG")
                     s["target_png"] = _png(_resize(rgb, 0))
@@ -350,5 +362,7 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None):
         _check_shapes(workflow, shapes, warnings, notes)
     if is_3d:
         notes.append("3D images: the middle slice is shown.")
+    if cropped:
+        notes.append("Large Zarr/H5 images: a central part of them is shown and inspected.")
     columns = ["Raw image", "Target ({})".format(TARGET_KIND.get(workflow, "target"))]
     return {"samples": samples, "warnings": warnings, "notes": notes, "columns": columns}

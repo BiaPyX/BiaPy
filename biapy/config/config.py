@@ -976,6 +976,23 @@ class Config:
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
         _C.DATA.NORMALIZATION.TARGET.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
+        # OME-Zarr (OME-NGFF, https://ngff.openmicroscopy.org) images. BiaPy reads any Zarr, and writes all the Zarr
+        # files it creates (e.g. the predictions made by chunks) as OME-Zarr images, with the axes ordered as the
+        # standard requires (time, channel and then z, y, x) and the voxel size of the image they come from.
+        _C.DATA.OME_ZARR = CN()
+        # The axes and voxel size of OME-Zarr images are taken from their metadata, so 'DATA.*.INPUT_IMG_AXES_ORDER',
+        # 'DATA.*.INPUT_MASK_AXES_ORDER' and 'DATA.*.RESOLUTION' are not used for them (a summary of what is used is
+        # printed when they are loaded). Set this to True to use those variables instead, e.g. if the metadata is wrong.
+        _C.DATA.OME_ZARR.IGNORE_METADATA = False
+        # OME-Zarr version of the Zarr files written: 0.5 (Zarr format 3) or 0.4 (Zarr format 2, for viewers that do
+        # not read the newer one yet).
+        _C.DATA.OME_ZARR.VERSION = 0.5
+        # Number of resolution levels of the OME-Zarr images written, so viewers can show large images quickly. 1 writes
+        # only the full resolution. Each level is half the size of the previous one in y and x, and in z too once the
+        # voxels are about isotropic (e.g. a voxel of 40x4x4 nm is reduced in z from 40x32x32 on). Floating point data
+        # is averaged and the rest (e.g. labels) subsampled. They are created once the image is complete.
+        _C.DATA.OME_ZARR.PYRAMID_LEVELS = 1
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3.2 Training data options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -989,7 +1006,8 @@ class Config:
         # and 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA = False
         # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is True.
-        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path. In an OME-Zarr image the raw path can
+        # be left empty (the image itself) and the GT path is that of its label image, e.g. 'labels.nuclei'.
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
         # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
@@ -1063,9 +1081,10 @@ class Config:
         # performing some augmentations, e.g. cutout. If defined it need to be (y,x)/(z,y,x) and needs to be to be a 2D
         # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TRAIN.RESOLUTION = (-1,)
-        # Order of the axes of the image when using Zarr/H5 images in train data.
+        # Order of the axes of the image when using Zarr/H5 images in train data. Not used for OME-Zarr images,
+        # whose axes are in their metadata (see 'DATA.OME_ZARR.IGNORE_METADATA').
         _C.DATA.TRAIN.INPUT_IMG_AXES_ORDER = "TZCYX"
-        # Order of the axes of the mask when using Zarr/H5 images in train data.
+        # Order of the axes of the mask when using Zarr/H5 images in train data. Not used for OME-Zarr images.
         _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = "TZCYX"
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1152,7 +1171,8 @@ class Config:
         # and 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA = False
         # Paths to the raw and gt within the Zarr file. Only used when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is True.
-        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path. In an OME-Zarr image the raw path can
+        # be left empty (the image itself) and the GT path is that of its label image, e.g. 'labels.nuclei'.
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
         # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
@@ -1185,9 +1205,10 @@ class Config:
         _C.DATA.VAL.PADDING = (0, 0)
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
-        # Order of the axes of the image when using Zarr/H5 images in validation data.
+        # Order of the axes of the image when using Zarr/H5 images in validation data. Not used for OME-Zarr images,
+        # whose axes are in their metadata (see 'DATA.OME_ZARR.IGNORE_METADATA').
         _C.DATA.VAL.INPUT_IMG_AXES_ORDER = "TZCYX"
-        # Order of the axes of the mask when using Zarr/H5 images in validation data.
+        # Order of the axes of the mask when using Zarr/H5 images in validation data. Not used for OME-Zarr images.
         _C.DATA.VAL.INPUT_MASK_AXES_ORDER = "TZCYX"
         # Remove validation images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and will
         # not depend on 'DATA.FILTER_BY_IMAGE' variable 
@@ -1287,20 +1308,23 @@ class Config:
         _C.DATA.TEST.ROI_MASK.AXES_ORDER = ""
 
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
+        # For OME-Zarr images it is taken from their voxel size, relative to the x one (e.g. (10,1,1) for 40x4x4 nm).
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Whether to read the per-image test resolution from a 'resolution.json' file placed in the parent
         # folder of 'DATA.TEST.PATH' (a mapping of image basename -> (z, y, x) resolution) instead of using
         # 'DATA.TEST.RESOLUTION'. Images missing from the JSON fall back to 'DATA.TEST.RESOLUTION'.
         _C.DATA.TEST.RESOLUTION_FROM_JSON = False
-        # Order of the axes of the image when using Zarr/H5 images in test data.
+        # Order of the axes of the image when using Zarr/H5 images in test data. Not used for OME-Zarr images, whose
+        # axes are in their metadata (see 'DATA.OME_ZARR.IGNORE_METADATA').
         _C.DATA.TEST.INPUT_IMG_AXES_ORDER = "TZCYX"
-        # Order of the axes of the mask when using Zarr/H5 images in test data.
+        # Order of the axes of the mask when using Zarr/H5 images in test data. Not used for OME-Zarr images.
         _C.DATA.TEST.INPUT_MASK_AXES_ORDER = "TZCYX"
         # Whether your input Zarr contains the raw images and labels together or not. Use 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA = False
         # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is True.
-        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path. In an OME-Zarr image the raw path can
+        # be left empty (the image itself) and the GT path is that of its label image, e.g. 'labels.nuclei'.
         _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
         # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
@@ -1400,7 +1424,8 @@ class Config:
         # WARNING: Only implemented for _C.TEST.BY_CHUNKS = True. It will change the zoom of each patch individually.
         # This is useful when the input image has a different resolution than the one used in the training. The value
         # is the zoom factor to be applied to each patch using scipy.ndimage.zoom.
-        # "E.g. [1,2,1,3,3] that needs to match _C.DATA.TEST.INPUT_IMG_AXES_ORDER axes"
+        # "E.g. [1,2,1,3,3] that needs to match _C.DATA.TEST.INPUT_IMG_AXES_ORDER axes". The values are taken by axis name,
+        # so for OME-Zarr images (whose axes may be in a different order, see 'DATA.OME_ZARR') each axis gets its value.
         _C.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR = [1, 1, 1, 1, 1]
 
         # Gaussian blur

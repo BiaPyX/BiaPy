@@ -27,13 +27,10 @@ def main():
 
     # Import BiaPy utilities
     sys.path.insert(0, code_dir)
-    from biapy.data.data_manipulation import save_tif
-    from biapy.data.data_3D_manipulation import read_chunked_data, ensure_3d_shape
+    from biapy.data.data_manipulation import save_tif, read_img_as_ndarray
 
-    # Read the data
-    data = read_chunked_data(zarrfile)[1]
-    data = np.array(data)
-    data = ensure_3d_shape(data)
+    # Read the data (the axes of OME-Zarr images are taken from their metadata)
+    data = read_img_as_ndarray(zarrfile, is_3d=True)
 
     # Data needs to be like this: (Z, X, Y, C)
     if data.ndim != 4:

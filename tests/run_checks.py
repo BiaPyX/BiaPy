@@ -15,6 +15,7 @@ import collections.abc
 import re
 import ast
 import socket
+import json
 
 # ---------------------------------------------------------
 # ARGUMENT PARSING
@@ -1974,6 +1975,84 @@ all_test_info["Test32"] = {
 }
 
 
+all_test_info["Test33"] = {
+    "enable": True,
+    "jobname": "test33",
+    "description": "3D Semantic seg. OME-Zarr data (Lucchi++). Train: OME-Zarr 0.5 with the GT as its label image "
+        "'mito', in memory false. Test: OME-Zarr 0.4 with a channel axis and the GT in another OME-Zarr, by chunks. "
+        "Axes taken from the metadata (the ones set do not match the test images). Output: OME-Zarr 0.5 with 3 "
+        "resolution levels + TIF (binarized masks, processed by chunks).",
+    "template_path": os.path.join(data_folder, "semantic_seg", "3d_semantic_segmentation.yaml"),
+    "yaml": "test33.yaml",
+    "yaml_modifications": {
+        "DATA": {
+            "PATCH_SIZE": "(32, 128, 128, 1)",
+            "OME_ZARR": {
+                "VERSION": 0.5,
+                "PYRAMID_LEVELS": 3,
+            },
+            "TRAIN": {
+                "PATH": os.path.join(data_folder, "semantic_seg", "lucchi_ome_zarr", "data", "train", "x"),
+                "GT_PATH": os.path.join(data_folder, "semantic_seg", "lucchi_ome_zarr", "data", "train", "x"),
+                "IN_MEMORY": False,
+                "INPUT_ZARR_MULTIPLE_DATA": True,
+                "INPUT_ZARR_MULTIPLE_DATA_RAW_PATH": "",
+                "INPUT_ZARR_MULTIPLE_DATA_GT_PATH": "labels.mito",
+            },
+            "VAL": {
+                "FROM_TRAIN": True,
+                "SPLIT_TRAIN": 0.1,
+            },
+            "TEST": {
+                "PATH": os.path.join(data_folder, "semantic_seg", "lucchi_ome_zarr", "data", "test", "x"),
+                "GT_PATH": os.path.join(data_folder, "semantic_seg", "lucchi_ome_zarr", "data", "test", "y"),
+                "IN_MEMORY": False,
+                "LOAD_GT": True,
+                # The test images are 'CZYX' OME-Zarr images, so their metadata must be used instead of this
+                "INPUT_IMG_AXES_ORDER": "ZYXC",
+                "PADDING": "(4, 16, 16)",
+            },
+        },
+        "AUGMENTOR": {
+            "ENABLE": True,
+            "VFLIP": True,
+            "HFLIP": True,
+        },
+        "MODEL": {
+            "ARCHITECTURE": "unet",
+            "FEATURE_MAPS": "[16, 32, 64, 128]",
+            "Z_DOWN": "[1, 2, 2]",
+        },
+        "TRAIN": {
+            "ENABLE": True,
+            "OPTIMIZER": "ADAMW",
+            "LR": 1.E-3,
+            "BATCH_SIZE": 4,
+            "EPOCHS": 10,
+            "PATIENCE": -1,
+            "LR_SCHEDULER": {
+                "NAME": "onecycle",
+            },
+        },
+        "TEST": {
+            "ENABLE": True,
+            "FULL_IMG": False,
+            "BY_CHUNKS": {
+                "ENABLE": True,
+                "FORMAT": "Zarr",
+                "SAVE_OUT_TIF": True,
+            },
+        },
+    },
+    "internal_checks": [
+        {"type": "regular", "pattern": "Test Foreground IoU (per patch)", "gt": True, "value": 0.35},
+        {"type": "OME-Zarr", "path": os.path.join("results", "test33_1", "per_image_binarized", "testing.zarr"),
+            "version": "0.5", "axes": "czyx", "levels": 3},
+        {"type": "file", "path": os.path.join("results", "test33_1", "per_image_binarized", "testing.tif")},
+    ]
+}
+
+
 # ---------------------------------------------------------
 # 4. DATASET DEFINITIONS
 # ---------------------------------------------------------
@@ -1996,6 +2075,10 @@ DATASETS = [
             {
                 "url": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
                 "filename": "fibsem_epfl_3D.zip",
+            },
+            {
+                "url": "https://drive.google.com/uc?id=LUCCHI_OME_ZARR_DRIVE_ID",
+                "filename": "lucchi_ome_zarr.zip",
             }
         ]
     },
@@ -2327,6 +2410,32 @@ def check_DatasetMatching(last_lines, pattern_to_find, ref_value, gt=True, value
                 c += 1
     return finished_good
 
+def check_ome_zarr(path, version, axes, levels):
+    """
+    Checks that 'path' is an OME-Zarr image of the version, axes (e.g. 'czyx') and number of resolution levels given.
+    """
+    try:
+        if version == "0.5":
+            with open(os.path.join(path, "zarr.json")) as f:
+                ome = json.load(f)["attributes"]["ome"]
+            found_version, multiscales = ome["version"], ome["multiscales"][0]
+        else:
+            with open(os.path.join(path, ".zattrs")) as f:
+                multiscales = json.load(f)["multiscales"][0]
+            found_version = multiscales["version"]
+    except (OSError, KeyError, ValueError) as e:
+        print(f"Could not read the OME-Zarr metadata of {path}: {e}")
+        return False
+    found_axes = "".join(a["name"] for a in multiscales["axes"])
+    found_levels = [d["path"] for d in multiscales["datasets"]]
+    print(f"OME-Zarr {found_version} image found in {path}: axes '{found_axes}', resolution levels {found_levels}")
+    return (
+        found_version == version
+        and found_axes == axes
+        and len(found_levels) == levels
+        and all(os.path.isdir(os.path.join(path, p)) for p in found_levels)
+    )
+
 def check_finished(test_info):
     # get the last lines of the output file
     jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
@@ -2536,12 +2645,17 @@ for test_key, test_info in all_test_info.items():
                 results.append(check_bmz_file_created(last_lines, checks["pattern"]))
             elif checks["type"] == "BMZ_weight_agreement":
                 results.append(check_bmz_weight_agreement(last_lines, checks["pattern"]))
+            elif checks["type"] == "OME-Zarr":
+                results.append(check_ome_zarr(os.path.join(RESULTS_FOLDER, test_info["jobname"], checks["path"]),
+                                              checks["version"], checks["axes"], checks["levels"]))
+            elif checks["type"] == "file":
+                results.append(os.path.exists(os.path.join(RESULTS_FOLDER, test_info["jobname"], checks["path"])))
 
             int_checks += 1
             if not results[-1]:
                 correct = False
                 print("Internal check not passed: {} {} {}".format(
-                    checks["pattern"], checks.get("gt", ""), checks.get("value", "")
+                    checks.get("pattern", checks.get("path")), checks.get("gt", ""), checks.get("value", "")
                 ))
 
         # 3. Print test results and append to main list

@@ -11,23 +11,21 @@ from torch.utils.data import IterableDataset, DistributedSampler
 import h5py
 import os
 import math
-import zarr
 import numpy as np
-import time
 from typing import Tuple
 from numpy.typing import NDArray
 
 from biapy.data.data_3D_manipulation import (
     extract_patch_from_efficient_file,
-    ensure_3d_shape,
-    insert_patch_in_efficient_file,
     order_dimensions,
     looks_like_hdf5,
 )
-from biapy.data.data_manipulation import load_img_data, save_tif, extract_patch_within_image
+from biapy.data.data_manipulation import load_img_data, extract_patch_within_image
 from biapy.utils.misc import get_world_size, get_rank, is_main_process
 from biapy.data.dataset import PatchCoords
 from biapy.data.roi_mask import load_roi_mask
+from biapy.data.chunked_writer import ChunkedZarrWriter
+from biapy.data import ome_zarr
 
 class chunked_workflow_process_generator(IterableDataset):
     """
@@ -73,6 +71,7 @@ class chunked_workflow_process_generator(IterableDataset):
         z_end: int = -1,
         roi_mask_path: str = "",
         roi_mask_axes_order: str = "",
+        ome_version: str | float = ome_zarr.DEFAULT_VERSION,
     ):
         """
         Initialize the chunked_workflow_process_generator.
@@ -82,7 +81,8 @@ class chunked_workflow_process_generator(IterableDataset):
         model_predictions : str
             Path to the model predictions to process.
         input_axes : str
-            Axes order for input data.
+            Axes order of the model predictions. Only used if the file is not an OME-Zarr image (it is when BiaPy
+            created it), as their metadata gives them otherwise.
         crop_shape : tuple of int
             Shape of the patches to extract.
         out_dir : str
@@ -98,6 +98,8 @@ class chunked_workflow_process_generator(IterableDataset):
             they are left as background in the output. It does not need to match the data shape.
         roi_mask_axes_order : str, optional
             Order of the axes of the ROI mask. Defaults to the axes order of the data.
+        ome_version : str or float, optional
+            OME-Zarr version of the output (``DATA.OME_ZARR.VERSION``).
         """
         super(chunked_workflow_process_generator).__init__()
         self.model_predictions = model_predictions
@@ -111,7 +113,7 @@ class chunked_workflow_process_generator(IterableDataset):
             data_within_zarr_path=None,
         )
 
-        self.input_axes = input_axes
+        self.input_axes, source = ome_zarr.resolve_axes(self.model_predictions, input_axes)
         self.dtype_str = dtype_str
         self.out_dir = out_dir
 
@@ -128,16 +130,8 @@ class chunked_workflow_process_generator(IterableDataset):
         
         self.crop_shape_zyx = crop_shape_zyx
 
-        # Output zarr handle (shared among workers/processes via filesystem)
-        self.out_data = None
-        self.out_file = None
-
-        # Output data order: ensure there is a channel dim in output ordering
-        # (predictions typically have channels; if not, C is appended)
-        if "C" not in self.input_axes:
-            self.out_data_order = self.input_axes + "C"
-        else:
-            self.out_data_order = self.input_axes
+        # Output data order: OME-Zarr order, with a channel axis
+        self.out_data_order = ome_zarr.ngff_axes_order(self.input_axes)
 
         # ---- Dimensions ----
         # We assume data is at least 3D in Z/Y/X. If it has extra axes (T, etc),
@@ -156,6 +150,18 @@ class chunked_workflow_process_generator(IterableDataset):
         self.step_z = self.crop_shape_zyx[0]
         self.step_y = self.crop_shape_zyx[1]
         self.step_x = self.crop_shape_zyx[2]
+
+        # Output file shared among workers/processes, aligned to the tiles
+        self.writer = ChunkedZarrWriter(
+            out_dir,
+            self.filename,
+            self.X_parallel_data.shape,
+            self.input_axes,
+            dtype_str,
+            self.crop_shape_zyx,
+            source=source,
+            ome_version=ome_version,
+        )
 
         self.vols_per_z = math.ceil(self.z_dim / self.step_z)
         self.vols_per_y = math.ceil(self.y_dim / self.step_y)
@@ -293,131 +299,20 @@ class chunked_workflow_process_generator(IterableDataset):
             yield vol_id, patch, patch_in_data
 
     def _shared_zarr_path(self) -> str:
-        """
-        Output path for the Zarr file created by this generator.
-        You can change naming here if you want a suffix like _bin.zarr.
-        """
-        base = os.path.splitext(self.filename)[0]
-        return os.path.join(self.out_dir, f"{base}.zarr")
-
-    def _compute_out_shape(self, patch: NDArray) -> Tuple[int, ...]:
-        """
-        Output shape mirrors input shape, but ensures the channel dim matches patch.shape[-1].
-        """
-        out_shape = list(self.X_parallel_data.shape)
-
-        if "C" not in self.input_axes:
-            out_shape = list(out_shape) + [patch.shape[-1]]
-        else:
-            out_shape[self.input_axes.index("C")] = patch.shape[-1]
-
-        return tuple(int(v) for v in out_shape)
-
-    def _compute_out_chunks(self, out_data_shape: Tuple[int, ...], out_channels: int) -> Tuple[int, ...]:
-        """
-        Chunk shape aligned to the tile grid: (step_z, step_y, step_x, C) in ZYXC,
-        then mapped to out_data_order.
-        """
-        write_tile_zyxc = (self.step_z, self.step_y, self.step_x, int(out_channels))
-
-        chunk_shape = order_dimensions(
-            write_tile_zyxc,
-            input_order="ZYXC",
-            output_order=self.out_data_order,
-            default_value=np.nan,
-        )
-
-        # Any axes not present get full size along that axis
-        chunk_shape = tuple(
-            int(v) if not np.isnan(v) else int(out_data_shape[i])
-            for i, v in enumerate(chunk_shape)
-        )
-        return tuple(int(v) for v in chunk_shape)
-
-    def _open_or_create_shared_out(self, out_path: str, out_shape: Tuple[int, ...], out_chunks: Tuple[int, ...]):
-        os.makedirs(self.out_dir, exist_ok=True)
-
-        # Already opened in this worker
-        if self.out_data is not None:
-            return
-
-        last_err = None
-        for _ in range(20):
-            try:
-                self.out_data = zarr.open(
-                    out_path,
-                    mode="w-",
-                    shape=out_shape,
-                    chunks=out_chunks,
-                    dtype=self.dtype_str,
-                    zarr_format=3,
-                )
-                self.out_file = out_path
-                return
-            except Exception as e:
-                last_err = e
-                # If exists or raced, try open r+
-                try:
-                    existing = zarr.open(out_path, mode="r+", zarr_format=3)
-                    if tuple(existing.shape) != tuple(out_shape):
-                        raise RuntimeError(
-                            f"Existing Zarr at {out_path} has shape {existing.shape}, but this run expects "
-                            f"{out_shape}. It is likely left over from a previous run with a different "
-                            "'DATA.PATCH_SIZE' or 'DATA.PREPROCESS.ZOOM.ZOOM_FACTOR'. Remove it and re-run."
-                        )
-                    self.out_data = existing
-                    self.out_file = out_path
-                    return
-                except FileNotFoundError:
-                    time.sleep(0.05)
-
-        raise RuntimeError(f"Could not create/open shared Zarr at {out_path}. Last error: {last_err}")
+        """Output path for the Zarr file created by this generator."""
+        return self.writer.path
 
     def insert_patch_in_file(self, patch: NDArray, patch_coords: PatchCoords):
         """
         Insert patch into the output Zarr at patch_coords (no padding removal required).
         `patch` must be ZYXC.
         """
-        out_path = self._shared_zarr_path()
-
-        if self.out_file is None or self.out_data is None:
-            out_shape = self._compute_out_shape(patch)
-            out_chunks = self._compute_out_chunks(out_shape, out_channels=patch.shape[-1])
-            self.out_data_shape = out_shape
-            self._open_or_create_shared_out(out_path, out_shape, out_chunks)
-
-        if self.out_data is not None:
-            insert_patch_in_efficient_file(
-                data=self.out_data,
-                patch=patch,
-                patch_coords=patch_coords,
-                data_axes_order=self.out_data_order,
-                patch_axes_order="ZYXC",
-                mode="replace",
-            )
-
-    def save_parallel_data_as_tif(self):
-        """Save the final zarr into a tiff file."""
-        final_zarr_file = self._shared_zarr_path()
-        if not os.path.exists(final_zarr_file):
-            print(f"Couldn't load Zarr data for saving. File {final_zarr_file} not found!")
-            return
-
-        data = np.array(zarr.open(final_zarr_file, mode="r"))
-        data = ensure_3d_shape(data)
-        save_tif(
-            np.expand_dims(data, 0),
-            self.out_dir,
-            [os.path.splitext(self.filename)[0] + ".tif"],
-            verbose=True,
-        )
+        self.writer.insert(patch, patch_coords)
 
     def close_open_files(self):
         """Close all files that may be open in the generator."""
         if self.X_parallel_file is not None and isinstance(self.X_parallel_file, h5py.File):
             self.X_parallel_file.close()
-        if isinstance(self.out_file, h5py.File):
-            self.out_file.close()
 
     def __len__(self):
         """

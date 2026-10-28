@@ -1333,9 +1333,8 @@ class Detection_Workflow(Base_Workflow):
             )
             opts.extend(["DATA.TRAIN.GT_PATH", self.cfg.DATA.TRAIN.DETECTION_MASK_DIR])
 
-            out_data_order = self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER
-            if "C" not in self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER:
-                out_data_order += "C"
+            # Detection masks are OME-Zarr images with the channels first
+            out_data_order = "CZYX"
             print(
                 "DATA.TRAIN.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
                     self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER, out_data_order
@@ -1351,9 +1350,8 @@ class Detection_Workflow(Base_Workflow):
             )
             opts.extend(["DATA.VAL.GT_PATH", self.cfg.DATA.VAL.DETECTION_MASK_DIR])
 
-            out_data_order = self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER
-            if "C" not in self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER:
-                out_data_order += "C"
+            # Detection masks are OME-Zarr images with the channels first
+            out_data_order = "CZYX"
             print(
                 "DATA.VAL.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
                     self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER, out_data_order
@@ -1369,9 +1367,8 @@ class Detection_Workflow(Base_Workflow):
             )
             opts.extend(["DATA.TEST.GT_PATH", self.cfg.DATA.TEST.DETECTION_MASK_DIR])
 
-            out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-            if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
-                out_data_order += "C"
+            # Detection masks are OME-Zarr images with the channels first
+            out_data_order = "CZYX"
             print(
                 "DATA.TEST.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
                     self.cfg.DATA.TEST.INPUT_MASK_AXES_ORDER, out_data_order

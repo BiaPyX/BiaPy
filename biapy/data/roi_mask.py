@@ -301,9 +301,14 @@ def load_roi_mask(
     # shape (smallest axis first), which would silently transpose a coarse mask.
     if mask_file.endswith((".zarr", ".n5")) or looks_like_hdf5(mask_file):
         from biapy.data.data_3D_manipulation import read_chunked_data
+        from biapy.data.ome_zarr import image_info
 
         _, mask = read_chunked_data(mask_file)
         mask = np.array(mask)
+        # An OME-Zarr mask has its axes in its metadata
+        info = image_info(mask_file)
+        if info is not None:
+            axes_order = info.axes
     else:
         mask = imread(mask_file)[0]
     assert isinstance(mask, np.ndarray)

@@ -2324,6 +2324,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
 
     #### Data ####
+    if cfg.DATA.OME_ZARR.VERSION not in (0.4, 0.5):
+        raise ValueError("'DATA.OME_ZARR.VERSION' must be 0.4 or 0.5")
+    if not isinstance(cfg.DATA.OME_ZARR.PYRAMID_LEVELS, int) or cfg.DATA.OME_ZARR.PYRAMID_LEVELS < 1:
+        raise ValueError("'DATA.OME_ZARR.PYRAMID_LEVELS' must be an integer greater than 0")
     if cfg.TRAIN.ENABLE:
         if check_data_paths:
             if not os.path.exists(cfg.DATA.TRAIN.PATH):
@@ -2346,7 +2350,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
             if cfg.PROBLEM.NDIM != "3D":
                 raise ValueError("'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' to True is only implemented in 3D workflows")
-            if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
+            # Empty raw path: the image itself (e.g. an OME-Zarr image with its labels), except for synapses
+            if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "" and cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
                 raise ValueError(
                     "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used."
                 )
@@ -2385,7 +2390,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
             if cfg.PROBLEM.NDIM != "3D":
                 raise ValueError("'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' to True is only implemented in 3D workflows")
-            if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
+            if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "" and cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
                 raise ValueError(
                     "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used."
                 )
@@ -2520,7 +2525,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
-                if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
+                if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "" and cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
                     raise ValueError(
                         "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
                         "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."

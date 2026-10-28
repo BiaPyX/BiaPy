@@ -45,14 +45,16 @@ class ChunkedTileProcessor:
             out_dir=out_vars["out_dir"],
             filename=tgen.filename,
             data_shape=tgen.data_shape_for_output(),
-            data_axes_order=tgen.out_data_order,
+            data_axes_order=tgen.input_axes,
             dtype_str=out_vars["dtype_str"],
             write_tile_zyx=tgen.tile_step_out,
+            source=tgen.writer.source,
+            ome_version=tgen.writer.ome_version,
         )
 
         workflow.chunked_output_info = {
             "zarr_path": self.writer.path,
-            "axes_order": tgen.out_data_order,
+            "axes_order": self.writer.axes_order,
             "dims": self.dims,
             "tile_step": tuple(int(x) for x in tgen.tile_step_out),
             "tiles": (int(tgen.tiles_per_z), int(tgen.tiles_per_y), int(tgen.tiles_per_x)),
@@ -208,7 +210,3 @@ class ChunkedTileProcessor:
         """Post-process the tiles that are still open, i.e. those missing some discarded patch."""
         for tile_id in list(self.open_tiles.keys()):
             self.flush(tile_id)
-
-    def save_as_tif(self):
-        """Save the post-processed output as a TIF."""
-        self.writer.save_as_tif()

@@ -33,6 +33,7 @@ from numpy.typing import NDArray
 from tqdm import tqdm
 from biapy.utils.misc import is_main_process
 from biapy.data.dataset import PatchCoords
+from biapy.data.ome_zarr import resolve_axes, find_array
 
 ZarrOrH5File = Union[zarr.Group, zarr.Array, h5py.File]
 ZarrOrH5Array = Union[zarr.Array, h5py.Dataset]
@@ -45,6 +46,7 @@ def load_3D_efficient_files(
     padding: Tuple[int, ...],
     check_channel: bool = True,
     data_within_zarr_path: Optional[str] = None,
+    use_ome_metadata: bool = True,
 ):
     """
     Efficiently index 3D patches from Zarr or HDF5 image volumes for training or inference.
@@ -61,7 +63,8 @@ def load_3D_efficient_files(
         List of paths to Zarr or HDF5 files containing the raw 3D image volumes.
 
     input_axes : str
-        Axes layout of the image data in the files. Must be one of ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
+        Axes layout of the image data in the files. Must be one of ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']. Not used for
+        OME-Zarr images, whose axes are in their metadata.
 
     crop_shape : tuple of int
         Shape of the 3D patches to be extracted, in the form (z, y, x, channels).
@@ -81,6 +84,9 @@ def load_3D_efficient_files(
         Optional internal path to the dataset inside the Zarr or HDF5 file, e.g.,
         'volumes/raw' or 'volumes/labels/neuron_ids'. If None, the top-level dataset is used.
 
+    use_ome_metadata : bool, optional
+        Whether to take the axes of OME-Zarr images from their metadata.
+
     Returns
     -------
     data_info : dict
@@ -88,6 +94,7 @@ def load_3D_efficient_files(
             - "filepath": path to the source file.
             - "full_shape": shape of the complete data volume.
             - "patch_coords": coordinates (start and end) of the extracted patch.
+            - "axes": axes of the data in the file.
 
     data_info_total_patches : list of int
         List with the number of patches extracted from each file in `data_path`.
@@ -108,11 +115,12 @@ def load_3D_efficient_files(
             file, data = read_chunked_nested_data(filename, data_within_zarr_path)
         else:
             file, data = read_chunked_data(filename)
+        axes, _ = resolve_axes(filename, input_axes, data_within_zarr_path or "", use_ome_metadata)
 
         # Modify crop_shape with the channel
         c_index = -1
         try:
-            c_index = input_axes.index("C")
+            c_index = axes.index("C")
             crop_shape = crop_shape[:-1] + (data.shape[c_index],)
         except:
             pass
@@ -121,7 +129,7 @@ def load_3D_efficient_files(
         obj = extract_3D_patch_with_overlap_and_padding_yield(
             data,
             crop_shape,
-            input_axes,
+            axes,
             overlap=overlap,
             padding=padding,
             total_ranks=1,
@@ -142,7 +150,7 @@ def load_3D_efficient_files(
             extract_3D_patch_with_overlap_and_padding_yield(
                 data,
                 crop_shape,
-                input_axes,
+                axes,
                 overlap=overlap,
                 padding=padding,
                 total_ranks=1,
@@ -159,6 +167,7 @@ def load_3D_efficient_files(
             data_info[c]["filepath"] = filename
             data_info[c]["full_shape"] = data.shape
             data_info[c]["patch_coords"] = patch_coords
+            data_info[c]["axes"] = axes
 
             c += 1
             assert isinstance(img, np.ndarray)
@@ -261,24 +270,13 @@ def extract_patch_from_efficient_file(
         tuple(slices), input_order="ZYXC", output_order=data_axes_order, default_value=0
     )
 
-    # Extract patch
+    # Extract patch. Its axes are those of the data but the time one, removed by the slicing
     try:
-        img = np.squeeze(np.array(data[data_ordered_slices]))
+        img = np.array(data[data_ordered_slices])
     except:
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
-    # Try to correct the axes
-    if img.ndim != len(data_axes_order):
-        empty_axes = [
-            (patch_coords.z_end - patch_coords.z_start) <= 1,
-            (patch_coords.y_end - patch_coords.y_start) <= 1,
-            (patch_coords.x_end - patch_coords.x_start) <= 1,
-        ]
-        axes_to_add = [i for i, empty in enumerate(empty_axes) if empty]
-        if axes_to_add:
-            img = np.expand_dims(img, axis=tuple(axes_to_add))
-
-    img = ensure_3d_shape(img, data_axes_order=data_axes_order)
+    img = ensure_3d_shape(img, data_axes_order=data_axes_order.replace("T", ""))
 
     return img
 
@@ -1357,21 +1355,6 @@ def ensure_3d_shape(
     return img
 
 
-def _first_array_in_group(g: zarr.Group) -> zarr.Array:
-    """Descend into the first array found (sorted by key) in a group."""
-    keys = sorted(list(g.keys()))
-    if not keys:
-        raise ValueError("Zarr group is empty (no arrays or subgroups).")
-    obj = g[keys[0]]
-    while isinstance(obj, zarr.Group):
-        subkeys = sorted(list(obj.keys()))
-        if not subkeys:
-            raise ValueError("Zarr group contains no arrays (only empty groups).")
-        obj = obj[subkeys[0]]
-    if not isinstance(obj, zarr.Array):
-        raise TypeError(f"Expected zarr.Array, found {type(obj)}")
-    return obj
-
 def _first_dataset_in_h5_group(g: h5py.Group) -> h5py.Dataset:
     """Descend into the first dataset found (sorted by key) in an HDF5 group."""
     keys = sorted(list(g.keys()))
@@ -1439,7 +1422,8 @@ def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.G
         Path to the Zarr/N5 file. Must have .zarr or .n5 extension.
     data_path : str, optional
         Internal path to the dataset within the Zarr hierarchy, using dot notation
-        for nested groups (e.g., "group1.subgroup.data"). Default: "" (root level).
+        for nested groups (e.g., "group1.subgroup.data"). Default: "" (root level). If it leads to a group,
+        its array is used (e.g. the full resolution one of the OME-Zarr label image "labels.nuclei").
 
     Returns
     -------
@@ -1493,6 +1477,15 @@ def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.G
         return obj
 
     data = find_obj(data_path, fid)
+    if data is None and isinstance(fid, zarr.Group) and data_path != "":
+        # The path may lead to a group, e.g. a label image of an OME-Zarr image ('labels.nuclei')
+        try:
+            node = fid
+            for part in data_path.replace("/", ".").split("."):
+                node = node[part]
+            data = find_array(node)
+        except (KeyError, ValueError):
+            data = None
 
     if data is None and data_path != "":
         raise ValueError(f"'{data_path}' not found in Zarr: {zarrfile}.")
@@ -1599,9 +1592,8 @@ def read_chunked_data(
 
     Notes
     -----
-    For Zarr files, the function will:
-    1. First look for groups and return the first group found
-    2. If no groups exist, return the first array found
+    For Zarr files, the function returns the full resolution array of the OME-Zarr image, the array itself if the
+    file is just an array, or the first array found (sorted by key) otherwise.
     """
     if isinstance(filename, str):
         if not os.path.exists(filename):
@@ -1619,10 +1611,7 @@ def read_chunked_data(
                 fid = zarr.open(filename, mode="r")
             except Exception as e:
                 raise ValueError(f"Error opening Zarr file {filename}: {e}")
-            if isinstance(fid, zarr.Group):
-                data = _first_array_in_group(fid)
-            else:
-                data = fid
+            data = find_array(fid)
         elif looks_like_precomputed(filename):
             fid, data = read_precomputed(filename)
         else:

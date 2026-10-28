@@ -47,6 +47,7 @@ from numpy.typing import NDArray
 
 from biapy.utils.misc import to_numpy_format, to_pytorch_format, os_walk_clean
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread, reduce_dtype
+from biapy.data.data_3D_manipulation import order_dimensions
 from biapy.data.pre_processing import generate_ellipse_footprint
 from biapy.data.post_processing.tta import (
     TTA_GROUPS,
@@ -1861,6 +1862,7 @@ def remove_close_points_by_mask(
     classes: Optional[List[int]]=None, 
     ndim: int=3, 
     return_drops: bool=False,
+    data_axes_order: str = "ZYXC",
 ) -> List[List[int | float]] | Tuple[List[List[int | float]], List[int]] | Tuple[List[List[int | float]], List[int], List[bool]]:
     """
     Remove all points from ``point_list`` that are at a ``radius`` or less distance from each other but conditioned that the must lay in the same mask label. For that last label creation the given ``raw_predictions`` is used, which is expected to be model's raw prediction. It is binarized using ``bin_th`` threshold and then the labels are created using connected-components.
@@ -1883,7 +1885,10 @@ def remove_close_points_by_mask(
         Whether to return or not a list containing the positions of the points removed.
 
     search_in_mask : bool, optional
-    
+
+    data_axes_order : str, optional
+        Order of the axes of ``raw_predictions``, e.g. ``'CZYX'``.
+
     Returns
     -------
     new_point_list : List of lists of floats
@@ -1891,6 +1896,7 @@ def remove_close_points_by_mask(
         or less from each other.
     """
     assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
+    _, z_dim, _, y_dim, x_dim = order_dimensions(raw_predictions.shape, data_axes_order)
 
     if len(points) == 0:
         if classes:
@@ -1953,22 +1959,23 @@ def remove_close_points_by_mask(
             patch_coords = [
                 slice(
                     max(0, min(patch_coords[0].start - 1, point[0] - 1)),
-                    min(max(patch_coords[0].stop + 1, point[0] + 1), raw_predictions.shape[0]),
+                    min(max(patch_coords[0].stop + 1, point[0] + 1), z_dim),
                 ),
                 slice(
                     max(0, min(patch_coords[1].start - 1, point[1] - 1)),
-                    min(max(patch_coords[1].stop + 1, point[1] + 1), raw_predictions.shape[1]),
+                    min(max(patch_coords[1].stop + 1, point[1] + 1), y_dim),
                 ),
                 slice(
                     max(0, min(patch_coords[2].start - 1, point[2] - 1)),
-                    min(max(patch_coords[2].stop + 1, point[2] + 1), raw_predictions.shape[2]),
+                    min(max(patch_coords[2].stop + 1, point[2] + 1), x_dim),
                 ),
             ]
         patch_coords += [slice(channel_to_look_into, channel_to_look_into + 1),]
         patch_coords = tuple(patch_coords)
 
         # Extract the patch, binarize and apply connected-components
-        patch = np.array(raw_predictions[patch_coords] > bin_th, dtype=np.uint8).squeeze()
+        patch = raw_predictions[order_dimensions(patch_coords, input_order="ZYXC", output_order=data_axes_order, default_value=0)]
+        patch = np.array(patch > bin_th, dtype=np.uint8).squeeze()
         patch = label(patch)
 
         # Groups points by labels

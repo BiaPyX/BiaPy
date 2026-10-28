@@ -57,7 +57,10 @@ from biapy.data.data_3D_manipulation import (
     read_chunked_nested_data,
     looks_like_hdf5,
     pick_chunks,
+    insert_patch_in_efficient_file,
 )
+from biapy.data.ome_zarr import image_info, resolve_axes, ngff_axes_order, create_image, default_chunks, output_scale
+from biapy.data.chunked_writer import ChunkedZarrWriter
 from biapy.data.data_manipulation import (
     read_img_as_ndarray,
     read_points_csv,
@@ -569,6 +572,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             overlap=getattr(cfg.DATA, tag).OVERLAP,
             padding=getattr(cfg.DATA, tag).PADDING,
             data_within_zarr_path=path_to_gt_data,
+            use_ome_metadata=not cfg.DATA.OME_ZARR.IGNORE_METADATA,
         )
         zarr_data_information = {
             "raw_data_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
@@ -580,6 +584,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             "partners_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
             "locations_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
             "resolution_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
+            "ome_version": cfg.DATA.OME_ZARR.VERSION,
         }
 
     else:
@@ -609,6 +614,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             )
         else:  # regular instances, not synapses
             mask = None
+            fid_mask = None
             imgfile = None
             last_parallel_file = None
             rank = get_rank()
@@ -626,7 +632,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 img = load_img_part_from_efficient_file(
                     Y[i]["filepath"],
                     patch_coords,
-                    data_axes_order=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
+                    data_axes_order=Y[i]["axes"],
                     data_path=getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
                 )
                 if img.ndim == 3:
@@ -683,20 +689,13 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                     fname = os.path.join(getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, os.path.basename(Y[i]["filepath"]))
                     os.makedirs(getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, exist_ok=True)
 
-                    # Determine data shape
-                    out_data_shape = np.array(data.shape)
-                    if "C" not in getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER:
-                        out_data_shape = tuple(out_data_shape) + (img.shape[-1],)
-                        out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER + "C"
-                        channel_pos = -1
-                    else:
-                        out_data_shape[getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")] = img.shape[-1]
-                        out_data_shape = tuple(out_data_shape)
-                        out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER
-                        channel_pos = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
-
                     is_h5 = looks_like_hdf5(fname)
                     if is_h5:
+                        # Determine data shape
+                        # Same axes order as the OME-Zarr masks
+                        out_data_order = ngff_axes_order(Y[i]["axes"])
+                        sizes = dict(zip(Y[i]["axes"], data.shape), C=img.shape[-1])
+                        out_data_shape = tuple(int(sizes.get(a, 1)) for a in out_data_order)
                         fname, _ = os.path.splitext(fname)
                         fid_mask = h5py.File(fname + ".h5", "w")
                         ds_kwargs = {
@@ -708,9 +707,17 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                             "shuffle": True
                         }
                         mask = fid_mask.create_dataset("data", **ds_kwargs)
-                    else:  # Zarr file
-                        out_data_shape = tuple(int(s) for s in out_data_shape)
-                        mask = zarr.open(fname, mode="w", shape=out_data_shape, dtype=dtype_str, zarr_format=3)
+                    else:  # OME-Zarr image, with the voxel size of the labels
+                        mask = ChunkedZarrWriter(
+                            getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR,
+                            os.path.basename(Y[i]["filepath"]),
+                            data.shape,
+                            Y[i]["axes"],
+                            dtype_str,
+                            cfg.DATA.PATCH_SIZE[:3],
+                            source=image_info(Y[i]["filepath"], path_to_gt_data or ""),
+                            ome_version=cfg.DATA.OME_ZARR.VERSION,
+                        )
 
                     # Close H5 file read for the data shape
                     if isinstance(imgfile, h5py.File):
@@ -718,33 +725,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
 
                     del data, fname
 
-                slices = (
-                    slice(patch_coords.z_start, patch_coords.z_end),
-                    slice(patch_coords.y_start, patch_coords.y_end),
-                    slice(patch_coords.x_start, patch_coords.x_end),
-                    slice(0, out_data_shape[channel_pos]),
-                )
-                data_ordered_slices = tuple(
-                    order_dimensions(
-                        slices,
-                        input_order="ZYXC",
-                        output_order=out_data_order,
-                        default_value=0,
-                    )
-                )
-
-                # Adjust patch slice to transpose it before inserting intop the final data
-                current_order = np.array(range(len(img.shape)))
-                transpose_order = order_dimensions(
-                    current_order,
-                    input_order="ZYXC",
-                    output_order=out_data_order,
-                    default_value=np.nan,
-                )
-                transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
-
-                # Place the patch into the Zarr
-                mask[data_ordered_slices] = img.transpose(transpose_order)
+                # Place the patch into the mask
+                if isinstance(mask, ChunkedZarrWriter):
+                    mask.insert(img, patch_coords)
+                else:
+                    insert_patch_in_efficient_file(mask, img, patch_coords, data_axes_order=out_data_order)
 
             # Close last open H5 file
             if mask and isinstance(imgfile, h5py.File):
@@ -2485,7 +2470,8 @@ def _make_output_array(fname: str, data_shape_zyx, channels: int, zinfo: Dict, d
     channels : int
         The number of channels in the output array.
     zinfo : Dict
-        A dictionary containing metadata, including the "axes_order" key which specifies the order of axes in the output array (e.g. "ZYXC" or "ZCYX").
+        A dictionary containing metadata, including the "axes_order" key which specifies the order of axes of the data
+        (e.g. "ZYXC" or "ZCYX"), and the "ome_version" one, with the OME-Zarr version to write.
     dtype_str : str
         The data type for the output array (default: "float32").    
     
@@ -2498,28 +2484,21 @@ def _make_output_array(fname: str, data_shape_zyx, channels: int, zinfo: Dict, d
     out_shape : Tuple[int, ...]
         The shape of the output array, including channels, in the order specified by `zinfo["axes_order"]`.
     out_order : str
-        The order of axes in the output array, as specified by `zinfo["axes_order"]` with "C" for channels if not already included.
-    c_pos : int or None
-        The position of the channel axis in the output array, or None if channels are added as the last axis.
+        The order of axes in the output array: `zinfo["axes_order"]` with "C" for channels if not already included,
+        ordered as OME-Zarr requires.
+    c_pos : int
+        The position of the channel axis in the output array.
     """
     os.makedirs(os.path.dirname(fname), exist_ok=True)
 
-    out_data_shape = np.array(data_shape_zyx, dtype=int)
     axes = zinfo["axes_order"]
-
-    if "C" not in axes:
-        out_shape = tuple(out_data_shape) + (channels,)
-        out_order = axes + "C"
-        c_pos = -1
-    else:
-        out_shape = out_data_shape.copy()
-        out_shape[axes.index("C")] = channels
-        out_shape = tuple(int(s) for s in out_shape)
-        out_order = axes
-        c_pos = axes.index("C")
-
     is_h5 = looks_like_hdf5(fname)
     fid_mask = None
+    # Axes ordered as OME-Zarr requires (the Zarr files are OME-Zarr images)
+    out_order = ngff_axes_order(axes)
+    sizes = dict(zip(axes, (int(v) for v in data_shape_zyx)), C=int(channels))
+    out_shape = tuple(sizes.get(a, 1) for a in out_order)
+    c_pos = out_order.index("C")
 
     if is_h5:
         base, _ = os.path.splitext(fname)
@@ -2534,7 +2513,9 @@ def _make_output_array(fname: str, data_shape_zyx, channels: int, zinfo: Dict, d
         }
         mask = fid_mask.create_dataset("data", **ds_kwargs)
     else:
-        mask = zarr.open(fname, mode="w", shape=out_shape, dtype=dtype_str, zarr_format=3)
+        mask = create_image(
+            fname, out_shape, out_order, dtype_str, default_chunks(out_shape, dtype_str), version=zinfo["ome_version"]
+        )
 
     return mask, fid_mask, out_shape, out_order, c_pos
 
@@ -3622,8 +3603,15 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
             shape = img_info.shape[:-1]
             is_h5 = False
         else:
-            img_zarr_file, img_data = read_chunked_data(os.path.join(img_dir, img_filename))
-            shape = img_data.shape if img_data.ndim == 3 else img_data.shape[:-1]
+            img_path = os.path.join(img_dir, img_filename)
+            img_zarr_file, img_data = read_chunked_data(img_path)
+            axes, img_ome = resolve_axes(
+                img_path,
+                getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
+                use_metadata=not cfg.DATA.OME_ZARR.IGNORE_METADATA,
+            )
+            _, z_dim, _, y_dim, x_dim = order_dimensions(img_data.shape, axes)
+            shape = (z_dim, y_dim, x_dim)
             if isinstance(img_zarr_file, h5py.File): img_zarr_file.close()
             is_h5 = looks_like_hdf5(img_filename)
 
@@ -3643,10 +3631,22 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
                     "shuffle": True
                 }
                 mask = fid_mask.create_dataset("data", **ds_kwargs)
-            else:
-                mask = zarr.open(out_path, mode="w", shape=out_shape, dtype=dtype_str, zarr_format=3)
+            else:  # OME-Zarr image, with the channels first and the voxel size of the image
+                mask_shape = (channels,) + shape
+                scale, units = output_scale("CZYX", mask_shape, img_ome)
+                mask = create_image(
+                    out_path,
+                    mask_shape,
+                    "CZYX",
+                    dtype_str,
+                    default_chunks(mask_shape, dtype_str),
+                    scale=scale,
+                    units=units,
+                    version=cfg.DATA.OME_ZARR.VERSION,
+                )
         else:
             mask = np.zeros(out_shape, dtype=dtype_str)
+        channels_first = isinstance(mask, zarr.Array)
 
         # 3. Process CSV points
         df = read_points_csv(file_path, is_3d=cfg.PROBLEM.NDIM == "3D", with_class=channels > 1)
@@ -3682,7 +3682,10 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
 
             # --- C. Create the Patch (Local Dilation) ---
             # Determine patch shape by looking at the slice size
-            local_chunk = mask[target_slice] 
+            if channels_first:
+                local_chunk = np.moveaxis(mask[(slice(None),) + target_slice], 0, -1)
+            else:
+                local_chunk = mask[target_slice]
             patch_shape = local_chunk.shape[:-1] # Exclude channel dimension
             patch = np.zeros(patch_shape, dtype=np.uint8)
             patch[tuple(rel_coords)] = 1
@@ -3699,7 +3702,10 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
                 local_chunk[mask_to_fill, 1] = c_point
 
             # Write the modified chunk back to the disk-backed array
-            mask[target_slice] = local_chunk
+            if channels_first:
+                mask[(slice(None),) + target_slice] = np.moveaxis(local_chunk, -1, 0)
+            else:
+                mask[target_slice] = local_chunk
 
         # Finalize
         if is_h5 and working_with_chunked_data:

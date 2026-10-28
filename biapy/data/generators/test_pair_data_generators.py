@@ -10,6 +10,7 @@ from biapy.data.data_3D_manipulation import looks_like_hdf5, looks_like_precompu
 from biapy.data.dataset import BiaPyDataset, DataSample
 from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
 from biapy.data.pre_processing import labels_into_channels
+from biapy.data.ome_zarr import resolve_axes
 
 
 class test_pair_data_generator(Dataset):
@@ -101,6 +102,15 @@ class test_pair_data_generator(Dataset):
 
     keep_native_y : bool, optional
         Whether to skip resizing and padding Y when ``preprocess_data`` is set.
+
+    img_axes : str, optional
+        Axes of the images read by chunks (``DATA.TEST.INPUT_IMG_AXES_ORDER``), unless they are OME-Zarr images.
+
+    mask_axes : str, optional
+        Axes of the masks read by chunks (``DATA.TEST.INPUT_MASK_AXES_ORDER``), unless they are OME-Zarr images.
+
+    use_ome_metadata : bool, optional
+        Whether to take the axes of OME-Zarr images from their metadata (``not DATA.OME_ZARR.IGNORE_METADATA``).
     """
 
     def __init__(
@@ -129,6 +139,9 @@ class test_pair_data_generator(Dataset):
         ignore_index: Optional[int]=None,
         is_y_mask: bool = True,
         keep_native_y: bool = False,
+        img_axes: str = "TZCYX",
+        mask_axes: str = "TZCYX",
+        use_ome_metadata: bool = True,
     ):
         if preprocess_data and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' must be set when 'preprocess_data' is provided")
@@ -136,6 +149,9 @@ class test_pair_data_generator(Dataset):
         self.X = X
         self.Y = Y
         self.test_by_chunks = test_by_chunks
+        self.img_axes = img_axes
+        self.mask_axes = mask_axes
+        self.use_ome_metadata = use_ome_metadata
         self.provide_Y = provide_Y
         self.convert_to_rgb = convert_to_rgb
         self.norm_module = norm_module
@@ -273,6 +289,12 @@ class test_pair_data_generator(Dataset):
                 )
             if img_file and isinstance(img_file, h5py.File):
                 sample_extra_info["img_file_to_close"] = img_file
+            sample_extra_info["X_axes"], sample_extra_info["X_ome"] = resolve_axes(
+                self.X.dataset_info[sample.fid].path,
+                self.img_axes,
+                data_path=sample.get_path_in_zarr() or "",
+                use_metadata=self.use_ome_metadata,
+            )
 
         if img_meta is not None:
             sample_extra_info["img_meta"] = img_meta
@@ -299,6 +321,13 @@ class test_pair_data_generator(Dataset):
                     )
                     if mask_file and isinstance(mask_file, h5py.File):
                         sample_extra_info["mask_file_to_close"] = mask_file
+                    if self.test_by_chunks:
+                        sample_extra_info["Y_axes"], _ = resolve_axes(
+                            self.Y.dataset_info[msample.fid].path,
+                            self.mask_axes,
+                            data_path=(msample.get_path_in_zarr() or "") if not self.instance_problem else "",
+                            use_metadata=self.use_ome_metadata,
+                        )
 
             # Instance-seg / membrane-repair: expand the raw single-channel instance-label GT into the
             # full target channel stack in memory (never cached to disk) -- see the equivalent step in

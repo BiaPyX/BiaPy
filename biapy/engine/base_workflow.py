@@ -84,6 +84,8 @@ from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
 )
+from biapy.data.ome_zarr import resolve_axes, report_ome_zarr_images
+from biapy.data.chunked_writer import finish_output
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
@@ -461,6 +463,9 @@ class Base_Workflow(metaclass=ABCMeta):
         # Description of the file created by that process. Set when the prediction loop runs.
         self.chunked_output_info = {}
         self.chunked_tiles = None
+        # Set while the Zarr file written by chunks is still going to be modified (e.g. by the merging of
+        # the instances), so 'finish_chunked_output' waits until it is final
+        self.defer_chunked_output_finish = False
 
     def _chunked_progress_message(self, progress: float, start_time: float, tiles_to_process: int) -> str:
         """
@@ -702,6 +707,7 @@ class Base_Workflow(metaclass=ABCMeta):
             "multiple_data_within_zarr": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA,
             "input_img_axes": self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
             "input_mask_axes": self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER,
+            "use_ome_metadata": not self.cfg.DATA.OME_ZARR.IGNORE_METADATA,
         }
         val_zarr_data_information = {
             "raw_path": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
@@ -710,6 +716,7 @@ class Base_Workflow(metaclass=ABCMeta):
             "multiple_data_within_zarr": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA,
             "input_img_axes": self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
             "input_mask_axes": self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER,
+            "use_ome_metadata": not self.cfg.DATA.OME_ZARR.IGNORE_METADATA,
         }
 
         # Same GT_PATH override as Instance_Segmentation_Workflow.__init__, mirrored for val.
@@ -1716,9 +1723,10 @@ class Base_Workflow(metaclass=ABCMeta):
             # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is True.
             test_zarr_data_information = None
             if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
-                use_gt_path = True
-                if self.cfg.PROBLEM.TYPE != "INSTANCE_SEG" and self.cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses":
-                    use_gt_path = False
+                # Synapses take their ground truth from the raw data file (CREMI layout)
+                use_gt_path = not (
+                    self.cfg.PROBLEM.TYPE == "INSTANCE_SEG" and self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses"
+                )
                 test_zarr_data_information = {
                     "raw_path": self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
                     "gt_path": self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
@@ -1938,8 +1946,16 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Process all the images
         for i, self.current_sample in enumerate(self.test_generator):  # type: ignore
-            # Per-file resolution override (see '_test_resolution_map' in __init__).
+            # Per-file resolution override: from the OME-Zarr metadata or '_test_resolution_map' (see __init__).
             file_resolution = self._test_resolution_map.get(self.current_sample["X_filename"])
+            ome_info = self.current_sample.get("X_ome")
+            if ome_info is not None:
+                report_ome_zarr_images(
+                    {self.current_sample["X_filename"]: ome_info},
+                    self.current_sample["X_dir"],
+                    ["DATA.TEST.INPUT_IMG_AXES_ORDER", "DATA.TEST.INPUT_MASK_AXES_ORDER", "DATA.TEST.RESOLUTION"],
+                )
+                file_resolution = ome_info.resolution("ZYX" if self.cfg.PROBLEM.NDIM == "3D" else "YX")
             if file_resolution is not None:
                 self.resolution = [1] + list(file_resolution) if self.cfg.PROBLEM.NDIM == "2D" else list(file_resolution)
             else:
@@ -2945,9 +2961,7 @@ class Base_Workflow(metaclass=ABCMeta):
             tgen: chunked_test_pair_data_generator = self.test_generator.dataset  # type: ignore
 
             # Get parallel data shape is ZYX
-            _, z_dim, _, y_dim, x_dim = order_dimensions(
-                tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-            )
+            _, z_dim, _, y_dim, x_dim = order_dimensions(tgen.X_parallel_data.shape, tgen.input_axes)
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
 
             # Same path 'ChunkedZarrWriter' (on-the-fly post-processing) and the raw-predictions
@@ -3069,14 +3083,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
             tgen.close_open_files()
 
-            # Only after everyone finished writing, optionally convert to TIF on rank0
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and write_raw:
-                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                    dist.barrier()
-                if is_main_process():
-                    tgen.save_parallel_data_as_tif()
-                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                    dist.barrier()
+            if write_raw:
+                self.finish_chunked_output(tgen.writer.path)
 
         self.after_all_chunk_prediction_workflow_process()
 
@@ -3088,6 +3096,50 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
             dist.barrier()
+
+    def finish_chunked_output(self, path: str):
+        """
+        Finish a Zarr file written by all the ranks in the "by chunks" setting, once they are all done: create its
+        lower resolution levels (``DATA.OME_ZARR.PYRAMID_LEVELS``) and save it as TIF if
+        ``TEST.BY_CHUNKS.SAVE_OUT_TIF`` is set. The main rank does it while the rest wait. Nothing is done while
+        ``self.defer_chunked_output_finish`` is set, i.e. while the file is still going to be modified.
+
+        Parameters
+        ----------
+        path : str
+            Path to the Zarr file.
+        """
+        if self.defer_chunked_output_finish:
+            return
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+            dist.barrier()
+        if is_main_process():
+            finish_output(
+                path,
+                self.chunked_output_axes(path),
+                pyramid_levels=self.cfg.DATA.OME_ZARR.PYRAMID_LEVELS,
+                save_as_tif=self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF,
+            )
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+            dist.barrier()
+
+    def chunked_output_axes(self, path: str) -> str:
+        """
+        Axes of a Zarr file written by the "by chunks" inference: from its OME-Zarr metadata or, if an older BiaPy
+        version wrote it, those of the test images plus the channel axis.
+
+        Parameters
+        ----------
+        path : str
+            Path to the Zarr file.
+
+        Returns
+        -------
+        axes : str
+            Axes of the file, e.g. ``'CZYX'``.
+        """
+        axes = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+        return resolve_axes(path, axes if "C" in axes else axes + "C")[0]
 
     def after_one_chunk_raw_prediction(
         self, chunk_id: int, chunk: NDArray, chunk_in_data: PatchCoords, added_pad: List[List[int]]
@@ -3146,11 +3198,8 @@ class Base_Workflow(metaclass=ABCMeta):
         This function is called on all ranks.
         """
         if self.process_chunks_on_the_fly():
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
-                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                    dist.barrier()
-                if is_main_process() and self.chunked_tiles:
-                    self.chunked_tiles.save_as_tif()
+            if self.chunked_tiles:
+                self.finish_chunked_output(self.chunked_tiles.writer.path)
             return
 
         # Create the generator
@@ -3167,9 +3216,7 @@ class Base_Workflow(metaclass=ABCMeta):
         tgen: chunked_workflow_process_generator = self.test_generator.dataset  # type: ignore
 
         # Get parallel data shape is ZYX
-        _, z_dim, _, y_dim, x_dim = order_dimensions(
-            tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-        )
+        _, z_dim, _, y_dim, x_dim = order_dimensions(tgen.X_parallel_data.shape, tgen.input_axes)
         self.parallel_data_shape = [z_dim, y_dim, x_dim]
 
         # The DistributedSampler behind this generator (shuffle=False, drop_last=False) pads its
@@ -3245,15 +3292,7 @@ class Base_Workflow(metaclass=ABCMeta):
             dist.barrier()
 
         tgen.close_open_files()
-
-        # Only after everyone finished writing, optionally convert to TIF on rank0
-        if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
-            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                dist.barrier()
-            if is_main_process():
-                tgen.save_parallel_data_as_tif()
-            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                dist.barrier()
+        self.finish_chunked_output(tgen.writer.path)
 
     def after_all_chunk_prediction_workflow_process_master_rank(self):
         """

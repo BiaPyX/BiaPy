@@ -37,6 +37,8 @@ from biapy.data.generators.chunked_workflow_process_generator import chunked_wor
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.pre_processing import channel_physical_offsets
 from biapy.data.data_manipulation import save_tif
+from biapy.data.data_3D_manipulation import order_dimensions
+from biapy.data.ome_zarr import image_info
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
 from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
@@ -126,6 +128,35 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
         # Per-channel warp interpolation: nearest-neighbour for binary channels, linear for "raw".
         "img_type": ["image" if ch == "raw" else "mask" for ch in mr.SOURCE_CHANNELS],
     }
+
+
+def data_resolution(cfg: CN, resolution: Tuple, dataset: BiaPyDataset) -> Tuple:
+    """
+    Resolution of the data: the voxel size of its OME-Zarr images (relative to the x one) or, if it has none or
+    'DATA.OME_ZARR.IGNORE_METADATA' is set, the one given (``DATA.*.RESOLUTION``).
+
+    Parameters
+    ----------
+    cfg : CN
+        BiaPy configuration node.
+
+    resolution : tuple of float
+        Resolution set in the configuration.
+
+    dataset : BiaPyDataset
+        Data.
+
+    Returns
+    -------
+    resolution : tuple of float
+        Resolution, in ``(y, x)`` or ``(z, y, x)`` order.
+    """
+    if not cfg.DATA.OME_ZARR.IGNORE_METADATA:
+        for dataset_file in dataset.dataset_info:
+            info = image_info(dataset_file.path)
+            if info is not None:
+                return info.resolution("ZYX" if cfg.PROBLEM.NDIM == "3D" else "YX")
+    return resolution
 
 
 def create_train_val_augmentors(
@@ -424,7 +455,7 @@ def create_train_val_augmentors(
             salt_pep_amount=cfg.AUGMENTOR.SALT_AND_PEPPER_AMOUNT,
             salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE,
-            resolution=cfg.DATA.TRAIN.RESOLUTION,
+            resolution=data_resolution(cfg, cfg.DATA.TRAIN.RESOLUTION, X_train),
             random_crops_in_DA=random_patches,
             prob_map=prob_map,
             class_locations=train_class_locations,
@@ -510,7 +541,7 @@ def create_train_val_augmentors(
             ignore_index=cfg.LOSS.IGNORE_INDEX,
             seed=cfg.SYSTEM.SEED,
             norm_module=norm_module,
-            resolution=cfg.DATA.VAL.RESOLUTION,
+            resolution=data_resolution(cfg, cfg.DATA.VAL.RESOLUTION, X_val),
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             is_y_mask=cfg.PROBLEM.TYPE not in ("IMAGE_TO_IMAGE", "DENOISING", "SUPER_RESOLUTION", "SELF_SUPERVISED"),
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
@@ -760,6 +791,9 @@ def create_test_generator(
         gen_name = test_pair_data_generator
         dic["Y"] = Y_test
         dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
+        dic["img_axes"] = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+        dic["mask_axes"] = cfg.DATA.TEST.INPUT_MASK_AXES_ORDER
+        dic["use_ome_metadata"] = not cfg.DATA.OME_ZARR.IGNORE_METADATA
         dic["resolution"] = cfg.DATA.TEST.RESOLUTION
         _membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
         dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG" or _membrane_repair
@@ -797,17 +831,18 @@ def create_test_generator(
 
     # Save a sample to export the model to BMZ
     bmz_input_sample = None
+    sample_extra_info = {}
     if gen_name == test_single_data_generator:
         bmz_input_sample, _ , _, _, _ = test_generator.load_sample(0, first_load=True) # type: ignore
         mask_sample = None
     else:
-        bmz_input_sample, mask_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True) # type: ignore
+        bmz_input_sample, mask_sample, _, _, sample_extra_info, _ = test_generator.load_sample(0, first_load=True) # type: ignore
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
         img=bmz_input_sample[0] if (isinstance(bmz_input_sample, np.ndarray) and not cfg.TEST.BY_CHUNKS.ENABLE) else bmz_input_sample,
         img_gt=mask_sample[0] if (isinstance(mask_sample, np.ndarray) and not cfg.TEST.BY_CHUNKS.ENABLE) else mask_sample,
         patch_size=cfg.DATA.PATCH_SIZE,
         is_3d=cfg.PROBLEM.NDIM == "3D",
-        input_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+        input_axis_order=sample_extra_info.get("X_axes", cfg.DATA.TEST.INPUT_IMG_AXES_ORDER),
     ) 
 
     # Ensure dimensions
@@ -892,11 +927,22 @@ def create_chunked_test_generator(
     test_dataset : DataLoader
         PyTorch DataLoader wrapping the chunked test data generator.
     """
+    # Axes of the image and its mask: from their metadata if they are OME-Zarr images (see test_pair_data_generator)
+    input_axes = current_sample.get("X_axes", cfg.DATA.TEST.INPUT_IMG_AXES_ORDER)
+    zoom_factor = None
+    if cfg.DATA.PREPROCESS.ZOOM.ENABLE:
+        # ZOOM_FACTOR gives a value per axis of DATA.TEST.INPUT_IMG_AXES_ORDER: take them by axis name
+        zoom_factor = order_dimensions(
+            tuple(cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR),
+            input_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+            output_order=input_axes,
+            default_value=1,
+        )
     chunked_generator = chunked_test_pair_data_generator(
         sample_to_process=current_sample,
         norm_module=norm_module,
-        input_axes=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-        mask_input_axes=cfg.DATA.TEST.INPUT_MASK_AXES_ORDER,
+        input_axes=input_axes,
+        mask_input_axes=current_sample.get("Y_axes", cfg.DATA.TEST.INPUT_MASK_AXES_ORDER),
         crop_shape=cfg.DATA.PATCH_SIZE,
         padding=cfg.DATA.TEST.PADDING,
         out_dir=out_dir,
@@ -909,7 +955,9 @@ def create_chunked_test_generator(
         roi_mask_path=cfg.DATA.TEST.ROI_MASK.PATH if cfg.DATA.TEST.ROI_MASK.ENABLE else "",
         roi_mask_axes_order=cfg.DATA.TEST.ROI_MASK.AXES_ORDER,
         patches_per_tile=cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.PATCHES_PER_TILE,
-        zoom_factor=cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR if cfg.DATA.PREPROCESS.ZOOM.ENABLE else None,
+        zoom_factor=zoom_factor,
+        source=current_sample.get("X_ome"),
+        ome_version=cfg.DATA.OME_ZARR.VERSION,
     )
 
     # ---- Choose num_workers for this DataLoader ----
@@ -1003,14 +1051,10 @@ def create_chunked_workflow_process_generator(
     test_dataset : DataLoader
         PyTorch DataLoader wrapping the chunked test data generator.
     """
-    if "C" not in cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
-        out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
-    else:
-        out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-
     chunked_generator = chunked_workflow_process_generator(
         model_predictions=model_predictions,
-        input_axes=out_data_order,
+        # Axes of predictions written by older BiaPy versions (not OME-Zarr), which kept the input order
+        input_axes=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + ("C" if "C" not in cfg.DATA.TEST.INPUT_IMG_AXES_ORDER else ""),
         crop_shape=cfg.DATA.PATCH_SIZE,
         out_dir=out_dir,
         dtype_str=dtype_str,
@@ -1018,6 +1062,7 @@ def create_chunked_workflow_process_generator(
         z_end=cfg.TEST.BY_CHUNKS.Z_END,
         roi_mask_path=cfg.DATA.TEST.ROI_MASK.PATH if cfg.DATA.TEST.ROI_MASK.ENABLE else "",
         roi_mask_axes_order=cfg.DATA.TEST.ROI_MASK.AXES_ORDER,
+        ome_version=cfg.DATA.OME_ZARR.VERSION,
     )
 
     # ---- Choose num_workers for this DataLoader ----
