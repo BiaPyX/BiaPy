@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import numpy as np
 from typing import Optional, Sequence
 from numpy.typing import NDArray
@@ -159,6 +160,26 @@ class ChunkedZarrWriter:
             patch_axes_order="ZYXC",
             mode="replace",
         )
+
+    def remove_if_misaligned(self):
+        """
+        Remove the output file left by a previous run if its chunks are not aligned to the tiles this run writes (e.g.
+        the instances were created while predicting, and now from the saved predictions, which uses other tiles). The
+        ranks write different tiles at once, so tiles sharing a chunk would overwrite each other's data. Call it on the
+        main rank before any rank writes.
+        """
+        info = ome_zarr.image_info(self.path)
+        if info is None:  # not there, or written by an older BiaPy version (create_image reports it)
+            return
+        chunks = ome_zarr.open_array(self.path).chunks
+        tile = dict(zip("ZYX", self.write_tile_zyx))
+        if all(chunks[info.axes.index(a)] == tile[a] for a in "ZYX" if a in info.axes):
+            return
+        print(
+            f"Removing {self.path}, left over from a previous run: its chunks {tuple(chunks)} are not aligned to the "
+            f"tiles written now {self.write_tile_zyx} (z, y, x)"
+        )
+        shutil.rmtree(self.path)
 
     def created(self) -> bool:
         """Whether the output file was created, i.e. at least one patch was written."""

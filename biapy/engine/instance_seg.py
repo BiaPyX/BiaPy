@@ -2004,6 +2004,16 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     )
                     step_z, step_y, step_x = grid["tile_step"]
                     vols_per_z, vols_per_y, vols_per_x = grid["tiles"]
+                    # The ranks merge different tiles at once: they must not share chunks of the file
+                    chunks = dict(zip(axes_order, _existing.chunks))
+                    if tuple(chunks.get(a, 1) for a in "ZYX") != (step_z, step_y, step_x):
+                        raise ValueError(
+                            f"The chunks of {zarr_path} {tuple(_existing.chunks)} (axes {axes_order}) are not "
+                            f"aligned to the tiles to merge {(step_z, step_y, step_x)} (z, y, x), e.g. because it "
+                            "was created from the saved predictions ('TEST.REUSE_PREDICTIONS'), whose tiles are "
+                            "those of 'DATA.PATCH_SIZE', or with other 'DATA.PATCH_SIZE'/'DATA.TEST.PADDING'. Run "
+                            "the 'instance_creation' phase again ('TEST.BY_CHUNKS.PHASES') before merging."
+                        )
 
                 if not run_merging:
                     return

@@ -448,6 +448,11 @@ def to_biapy_order(data: np.ndarray, axes: str, is_3d: bool) -> np.ndarray:
     """
     target = "ZYXC" if is_3d else "YXC"
     for i, a in enumerate(axes):
+        if a == "Z" and not is_3d and data.shape[i] != 1:
+            raise ValueError(
+                "The image is 3D (axes {}, shape {}) but it is being processed as 2D: process it as 3D (set "
+                "'PROBLEM.NDIM' to '3D')".format(axes, data.shape)
+            )
         if a not in target and data.shape[i] != 1:
             raise ValueError(
                 "Axis '{}' of the image (axes {}, shape {}) has size {}, but it must be 1 to process the image in "

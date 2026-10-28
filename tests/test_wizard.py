@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from biapy.wizard import detection, instance_seg, unet
-from biapy.wizard.config_builder import WizardError, build_config, write_config
+from biapy.wizard.config_builder import WizardError, build_config, tuples_to_lists, write_config
 from biapy.wizard.data_check import check_folder, semantic_classes
 from biapy.wizard.planning import plan_config
 from biapy.wizard.preview import preview
@@ -869,6 +869,117 @@ def test_config_instance_seg_representation(tmp_path):
     assert tuple(inst["DATA_CHANNELS"]) == ("F", "P")
     assert inst["INSTANCE_CREATION_PROCESS"]
     _biapy_check(cfg, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "representation, augmentor, weights",
+    [
+        ("F_G", {"AFFINE_MODE": "constant", "ZOOM": False, "RANDOM_ROT_PROB": 1.0}, [1, 0.25, 0.25]),
+        ("Db_R", {"ROT90": True, "RANDOM_ROT": False, "ZOOM": False}, [1, 0.2]),
+        ("F_HV", {"AFFINE_MODE": "reflect", "ZOOM_RANGE": "(0.5, 1.5)", "ZOOM_PROB": 1.0}, [1, 0.25, 0.25]),
+        ("F_C", {"AFFINE_MODE": "reflect", "ZOOM": True}, None),
+    ],
+)
+def test_config_representation_settings(tmp_path, representation, augmentor, weights):
+    """What the representation needs as in the original method (the sanity checks of the paper), valid for BiaPy."""
+    folder = _instances(tmp_path, "round")
+    raw = _raw_like(tmp_path, folder)
+    answers = _answers(
+        "INSTANCE_SEG", "2D", [("DATA.TRAIN.PATH", raw), ("DATA.TRAIN.GT_PATH", folder)],
+        instance_representation=representation,
+    )
+    cfg, report = build_config(answers, GPU)
+    assert report["applied"], report
+    for key, value in augmentor.items():
+        assert cfg["AUGMENTOR"][key] == value, key
+    inst = cfg["PROBLEM"]["INSTANCE_SEG"]
+    assert inst.get("DATA_CHANNEL_WEIGHTS") == weights
+    assert any("as the original method" in line for line in report["lines"]) == (weights is not None)
+    _biapy_check(cfg, tmp_path)
+
+
+def test_representation_settings_bmz_cellpose(tmp_path):
+    """A BioImage Model Zoo model predicting Cellpose's flows, fine-tuned: the same settings as the representation."""
+    folder = _instances(tmp_path, "round")
+    raw = _raw_like(tmp_path, folder)
+    restrictions = {
+        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS": ["F", "Gh", "Gv"],
+        "PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS": [1, 1],
+        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES": [],
+        "PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS": "",
+        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS": [{}],
+        "DATA.PATCH_SIZE": [256, 256, 1],
+    }
+    answers = _answers(
+        "INSTANCE_SEG", "2D", [("DATA.TRAIN.PATH", raw), ("DATA.TRAIN.GT_PATH", folder)],
+        model_restrictions=restrictions, **{"MODEL.SOURCE": "bmz", "MODEL.BMZ.SOURCE_MODEL_ID": "some-model"},
+    )
+    cfg, report = build_config(answers, GPU)
+    assert cfg["AUGMENTOR"]["AFFINE_MODE"] == "constant" and not cfg["AUGMENTOR"]["ZOOM"]
+    inst = cfg["PROBLEM"]["INSTANCE_SEG"]
+    assert inst["DATA_CHANNEL_WEIGHTS"] == [1, 0.25, 0.25]
+    assert inst["CLASS_REBALANCE_WITHIN_CHANNELS"] is False
+    assert any(line.startswith("Cellpose flows") for line in report["lines"])
+
+
+def test_representation_settings_omnipose_checkpoint(tmp_path):
+    """Omnipose's flows (from a BiaPy checkpoint) are filled by reflection, unlike Cellpose's."""
+    torch = pytest.importorskip("torch")
+    ckpt = str(tmp_path / "model-checkpoint-best.pth")
+    extra = [{"Db": {"val_type": "omnipose"}, "Gh": {"gradient_type": "omnipose"}}]
+    inst = {"DATA_CHANNELS": ["Db", "Gh", "Gv"], "DATA_CHANNELS_EXTRA_OPTS": extra}
+    torch.save({"cfg": {"PROBLEM": {"TYPE": "INSTANCE_SEG", "INSTANCE_SEG": inst}}}, ckpt)
+    cfg = _cfg("2D")
+    cfg["PROBLEM"]["TYPE"] = "INSTANCE_SEG"
+    cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+    cfg["PATHS"] = {"CHECKPOINT_FILE": ckpt}
+    cfg["DATA"]["PATCH_SIZE"] = "(256, 256, 1)"
+    report = plan_config(cfg, {}, [])
+    assert cfg["AUGMENTOR"]["AFFINE_MODE"] == "reflect" and cfg["AUGMENTOR"]["ZOOM_RANGE"] == "(0.5, 1.5)"
+    assert cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS_LOSSES"] == ["mse"] * 3
+    assert any(line.startswith("Omnipose flows") for line in report["lines"])
+
+
+def test_representation_settings_hovernet_3d_inference(tmp_path):
+    """Inference only: HoVer-Net's watershed thresholds, with the Z distances in 3D, and no training settings."""
+    cfg = _cfg("3D")
+    cfg["PROBLEM"]["TYPE"] = "INSTANCE_SEG"
+    cfg["PROBLEM"]["INSTANCE_SEG"] = {"DATA_CHANNELS": ["F", "H", "V", "Z"], "DATA_CHANNELS_EXTRA_OPTS": [{}]}
+    cfg["TRAIN"]["ENABLE"] = False
+    cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+    report = plan_config(cfg, {}, [])
+    ws = cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]
+    assert ws == {"SEED_CHANNELS_THRESH": [0.5, 0.4, 0.4, 0.4], "GROWTH_MASK_CHANNELS_THRESH": [0.5]}
+    assert "AUGMENTOR" not in cfg and "DATA_CHANNEL_WEIGHTS" not in cfg["PROBLEM"]["INSTANCE_SEG"]
+    assert any(line.startswith("HoVer-Net") for line in report["lines"])
+    # BiaPy sets the seed channels (F first) and keeps the thresholds, without warning that they are custom
+    import warnings
+
+    from biapy.config.config import Config
+    from biapy.engine.check_configuration import check_configuration
+    from yacs.config import CfgNode as CN
+
+    manager = Config(str(tmp_path / "out"), "job")
+    manager._C.merge_from_other_cfg(CN(tuples_to_lists(cfg)))
+    biapy_cfg = manager.get_cfg_defaults()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        check_configuration(biapy_cfg, "job", check_data_paths=False)
+    ws = biapy_cfg.PROBLEM.INSTANCE_SEG.WATERSHED
+    assert list(ws.SEED_CHANNELS) == ["F", "Z", "V", "H"] and list(ws.SEED_CHANNELS_THRESH) == [0.5, 0.4, 0.4, 0.4]
+    assert list(ws.GROWTH_MASK_CHANNELS) == ["F"] and list(ws.GROWTH_MASK_CHANNELS_THRESH) == [0.5]
+
+
+def test_representation_family():
+    family = instance_seg.representation_family
+    assert family(("F", "Gv", "Gh", "Gz"), ({},)) == "cellpose"
+    assert family(["Gv", "Gh", "F", "I"], None) == "cellpose"
+    assert family(["Db", "Gv", "Gh"], [{"Gv": {"gradient_type": "omnipose"}}]) == "omnipose"
+    assert family(["Db", "R"], [{}]) == "stardist"
+    assert family(["E_offset", "E_sigma", "E_seediness"], [{}]) == "embedseg"
+    assert family(["F", "H", "V"], [{}]) == "hovernet"
+    assert family(["Db", "H", "V"], [{}]) is None  # HoVer-Net's thresholds are for its foreground
+    assert family(["F", "C"], [{}]) is None and family("BC", None) is None
 
 
 def test_config_detection(tmp_path):

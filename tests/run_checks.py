@@ -2077,7 +2077,7 @@ DATASETS = [
                 "filename": "fibsem_epfl_3D.zip",
             },
             {
-                "url": "https://drive.google.com/uc?id=LUCCHI_OME_ZARR_DRIVE_ID",
+                "url": "https://drive.google.com/uc?id=1nta4FwJp2V9t3ThCn5TzAgSc60iqtriD",
                 "filename": "lucchi_ome_zarr.zip",
             }
         ]

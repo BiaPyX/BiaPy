@@ -85,7 +85,7 @@ from biapy.data.data_2D_manipulation import (
     merge_data_with_overlap,
 )
 from biapy.data.ome_zarr import resolve_axes, report_ome_zarr_images
-from biapy.data.chunked_writer import finish_output
+from biapy.data.chunked_writer import ChunkedZarrWriter, finish_output
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
@@ -2979,6 +2979,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 if process_on_the_fly and self.chunked_process_writes_output
                 else None
             )
+            self.prepare_chunked_outputs(
+                ([tgen.writer] if write_raw else []) + ([self.chunked_tiles.writer] if self.chunked_tiles else [])
+            )
 
             # The tiles are distributed among the ranks, so each of them reports the progress of its own share
             patches_to_process, tiles_to_process = tgen.rank_workload(
@@ -3095,6 +3098,23 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
+            dist.barrier()
+
+    def prepare_chunked_outputs(self, writers: List[ChunkedZarrWriter]):
+        """
+        Before the ranks write the Zarr files of the "by chunks" setting: the main rank removes those left by a
+        previous run whose chunks are not aligned to the tiles written now (see
+        ``ChunkedZarrWriter.remove_if_misaligned``), while the rest wait.
+
+        Parameters
+        ----------
+        writers : list of ChunkedZarrWriter
+            Writers of the files.
+        """
+        if is_main_process():
+            for writer in writers:
+                writer.remove_if_misaligned()
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
             dist.barrier()
 
     def finish_chunked_output(self, path: str):
@@ -3214,6 +3234,7 @@ class Base_Workflow(metaclass=ABCMeta):
             dtype_str=self.test_chunked_workflow_process_vars["dtype_str"],
         )
         tgen: chunked_workflow_process_generator = self.test_generator.dataset  # type: ignore
+        self.prepare_chunked_outputs([tgen.writer])
 
         # Get parallel data shape is ZYX
         _, z_dim, _, y_dim, x_dim = order_dimensions(tgen.X_parallel_data.shape, tgen.input_axes)

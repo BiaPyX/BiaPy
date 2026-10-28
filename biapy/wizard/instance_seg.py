@@ -7,6 +7,9 @@ Strategy for the instance segmentation workflow.
   (representation_to_biapy()).
 * Training: as for semantic segmentation (nnU-Net-like U-Net, patch and batch size, foreground
   oversampling, no elastic deformations), with the losses BiaPy sets for each channel.
+* What some representations need besides their channels (augmentations, weights of the channels in the loss,
+  creation of the instances), as the original methods (apply_representation_settings()), also when a pretrained
+  model imposes them.
 """
 from . import common
 
@@ -248,6 +251,147 @@ def output_channels(channels, ndim, n_classes):
     """
     n = sum(STARDIST_RAYS[ndim] if c == "R" else ndim if c == "A" else 1 for c in channels)
     return n + (n_classes if n_classes > 2 else 0)
+
+
+# Settings some representations need besides their channels, as BiaPy's sanity checks of the "Representation
+# matters" paper set them to reproduce the original methods
+# (templates/instance_segmentation/Representation_matters_paper/sanity_experiments). Only what concerns the
+# representation: the geometric augmentations (the channels are rebuilt from the augmented masks), the weight of each
+# channel in the loss and how the instances are created. The optimizer, the intensity augmentations, the
+# normalization and the model are planned as for any representation. "train"/"test": variables set when training /
+# testing; "weights": loss weight of the channels not weighted 1; "losses": loss of all the channels.
+REPRESENTATION_SETTINGS = {
+    "cellpose": {
+        "name": "Cellpose flows",
+        "train": {
+            # Reflecting the image to fill the rotated patches would mirror the cells cut by the border, whose flows
+            # would then point outside the image
+            "AUGMENTOR.AFFINE_MODE": "constant",
+            "AUGMENTOR.RANDOM_ROT": True,
+            "AUGMENTOR.RANDOM_ROT_PROB": 1.0,
+            # Cellpose rescales the cells to CELLPOSE.DIAM_MEAN, with its own jitter (CELLPOSE.SCALE_RANGE)
+            "AUGMENTOR.ZOOM": False,
+            "PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS": False,
+        },
+        "weights": {"Gv": 0.25, "Gh": 0.25, "Gz": 0.25},
+        "train_summary": "every patch rotated, filled with zeros instead of reflecting the image (it would mirror the "
+        "cells cut by the border and break their flows), no zoom (Cellpose rescales the cells itself), flows weighted "
+        "0.25 in the loss, no rebalancing",
+    },
+    "omnipose": {
+        "name": "Omnipose flows",
+        "train": {
+            "AUGMENTOR.AFFINE_MODE": "reflect",
+            "AUGMENTOR.RANDOM_ROT": True,
+            "AUGMENTOR.RANDOM_ROT_PROB": 1.0,
+            "AUGMENTOR.ZOOM": True,
+            "AUGMENTOR.ZOOM_RANGE": str((0.5, 1.5)),
+            "AUGMENTOR.ZOOM_PROB": 1.0,
+        },
+        "losses": "mse",
+        "train_summary": "every patch rotated and zoomed (x0.5 to x1.5), filled by reflecting the image, mean squared "
+        "error for all the channels",
+    },
+    "stardist": {
+        "name": "StarDist",
+        "train": {"AUGMENTOR.ROT90": True, "AUGMENTOR.RANDOM_ROT": False, "AUGMENTOR.ZOOM": False},
+        "weights": {"R": 0.2},
+        "train_summary": "patches rotated by multiples of 90 degrees only, no zoom, radial distances weighted 0.2 in "
+        "the loss",
+        "test": {"PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH": 0.5, "PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH": 0.4},
+        "test_summary": "object probability threshold 0.5, overlap (NMS) threshold 0.4",
+    },
+    "hovernet": {
+        "name": "HoVer-Net",
+        "train": {
+            "AUGMENTOR.AFFINE_MODE": "reflect",
+            "AUGMENTOR.RANDOM_ROT": True,
+            "AUGMENTOR.RANDOM_ROT_PROB": 1.0,
+            "AUGMENTOR.ZOOM": True,
+            "AUGMENTOR.ZOOM_RANGE": str((0.5, 1.5)),
+            "AUGMENTOR.ZOOM_PROB": 1.0,
+            "PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS": False,
+        },
+        "weights": {"H": 0.25, "V": 0.25, "Z": 0.25},
+        "train_summary": "every patch rotated and zoomed (x0.5 to x1.5), distance maps weighted 0.25 in the loss, no "
+        "rebalancing",
+        # Thresholds of HoVer-Net's watershed: 0.5 for the foreground and 0.4 for the distance maps (seeds, in the
+        # order BiaPy sets them) and 0.5 for the foreground as growth mask
+        "test_summary": "watershed thresholds 0.5 for the foreground and 0.4 for the distance maps",
+    },
+    "embedseg": {
+        "name": "EmbedSeg",
+        "train": {"AUGMENTOR.RANDOM_ROT": True, "AUGMENTOR.RANDOM_ROT_PROB": 1.0, "AUGMENTOR.ZOOM": False},
+        "train_summary": "every patch rotated, no zoom",
+    },
+}
+
+
+def representation_family(channels, extra):
+    """
+    Method whose representation BiaPy's channels are (a key of REPRESENTATION_SETTINGS), or None. ``extra``:
+    DATA_CHANNELS_EXTRA_OPTS, which tells Omnipose's flows from Cellpose's.
+    """
+    if not isinstance(channels, (list, tuple)):  # e.g. BiaPy-GUI's "BC"
+        return None
+    channels = [c for c in channels if c not in ("I", "We")]
+    opts = dict(extra[0]) if extra else {}
+    if any(c.startswith("E") for c in channels):
+        return "embedseg"
+    if "R" in channels:
+        return "stardist"
+    flows = [c for c in channels if c in ("Gv", "Gh", "Gz")]
+    if flows:
+        omnipose = any(dict(opts.get(c) or {}).get("gradient_type") == "omnipose" for c in ("Gv", "Gh", "Gz"))
+        return "omnipose" if omnipose else "cellpose"
+    if set(channels) in ({"F", "H", "V"}, {"F", "H", "V", "Z"}):
+        return "hovernet"
+    return None
+
+
+def apply_representation_settings(cfg, lines):
+    """
+    Sets in ``cfg`` what the representation of its instance channels needs (REPRESENTATION_SETTINGS), whether
+    chosen in the Wizard or imposed by a pretrained model (BioImage Model Zoo or BiaPy checkpoint), so it must run
+    once the channels are final. Returns the method, or None.
+    """
+    from .config_builder import create_dict_from_key
+
+    if cfg["PROBLEM"].get("TYPE") != "INSTANCE_SEG":
+        return None
+    inst = cfg["PROBLEM"].setdefault("INSTANCE_SEG", {})
+    channels = inst.get("DATA_CHANNELS")
+    family = representation_family(channels, inst.get("DATA_CHANNELS_EXTRA_OPTS"))
+    if family is None:
+        return None
+    s = REPRESENTATION_SETTINGS[family]
+    said = []
+    if cfg["TRAIN"].get("ENABLE"):
+        for key, value in s["train"].items():
+            create_dict_from_key(key, value, cfg)
+        predicted = [c for c in channels if c != "I"]
+        if "weights" in s:
+            weights = [s["weights"].get(c, 1) for c in predicted]
+            if inst.get("TYPE", "regular") == "regular" and int(cfg["DATA"].get("N_CLASSES", 2)) > 2:
+                weights.append(1)  # the class channel
+            inst["DATA_CHANNEL_WEIGHTS"] = weights
+        if "losses" in s:
+            inst["DATA_CHANNELS_LOSSES"] = [s["losses"]] * len([c for c in predicted if c != "We"])
+        said.append(s["train_summary"])
+    if cfg["TEST"].get("ENABLE"):
+        for key, value in s.get("test", {}).items():
+            create_dict_from_key(key, value, cfg)
+        if family == "hovernet":
+            # Only the thresholds: BiaPy sets the channels (seeds F, V, H, with Z after F in 3D; growth mask F) and
+            # keeps thresholds of their length, while setting the channels too makes it warn that they are custom
+            ws = inst.setdefault("WATERSHED", {})
+            ws["SEED_CHANNELS_THRESH"] = [0.5] + [0.4] * sum(c in ("H", "V", "Z") for c in channels)
+            ws["GROWTH_MASK_CHANNELS_THRESH"] = [0.5]
+        if "test_summary" in s:
+            said.append(s["test_summary"])
+    if said:
+        lines.append("{}, as the original method: {}".format(s["name"], "; ".join(said)))
+    return family
 
 
 def plan_instance_seg(cfg, sample_info, vram_bytes, vram_source, training_length="full"):

@@ -130,6 +130,11 @@ def image_parts(path, is_3d, fraction=1.0, data_path="", rng=None):
         img, meta = read_img_as_ndarray(path, is_3d=is_3d, load_meta=True)
         return [img], tuple(img.shape), meta
     data, axes, meta = _open_chunked(path, data_path)
+    if not is_3d and axes is not None and "Z" in axes and data.shape[axes.index("Z")] > 1:
+        raise ValueError(
+            f"The image is 3D (axes {axes}, shape {tuple(data.shape)}), but the images were said to be 2D: answer "
+            "'Yes' to the question 'Are your images in 3D?'"
+        )
     # Shape it is read with, without reading it: the same reordering applied to an array that takes no memory
     shape = _to_biapy(np.broadcast_to(np.zeros((), np.uint8), data.shape), axes, is_3d, path).shape
     rng = rng or np.random.default_rng(0)

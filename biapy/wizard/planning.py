@@ -84,6 +84,10 @@ def plan_config(cfg, sample_info, gpus, training_length="full"):
         shorten_unplanned_training(cfg, report)
     if cfg["MODEL"].get("LOAD_CHECKPOINT"):
         apply_checkpoint_settings(cfg, report)
+    # Once the instance channels are final: chosen in the Wizard or imposed by the pretrained model
+    from .instance_seg import apply_representation_settings
+
+    apply_representation_settings(cfg, report.setdefault("lines", []))
     if patch_size_unset(cfg):
         set_unplanned_patch_size(cfg, report)
     from .inference import host_ram_bytes, plan_inference
