@@ -1,0 +1,56 @@
+# BiaPy version: 3.7.1
+# Cellpose-SAM inference (no cellpose package needed). To fine-tune, enable TRAIN and set DATA.TRAIN.
+
+SYSTEM:
+    NUM_CPUS: -1
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: ['F', 'Gv', 'Gh']
+        CELLPOSE:
+            # No rescaling, as Cellpose-SAM
+            DIAMETER: 30.0
+            DIAM_MEAN: 30.0
+            FLOW_THRESHOLD: 0.4
+
+DATA:
+    # Cellpose-SAM's tile size; up to 3 channels
+    PATCH_SIZE: (256, 256, 1)
+    # Cellpose's normalization (1-99 percentiles, no clipping)
+    NORMALIZATION:
+        TYPE: scale_range
+        SCALE_RANGE:
+            LOWER_PERC: 1.0
+            UPPER_PERC: 99.0
+    TEST:
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: True
+        LOAD_GT: False
+        OVERLAP: (0.1, 0.1)
+        # Zero padding, as Cellpose; avoids losing border cells
+        PADDING: (8, 8)
+
+MODEL:
+    ARCHITECTURE: vit_readout
+    VIT_MODEL: cellpose_sam_vit
+    VIT_PRETRAINED_WEIGHTS: cpsam_v2
+    VIT_READOUT:
+        FEATURES: 3
+        REFINE_LAYERS: 0
+        INPUT_SKIP: False
+
+TRAIN:
+    ENABLE: False
+
+TEST:
+    ENABLE: True
+    FULL_IMG: False
+    POST_PROCESSING:
+        # Cellpose's fill holes + min_size 15
+        INSTANCE_REFINEMENT:
+            ENABLE: True
+            OPERATIONS: ['fill_holes', 'remove_small_objects']
+            VALUES: ['none', 14]

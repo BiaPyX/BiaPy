@@ -21,11 +21,12 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 
-from biapy.models.blocks import ConvBlock
-from biapy.models.dense_vit import DenseViTBase
+from biapy.models.vit_backbones.encoder import ViTEncoderMixin
+from biapy.models.vit_decoders.output_heads import OutputHeadsMixin
+from biapy.models.vit_decoders.readout_decoder import ReadoutDecoderMixin
 
 
-class ViTReadout(DenseViTBase):
+class ViTReadout(ViTEncoderMixin, ReadoutDecoderMixin, OutputHeadsMixin, nn.Module):
     """ViT encoder + per-token pixel-shuffle readout + optional convolutional refinement (Cellpose 4 style)."""
 
     def __init__(
@@ -65,7 +66,8 @@ class ViTReadout(DenseViTBase):
             ViT hyperparameters. Ignored unless ``vit_model`` is "custom".
 
         vit_model : str, optional
-            "custom" or one of ``biapy.models.dense_vit.DENSE_VIT_MODELS`` (e.g. "celldino_vit").
+            "custom" or one of ``VIT_BACKBONES`` (``biapy.models.vit_backbones.common``). "cellpose_sam_vit" with
+            ``readout_features=3`` and ``refine_layers=0`` is the whole Cellpose-SAM network.
 
         token_stride : int, optional
             Stride of the patch embedding, i.e. the side of the pixel block each token predicts. ``-1`` uses the
@@ -77,70 +79,49 @@ class ViTReadout(DenseViTBase):
         grad_checkpointing : bool, optional
             Recompute the transformer blocks in the backward pass to save memory.
 
-        readout_features : int, optional
-            Channels each pixel receives from the readout (per-token linear projection).
-
-        refine_layers : int, optional
-            Number of 3x3 convolutional blocks applied at full resolution after the readout. ``0`` disables the
-            refinement, leaving Cellpose's linear readout.
-
-        input_skip : bool, optional
-            Whether to concatenate the input image to the readout features before the refinement.
-
-        normalization, decoder_activation, k_size, dropout : str, str, int, float, optional
-            Normalization (``'bn'``, ``'sync_bn'``, ``'in'``, ``'gn'`` or ``'none'``), activation, kernel size and
-            dropout of the refinement blocks.
+        readout_features, refine_layers, input_skip, normalization, decoder_activation, k_size, dropout : optional
+            Decoder settings (see ``ReadoutDecoderMixin._build_readout_decoder``).
 
         output_channels, output_channel_info, explicit_activations, head_activations, return_one_tensor : optional
             Output heads configuration, as in the rest of BiaPy's models.
         """
         super().__init__()
-        self._build_encoder(
+        if len(input_shape) != 3:
+            raise ValueError("ViTReadout only supports 2D data, i.e. 'input_shape' as (y, x, channels)")
+        if input_shape[0] != input_shape[1]:
+            raise ValueError(f"ViTReadout needs square inputs. Provided: {input_shape}")
+        self._build_vit_encoder(
+            "vit_readout",
             input_shape,
             patch_size,
             embed_dim,
             depth,
             num_heads,
             mlp_ratio,
-            vit_model,
-            token_stride,
-            drop_path_rate,
-            grad_checkpointing,
+            vit_model=vit_model,
+            token_stride=token_stride,
+            drop_path_rate=drop_path_rate,
+            grad_checkpointing=grad_checkpointing,
         )
-        self.readout_features = readout_features
-        self.refine_layers = refine_layers
-        self.input_skip = input_skip and refine_layers > 0
-
-        s = self.token_stride
-        self.readout = nn.Linear(self.embed_dim, readout_features * s * s)
-        self.pixel_shuffle = nn.PixelShuffle(s)
-
-        refine = []
-        in_size = readout_features + (input_shape[-1] if self.input_skip else 0)
-        for _ in range(refine_layers):
-            refine.append(
-                ConvBlock(
-                    nn.Conv2d,
-                    in_size=in_size,
-                    out_size=readout_features,
-                    k_size=k_size,
-                    act=decoder_activation,
-                    norm=normalization,
-                    dropout=dropout,
-                )
-            )
-            in_size = readout_features
-        self.refine = nn.Sequential(*refine)
-
-        self._build_heads(
+        out_features = self._build_readout_decoder(
+            input_shape[-1],
             readout_features,
+            refine_layers,
+            input_skip,
+            normalization,
+            decoder_activation,
+            k_size,
+            dropout,
+        )
+        self._build_heads(
+            out_features,
             output_channels,
             output_channel_info,
             explicit_activations,
             head_activations,
             return_one_tensor,
         )
-        self._init_encoder_weights()
+        self._init_vit_encoder_weights()
 
     def forward(self, input: torch.Tensor) -> Dict | torch.Tensor:
         """
@@ -156,10 +137,4 @@ class ViTReadout(DenseViTBase):
         Dict or torch.Tensor
             Model output, as in the rest of BiaPy's models.
         """
-        tokens = self.forward_tokens(input, [self.depth])[0][:, 1:]
-        # Each token predicts its own 'stride x stride' block of pixels
-        x = self.pixel_shuffle(self.tokens_to_map(self.readout(tokens)))
-        if self.input_skip:
-            x = torch.cat([x, input], dim=1)
-        x = self.refine(x)
-        return self._format_output(x)
+        return self._format_output(self._readout_decode(self.forward_features(input), input))

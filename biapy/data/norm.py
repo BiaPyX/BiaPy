@@ -60,12 +60,13 @@ def normalize_image(
                 - ``div``: normalize the image by dividing it by a value. The value can be either 255 or 65535 depending on the maximum 
                   value of the image or the maximum and minimum values of the image if `div_using_max_and_scale` is `True`.
                 - ``scale_range``: normalize the image by using the following operation: ``results = ((x - x_min)/(x_max - x_min)) * (out_max - out_min)``. 
-                  In this case, the values used to do the normalization are computed from the data itself.
+                  ``x_min``/``x_max`` are the data's min/max, or its ``scale_range_lower_perc``/``scale_range_upper_perc`` percentiles (no clipping).
                 - ``zero_mean_unit_variance``: apply zero-mean, unit-variance normalization to the image.
             * ``percentile_clip``, bool: whether to apply percentile clipping to the image before applying the normalization. If True, the values used for clipping
                 will be computed from the data itself by using the percentiles specified in `per_lower_bound` and `per_upper_bound` or the values specified in 
                 `lower_bound_val` and `upper_bound_val`.
             * ``out_dtype``, str: output dtype to convert the image to after applying the normalization. Expected values are: 'uint8', 'uint16' or 'float32'.
+            * ``scale_range_lower_perc``/``scale_range_upper_perc``, float, optional: percentiles mapped to 0 and 1 by ``scale_range``. Default: 0/100.
             * For ``zero_mean_unit_variance`` type, expected keys are:
                 - ``mean``, list of float or single float: mean to use in the normalization. If a single float is provided, it will be used for all channels. 
                   If None, the mean of the data will be used.
@@ -217,11 +218,22 @@ def normalize_image(
             stats_data = data.clamp(x_lwr, x_upr) if isinstance(data, torch.Tensor) else np.clip(data, x_lwr, x_upr)
 
         if norm_module["type"] in ["div", "scale_range"]:
+            c_max_val = max_val_to_div[c] if max_val_to_div is not None else None
+            c_min_val = min_val_to_div[c] if min_val_to_div is not None else None
+            lower_perc = norm_module.get("scale_range_lower_perc", 0)
+            upper_perc = norm_module.get("scale_range_upper_perc", 100)
+            if norm_module["type"] == "scale_range" and c_max_val is None and (lower_perc, upper_perc) != (0, 100):
+                if isinstance(stats_data, torch.Tensor):
+                    c_min_val = float(torch_percentile(stats_data, lower_perc))
+                    c_max_val = float(torch_percentile(stats_data, upper_perc))
+                else:
+                    c_min_val = float(np.percentile(stats_data, lower_perc))
+                    c_max_val = float(np.percentile(stats_data, upper_perc))
             out, max_val, min_val = norm_range01( # type: ignore
                 stats_data,
                 div_using_max_and_scale=(norm_module["type"] == "scale_range"),
-                max_val_to_div = max_val_to_div[c] if max_val_to_div is not None else None,
-                min_val_to_div = min_val_to_div[c] if min_val_to_div is not None else None,
+                max_val_to_div = c_max_val,
+                min_val_to_div = c_min_val,
                 apply_norm=apply_norm,
                 orig_was_integer=orig_was_integer,
             )

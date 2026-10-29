@@ -45,7 +45,7 @@ import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
 
-from biapy.models.tr_layers import PatchEmbed
+from biapy.models.vit_backbones.common import PatchEmbed
 
 
 class MaskedAutoencoderViT(nn.Module):

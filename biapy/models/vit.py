@@ -9,16 +9,8 @@ self-supervised learning (e.g., Masked Autoencoders).
 
 Classes:
 
-- ``VisionTransformer``: An extended ViT model with support for 2D/3D inputs and global pooling.
-
-Functions:
-
-- ``vit_base_patch16``: Factory function for a base-sized ViT model with 16x16 patches.
-- ``vit_large_patch16``: Factory function for a large-sized ViT model with 16x16 patches.
-- ``vit_huge_patch14``: Factory function for a huge-sized ViT model with 14x14 patches.
-- ``sam3_vit``: Factory function for a ViT with SAM 3's image encoder as backbone.
-- ``celldino_vit``: Factory function for a ViT with Cell-DINO's channel-adaptive image encoder as backbone.
-- ``dinov3_vit``: Factory function for a ViT with DINOv3's ViT-L/16 image encoder as backbone.
+- ``VisionTransformer``: An extended ViT model with support for 2D/3D inputs, global pooling and the predefined
+  backbones of ``biapy.models.vit_backbones.common.VIT_BACKBONES`` ('MODEL.VIT_MODEL').
 
 References:
 
@@ -35,10 +27,8 @@ import torch.nn as nn
 import timm.models.vision_transformer
 
 from biapy.models.blocks import prepare_activation_layers
-from biapy.models.tr_layers import PatchEmbed
-from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
-from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
-from biapy.models.dinov3_vit import DINOV3_VIT_PARAMS, build_dinov3_blocks
+from biapy.models.vit_backbones.common import VIT_BACKBONES, PatchEmbed, build_vit_blocks, check_vit_backbone
+from biapy.models.vit_backbones.dinov3 import DINOV3_VIT_PARAMS
 
 
 class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
@@ -47,7 +37,7 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
     This class inherits from `timm.models.vision_transformer.VisionTransformer`
     and customizes it by replacing the default `patch_embed` with a custom
-    implementation (`biapy.models.tr_layers.PatchEmbed`) that supports 2D and 3D inputs.
+    implementation (`biapy.models.vit_backbones.common.PatchEmbed`) that supports 2D and 3D inputs.
     It also adds an option for global average pooling of patch tokens for classification.
 
     Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
@@ -75,6 +65,7 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         head_activations: List[str] = ["ce_sigmoid"],         
         output_channel_info: List[str] = ["F"],
         explicit_activations: bool = False,
+        vit_model: str = "custom",
         **kwargs
     ):
         """
@@ -93,11 +84,43 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
             If True, enables global average pooling of patch tokens. Defaults to False.
         explicit_activations : bool, optional
             If True, enables explicit activation functions. Defaults to False.
+        vit_model : str, optional
+            "custom" (built from ``kwargs``) or one of ``VIT_BACKBONES``
+            (``biapy.models.vit_backbones.common``), which overrides the geometry in ``kwargs``.
         **kwargs
             Keyword arguments to pass to the parent `timm.models.vision_transformer.VisionTransformer`
             constructor. These typically include `img_size`, `patch_size`, `in_chans`,
             `embed_dim`, `depth`, `num_heads`, `mlp_ratio`, `qkv_bias`, `norm_layer`.
         """
+        blocks_kind = "timm"
+        if vit_model != "custom":
+            check_vit_backbone(vit_model, "vit", ndim, kwargs.get("in_chans", 3))
+            preset = VIT_BACKBONES[vit_model]
+            blocks_kind = preset["blocks"]
+            for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer",
+                      "init_values", "pre_norm"]:
+                kwargs.pop(k, None)
+            kwargs.update(
+                patch_size=preset["patch_size"],
+                embed_dim=preset["embed_dim"],
+                # SAM 3/DINOv3 blocks are replaced below: build a single placeholder
+                depth=1 if blocks_kind in ["sam3", "dinov3"] else preset["depth"],
+                num_heads=preset["num_heads"],
+                mlp_ratio=preset["mlp_ratio"],
+                qkv_bias=True,
+            )
+            if "norm_eps" in preset:
+                kwargs["norm_layer"] = partial(nn.LayerNorm, eps=preset["norm_eps"])
+            if blocks_kind == "timm" and "init_values" in preset:
+                kwargs["init_values"] = preset["init_values"]
+            if blocks_kind == "sam3":
+                kwargs["pre_norm"] = True  # SAM 3's 'ln_pre'
+            if blocks_kind == "dinov3":
+                # RoPE instead of a position embedding, plus register tokens
+                kwargs["reg_tokens"] = DINOV3_VIT_PARAMS["num_register_tokens"]
+                kwargs["pos_embed"] = "none"
+            print(f"Building the ViT backbone as '{vit_model}': {preset}")
+
         super(VisionTransformer, self).__init__(**kwargs)
         self.ndim = ndim
         self.global_pool = global_pool
@@ -125,6 +148,20 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         if self.pos_embed is not None:
             embed_len = num_patches if self.no_embed_class else num_patches + self.num_prefix_tokens
             self.pos_embed = nn.Parameter(torch.randn(1, embed_len, kwargs["embed_dim"]) * 0.02)
+
+        if blocks_kind in ["sam3", "dinov3"]:
+            if self.reg_token is not None:
+                nn.init.normal_(self.reg_token, std=0.02)
+            grid_size = self.patch_embed.grid_size
+            self.blocks = build_vit_blocks(
+                blocks_kind,
+                preset["embed_dim"],
+                preset["depth"],
+                preset["num_heads"],
+                preset["mlp_ratio"],
+                (grid_size, grid_size),
+                self.num_prefix_tokens,
+            )
 
     def forward_features(self, x):
         """
@@ -183,233 +220,3 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
             outs = self.class_head_activations[0](outs)
         
         return outs
-
-def vit_base_patch16(**kwargs):
-    """
-    Create a Vision Transformer (ViT) model with a Base-sized encoder and 16x16 patches.
-
-    This function serves as a convenient constructor for a specific ViT configuration,
-    often used as a standard baseline.
-
-    Parameters
-    ----------
-    **kwargs
-        Arbitrary keyword arguments to be passed to the `VisionTransformer`
-        constructor. This allows overriding default parameters like `img_size`,
-        `in_chans`, `ndim`, `global_pool`, etc.
-
-    Returns
-    -------
-    model : VisionTransformer
-        An initialized Base-sized ViT model.
-    """
-    # The patch size is defined by the model itself, so the one provided (e.g. 'MODEL.VIT_TOKEN_SIZE')
-    # is discarded. Without this, passing it would raise a "multiple values for 'patch_size'" error.
-    kwargs.pop("patch_size", None)
-    model = VisionTransformer(
-        patch_size=16,
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        mlp_ratio=4,
-        qkv_bias=True,
-        **kwargs,
-    )
-    return model
-
-
-def vit_large_patch16(**kwargs):
-    """
-    Create a Vision Transformer (ViT) model with a Large-sized encoder and 16x16 patches.
-
-    This function provides a constructor for a larger ViT configuration,
-    suitable for tasks requiring more capacity.
-
-    Parameters
-    ----------
-    **kwargs
-        Arbitrary keyword arguments to be passed to the `VisionTransformer`
-        constructor. This allows overriding default parameters like `img_size`,
-        `in_chans`, `ndim`, `global_pool`, etc.
-
-    Returns
-    -------
-    model : VisionTransformer
-        An initialized Large-sized ViT model.
-    """
-    # The patch size is defined by the model itself, so the one provided (e.g. 'MODEL.VIT_TOKEN_SIZE')
-    # is discarded. Without this, passing it would raise a "multiple values for 'patch_size'" error.
-    kwargs.pop("patch_size", None)
-    model = VisionTransformer(
-        patch_size=16,
-        embed_dim=1024,
-        depth=24,
-        num_heads=16,
-        mlp_ratio=4,
-        qkv_bias=True,
-        **kwargs,
-    )
-    return model
-
-
-def vit_huge_patch14(**kwargs):
-    """
-    Create a Vision Transformer (ViT) model with a Huge-sized encoder and 14x14 patches.
-
-    This function provides a constructor for the largest ViT configuration,
-    designed for tasks demanding maximum model capacity.
-
-    Parameters
-    ----------
-    **kwargs
-        Arbitrary keyword arguments to be passed to the `VisionTransformer`
-        constructor. This allows overriding default parameters like `img_size`,
-        `in_chans`, `ndim`, `global_pool`, etc.
-
-    Returns
-    -------
-    model : VisionTransformer
-        An initialized Huge-sized ViT model.
-    """
-    # The patch size is defined by the model itself, so the one provided (e.g. 'MODEL.VIT_TOKEN_SIZE')
-    # is discarded. Without this, passing it would raise a "multiple values for 'patch_size'" error.
-    kwargs.pop("patch_size", None)
-    model = VisionTransformer(
-        patch_size=14,
-        embed_dim=1280,
-        depth=32,
-        num_heads=16,
-        mlp_ratio=4,
-        qkv_bias=True,
-        **kwargs,
-    )
-    return model
-
-
-def sam3_vit(**kwargs):
-    """
-    Create a Vision Transformer (ViT) with the image encoder of SAM 3.
-
-    The encoder is built exactly as SAM 3's one (1024 embedding dimensions, 32 blocks, 16 heads,
-    a 4.625 MLP ratio, 2D rotary position embeddings and window attention in all the blocks but
-    the global ones), so its pretrained weights can be loaded into it afterwards with
-    `biapy.models.sam3_vit.load_sam3_pretrained_encoder`. Every value defining the architecture is
-    the one of SAM 3, its ``14x14`` token size included, so the size of the input images needs to
-    be a multiple of it.
-
-    Unlike SAM 3's trunk, the model keeps a class token, as it is what BiaPy's ViT uses to
-    classify. It is randomly initialized, as there is none in SAM 3's checkpoint, and it is not
-    rotated within the attention, as it has no position in the token grid.
-
-    Parameters
-    ----------
-    **kwargs
-        Arbitrary keyword arguments to be passed to the `VisionTransformer` constructor, such as
-        `img_size`, `in_chans` or `num_classes`. Every ViT parameter defining the architecture of
-        SAM 3's encoder, the token size included, is ignored, as it is set by the encoder itself.
-
-    Returns
-    -------
-    model : VisionTransformer
-        An initialized ViT with SAM 3's image encoder as backbone.
-    """
-    params = SAM3_VIT_PARAMS
-    if kwargs.get("ndim", 2) != 2:
-        raise ValueError(
-            "SAM 3's image encoder ('sam3_vit') can only be used with 2D data, as its pretrained weights "
-            "are 2D (its patch embedding projects 3-channel 2D images). Set 'MODEL.VIT_MODEL' to another "
-            "value to work with 3D data."
-        )
-    # Everything defining the architecture is set by SAM 3's encoder, so the values provided
-    # (e.g. 'MODEL.VIT_TOKEN_SIZE') are discarded
-    for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "pre_norm"]:
-        kwargs.pop(k, None)
-
-    model = VisionTransformer(
-        patch_size=params["patch_size"],
-        embed_dim=params["embed_dim"],
-        # The blocks are replaced below by SAM 3's ones, so only one is created here to avoid
-        # allocating (and immediately discarding) the parameters of the 32 blocks of the encoder
-        depth=1,
-        num_heads=params["num_heads"],
-        mlp_ratio=params["mlp_ratio"],
-        qkv_bias=params["qkv_bias"],
-        norm_layer=partial(nn.LayerNorm, eps=params["norm_eps"]),
-        pre_norm=True,  # SAM 3's 'ln_pre'
-        **kwargs,
-    )
-    grid_size = model.patch_embed.grid_size
-    model.blocks = build_sam3_blocks((grid_size, grid_size), num_prefix_tokens=model.num_prefix_tokens)
-    print(
-        f"SAM 3 image encoder built with {params['depth']} blocks over a {grid_size}x{grid_size} token grid "
-        f"({params['patch_size']}x{params['patch_size']} tokens)"
-    )
-    return model
-
-
-def celldino_vit(**kwargs):
-    """Create a ViT with Cell-DINO's channel-adaptive (1-channel) image encoder as backbone."""
-    params = CELLDINO_VIT_PARAMS
-    if kwargs.get("ndim", 2) != 2:
-        raise ValueError("'celldino_vit' can only be used with 2D data.")
-    if kwargs.get("in_chans", params["in_chans"]) != params["in_chans"]:
-        raise ValueError(
-            f"'celldino_vit' needs {params['in_chans']} input channel, got {kwargs.get('in_chans')}."
-        )
-    for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "init_values"]:
-        kwargs.pop(k, None)
-
-    model = VisionTransformer(
-        patch_size=params["patch_size"],
-        embed_dim=params["embed_dim"],
-        depth=params["depth"],
-        num_heads=params["num_heads"],
-        mlp_ratio=params["mlp_ratio"],
-        qkv_bias=params["qkv_bias"],
-        norm_layer=partial(nn.LayerNorm, eps=params["norm_eps"]),
-        init_values=params["init_values"],
-        **kwargs,
-    )
-    print(
-        f"Cell-DINO image encoder built with {params['depth']} blocks, {params['embed_dim']} "
-        f"embedding dimensions and {params['patch_size']}x{params['patch_size']} tokens"
-    )
-    return model
-
-
-def dinov3_vit(**kwargs):
-    """
-    Create a ViT with DINOv3's ViT-L/16 image encoder as backbone.
-
-    The encoder is built as DINOv3's one (2D rotary position embeddings within the blocks instead of a learned
-    position embedding, 4 register tokens, LayerScale), so its pretrained weights can be loaded into it afterwards
-    with `biapy.models.dinov3_vit.load_dinov3_pretrained_encoder`. Every ViT parameter defining the architecture,
-    the token size included, is ignored, as it is set by the encoder itself.
-    """
-    params = DINOV3_VIT_PARAMS
-    if kwargs.get("ndim", 2) != 2:
-        raise ValueError("'dinov3_vit' can only be used with 2D data.")
-    for k in ["patch_size", "embed_dim", "depth", "num_heads", "mlp_ratio", "qkv_bias", "norm_layer", "init_values"]:
-        kwargs.pop(k, None)
-
-    model = VisionTransformer(
-        patch_size=params["patch_size"],
-        embed_dim=params["embed_dim"],
-        # The blocks are replaced below by DINOv3's ones, so only one is created here
-        depth=1,
-        num_heads=params["num_heads"],
-        mlp_ratio=params["mlp_ratio"],
-        qkv_bias=params["qkv_bias"],
-        norm_layer=partial(nn.LayerNorm, eps=params["norm_eps"]),
-        reg_tokens=params["num_register_tokens"],
-        pos_embed="none",
-        **kwargs,
-    )
-    nn.init.normal_(model.reg_token, std=0.02)
-    grid_size = model.patch_embed.grid_size
-    model.blocks = build_dinov3_blocks((grid_size, grid_size), num_prefix_tokens=model.num_prefix_tokens)
-    print(
-        f"DINOv3 image encoder built with {params['depth']} blocks over a {grid_size}x{grid_size} token grid "
-        f"({params['patch_size']}x{params['patch_size']} tokens)"
-    )
-    return model

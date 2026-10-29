@@ -628,7 +628,7 @@ class AttenBlocks(nn.Module):
 
 
 class PatchEmbed(nn.Module):
-    """Flatten (B, C, H, W) -> (B, H*W, C). NOT the same as biapy.models.tr_layers.PatchEmbed
+    """Flatten (B, C, H, W) -> (B, H*W, C). NOT the same as biapy.models.vit_backbones.common.PatchEmbed
     (which projects with a strided conv) -- here patch_size is always 1, projection already
     happened via conv_first before this is called."""
 

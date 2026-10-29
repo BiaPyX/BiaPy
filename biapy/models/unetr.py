@@ -12,9 +12,7 @@ Classes:
 
 - ``UNETR``: The main UNETR model, integrating a ViT encoder with a U-Net-like decoder.
 
-This module leverages components from `biapy.models.blocks` such as `DoubleConvBlock`,
-`ConvBlock`, `ProjectionHead`, and normalization helpers (`get_norm_2d`, `get_norm_3d`),
-as well as `PatchEmbed` from `biapy.models.tr_layers`.
+Encoder: `biapy.models.vit_backbones.encoder`. Decoder: `biapy.models.vit_decoders.unetr_decoder`.
 
 Reference:
 `UNETR: Transformers for 3D Medical Image Segmentation
@@ -22,63 +20,18 @@ Reference:
 """
 
 import math
-from functools import partial
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
-from timm.models.vision_transformer import Block
-from typing import Dict, List
 
-from biapy.models.blocks import (
-    DoubleConvBlock, 
-    ConvBlock, 
-    get_norm_2d, 
-    get_norm_3d, 
-    prepare_activation_layers, 
-    init_weights
-)
-from biapy.models.tr_layers import PatchEmbed
-from biapy.models.heads import ProjectionHead
-from biapy.models.sam3_vit import SAM3_VIT_PARAMS, build_sam3_blocks
-from biapy.models.celldino_vit import CELLDINO_VIT_PARAMS
-from biapy.models.dinov3_vit import DINOV3_VIT_PARAMS, build_dinov3_blocks
-
-# Predefined ViT backbones for UNETR's encoder. "custom" uses the values passed to the model; the
-# rest are fully defined by the preset. Optional "init_values" enables LayerScale and "norm_eps" sets the
-# epsilon of the ViT's LayerNorms (PyTorch's default, 1e-5, otherwise).
-UNETR_VIT_MODELS = {
-    "vit_base_patch16": dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4.0),
-    "vit_large_patch16": dict(patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4.0),
-    "vit_huge_patch14": dict(patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4.0),
-    "sam3_vit": dict(
-        patch_size=16,
-        embed_dim=SAM3_VIT_PARAMS["embed_dim"],
-        depth=SAM3_VIT_PARAMS["depth"],
-        num_heads=SAM3_VIT_PARAMS["num_heads"],
-        mlp_ratio=SAM3_VIT_PARAMS["mlp_ratio"],
-    ),
-    "celldino_vit": dict(
-        patch_size=CELLDINO_VIT_PARAMS["patch_size"],
-        embed_dim=CELLDINO_VIT_PARAMS["embed_dim"],
-        depth=CELLDINO_VIT_PARAMS["depth"],
-        num_heads=CELLDINO_VIT_PARAMS["num_heads"],
-        mlp_ratio=CELLDINO_VIT_PARAMS["mlp_ratio"],
-        init_values=CELLDINO_VIT_PARAMS["init_values"],
-        norm_eps=CELLDINO_VIT_PARAMS["norm_eps"],
-    ),
-    "dinov3_vit": dict(
-        patch_size=DINOV3_VIT_PARAMS["patch_size"],
-        embed_dim=DINOV3_VIT_PARAMS["embed_dim"],
-        depth=DINOV3_VIT_PARAMS["depth"],
-        num_heads=DINOV3_VIT_PARAMS["num_heads"],
-        mlp_ratio=DINOV3_VIT_PARAMS["mlp_ratio"],
-        init_values=DINOV3_VIT_PARAMS["init_values"],
-        norm_eps=DINOV3_VIT_PARAMS["norm_eps"],
-    ),
-}
+from biapy.models.blocks import init_weights
+from biapy.models.vit_backbones.common import UNETR_PATCH_SIZE, VIT_BACKBONES
+from biapy.models.vit_backbones.encoder import ViTEncoderMixin
+from biapy.models.vit_decoders.unetr_decoder import UNETRDecoderMixin
 
 
-class UNETR(nn.Module):
+class UNETR(ViTEncoderMixin, UNETRDecoderMixin, nn.Module):
     """
     UNETR (U-Net TRansformers) architecture.
 
@@ -158,13 +111,9 @@ class UNETR(nn.Module):
             `vit_model` is "custom".
 
         vit_model : str, optional
-            Type of ViT backbone to build. With "custom" (default) the backbone is built with
-            the `patch_size`, `embed_dim`, `depth`, `num_heads` and `mlp_ratio` values provided.
-            Otherwise it must be one of the presets in `UNETR_VIT_MODELS`, which define all those
-            values, e.g. "vit_base_patch16". With "sam3_vit" the backbone is SAM 3's image encoder
-            (2D only), whose pretrained weights can be loaded afterwards with
-            `biapy.models.sam3_vit.load_sam3_pretrained_encoder`; in that case `patch_size` is the
-            only value kept, as the decoder needs it to be a power of two.
+            "custom" (built from `patch_size`, `embed_dim`, `depth`, `num_heads` and `mlp_ratio`) or one
+            of `VIT_BACKBONES` (`biapy.models.vit_backbones.common`), which fix those values ("sam3_vit"
+            uses 16x16 tokens, as the decoder needs a power of two).
 
         num_filters : int, optional
             Number of filters in the first layer of the UNETR's convolutional decoder.
@@ -246,41 +195,10 @@ class UNETR(nn.Module):
         for i, info in enumerate(output_channel_info):
             print(f"  - {i} channel for {info} output")
 
-        # Build the ViT backbone out of one of the predefined models, if selected
-        init_values = None
-        if vit_model != "custom":
-            if vit_model not in UNETR_VIT_MODELS:
-                raise ValueError(
-                    "'vit_model' needs to be 'custom' or one of {}. Provided: '{}'".format(
-                        list(UNETR_VIT_MODELS.keys()), vit_model
-                    )
-                )
-            if vit_model == "sam3_vit" and len(input_shape) == 4:
-                raise ValueError(
-                    "SAM 3's image encoder ('sam3_vit') can only be used with 2D data, as its pretrained "
-                    "weights are 2D (its patch embedding projects 3-channel 2D images). Set "
-                    "'MODEL.UNETR_VIT_MODEL' to another value to work with 3D data."
-                )
-            if vit_model == "celldino_vit":
-                if len(input_shape) == 4:
-                    raise ValueError("'celldino_vit' can only be used with 2D data.")
-                if input_shape[-1] != CELLDINO_VIT_PARAMS["in_chans"]:
-                    raise ValueError(
-                        f"'celldino_vit' needs {CELLDINO_VIT_PARAMS['in_chans']} input channel, "
-                        f"'DATA.PATCH_SIZE' has {input_shape[-1]}."
-                    )
-            if vit_model == "dinov3_vit" and len(input_shape) == 4:
-                raise ValueError("'dinov3_vit' can only be used with 2D data.")
-            vit_params = UNETR_VIT_MODELS[vit_model]
-            patch_size = vit_params["patch_size"]
-            embed_dim = vit_params["embed_dim"]
-            depth = vit_params["depth"]
-            num_heads = vit_params["num_heads"]
-            mlp_ratio = vit_params["mlp_ratio"]
-            init_values = vit_params.get("init_values")
-            if "norm_eps" in vit_params:
-                norm_layer = partial(nn.LayerNorm, eps=vit_params["norm_eps"])
-            print(f"Building UNETR's ViT backbone as '{vit_model}': {vit_params}")
+        # Fixed by predefined backbones
+        if vit_model != "custom" and vit_model in VIT_BACKBONES:
+            patch_size = UNETR_PATCH_SIZE.get(vit_model, VIT_BACKBONES[vit_model]["patch_size"])
+            depth = VIT_BACKBONES[vit_model]["depth"]
 
         # The decoder recovers the input resolution upsampling the ViT features by a factor of two on each
         # of its levels, so there must be an exact number of levels, i.e. log2(patch_size) must be an integer
@@ -313,234 +231,48 @@ class UNETR(nn.Module):
                 "-1 ('MODEL.UNETR_VIT_HIDD_MULT') to let BiaPy space them evenly along the encoder."
             )
 
-        self.input_shape = input_shape
-        self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.ViT_hidd_mult = ViT_hidd_mult
         self.ndim = 3 if len(input_shape) == 4 else 2
-        self.output_channels = output_channels
-        self.output_channel_info = output_channel_info
-        self.return_class = True if "class" in output_channel_info else False
-        self.k_size = k_size
-        self.contrast = contrast
-        self.explicit_activations = explicit_activations
-        self.return_one_tensor = return_one_tensor
-        if self.explicit_activations:
-            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
-            "have the same number of values as 'output_channels'"
-            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
-            if self.return_class and self.class_head_activations is None:
-                raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
-        if self.ndim == 3:
-            conv = nn.Conv3d
-            convtranspose = nn.ConvTranspose3d
-            self.reshape_shape = (
-                self.input_shape[0] // self.patch_size,
-                self.input_shape[1] // self.patch_size,
-                self.input_shape[2] // self.patch_size,
-                self.embed_dim,
-            )
-            self.permutation = (0, 4, 1, 2, 3)
-            norm_func = get_norm_3d
-            dropout_layer = nn.Dropout3d
-        else:
-            conv = nn.Conv2d
-            convtranspose = nn.ConvTranspose2d
-            self.reshape_shape = (
-                self.input_shape[0] // self.patch_size,
-                self.input_shape[1] // self.patch_size,
-                self.embed_dim,
-            )
-            self.permutation = (0, 3, 1, 2)
-            norm_func = get_norm_2d
-            dropout_layer = nn.Dropout2d
 
-        # ViT part
-        self.patch_embed = PatchEmbed(
-            img_size=input_shape[0],
-            patch_size=patch_size,
-            in_chans=input_shape[-1],
-            ndim=self.ndim,
-            embed_dim=embed_dim,
-        )
-        num_patches = self.patch_embed.num_patches
-
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(
-            torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False
-        )  # fixed sin-cos embedding
-        self.reg_token = None
-
-        if vit_model == "dinov3_vit":
-            # DINOv3's encoder: no position embedding (RoPE within its blocks) and register tokens after the
-            # class token
-            grid_size = self.patch_embed.grid_size
-            num_reg = DINOV3_VIT_PARAMS["num_register_tokens"]
-            self.pos_embed = None
-            self.reg_token = nn.Parameter(torch.zeros(1, num_reg, embed_dim))
-            nn.init.normal_(self.reg_token, std=0.02)
-            self.blocks = build_dinov3_blocks((grid_size, grid_size), num_prefix_tokens=1 + num_reg)
-            self.ln_pre = nn.Identity()
-            print(
-                f"DINOv3 encoder built with {depth} blocks over a {grid_size}x{grid_size} token grid "
-                f"({patch_size}x{patch_size} tokens)"
-            )
-        elif vit_model == "sam3_vit":
-            # SAM 3's encoder: rotary position embeddings and window attention within its blocks,
-            # plus a layer normalization applied to the tokens before them
-            grid_size = self.patch_embed.grid_size
-            self.blocks = build_sam3_blocks((grid_size, grid_size), num_prefix_tokens=1)
-            self.ln_pre = nn.LayerNorm(embed_dim, eps=SAM3_VIT_PARAMS["norm_eps"])
-            print(
-                f"SAM 3 image encoder built with {depth} blocks over a {grid_size}x{grid_size} token grid "
-                f"({patch_size}x{patch_size} tokens)"
-            )
-        else:
-            self.blocks = nn.ModuleList(
-                [
-                    Block(
-                        embed_dim,
-                        num_heads,
-                        mlp_ratio,
-                        qkv_bias=True,
-                        norm_layer=norm_layer,
-                        init_values=init_values,
-                    )
-                    for i in range(depth)
-                ]
-            )
-            self.ln_pre = nn.Identity()
-
-        # UNETR Part (bottom_up, from the bottle-neck, to the output)
-        self.total_upscale_factor = int(math.log2(patch_size))
-        # make a list of dropout values if needed
-        if type(dropout) is float or type(dropout) is int:
-            dropout = [
-                dropout,
-            ] * self.total_upscale_factor
-
-        self.bottleneck = convtranspose(
+        # No final norm, fixed position embedding, 'ln_pre' (identity but for SAM 3)
+        self._build_vit_encoder(
+            "unetr",
+            input_shape,
+            patch_size,
             embed_dim,
-            num_filters * (2 ** (self.total_upscale_factor - 1)),
-            kernel_size=2,
-            stride=2,
-            bias=False,
+            depth,
+            num_heads,
+            mlp_ratio,
+            vit_model=vit_model,
+            norm_layer=norm_layer,
+            final_norm=False,
+            pre_norm=True,
+            trainable_pos_embed=False,
+            preset_patch_size=UNETR_PATCH_SIZE.get(vit_model),
         )
+        if self.reg_token is not None:
+            nn.init.normal_(self.reg_token, std=0.02)
 
-        self.mid_blue_block = nn.ModuleList()
-        self.two_yellow_layers = nn.ModuleList()
-        self.up_green_layers = nn.ModuleList()
-        for layer in reversed(range(1, self.total_upscale_factor)):
-            block = []
-            in_size = embed_dim
-            for _ in range(self.total_upscale_factor - layer):
-                block.append(
-                    convtranspose(
-                        in_size,
-                        num_filters * (2**layer),
-                        kernel_size=2,
-                        stride=2,
-                        bias=False,
-                    )
-                )
-                block.append(
-                    ConvBlock(
-                        conv,
-                        in_size=num_filters * (2**layer),
-                        out_size=num_filters * (2**layer),
-                        k_size=k_size,
-                        act=decoder_activation,
-                        norm=normalization,
-                        dropout=dropout[layer],
-                    )
-                )
-                in_size = num_filters * (2**layer)
-            self.mid_blue_block.append(nn.Sequential(*block))
-            self.two_yellow_layers.append(
-                DoubleConvBlock(
-                    conv,
-                    in_size * 2,
-                    in_size,
-                    k_size=k_size,
-                    act=decoder_activation,
-                    norm=normalization,
-                    dropout=dropout[layer],
-                )
-            )
-            self.up_green_layers.append(
-                convtranspose(
-                    in_size,
-                    num_filters * (2 ** (layer - 1)),
-                    kernel_size=2,
-                    stride=2,
-                    bias=False,
-                )
-            )
-
-        # Last two yellow block for the first skip connection
-        self.two_yellow_layers.append(
-            DoubleConvBlock(
-                conv,
-                input_shape[-1],
-                num_filters,
-                k_size=k_size,
-                act=decoder_activation,
-                norm=normalization,
-                dropout=dropout[0],
-            )
+        self._build_unetr_decoder(
+            input_shape,
+            self.embed_dim,
+            patch_size,
+            num_filters,
+            output_channels,
+            output_channel_info,
+            explicit_activations,
+            head_activations,
+            decoder_activation,
+            normalization,
+            dropout,
+            k_size,
+            contrast,
+            contrast_proj_dim,
+            return_one_tensor,
         )
-
-        # Last convolutions
-        self.two_yellow_layers.append(
-            DoubleConvBlock(
-                conv,
-                num_filters * 2,
-                num_filters,
-                k_size=k_size,
-                act=decoder_activation,
-                norm=normalization,
-                dropout=dropout[0],
-            )
-        )
-
-        if self.contrast:
-            # extra added layers
-            self.heads = nn.Sequential(
-                conv(num_filters, num_filters, kernel_size=3, stride=1, padding=1),
-                norm_func(normalization, num_filters),
-                dropout_layer(0.10),
-                conv(num_filters, output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
-            )
-
-            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=num_filters, proj_dim=contrast_proj_dim)
-        else:
-            self.heads = nn.Sequential()
-            for i, out_ch in enumerate(output_channels):
-                self.heads.append(conv(num_filters, out_ch, kernel_size=1, padding="same"))
 
         init_weights(self)
-
-
-    def proj_feat(self, x):
-        """
-        Reshape and permute the flattened ViT feature tensor back into a spatial feature map format suitable for convolutional layers.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Flattened feature tensor from the ViT encoder, typically
-            ` (batch_size, num_patches, embed_dim)`.
-
-        Returns
-        -------
-        torch.Tensor
-            Reshaped and permuted feature tensor,
-            e.g., `(batch_size, embed_dim, D, H, W)` for 3D or
-            `(batch_size, embed_dim, H, W)` for 2D.
-        """
-        x = x.view((x.size(0),) + self.reshape_shape)
-        x = x.permute(self.permutation).contiguous()
-        return x
 
     def forward(self, input) -> Dict | torch.Tensor:
         """
@@ -557,102 +289,11 @@ class UNETR(nn.Module):
             Model output. Returns a dictionary if multi-head or contrastive outputs are enabled,
             otherwise returns the main prediction tensor.
         """
-        B = input.shape[0] # batch size
-        # ViT Encoder
-        x = self.patch_embed(input)
-
-        # Add class token and positional embeddings
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
-        if self.pos_embed is not None:
-            x = x + self.pos_embed
-        # Identity unless SAM 3's encoder is used, where it is its 'ln_pre' layer
-        x = self.ln_pre(x)
-        # DINOv3's register tokens go between the class token and the patch tokens
-        num_prefix = 1
-        if self.reg_token is not None:
-            x = torch.cat((x[:, :1], self.reg_token.expand(B, -1, -1), x[:, 1:]), dim=1)
-            num_prefix += self.reg_token.shape[1]
-
-        # Collect skip connections from ViT blocks
+        # Skip connections: patch tokens of intermediate blocks, deepest first
+        num_prefix = self.num_prefix_tokens
         skip_connection_index = [self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)]
-        skip_connections = []
-        for i, blk in enumerate(self.blocks):
-            x = blk(x)
-            if (i + 1) in skip_connection_index:
-                skip_connections.insert(0, x[:, num_prefix:, :])
+        layers = sorted(set(skip_connection_index + [self.depth]))
+        outs = dict(zip(layers, self._run_blocks(self.embed_tokens(input), layers)))
+        skip_connections = [outs[i][:, num_prefix:, :] for i in reversed(skip_connection_index)]
 
-        # CNN Decoder
-        # Bottleneck: Reshape ViT output (excluding class token) and apply transposed conv
-        x = self.bottleneck(self.proj_feat(x[:, num_prefix:, :]))
-
-        # Decoder's upsampling path
-        for i, layers in enumerate(zip(self.mid_blue_block, self.two_yellow_layers, self.up_green_layers)):
-            blue, yellow, green = layers
-
-            # Process ViT skip connection (blue block)
-            z = self.proj_feat(skip_connections[i])
-            z = blue(z)
-
-            # Concatenate current decoder feature with processed skip connection
-            x = torch.cat([x, z], dim=1)
-
-            # Apply DoubleConvBlock (yellow block)
-            x = yellow(x)
-
-            # Apply transposed conv for upsampling (green block)
-            x = green(x)
-
-        # First skip connection (from original input image)
-        # This connects the raw input to the first decoder stage
-        first_skip = self.two_yellow_layers[-2](input)
-        x = torch.cat([first_skip, x], dim=1)
-
-        # Final UNETR output block before prediction heads
-        x = self.two_yellow_layers[-1](x)
-
-        feats = x
-
-        out_dict = {}
-
-        # Pass the features through the output heads
-        class_outs, outs = [], []
-        for i, head in enumerate(self.heads):
-            if "class" not in self.output_channel_info[i]:
-                outs.append(head(feats))
-            else:
-                class_outs.append(head(feats))  
-        outs = torch.cat(outs, dim=1)
-
-        # Apply activations to the output heads if explicit_activations is True
-        if self.explicit_activations:
-            # If there is only one activation, apply it to the whole tensor
-            if len(self.head_activations) == 1:
-                outs = self.head_activations[0](outs)
-            else:
-                for i, act in enumerate(self.head_activations):
-                    outs[:, i:i+1] = act(outs[:, i:i+1])
-
-            if self.return_class and self.class_head_activations is not None:
-                for i, act in enumerate(self.class_head_activations):
-                    class_outs[i] = act(class_outs[i])
-
-        out_dict = {
-            "pred": outs,
-        }
-        if self.return_class:
-            out_dict["class"] = torch.cat(class_outs, dim=1)
-
-        # Contrastive learning head
-        if self.contrast:
-            out_dict["embed"] = self.proj_head(feats)
-
-        if len(out_dict.keys()) == 1:
-            return out_dict["pred"]
-        else:
-            if self.return_one_tensor:
-                if "class" in out_dict:
-                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
-                else:
-                    return out_dict["pred"]
-            return out_dict
+        return self._unetr_decode(outs[self.depth][:, num_prefix:, :], skip_connections, input)

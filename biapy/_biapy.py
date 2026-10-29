@@ -52,7 +52,7 @@ from bioimageio.spec.model.v0_5 import (
     FileDescr_dependencies,
 )
 from packaging.version import Version
-from bioimageio.spec._internal.io_basics import Sha256
+from bioimageio.spec.common import Sha256
 from bioimageio.spec import save_bioimageio_package
 from bioimageio.spec.dataset.v0_3 import LinkedDataset
 
@@ -127,6 +127,13 @@ def _normalize_gpu_arg(gpu: GpuArg) -> str:
         f"'gpu' must be a str, int, list or tuple (got {type(gpu).__name__}). "
         "Examples: gpu=0, gpu='0', gpu='0,1', gpu=[0, 1]."
     )
+
+
+def _as_file_descr(source: Any) -> Any:
+    """Wrap a path/URL as a BMZ file description (required by bioimageio.spec >= 0.5.12)."""
+    if isinstance(source, (str, Path)):
+        return {"source": source}
+    return source
 
 
 class BiaPy:
@@ -1349,13 +1356,18 @@ class BiaPy:
                         "There is no information about covers. You can: 1) provide it using bmz_config['covers'] or run the training phase, by calling train() or run_job() functions, so a cover can be generated."
                     )
 
-        # Add percentile norm
+        # bioimageio.core computes every preprocessing statistic on the raw input, while BiaPy computes the
+        # normalization ones on the clipped data. For 'scale_range' that is equivalent to using the percentiles
+        # max(q_lo, clip_lo) and min(q_hi, clip_hi) of the raw input.
         preprocessing = []
         axes = list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-        if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
-            min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
-            max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
+        norm_cfg = self.cfg.DATA.NORMALIZATION
+        clip_percentiles = None
+        if norm_cfg.PERC_CLIP.ENABLE:
+            min_percentile = max(norm_cfg.PERC_CLIP.LOWER_PERC, 0)
+            max_percentile = min(norm_cfg.PERC_CLIP.UPPER_PERC, 100)
             if min_percentile != 0 or max_percentile != 100:
+                clip_percentiles = (min_percentile, max_percentile)
                 preprocessing.append(
                     {
                         "id": "clip",
@@ -1367,19 +1379,19 @@ class BiaPy:
                     }
                 )
             else:
-                lower_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE
-                upper_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE
-                if lower_value != -1 or upper_value != -1:
-                    preprocessing.append(
-                        {
-                            "id": "clip",
-                            "kwargs": {
-                                "max_value": upper_value if upper_value != -1 else None,
-                                "min_value": lower_value if lower_value != -1 else None,
-                                "axes": axes,
-                            },
-                        }
-                    )
+                # BMZ's clip takes a single value for all channels
+                clip_values = {}
+                for key, values in [("min", norm_cfg.PERC_CLIP.LOWER_VALUE), ("max", norm_cfg.PERC_CLIP.UPPER_VALUE)]:
+                    values = [v for v in values if v != -1]
+                    if len(set(values)) > 1:
+                        raise ValueError(
+                            "BMZ export does not support a different clipping value per channel "
+                            f"('DATA.NORMALIZATION.PERC_CLIP.{'LOWER' if key == 'min' else 'UPPER'}_VALUE')"
+                        )
+                    if values:
+                        clip_values[key] = float(values[0])
+                if clip_values:
+                    preprocessing.append({"id": "clip", "kwargs": clip_values})
 
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
@@ -1400,12 +1412,17 @@ class BiaPy:
                     }
                 )
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
+            min_percentile = norm_cfg.SCALE_RANGE.LOWER_PERC
+            max_percentile = norm_cfg.SCALE_RANGE.UPPER_PERC
+            if clip_percentiles is not None:
+                min_percentile = max(min_percentile, clip_percentiles[0])
+                max_percentile = min(max_percentile, clip_percentiles[1])
             preprocessing.append(
                 {
                     "id": "scale_range",
                     "kwargs": {
-                        "max_percentile": 100,
-                        "min_percentile": 0,
+                        "max_percentile": max_percentile,
+                        "min_percentile": min_percentile,
                         "axes": axes,
                     },
                 }
@@ -1415,16 +1432,15 @@ class BiaPy:
             custom_std = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL
 
             if custom_mean != [-1] and custom_std != [-1]:
-                preprocessing.append(
-                    {
-                        "id": "fixed_zero_mean_unit_variance",
-                        "kwargs": {
-                            "mean": [custom_mean],
-                            "std": [custom_std],
-                            "axis": "channel",
-                        },
+                if len(custom_mean) == 1 and len(custom_std) == 1:
+                    fixed_kwargs = {"mean": float(custom_mean[0]), "std": float(custom_std[0])}
+                else:
+                    fixed_kwargs = {
+                        "mean": [float(v) for v in custom_mean],
+                        "std": [float(v) for v in custom_std],
+                        "axis": "channel",
                     }
-                )
+                preprocessing.append({"id": "fixed_zero_mean_unit_variance", "kwargs": fixed_kwargs})
             else:
                 preprocessing.append(
                     {
@@ -1908,7 +1924,7 @@ class BiaPy:
             authors=authors,
             cite=citations,
             license=license,
-            documentation=doc,  # type: ignore
+            documentation=_as_file_descr(doc),  # type: ignore
             git_repo=HttpUrl("https://github.com/BiaPyX/BiaPy"),
             inputs=inputs,
             outputs=outputs,
@@ -1917,7 +1933,7 @@ class BiaPy:
                 # torchscript,
             ),
             tags=tags,
-            covers=covers,
+            covers=[_as_file_descr(c) for c in covers],
             maintainers=maintainers,
             training_data=dataset_id,
             version=version,  # type: ignore

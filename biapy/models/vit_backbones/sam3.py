@@ -30,15 +30,22 @@ Functions:
 Reference: `SAM 3: Segment Anything with Concepts <https://huggingface.co/facebook/sam3>`_.
 """
 
-import os
-import math
-import warnings
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.layers import Mlp
+
+from biapy.models.vit_backbones.weights import (
+    adapt_rgb_patch_embed,
+    fetch_vit_weights,
+    interpolate_grid_pos_embed,
+    load_matching_tensors,
+    max_block_index,
+    read_checkpoint_tensors,
+    strip_tensor_prefix,
+)
 
 # Geometry of SAM 3's image encoder. These values are not configurable: they are the ones of the
 # released checkpoint, and any deviation would make its weights unusable.
@@ -403,50 +410,6 @@ def build_sam3_blocks(grid_size: Tuple[int, int], num_prefix_tokens: int = 0) ->
     )
 
 
-def _sam3_weights_path(weights: str) -> str:
-    """
-    Get a local path to the SAM 3 weights, downloading them from the Hugging Face Hub if needed.
-
-    Parameters
-    ----------
-    weights : str
-        Local path to a checkpoint or identifier of a Hugging Face Hub repository, e.g.
-        ``'facebook/sam3'``.
-
-    Returns
-    -------
-    path : str
-        Local path to the downloaded (or provided) checkpoint file.
-    """
-    if os.path.isfile(weights):
-        return weights
-
-    from huggingface_hub import HfApi, hf_hub_download
-    from huggingface_hub.errors import GatedRepoError, LocalTokenNotFoundError, RepositoryNotFoundError
-
-    # The original checkpoint is preferred, as the naming of its layers is the one this module
-    # reproduces. The rest are only tried in case the repository does not contain it.
-    preferred_files = ["sam3.pt", "sam3.safetensors", "model.safetensors"]
-    try:
-        repo_files = HfApi().list_repo_files(weights)
-        filename = next((f for f in preferred_files if f in repo_files), None)
-        if filename is None:
-            raise FileNotFoundError(
-                f"Could not find any of the expected weight files {preferred_files} in the Hugging Face "
-                f"repository '{weights}'. Files available: {sorted(repo_files)[:20]}"
-            )
-        return hf_hub_download(weights, filename)
-    except (GatedRepoError, LocalTokenNotFoundError) as e:
-        raise RuntimeError(_sam3_gated_message(weights, e)) from e
-    except RepositoryNotFoundError as e:
-        # A private/gated repository is reported as "not found" when the request is not authenticated
-        raise RuntimeError(_sam3_gated_message(weights, e)) from e
-    except Exception as e:
-        if "401" in str(e) or "403" in str(e) or "gated" in str(e).lower() or "authenticat" in str(e).lower():
-            raise RuntimeError(_sam3_gated_message(weights, e)) from e
-        raise
-
-
 def _sam3_gated_message(weights: str, error: Exception) -> str:
     """
     Build the message shown when the SAM 3 weights can not be downloaded.
@@ -478,234 +441,54 @@ def _sam3_gated_message(weights: str, error: Exception) -> str:
     )
 
 
-def _sam3_read_trunk(path: str) -> Dict[str, torch.Tensor]:
-    """
-    Read the tensors of SAM 3's image encoder from a checkpoint file.
-
-    Only the tensors of the encoder are read, so the rest of the model (which is several times
-    larger) is never loaded into memory.
-
-    Parameters
-    ----------
-    path : str
-        Local path to the checkpoint, either a ``.safetensors`` or a PyTorch file.
-
-    Returns
-    -------
-    trunk : Dict[str, torch.Tensor]
-        Tensors of the image encoder, with its prefix stripped from the keys, e.g.
-        ``'blocks.0.attn.qkv.weight'``.
-    """
-    if path.endswith(".safetensors"):
-        from safetensors import safe_open
-
-        with safe_open(path, framework="pt", device="cpu") as f:
-            keys = list(f.keys())
-            prefix = _sam3_trunk_prefix(keys)
-            return {k[len(prefix) :]: f.get_tensor(k) for k in keys if k.startswith(prefix)}
-
-    checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-    for key in ["model", "state_dict", "model_weights"]:
-        if isinstance(checkpoint, dict) and key in checkpoint and isinstance(checkpoint[key], dict):
-            checkpoint = checkpoint[key]
-            break
-    checkpoint = {k: v for k, v in checkpoint.items() if isinstance(v, torch.Tensor)}
-    prefix = _sam3_trunk_prefix(list(checkpoint))
-    return {k[len(prefix) :]: v for k, v in checkpoint.items() if k.startswith(prefix)}
-
-
-def _sam3_trunk_prefix(keys: List[str]) -> str:
-    """
-    Find the prefix under which the image encoder is stored within a SAM 3 checkpoint.
-
-    Parameters
-    ----------
-    keys : List[str]
-        Names of the tensors stored in the checkpoint.
-
-    Returns
-    -------
-    prefix : str
-        Prefix of the image encoder, e.g. ``'detector.backbone.vision_backbone.trunk.'``.
-    """
-    reference = "blocks.0.attn.qkv.weight"
-    for k in keys:
-        if k.endswith(reference):
-            return k[: -len(reference)]
-    raise RuntimeError(
-        "Could not find SAM 3's image encoder within the provided weights: no tensor ending in "
-        f"'{reference}' was found. This module expects the layer naming of the original SAM 3 "
-        "checkpoint (e.g. 'detector.backbone.vision_backbone.trunk.blocks.0.attn.qkv.weight'), so "
-        "the file may correspond to a different model or to a converted version of it. Some of the "
-        f"keys found are: {sorted(keys)[:5]}"
-    )
-
-
-def _sam3_adapt_patch_embed(
-    weight: torch.Tensor,
-    in_chans: int,
-    patch_size: int,
-    verbose: bool = True,
-) -> torch.Tensor:
-    """
-    Adapt the patch embedding of SAM 3 to the number of channels and patch size used by the model.
-
-    SAM 3 was trained on RGB images with ``14x14`` patches, so the projection needs to be adapted
-    when the input has one channel (e.g. grayscale microscopy images) or when a different patch
-    size is used.
-
-    Parameters
-    ----------
-    weight : torch.Tensor
-        Pretrained patch embedding of shape ``(embed_dim, 3, 14, 14)``.
-
-    in_chans : int
-        Number of channels of the images the model is going to be trained with. It can only be
-        ``1`` or ``3``.
-
-    patch_size : int
-        Patch (token) size of the model.
-
-    verbose : bool, optional
-        Whether to print what is being adapted. Defaults to ``True``.
-
-    Returns
-    -------
-    weight : torch.Tensor
-        Patch embedding of shape ``(embed_dim, in_chans, patch_size, patch_size)``.
-    """
-    if in_chans == 1:
-        # Adding up the three kernels reproduces exactly the response the pretrained model would
-        # give to a grayscale image replicated into its three channels
-        weight = weight.sum(dim=1, keepdim=True)
-        if verbose:
-            print(
-                "    - patch embedding adapted from 3 (RGB) to 1 channel by adding up its three kernels, "
-                "which is equivalent to replicating the grayscale image into the three input channels"
-            )
-    elif in_chans != 3:
-        raise ValueError(
-            f"SAM 3's pretrained weights can only be loaded with 1 or 3 input channels, but the images "
-            f"have {in_chans}. SAM 3 was trained on RGB images, and BiaPy can only adapt its patch "
-            "embedding automatically when the input is grayscale (1 channel), by adding up its three "
-            f"kernels. With {in_chans} channels there is no meaningful way of doing it, so the data needs "
-            "to be converted beforehand: keep the channel of interest (1 channel), combine them into an "
-            "RGB image (3 channels), or set 'MODEL.VIT_PRETRAINED_WEIGHTS' to '' to train from scratch "
-            f"with the {in_chans} channels."
-        )
-
-    pretrained_size = weight.shape[-1]
-    if pretrained_size != patch_size:
-        # Resize the kernel to the patch size used by the model, keeping the magnitude of its
-        # response by compensating the change in the number of elements added up by the convolution
-        weight = F.interpolate(
-            weight.float(), size=(patch_size, patch_size), mode="bicubic", align_corners=False
-        ) * (pretrained_size / patch_size) ** 2
-        if verbose:
-            print(
-                f"    - patch embedding resized from {pretrained_size}x{pretrained_size} to "
-                f"{patch_size}x{patch_size} to match the token size of the model"
-            )
-    return weight
-
-
-def _sam3_adapt_pos_embed(
-    pos_embed: torch.Tensor,
-    grid_size: Tuple[int, int],
-    num_prefix_tokens: int,
-    verbose: bool = True,
-) -> torch.Tensor:
-    """
-    Interpolate SAM 3's position embedding to the token grid of the model.
-
-    Parameters
-    ----------
-    pos_embed : torch.Tensor
-        Pretrained position embedding of shape ``(1, 1 + 24 * 24, embed_dim)``, where the first
-        entry corresponds to a class token.
-
-    grid_size : Tuple[int, int]
-        Number of tokens of the model along the y and x axes.
-
-    num_prefix_tokens : int
-        Number of tokens at the beginning of the model's sequence that are not part of the token
-        grid (e.g. a class token).
-
-    verbose : bool, optional
-        Whether to print what is being adapted. Defaults to ``True``.
-
-    Returns
-    -------
-    pos_embed : torch.Tensor
-        Position embedding of shape ``(1, num_prefix_tokens + grid_h * grid_w, embed_dim)``.
-    """
-    embed_dim = pos_embed.shape[-1]
-    prefix, grid = pos_embed[:, :1], pos_embed[:, 1:]
-    src = int(math.sqrt(grid.shape[1]))
-    if src * src != grid.shape[1]:
-        raise ValueError(f"Unexpected position embedding with {grid.shape[1]} grid entries, a square number was expected")
-
-    if (src, src) != tuple(grid_size):
-        grid = grid.reshape(1, src, src, embed_dim).permute(0, 3, 1, 2)
-        grid = F.interpolate(grid.float(), size=tuple(grid_size), mode="bicubic", align_corners=False)
-        grid = grid.permute(0, 2, 3, 1).reshape(1, grid_size[0] * grid_size[1], embed_dim)
-        if verbose:
-            print(
-                f"    - position embedding interpolated from a {src}x{src} to a "
-                f"{grid_size[0]}x{grid_size[1]} token grid"
-            )
-
-    return torch.cat([prefix.repeat(1, num_prefix_tokens, 1), grid], dim=1) if num_prefix_tokens > 0 else grid
-
-
 def load_sam3_pretrained_encoder(
     model: nn.Module,
     weights: str,
     verbose: bool = True,
 ) -> Dict[str, int]:
     """
-    Load SAM 3's pretrained image encoder into a BiaPy model.
-
-    The weights are downloaded from the Hugging Face Hub (and cached, so it only happens once) and
-    mapped into the ``patch_embed``, ``pos_embed``, ``ln_pre`` and ``blocks`` of the given model,
-    adapting the patch embedding to the number of input channels and to the patch size used, and
-    interpolating the position embedding to the model's token grid. All those values are taken from
-    the model itself, so the weights always end up adapted to the model they are loaded into.
+    Load SAM 3's image encoder into ``model`` (``patch_embed``, ``pos_embed``, ``ln_pre``/``norm_pre``, ``blocks``),
+    adapting the patch embedding to the model's channels and token size and interpolating the position embedding.
 
     Parameters
     ----------
     model : nn.Module
-        Model to load the weights into. It must expose SAM 3's encoder as ``patch_embed``,
-        ``pos_embed``, ``blocks`` and, optionally, ``ln_pre``/``norm_pre``.
+        Target model.
 
     weights : str
-        Identifier of a Hugging Face Hub repository, e.g. ``'facebook/sam3'`` or
-        ``'facebook/sam3.1'``, or path to a local checkpoint file.
+        Hugging Face repository (e.g. ``'facebook/sam3'``) or local checkpoint.
 
     verbose : bool, optional
-        Whether to print a report of what was loaded. Defaults to ``True``.
+        Whether to print a report.
 
     Returns
     -------
     report : Dict[str, int]
-        Number of tensors ``loaded`` into the model and number of them left ``missing``.
+        Number of tensors ``loaded`` and ``missing``.
     """
     if verbose:
         print(f"Loading SAM 3's pretrained image encoder from '{weights}' ...")
 
-    # Everything needed to adapt the weights is taken from the model, so they can not disagree
     patch_size = model.patch_embed.patch_size  # type: ignore
     grid = model.patch_embed.grid_size  # type: ignore
     grid_size = (grid, grid) if isinstance(grid, int) else tuple(grid)
     in_chans = model.patch_embed.proj.weight.shape[1]  # type: ignore
     num_prefix_tokens = int(model.pos_embed.shape[1] - grid_size[0] * grid_size[1])  # type: ignore
 
-    trunk = _sam3_read_trunk(_sam3_weights_path(weights))
+    # The original checkpoint (its naming is the one reproduced here) is preferred
+    path = fetch_vit_weights(
+        weights,
+        hf_filenames=["sam3.pt", "sam3.safetensors", "model.safetensors"],
+        access_message=_sam3_gated_message,
+    )
+    trunk = strip_tensor_prefix(
+        read_checkpoint_tensors(path, wrapper_keys=["model", "state_dict", "model_weights"]),
+        "blocks.0.attn.qkv.weight",
+        "SAM 3's image encoder",
+    )
 
-    # Make sure the encoder stored is the one this module reproduces. SAM 3 and SAM 3.1 share the very
-    # same image encoder, but a future version of it may not, and loading it partially would silently
-    # give a model with randomly initialized blocks.
-    ckpt_depth = 1 + max((int(k.split(".")[1]) for k in trunk if k.startswith("blocks.")), default=-1)
+    # A different encoder would load partially and silently
+    ckpt_depth = max_block_index(trunk)
     ckpt_embed_dim = trunk["patch_embed.proj.weight"].shape[0] if "patch_embed.proj.weight" in trunk else -1
     if ckpt_depth != SAM3_VIT_PARAMS["depth"] or ckpt_embed_dim != SAM3_VIT_PARAMS["embed_dim"]:
         raise RuntimeError(
@@ -716,55 +499,31 @@ def load_sam3_pretrained_encoder(
         )
 
     new_state_dict = {}
-    # Patch embedding. SAM 3 has no bias in its projection, so it is zeroed to keep it that way.
+    # SAM 3's projection has no bias: zero it
     if "patch_embed.proj.weight" in trunk:
-        new_state_dict["patch_embed.proj.weight"] = _sam3_adapt_patch_embed(
-            trunk["patch_embed.proj.weight"], in_chans, patch_size, verbose=verbose
+        new_state_dict["patch_embed.proj.weight"] = adapt_rgb_patch_embed(
+            trunk["patch_embed.proj.weight"], in_chans, "SAM 3", patch_size=patch_size, verbose=verbose
         )
         if getattr(model.patch_embed.proj, "bias", None) is not None:
             new_state_dict["patch_embed.proj.bias"] = torch.zeros_like(model.patch_embed.proj.bias)
-
-    # Position embedding
     if "pos_embed" in trunk:
-        new_state_dict["pos_embed"] = _sam3_adapt_pos_embed(
+        new_state_dict["pos_embed"] = interpolate_grid_pos_embed(
             trunk["pos_embed"], grid_size, num_prefix_tokens, verbose=verbose
         )
-
-    # Layer normalization applied before the blocks
     ln_pre_name = "ln_pre" if hasattr(model, "ln_pre") else "norm_pre"
     for suffix in ["weight", "bias"]:
         if f"ln_pre.{suffix}" in trunk and hasattr(model, ln_pre_name):
             new_state_dict[f"{ln_pre_name}.{suffix}"] = trunk[f"ln_pre.{suffix}"]
-
-    # Transformer blocks. Their naming is the same in the checkpoint and in `SAM3Block`, so they
-    # are copied as they are. The rotary frequencies are not: they are computed by each block for
-    # the token grid actually used, which the ones stored in the checkpoint do not match.
+    # Same naming as SAM3Block. The rotary frequencies are recomputed per block for the grid used
     for k, v in trunk.items():
         if k.startswith("blocks.") and not k.endswith("freqs_cis"):
             new_state_dict[k] = v
 
-    model_state = model.state_dict()
-    to_load, skipped = {}, []
-    for k, v in new_state_dict.items():
-        if k in model_state and model_state[k].shape == v.shape:
-            to_load[k] = v
-        else:
-            skipped.append(k)
-
-    missing = [k for k in model_state if k.startswith(("patch_embed.", "blocks.", "pos_embed", ln_pre_name)) and k not in to_load]
-    # The rotary frequencies are buffers computed by each block, never loaded
-    missing = [k for k in missing if not k.endswith("freqs_cis")]
-
-    model.load_state_dict(to_load, strict=False)
-
-    if verbose:
-        print(f"    - {len(to_load)} tensors of SAM 3's encoder loaded into the model")
-        if missing:
-            print(f"    - {len(missing)} encoder tensors were NOT found in the checkpoint: {missing[:6]}")
-    if skipped:
-        warnings.warn(
-            f"{len(skipped)} tensors of SAM 3's checkpoint could not be loaded, as they do not exist in the "
-            f"model or their shape differs: {skipped[:6]}"
-        )
-
-    return {"loaded": len(to_load), "missing": len(missing)}
+    return load_matching_tensors(
+        model,
+        new_state_dict,
+        ("patch_embed.", "blocks.", "pos_embed", ln_pre_name),
+        "SAM 3's encoder",
+        ignore_suffixes=("freqs_cis",),
+        verbose=verbose,
+    )

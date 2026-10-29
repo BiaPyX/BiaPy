@@ -29,16 +29,23 @@ Functions:
 Reference: `DINOv3 <https://arxiv.org/abs/2508.10104>`_, https://github.com/facebookresearch/dinov3.
 """
 
-import os
 import re
 import math
-import warnings
 from typing import Dict, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.layers import DropPath, LayerScale, Mlp
+
+from biapy.models.vit_backbones.weights import (
+    adapt_rgb_patch_embed,
+    fetch_vit_weights,
+    load_matching_tensors,
+    max_block_index,
+    read_checkpoint_tensors,
+    strip_tensor_prefix,
+)
 
 # Geometry of DINOv3's ViT-L/16 ('dinov3_vitl16'). These values are not configurable: they are the ones of the
 # released checkpoint, and any deviation would make its weights unusable.
@@ -307,47 +314,6 @@ def build_dinov3_blocks(
     )
 
 
-def _dinov3_weights_path(weights: str) -> str:
-    """
-    Get a local path to the DINOv3 weights.
-
-    Parameters
-    ----------
-    weights : str
-        Local path to a checkpoint, URL to download it from (e.g. the one e-mailed by Meta) or identifier of a
-        Hugging Face Hub repository, e.g. ``'facebook/dinov3-vitl16-pretrain-lvd1689m'``.
-
-    Returns
-    -------
-    path : str
-        Local path to the downloaded (or provided) checkpoint file.
-    """
-    if os.path.isfile(weights):
-        return weights
-
-    if weights.startswith(("http://", "https://")):
-        from urllib.parse import urlparse
-
-        dst = os.path.join(torch.hub.get_dir(), "checkpoints", os.path.basename(urlparse(weights).path))
-        if not os.path.isfile(dst):
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            print(f"    - downloading '{weights}' to '{dst}'")
-            torch.hub.download_url_to_file(weights, dst)
-        return dst
-
-    from huggingface_hub import hf_hub_download
-    from huggingface_hub.errors import GatedRepoError, LocalTokenNotFoundError, RepositoryNotFoundError
-
-    try:
-        return hf_hub_download(weights, "model.safetensors")
-    except (GatedRepoError, LocalTokenNotFoundError, RepositoryNotFoundError) as e:
-        raise RuntimeError(_dinov3_gated_message(weights, e)) from e
-    except Exception as e:
-        if "401" in str(e) or "403" in str(e) or "gated" in str(e).lower() or "authenticat" in str(e).lower():
-            raise RuntimeError(_dinov3_gated_message(weights, e)) from e
-        raise
-
-
 def _dinov3_gated_message(weights: str, error: Exception) -> str:
     """Build the message shown when the DINOv3 weights can not be downloaded."""
     return (
@@ -364,48 +330,11 @@ def _dinov3_gated_message(weights: str, error: Exception) -> str:
 
 
 def _dinov3_read_encoder(path: str) -> Dict[str, torch.Tensor]:
-    """
-    Read DINOv3's encoder tensors from a checkpoint, with the original (Meta) naming.
-
-    Both the original checkpoints (``dinov3_vitl16_pretrain_lvd1689m-*.pth``, also within a training checkpoint) and
-    the Hugging Face ``transformers`` ones (``model.safetensors``) are supported. The latter are converted back to the
-    original naming, merging their separate ``q_proj``, ``k_proj`` and ``v_proj`` into ``qkv``.
-
-    Parameters
-    ----------
-    path : str
-        Local path to the checkpoint, either a ``.safetensors`` or a PyTorch file.
-
-    Returns
-    -------
-    encoder : Dict[str, torch.Tensor]
-        Tensors of the encoder, e.g. ``'blocks.0.attn.qkv.weight'`` or ``'storage_tokens'``.
-    """
-    if path.endswith(".safetensors"):
-        from safetensors import safe_open
-
-        with safe_open(path, framework="pt", device="cpu") as f:
-            checkpoint = {k: f.get_tensor(k) for k in f.keys()}
-    else:
-        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-        for key in ["teacher", "model", "state_dict"]:
-            if isinstance(checkpoint, dict) and key in checkpoint and isinstance(checkpoint[key], dict):
-                checkpoint = checkpoint[key]
-                break
-        checkpoint = {k: v for k, v in checkpoint.items() if isinstance(v, torch.Tensor)}
-
+    """Encoder tensors of an original (``.pth``) or Hugging Face (``.safetensors``) DINOv3 checkpoint, in the original naming."""
+    checkpoint = read_checkpoint_tensors(path, wrapper_keys=["teacher", "model", "state_dict"])
     if any("embeddings.patch_embeddings" in k for k in checkpoint):
         return _dinov3_from_hf(checkpoint)
-
-    reference = "storage_tokens"
-    prefix = next((k[: -len(reference)] for k in checkpoint if k.endswith(reference)), None)
-    if prefix is None:
-        raise RuntimeError(
-            f"Could not find DINOv3's ViT encoder in the provided weights: no tensor ending in '{reference}' (original "
-            "naming) or containing 'embeddings.patch_embeddings' (Hugging Face naming) was found. Some keys found: "
-            f"{sorted(checkpoint)[:5]}"
-        )
-    return {k[len(prefix) :]: v for k, v in checkpoint.items() if k.startswith(prefix)}
+    return strip_tensor_prefix(checkpoint, "storage_tokens", "DINOv3's ViT encoder (original naming)")
 
 
 def _dinov3_from_hf(checkpoint: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
@@ -444,46 +373,6 @@ def _dinov3_from_hf(checkpoint: Dict[str, torch.Tensor]) -> Dict[str, torch.Tens
     return encoder
 
 
-def _dinov3_adapt_patch_embed(weight: torch.Tensor, in_chans: int, verbose: bool = True) -> torch.Tensor:
-    """
-    Adapt DINOv3's RGB patch embedding to the number of input channels of the model.
-
-    Parameters
-    ----------
-    weight : torch.Tensor
-        Pretrained patch embedding of shape ``(embed_dim, 3, 16, 16)``.
-
-    in_chans : int
-        Number of channels of the images the model is going to be trained with. It can only be ``1`` or ``3``.
-
-    verbose : bool, optional
-        Whether to print what is being adapted.
-
-    Returns
-    -------
-    weight : torch.Tensor
-        Patch embedding of shape ``(embed_dim, in_chans, 16, 16)``.
-    """
-    if in_chans == 1:
-        # Adding up the three kernels reproduces exactly the response the pretrained model would give to a
-        # grayscale image replicated into its three channels
-        weight = weight.sum(dim=1, keepdim=True)
-        if verbose:
-            print(
-                "    - patch embedding adapted from 3 (RGB) to 1 channel by adding up its three kernels, which is "
-                "equivalent to replicating the grayscale image into the three input channels"
-            )
-    elif in_chans != 3:
-        raise ValueError(
-            f"DINOv3's pretrained weights can only be loaded with 1 or 3 input channels, but the images have "
-            f"{in_chans}. DINOv3 was trained on RGB images, and BiaPy can only adapt its patch embedding "
-            "automatically when the input is grayscale (1 channel), by adding up its three kernels. Keep the channel "
-            "of interest (1 channel), combine them into an RGB image (3 channels), or set "
-            "'MODEL.VIT_PRETRAINED_WEIGHTS' to '' to train from scratch."
-        )
-    return weight
-
-
 def load_dinov3_pretrained_encoder(
     model: nn.Module,
     weights: str,
@@ -517,10 +406,12 @@ def load_dinov3_pretrained_encoder(
         print(f"Loading DINOv3's pretrained ViT encoder from '{weights}' ...")
 
     in_chans = model.patch_embed.proj.weight.shape[1]  # type: ignore
-    encoder = _dinov3_read_encoder(_dinov3_weights_path(weights))
+    encoder = _dinov3_read_encoder(
+        fetch_vit_weights(weights, hf_filenames=["model.safetensors"], access_message=_dinov3_gated_message)
+    )
 
     params = DINOV3_VIT_PARAMS
-    ckpt_depth = 1 + max((int(k.split(".")[1]) for k in encoder if k.startswith("blocks.")), default=-1)
+    ckpt_depth = max_block_index(encoder)
     ckpt_embed_dim = encoder["cls_token"].shape[-1] if "cls_token" in encoder else -1
     ckpt_mlp = encoder["blocks.0.mlp.fc1.weight"].shape[0] if "blocks.0.mlp.fc1.weight" in encoder else -1
     if (
@@ -537,8 +428,8 @@ def load_dinov3_pretrained_encoder(
 
     new_state_dict = {}
     if "patch_embed.proj.weight" in encoder:
-        new_state_dict["patch_embed.proj.weight"] = _dinov3_adapt_patch_embed(
-            encoder["patch_embed.proj.weight"], in_chans, verbose=verbose
+        new_state_dict["patch_embed.proj.weight"] = adapt_rgb_patch_embed(
+            encoder["patch_embed.proj.weight"], in_chans, "DINOv3", verbose=verbose
         )
     for src, dst in [("patch_embed.proj.bias", "patch_embed.proj.bias"), ("cls_token", "cls_token"), ("storage_tokens", "reg_token")]:
         if src in encoder:
@@ -556,27 +447,10 @@ def load_dinov3_pretrained_encoder(
                 v[v.shape[0] // 3 : 2 * v.shape[0] // 3] = 0
             new_state_dict[k] = v
 
-    model_state = model.state_dict()
-    to_load, skipped = {}, []
-    for k, v in new_state_dict.items():
-        if k in model_state and model_state[k].shape == v.shape:
-            to_load[k] = v
-        else:
-            skipped.append(k)
-
-    tracked_prefixes = ("patch_embed.", "blocks.", "cls_token", "reg_token", "norm.")
-    missing = [k for k in model_state if k.startswith(tracked_prefixes) and k not in to_load]
-
-    model.load_state_dict(to_load, strict=False)
-
-    if verbose:
-        print(f"    - {len(to_load)} tensors of DINOv3's encoder loaded into the model")
-        if missing:
-            print(f"    - {len(missing)} encoder tensors were NOT found in the checkpoint: {missing[:6]}")
-    if skipped:
-        warnings.warn(
-            f"{len(skipped)} tensors of DINOv3's checkpoint could not be loaded, as they do not exist in the model or "
-            f"their shape differs: {skipped[:6]}"
-        )
-
-    return {"loaded": len(to_load), "missing": len(missing)}
+    return load_matching_tensors(
+        model,
+        new_state_dict,
+        ("patch_embed.", "blocks.", "cls_token", "reg_token", "norm."),
+        "DINOv3's encoder",
+        verbose=verbose,
+    )

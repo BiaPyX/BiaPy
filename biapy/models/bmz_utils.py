@@ -22,8 +22,7 @@ from pathlib import Path
 
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
-from bioimageio.spec._internal.types import ImportantFileSource
-from bioimageio.spec._internal.io_basics import Sha256
+from bioimageio.spec.common import FileSource, Sha256
 from bioimageio.spec.model.v0_5 import (
     ArchitectureFromFileDescr,
     ArchitectureFromLibraryDescr,
@@ -66,7 +65,7 @@ def download_to_local_path(source, sha256=None, suffix=""):
     
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
-) -> Tuple[ImportantFileSource, Sha256 | None, ArchitectureFromFileDescr | ArchitectureFromLibraryDescr]:
+) -> Tuple[FileSource, Sha256 | None, ArchitectureFromFileDescr | ArchitectureFromLibraryDescr]:
     """
     Gather model info depending on its spec version. Currently supports ``v0_4`` and ``v0_5`` spec model.
 
@@ -645,7 +644,12 @@ def create_model_doc(
     if biapy_cfg.DATA.NORMALIZATION.TYPE == "div":
         preproc_info = "- Division to 255 (or 65535 if uint16) to scale the data to [0,1] range.\n"
     elif biapy_cfg.DATA.NORMALIZATION.TYPE == "scale_range":
-        preproc_info = "- Scaling the range to [0-max] and then dividing by the maximum value of the data.\n"
+        lower_perc = biapy_cfg.DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC
+        upper_perc = biapy_cfg.DATA.NORMALIZATION.SCALE_RANGE.UPPER_PERC
+        if (lower_perc, upper_perc) == (0, 100):
+            preproc_info = "- Scaling the range to [0-max] and then dividing by the maximum value of the data.\n"
+        else:
+            preproc_info = f"- Scaling the {lower_perc}-{upper_perc} percentiles to [0, 1] (no clipping).\n"
     elif biapy_cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":    
         preproc_info = "- Zero mean and unit variance normalization. "
         if any(x for x in biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL if x > 0):

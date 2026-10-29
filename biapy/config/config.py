@@ -947,6 +947,11 @@ class Config:
         # 'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' and 'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' 
         _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE = [-1.0]
         _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE = [-1.0]
+        # Percentiles (per image and channel) that 'scale_range' maps to 0 and 1, without clipping (as BMZ's
+        # 'scale_range' and Cellpose do). 0 and 100 = min/max. Only for 'DATA.NORMALIZATION.TYPE' = 'scale_range'.
+        _C.DATA.NORMALIZATION.SCALE_RANGE = CN()
+        _C.DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC = 0.0
+        _C.DATA.NORMALIZATION.SCALE_RANGE.UPPER_PERC = 100.0
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
         #   'scale_range' same as 'div' but scaling the range to [0-max] and then dividing by the maximum value of the data
@@ -1766,8 +1771,8 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.1.2 UNETR architecture options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model to use as UNETR's backbone. Same options as 'MODEL.VIT_MODEL', except "vit_huge_patch14"
-        # (UNETR needs a power-of-two token size).
+        # UNETR's ViT backbone. Same options as 'MODEL.VIT_MODEL' except "vit_huge_patch14" (token size not a power of
+        # two) and "cellpose_sam_vit".
         _C.MODEL.UNETR_VIT_MODEL = "custom"
         # Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
         # Leave it as -1 to decide it automatically based on the encoder selected, which spaces the skip connections
@@ -1784,15 +1789,25 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 5.1.2 Transformer-based architectures options
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Type of ViT model. Options are "custom", "vit_base_patch16", "vit_large_patch16", "vit_huge_patch14",
-        # "sam3_vit", "celldino_vit" and "dinov3_vit". "custom" uses the rest of the 'MODEL.VIT_*' variables; the rest
-        # set them automatically. "sam3_vit" (SAM 3's image encoder, 14x14 tokens), "celldino_vit" (Cell-DINO's
-        # channel-adaptive ViT-L/16, https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013828,
-        # 16x16 tokens, 1 input channel) and "dinov3_vit" (DINOv3's ViT-L/16, https://arxiv.org/abs/2508.10104, 16x16
-        # tokens, RoPE and 4 register tokens) are 2D only and initializable via 'MODEL.VIT_PRETRAINED_WEIGHTS'.
+        # ViT backbone of 'vit', 'dpt' and 'vit_readout' ('unetr' uses 'MODEL.UNETR_VIT_MODEL'; 'mae' is always
+        # "custom"). All but "custom" fix the geometry, ignoring the 'MODEL.VIT_*' size variables. Options:
+        #   - "custom": built from the 'MODEL.VIT_*' variables. 2D/3D.
+        #   - "vit_base_patch16": ViT-B/16 (768 dims, 12 blocks, 12 heads). 2D/3D.
+        #   - "vit_large_patch16": ViT-L/16 (1024 dims, 24 blocks, 16 heads). 2D/3D.
+        #   - "vit_huge_patch14": ViT-H/14 (1280 dims, 32 blocks, 16 heads). 2D/3D. Not for 'unetr'.
+        #   - "sam3_vit": SAM 3's image encoder (14x14 tokens, 16x16 under 'unetr'). 2D, 'vit' and 'unetr' only.
+        #     Pretrained.
+        #   - "celldino_vit": Cell-DINO's ViT-L/16 (https://doi.org/10.1371/journal.pcbi.1013828). 2D, 1 channel.
+        #     Pretrained.
+        #   - "dinov3_vit": DINOv3's ViT-L/16 (https://arxiv.org/abs/2508.10104). 2D, 1 or 3 channels. Pretrained.
+        #   - "cellpose_sam_vit": Cellpose-SAM's encoder (8x8 tokens). 2D, up to 3 channels, 'vit_readout' only.
+        #     Pretrained. With 'MODEL.VIT_READOUT.FEATURES' = 3, 'MODEL.VIT_READOUT.REFINE_LAYERS' = 0 and
+        #     'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' = ['F', 'Gv', 'Gh'] it is the whole Cellpose-SAM model (ready for
+        #     inference).
+        # "Pretrained": weights loaded with 'MODEL.VIT_PRETRAINED_WEIGHTS'.
         _C.MODEL.VIT_MODEL = "custom"
         # Pretrained weights for the ViT backbone. Leave empty to train from scratch. Only used with "sam3_vit",
-        # "celldino_vit" or "dinov3_vit":
+        # "celldino_vit", "dinov3_vit" or "cellpose_sam_vit":
         #   - "sam3_vit": a Hugging Face repo (e.g. "facebook/sam3") or local file path. Gated model: accept the
         #     license at https://huggingface.co/facebook/sam3 and authenticate ("hf auth login" or HF_TOKEN).
         #   - "celldino_vit": local path to the "channel_adaptive_dino_vitl16" checkpoint. Not on the HF Hub; request
@@ -1801,6 +1816,8 @@ class Config:
         #     path (original "dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth" or HF "model.safetensors"). Gated model:
         #     request access on its HF page and authenticate, or at https://ai.meta.com/resources/models-and-libraries/dinov3-downloads/.
         #     Its RGB patch embedding is adapted to 1 channel by adding up its kernels; other channel counts need "".
+        #   - "cellpose_sam_vit": "cpsam", "cpsam_v2" (https://huggingface.co/mouseland/cellpose-sam), a URL or a
+        #     local Cellpose-SAM checkpoint. Use a 256 'DATA.PATCH_SIZE' (other sizes interpolate the position embedding).
         # Ignored when 'MODEL.LOAD_CHECKPOINT' is enabled.
         _C.MODEL.VIT_PRETRAINED_WEIGHTS = ""
         # Size of the patches (tokens) that are extracted from the input image. Only used when the ViT model selected
@@ -2072,7 +2089,8 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # BMZ model export options
         _C.MODEL.BMZ = CN()
-        # DOI or nickname of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
+        # DOI or nickname of the BMZ model to load, or path to a local BMZ package ('.zip', folder or 'rdf.yaml').
+        # It can not be empty if MODEL.SOURCE = "bmz".
         _C.MODEL.BMZ.SOURCE_MODEL_ID = ""
         # Module to export the model to BMZ format. It will be activated when 'MODEL.BMZ.EXPORT.ENABLE' is set to True.
         _C.MODEL.BMZ.EXPORT = CN()

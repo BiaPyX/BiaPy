@@ -41,6 +41,8 @@ from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import load_description
 from bioimageio.spec.model import v0_4, v0_5
 
+from biapy.models.vit_backbones.common import load_pretrained_vit_backbone, vit_backbones_with_weights
+
 def build_model(
     cfg: CN, 
     output_channels: List[int], 
@@ -308,11 +310,10 @@ def build_model(
                     drop_rate=cfg.MODEL.DROPOUT_VALUES[0],
                 )
                 args.update(args2)
-                model = VisionTransformer(**args)  # type: ignore
-                callable_model = VisionTransformer  # type: ignore
             else:
-                model = eval(cfg.MODEL.VIT_MODEL)(**args)
-                callable_model = eval(cfg.MODEL.VIT_MODEL)
+                args["vit_model"] = cfg.MODEL.VIT_MODEL
+            model = VisionTransformer(**args)  # type: ignore
+            callable_model = VisionTransformer  # type: ignore
         elif modelname == "multiresunet":
             args = dict(
                 input_channels=cfg.DATA.PATCH_SIZE[-1],
@@ -564,26 +565,18 @@ def build_model(
     # within the models, so the architectures stay self-contained (e.g. when they are exported to
     # the BioImage Model Zoo, where the weights shipped are the trained ones).
     vit_backbone = cfg.MODEL.UNETR_VIT_MODEL if modelname == "unetr" else cfg.MODEL.VIT_MODEL
-    vit_backbone_names = {"sam3_vit": "SAM 3", "celldino_vit": "Cell-DINO", "dinov3_vit": "DINOv3"}
-    if modelname in ["vit", "unetr", "dpt", "vit_readout"] and vit_backbone in vit_backbone_names and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
+    if (
+        modelname in ["vit", "unetr", "dpt", "vit_readout"]
+        and vit_backbone in vit_backbones_with_weights()
+        and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != ""
+    ):
         if cfg.MODEL.LOAD_CHECKPOINT:
             print(
-                f"Skipping the download of {vit_backbone_names[vit_backbone]}'s pretrained "
-                "weights, as 'MODEL.LOAD_CHECKPOINT' is enabled and the checkpoint loaded afterwards would "
-                "replace them"
+                f"Skipping the download of '{vit_backbone}' pretrained weights, as 'MODEL.LOAD_CHECKPOINT' is "
+                "enabled and the checkpoint loaded afterwards would replace them"
             )
-        elif vit_backbone == "sam3_vit":
-            from biapy.models.sam3_vit import load_sam3_pretrained_encoder
-
-            load_sam3_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
-        elif vit_backbone == "dinov3_vit":
-            from biapy.models.dinov3_vit import load_dinov3_pretrained_encoder
-
-            load_dinov3_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
         else:
-            from biapy.models.celldino_vit import load_celldino_pretrained_encoder
-
-            load_celldino_pretrained_encoder(model, weights=cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
+            load_pretrained_vit_backbone(model, vit_backbone, cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
 
     # Check the network created
     model.to(device)
@@ -923,7 +916,7 @@ def extract_model(
     # The order is not the discovery order: the generated file is executed top to bottom, so a
     # definition whose body is evaluated at import time (a module-level constant, a base class,
     # a decorator or a default argument) must appear after everything it references. For instance
-    # `UNETR_VIT_MODELS` builds its "sam3_vit" entry out of `SAM3_VIT_PARAMS`, and writing it
+    # `VIT_BACKBONES` builds its "sam3_vit" entry out of `SAM3_VIT_PARAMS`, and writing it
     # first raises a NameError as soon as the model file is imported. A post-order DFS gives that
     # guarantee whatever the order in which the names show up.
     definition_list: List[Tuple[str, str]] = []
@@ -1392,6 +1385,43 @@ def find_bmz_models(
     return out
 
 
+def read_local_bmz_model(path: str) -> Dict:
+    """
+    Read a local BMZ package into the same structure :func:`find_bmz_models` returns.
+
+    Parameters
+    ----------
+    path : str
+        Package ``.zip``, its folder or its ``rdf.yaml``/``bioimageio.yaml``.
+
+    Returns
+    -------
+    model : dict
+        RDF in ``["raw"]["manifest"]`` and ``path`` as ``nickname``.
+    """
+    rdf_names = ["rdf.yaml", "bioimageio.yaml"]
+    if os.path.isdir(path):
+        rdf_file = next((os.path.join(path, n) for n in rdf_names if os.path.isfile(os.path.join(path, n))), None)
+        if rdf_file is None:
+            raise ValueError(f"No BMZ model description ({' or '.join(rdf_names)}) found in folder: {path}")
+        with open(rdf_file, "r") as f:
+            rdf = yaml.safe_load(f)
+    elif path.lower().endswith(".zip"):
+        import zipfile
+
+        with zipfile.ZipFile(path) as z:
+            rdf_file = next((n for n in z.namelist() if os.path.basename(n) in rdf_names), None)
+            if rdf_file is None:
+                raise ValueError(f"No BMZ model description ({' or '.join(rdf_names)}) found in package: {path}")
+            rdf = yaml.safe_load(z.read(rdf_file))
+    else:
+        with open(path, "r") as f:
+            rdf = yaml.safe_load(f)
+    if not isinstance(rdf, dict) or rdf.get("type") != "model":
+        raise ValueError(f"'{path}' does not describe a BMZ model")
+    return {"nickname": path, "alias": None, "raw": {"manifest": rdf}}
+
+
 def check_bmz_args(
     model_ID: str,
     cfg: Optional[CN] = None,
@@ -1402,7 +1432,7 @@ def check_bmz_args(
     Parameters
     ----------
     model_ID : str
-        Model identifier. It can be either its ``DOI`` or ``nickname``.
+        Model ``DOI``, ``nickname`` or path to a local BMZ package.
 
     cfg : YACS configuration, optional
         Running configuration. When provided, the model is checked against its workflow
@@ -1421,14 +1451,17 @@ def check_bmz_args(
     workflow_info : dict
         Inferred workflow information (``workflow_type``, ``ndim``, ``nclasses``).
     """
-    # Checking BMZ model compatibility using the available model list provided by BMZ
-    matches = find_bmz_models(model_ID)
+    if os.path.exists(model_ID):
+        model_dict = read_local_bmz_model(model_ID)
+    else:
+        # Checking BMZ model compatibility using the available model list provided by BMZ
+        matches = find_bmz_models(model_ID)
 
-    if len(matches) == 0:
-        raise ValueError(f"No model found with the provided DOI/name: {model_ID}")
-    if len(matches) > 1:
-        raise ValueError(f"More than one model found with the provided DOI/name ({model_ID}). Contact BiaPy team.")
-    model_dict = matches[0]
+        if len(matches) == 0:
+            raise ValueError(f"No model found with the provided DOI/name: {model_ID}")
+        if len(matches) > 1:
+            raise ValueError(f"More than one model found with the provided DOI/name ({model_ID}). Contact BiaPy team.")
+        model_dict = matches[0]
 
     workflow_specs = None
     if cfg is not None:
@@ -1578,12 +1611,15 @@ def check_bmz_model_compatibility(
             pass
 
     # --------- Extract model kwargs ---------
+    # Optional in the spec
     model_kwargs = None
     if "kwargs" in weights:
         model_kwargs = weights["kwargs"]
     elif "architecture" in weights and isinstance(weights["architecture"], dict):
         model_kwargs = weights["architecture"].get("kwargs", None)
     if model_kwargs is None:
+        model_kwargs = {}
+    if not isinstance(model_kwargs, dict):
         return _result(True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n")
 
     # --------- Problem type via tags ---------
@@ -1694,7 +1730,7 @@ def check_bmz_model_compatibility(
                 channel_code = ["A"] # wild-whale
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
-        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = (1, 1)
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = tuple([1] * len(channel_code))
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES"] = []
         if any([x for x in ["F_pre", "F_post", "F_cleft"] if x in channel_code]):
             opts["PROBLEM.INSTANCE_SEG.TYPE"] = "synapses"
@@ -1823,6 +1859,10 @@ def check_bmz_model_compatibility(
                 ):
                     filtered_preproc_info.append(preproc)
 
+            # Clip before normalization -> PERC_CLIP. scale_range(p) -> SCALE_RANGE p (no clip), unless followed by
+            # clip(0, 1): that pair is PERC_CLIP p + min-max scale_range.
+            normalized = False
+            scale_range_perc = (0.0, 100.0)
             for preproc_info in filtered_preproc_info:
                 if key_to_find not in preproc_info:
                     reason_message = (
@@ -1831,6 +1871,7 @@ def check_bmz_model_compatibility(
                     return _result(True, reason_message)
                 
                 proc_id = preproc_info[key_to_find]
+                proc_kwargs = preproc_info.get("kwargs") or {}
                 if proc_id not in [
                     "zero_mean_unit_variance",
                     "fixed_zero_mean_unit_variance",
@@ -1845,9 +1886,9 @@ def check_bmz_model_compatibility(
 
                 # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
                 if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-                    if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
-                        mean = preproc_info["kwargs"]["mean"]
-                        std = preproc_info["kwargs"]["std"]
+                    if "mean" in proc_kwargs:
+                        mean = proc_kwargs["mean"]
+                        std = proc_kwargs["std"]
                     elif "mean" in preproc_info:
                         mean = preproc_info["mean"]
                         std = preproc_info["std"]
@@ -1862,33 +1903,59 @@ def check_bmz_model_compatibility(
                     opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
                     opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
                     opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
+                    normalized = True
 
                 # scale_linear ~ div (gain not handled, same as original)
                 elif proc_id == "scale_linear":
                     opts["DATA.NORMALIZATION.TYPE"] = "div"
+                    normalized = True
 
-                # scale_range -> scale_range (+ optional PERC_CLIP)
+                # scale_range -> scale_range between percentiles (no clipping)
                 elif proc_id == "scale_range":
                     opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-                    min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
-                    max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
-                    # Check if there is percentile clipping
-                    if min_percentile != 0 or max_percentile != 100:
-                        opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
-                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                    scale_range_perc = (
+                        float(proc_kwargs.get("min_percentile", 0) or 0),
+                        float(proc_kwargs.get("max_percentile", 100) or 100),
+                    )
+                    if scale_range_perc != (0, 100):
+                        opts["DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC"] = scale_range_perc[0]
+                        opts["DATA.NORMALIZATION.SCALE_RANGE.UPPER_PERC"] = scale_range_perc[1]
+                    normalized = True
+
                 elif proc_id == "clip":
-                    opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                    min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
-                    max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
-                    max_value = float(preproc_info["kwargs"].get("max_value", -1))
-                    min_value = float(preproc_info["kwargs"].get("min_value", -1))
-                    if min_percentile != 0 or max_percentile != 100:
-                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
-                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
-                    elif min_value != -1 or max_value != -1:
-                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
-                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
+                    min_percentile = proc_kwargs.get("min_percentile")
+                    max_percentile = proc_kwargs.get("max_percentile")
+                    min_value = proc_kwargs.get("min", proc_kwargs.get("min_value"))
+                    max_value = proc_kwargs.get("max", proc_kwargs.get("max_value"))
+                    if not normalized:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(min_percentile or 0)
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(max_percentile or 100)
+                        if min_value is not None:
+                            opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = [float(min_value)]
+                        if max_value is not None:
+                            opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = [float(max_value)]
+                    elif (
+                        opts.get("DATA.NORMALIZATION.TYPE") == "scale_range"
+                        and min_percentile is None
+                        and max_percentile is None
+                        and min_value is not None
+                        and max_value is not None
+                        and float(min_value) == 0
+                        and float(max_value) == 1
+                    ):
+                        if scale_range_perc != (0, 100):
+                            opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                            opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = scale_range_perc[0]
+                            opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = scale_range_perc[1]
+                            opts["DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC"] = 0.0
+                            opts["DATA.NORMALIZATION.SCALE_RANGE.UPPER_PERC"] = 100.0
+                    else:
+                        reason_message = (
+                            f"[{specific_workflow}] A clip after the normalization is not supported (only a clip to "
+                            f"[0, 1] after 'scale_range'). Found: {preproc_info}\n"
+                        )
+                        return _result(True, reason_message)
 
     # --------- Post-processing in kwargs (unsupported) ---------
     if "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:

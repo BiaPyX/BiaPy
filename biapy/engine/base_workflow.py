@@ -395,6 +395,8 @@ class Base_Workflow(metaclass=ABCMeta):
             "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
             "lower_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
             "upper_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            "scale_range_lower_perc": cfg.DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC,
+            "scale_range_upper_perc": cfg.DATA.NORMALIZATION.SCALE_RANGE.UPPER_PERC,
             "mean": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
             "std": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
             # None (default) => target normalized like the input, as before. See DATA.NORMALIZATION.TARGET.

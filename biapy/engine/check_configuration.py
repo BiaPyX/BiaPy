@@ -2692,6 +2692,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' not in [0, 100] range")
         if not check_value(cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, value_range=(0, 100)):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
+    scale_range_perc = (cfg.DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC, cfg.DATA.NORMALIZATION.SCALE_RANGE.UPPER_PERC)
+    if scale_range_perc != (0, 100):
+        if cfg.DATA.NORMALIZATION.TYPE != "scale_range":
+            raise ValueError(
+                "'DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC'/'UPPER_PERC' need 'DATA.NORMALIZATION.TYPE' = 'scale_range'"
+            )
+        if not (0 <= scale_range_perc[0] < scale_range_perc[1] <= 100):
+            raise ValueError(
+                "'DATA.NORMALIZATION.SCALE_RANGE.LOWER_PERC'/'UPPER_PERC' must satisfy 0 <= lower < upper <= 100. "
+                f"Provided: {scale_range_perc}"
+            )
 
     if cfg.DATA.NORMALIZATION.TARGET.ENABLE:
         tnorm = cfg.DATA.NORMALIZATION.TARGET
@@ -3286,6 +3297,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "sam3_vit",
                 "celldino_vit",
                 "dinov3_vit",
+                "cellpose_sam_vit",
             ]
             if model_arch == "unetr":
                 vit_backbone, vit_backbone_var = cfg.MODEL.UNETR_VIT_MODEL, "MODEL.UNETR_VIT_MODEL"
@@ -3295,12 +3307,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 vit_backbone, vit_backbone_var = "custom", "MODEL.VIT_MODEL"
             if vit_backbone not in _vit_models:
                 raise ValueError(f"'{vit_backbone_var}' needs to be in {_vit_models}. Provided: '{vit_backbone}'")
+            if vit_backbone == "cellpose_sam_vit" and model_arch != "vit_readout":
+                raise ValueError(f"'{vit_backbone_var}' = 'cellpose_sam_vit' is only supported by 'vit_readout'")
 
             # Only "custom" builds the ViT out of the 'MODEL.VIT_*' variables. The rest of the models are
             # built with the values they were designed with, 'MODEL.VIT_TOKEN_SIZE' included.
             custom_vit = vit_backbone == "custom"
             if custom_vit:
                 token_size = cfg.MODEL.VIT_TOKEN_SIZE
+            elif vit_backbone == "cellpose_sam_vit":
+                token_size = 8
             elif vit_backbone == "sam3_vit":
                 # SAM 3 uses 14x14 tokens, but UNETR's decoder needs a power of two, so the closest one is
                 # used there and its patch embedding is resized to it when loading the pretrained weights
@@ -3423,10 +3439,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "Convert the data to 1 or 3 channels, or set 'MODEL.VIT_PRETRAINED_WEIGHTS' to '' to train "
                         "from scratch."
                     )
+            elif vit_backbone == "cellpose_sam_vit":
+                if cfg.PROBLEM.NDIM == "3D":
+                    raise ValueError(f"'{vit_backbone_var}' can not be 'cellpose_sam_vit' with 3D data.")
+                if cfg.MODEL.VIT_TOKEN_STRIDE not in [-1, 8]:
+                    raise ValueError("'MODEL.VIT_TOKEN_STRIDE' must be -1 or 8 with 'cellpose_sam_vit'")
+                if cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "" and cfg.DATA.PATCH_SIZE[-1] > 3:
+                    raise ValueError(
+                        "Cellpose-SAM's pretrained weights support up to 3 input channels, "
+                        f"'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}"
+                    )
             elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
                 raise ValueError(
                     "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit', "
-                    f"'celldino_vit' or 'dinov3_vit', as those are the only ones with pretrained weights available. "
+                    f"'celldino_vit', 'dinov3_vit' or 'cellpose_sam_vit', as those are the only ones with pretrained "
+                    "weights available. "
                     f"'{vit_backbone_var}' is set to '{vit_backbone}'."
                 )
         elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
@@ -3559,7 +3586,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             except ImportError:
                 raise ImportError("Please install safetensors package to be able to load .safetensors checkpoints")
 
-    if cfg.MODEL.SOURCE == "biapy" and not cfg.MODEL.LOAD_CHECKPOINT and not cfg.TRAIN.ENABLE and cfg.TEST.ENABLE:
+    # Built as Cellpose-SAM, its pretrained weights are the whole model, so it can be tested without a checkpoint
+    full_cellpose_sam = (
+        cfg.MODEL.ARCHITECTURE == "vit_readout"
+        and cfg.MODEL.VIT_MODEL == "cellpose_sam_vit"
+        and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != ""
+        and cfg.MODEL.VIT_READOUT.FEATURES == 3
+        and cfg.MODEL.VIT_READOUT.REFINE_LAYERS == 0
+        and cfg.PROBLEM.TYPE == "INSTANCE_SEG"
+        and sorted(c for c in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if c not in ["I", "We"]) == ["F", "Gh", "Gv"]
+    )
+    if (
+        cfg.MODEL.SOURCE == "biapy"
+        and not cfg.MODEL.LOAD_CHECKPOINT
+        and not cfg.TRAIN.ENABLE
+        and cfg.TEST.ENABLE
+        and not full_cellpose_sam
+    ):
         raise ValueError("Seems that you want to test a model without training first. In this case, 'MODEL.LOAD_CHECKPOINT' needs to be set to True to load a pre-trained model.")
 
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
