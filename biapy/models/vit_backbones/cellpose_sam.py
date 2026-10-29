@@ -9,7 +9,7 @@ References: https://www.biorxiv.org/content/10.1101/2025.04.28.651001 and https:
 encoder code, Apache 2.0).
 """
 
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 import torch
 import torch.nn as nn
@@ -42,8 +42,8 @@ CELLPOSE_SAM_VIT_PARAMS = {
 CELLPOSE_SAM_WEIGHTS_URL = "https://huggingface.co/mouseland/cellpose-sam/resolve/main/"
 CELLPOSE_SAM_WEIGHTS = ["cpsam", "cpsam_v2"]
 
-# BiaPy channel -> Cellpose-SAM readout channel (y flow, x flow, cell probability logit)
-CELLPOSE_SAM_OUTPUTS = {"Gv": 0, "Gh": 1, "F": 2}
+# BiaPy channel -> Cellpose readout channel (y flow, x flow, cell probability logit)
+CELLPOSE_OUTPUTS = {"Gv": 0, "Gh": 1, "F": 2}
 
 
 class LayerNorm2d(nn.Module):
@@ -188,11 +188,49 @@ def build_cellpose_sam_neck() -> nn.Sequential:
     )
 
 
-def _cellpose_sam_readout_targets(output_channel_info: List[str]) -> Optional[List[List[int]]]:
-    """Per head, the Cellpose-SAM readout channel of each output channel, or ``None`` if they are not exactly F/Gv/Gh."""
-    targets = [[CELLPOSE_SAM_OUTPUTS.get(ch, -1) for ch in info.split("+")] for info in output_channel_info]
-    flat = sorted(t for head in targets for t in head)
-    return targets if flat == sorted(CELLPOSE_SAM_OUTPUTS.values()) else None
+def cellpose_patch_embed(weight: torch.Tensor, model: nn.Module, what: str, verbose: bool = True) -> torch.Tensor:
+    """Patch embedding of a Cellpose 4 checkpoint for ``model``'s input channels: the first kernels, as Cellpose does."""
+    in_chans = model.patch_embed.proj.weight.shape[1]  # type: ignore
+    if in_chans > weight.shape[1]:
+        raise ValueError(f"{what}'s weights support up to {weight.shape[1]} input channels, the model has {in_chans}")
+    if in_chans < weight.shape[1]:
+        weight = weight[:, :in_chans]
+        if verbose:
+            print(f"    - patch embedding reduced to {in_chans} input channel(s) (first kernels kept)")
+    return weight
+
+
+def cellpose_readout_tensors(
+    model: nn.Module, out_weight: torch.Tensor, out_bias: torch.Tensor, verbose: bool = True
+) -> Optional[Dict[str, torch.Tensor]]:
+    """
+    Readout of a Cellpose 4 model (its ``out`` layer: 1x1 conv in Cellpose-SAM, linear in Cellpose-DINO) as
+    ``vit_readout``'s ``readout``, plus heads that select its outputs. ``None`` if the model can not hold it: it needs 3
+    readout features, no refinement, the same token stride and heads predicting exactly F, Gv and Gh.
+    """
+    targets = [[CELLPOSE_OUTPUTS.get(ch, -1) for ch in info.split("+")] for info in getattr(model, "output_channel_info", [])]
+    weight = out_weight.reshape(out_weight.shape[0], -1)
+    if not (
+        getattr(model, "readout_features", None) == len(CELLPOSE_OUTPUTS)
+        and getattr(model, "refine_layers", None) == 0
+        and sorted(t for head in targets for t in head) == sorted(CELLPOSE_OUTPUTS.values())
+        and model.readout.weight.shape == weight.shape  # type: ignore
+    ):
+        if verbose:
+            print(
+                "    - only the encoder is loaded (the readout needs 'MODEL.VIT_READOUT.FEATURES' = 3, 'REFINE_LAYERS' "
+                "= 0, 8x8 token stride and DATA_CHANNELS 'F', 'Gv', 'Gh')"
+            )
+        return None
+
+    state = {"readout.weight": weight, "readout.bias": out_bias}
+    for i, (head, head_targets) in enumerate(zip(model.heads, targets)):  # type: ignore
+        head_weight = torch.zeros_like(head.weight)
+        for j, t in enumerate(head_targets):
+            head_weight[j, t] = 1.0
+        state[f"heads.{i}.weight"] = head_weight
+        state[f"heads.{i}.bias"] = torch.zeros_like(head.bias)
+    return state
 
 
 def load_cellpose_sam_pretrained(
@@ -243,14 +281,9 @@ def load_cellpose_sam_pretrained(
         if k.startswith("encoder."):
             new_state_dict[k[len("encoder.") :]] = v
 
-    in_chans = model.patch_embed.proj.weight.shape[1]  # type: ignore
-    w = new_state_dict["patch_embed.proj.weight"]
-    if in_chans > w.shape[1]:
-        raise ValueError(f"Cellpose-SAM's weights support up to {w.shape[1]} input channels, the model has {in_chans}")
-    if in_chans < w.shape[1]:
-        new_state_dict["patch_embed.proj.weight"] = w[:, :in_chans]
-        if verbose:
-            print(f"    - patch embedding reduced from {w.shape[1]} to {in_chans} input channel(s) (first kernels kept)")
+    new_state_dict["patch_embed.proj.weight"] = cellpose_patch_embed(
+        new_state_dict["patch_embed.proj.weight"], model, "Cellpose-SAM", verbose
+    )
 
     grid = model.patch_embed.grid_size  # type: ignore
     pos_embed = new_state_dict["pos_embed"]
@@ -261,29 +294,10 @@ def load_cellpose_sam_pretrained(
         if verbose:
             print(f"    - position embedding interpolated from {pos_embed.shape[1]}x{pos_embed.shape[1]} to {grid}x{grid}")
 
-    # Readout: 1x1 conv to 3 * stride^2 channels + pixel shuffle, as 'vit_readout'
-    targets = _cellpose_sam_readout_targets(list(getattr(model, "output_channel_info", [])))
-    readout_ok = (
-        getattr(model, "readout_features", None) == len(CELLPOSE_SAM_OUTPUTS)
-        and getattr(model, "refine_layers", None) == 0
-        and targets is not None
-        and model.readout.weight.shape == checkpoint["out.weight"].shape[:2]  # type: ignore
-    )
-    if readout_ok:
-        new_state_dict["readout.weight"] = checkpoint["out.weight"][:, :, 0, 0]
-        new_state_dict["readout.bias"] = checkpoint["out.bias"]
-        # Heads just select Cellpose-SAM's outputs
-        for i, (head, head_targets) in enumerate(zip(model.heads, targets)):  # type: ignore
-            weight = torch.zeros_like(head.weight)
-            for j, t in enumerate(head_targets):
-                weight[j, t] = 1.0
-            new_state_dict[f"heads.{i}.weight"] = weight
-            new_state_dict[f"heads.{i}.bias"] = torch.zeros_like(head.bias)
-    elif verbose:
-        print(
-            "    - only the encoder is loaded (the readout needs 'MODEL.VIT_READOUT.FEATURES' = 3, 'REFINE_LAYERS' = 0 "
-            "and DATA_CHANNELS 'F', 'Gv', 'Gh')"
-        )
+    readout = cellpose_readout_tensors(model, checkpoint["out.weight"], checkpoint["out.bias"], verbose)
+    readout_ok = readout is not None
+    if readout is not None:
+        new_state_dict.update(readout)
 
     return load_matching_tensors(
         model,

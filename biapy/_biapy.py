@@ -10,6 +10,7 @@ import argparse
 import datetime
 import ntpath
 import yaml
+import warnings
 import torch
 import pooch
 import torch.distributed as dist
@@ -1052,6 +1053,14 @@ class BiaPy:
             chosen = chosen[0]
         return chosen
 
+    def _bmz_output_channel_names(self, n: int) -> List[str]:
+        """Output channel names of the BMZ export: BiaPy's channel codes in instance segmentation, else 'channel<i>'."""
+        if self.cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+            codes = [c for c in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if c not in ["I", "We"]]
+            if len(codes) == n and len(set(codes)) == n:
+                return codes
+        return [f"channel{i}" for i in range(n)]
+
     def export_model_to_bmz(
         self,
         building_dir: str,
@@ -1442,6 +1451,14 @@ class BiaPy:
                     }
                 preprocessing.append({"id": "fixed_zero_mean_unit_variance", "kwargs": fixed_kwargs})
             else:
+                if preprocessing:
+                    # No exact equivalent: there is no BMZ op computing statistics after a clip
+                    warnings.warn(
+                        "Clipping + per-image 'zero_mean_unit_variance' is exported as BMZ 'clip' + "
+                        "'zero_mean_unit_variance', but bioimageio.core computes the mean/std on the unclipped image "
+                        "while BiaPy uses the clipped one, so other BMZ consumers will normalize differently (and the "
+                        "package's reproducibility test may report a mismatch)."
+                    )
                 preprocessing.append(
                     {
                         "id": "zero_mean_unit_variance",
@@ -1512,7 +1529,7 @@ class BiaPy:
             else:
                 output_axes = [
                     BatchAxis(size=1),
-                    ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
+                    ChannelAxis(channel_names=[Identifier(n) for n in self._bmz_output_channel_names(test_output.shape[1])]),
                 ]
                 if self.cfg.PROBLEM.NDIM == "3D":
                     if test_output.shape[test_output.ndim-3] >= 20:
@@ -1832,12 +1849,16 @@ class BiaPy:
         ):
             covers = self.workflow.bmz_config["original_bmz_config"].covers
         else:  # create_model_cover
+            cover_gt = self.workflow.bmz_config["cover_gt"]
             cover_path = create_model_cover(
                 self.workflow.bmz_config["cover_raw"], 
-                self.workflow.bmz_config["cover_gt"], 
+                cover_gt, 
                 building_dir, 
                 is_3d=self.cfg.PROBLEM.NDIM == "3D", 
                 workflow=workflow,
+                channel_names=(
+                    self._bmz_output_channel_names(cover_gt.shape[-1]) if isinstance(cover_gt, np.ndarray) else None
+                ),
             )
             covers.append(Path(cover_path))
 

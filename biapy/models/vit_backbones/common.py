@@ -7,7 +7,7 @@ from timm.models.vision_transformer import Block
 
 from biapy.models.vit_backbones.cellpose_sam import CELLPOSE_SAM_VIT_PARAMS, build_cellpose_sam_blocks
 from biapy.models.vit_backbones.celldino import CELLDINO_VIT_PARAMS
-from biapy.models.vit_backbones.dinov3 import DINOV3_VIT_PARAMS, build_dinov3_blocks
+from biapy.models.vit_backbones.dinov3 import DINOV3_VIT_PARAMS, DINOV3_VITB_PARAMS, build_dinov3_blocks
 from biapy.models.vit_backbones.sam3 import SAM3_VIT_PARAMS, build_sam3_blocks
 
 
@@ -125,6 +125,16 @@ VIT_BACKBONES: Dict[str, Dict] = {
         norm_eps=DINOV3_VIT_PARAMS["norm_eps"],
         blocks="dinov3", ndims=(2,), in_chans=None, archs=("vit", "unetr", "dpt", "vit_readout"), pretrained=True,
     ),
+    "dinov3_vitb": dict(
+        patch_size=DINOV3_VITB_PARAMS["patch_size"],
+        embed_dim=DINOV3_VITB_PARAMS["embed_dim"],
+        depth=DINOV3_VITB_PARAMS["depth"],
+        num_heads=DINOV3_VITB_PARAMS["num_heads"],
+        mlp_ratio=DINOV3_VITB_PARAMS["mlp_ratio"],
+        init_values=DINOV3_VITB_PARAMS["init_values"],
+        norm_eps=DINOV3_VITB_PARAMS["norm_eps"],
+        blocks="dinov3", ndims=(2,), in_chans=None, archs=("vit", "unetr", "dpt", "vit_readout"), pretrained=True,
+    ),
     "cellpose_sam_vit": dict(
         patch_size=CELLPOSE_SAM_VIT_PARAMS["patch_size"],
         embed_dim=CELLPOSE_SAM_VIT_PARAMS["embed_dim"],
@@ -173,7 +183,8 @@ def build_vit_blocks(
     Parameters
     ----------
     blocks : str
-        "timm" (plain ViT, built from the rest of arguments), "sam3", "dinov3" or "cellpose_sam" (fixed geometry).
+        "timm" (plain ViT, built from the rest of arguments), "sam3", "dinov3" (ViT-L or ViT-B by ``embed_dim``) or
+        "cellpose_sam" (fixed geometry).
 
     embed_dim, depth, num_heads, mlp_ratio, norm_layer, init_values :
         Plain ViT block settings (``init_values`` = LayerScale, ``None`` disables it).
@@ -195,7 +206,8 @@ def build_vit_blocks(
     if blocks == "sam3":
         return build_sam3_blocks(grid_size, num_prefix_tokens=num_prefix_tokens)
     if blocks == "dinov3":
-        return build_dinov3_blocks(grid_size, num_prefix_tokens, drop_path)
+        params = DINOV3_VITB_PARAMS if embed_dim == DINOV3_VITB_PARAMS["embed_dim"] else DINOV3_VIT_PARAMS
+        return build_dinov3_blocks(grid_size, num_prefix_tokens, drop_path, params)
     if blocks == "cellpose_sam":
         return build_cellpose_sam_blocks(drop_path)
     drop_path = [0.0] * depth if drop_path is None else list(drop_path)
@@ -221,10 +233,11 @@ def load_pretrained_vit_backbone(model: nn.Module, vit_model: str, weights: str)
         from biapy.models.vit_backbones.sam3 import load_sam3_pretrained_encoder
 
         return load_sam3_pretrained_encoder(model, weights=weights)
-    if vit_model == "dinov3_vit":
+    if vit_model in ["dinov3_vit", "dinov3_vitb"]:
         from biapy.models.vit_backbones.dinov3 import load_dinov3_pretrained_encoder
 
-        return load_dinov3_pretrained_encoder(model, weights=weights)
+        params = DINOV3_VITB_PARAMS if vit_model == "dinov3_vitb" else DINOV3_VIT_PARAMS
+        return load_dinov3_pretrained_encoder(model, weights=weights, params=params)
     if vit_model == "celldino_vit":
         from biapy.models.vit_backbones.celldino import load_celldino_pretrained_encoder
 

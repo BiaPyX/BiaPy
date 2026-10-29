@@ -93,6 +93,9 @@ class test_pair_data_generator(Dataset):
     reflect_to_complete_shape : bool, optional
         Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
 
+    complete_shape_mode : str, optional
+        Padding of ``reflect_to_complete_shape``: "reflect" or "zeros" (Cellpose flows).
+
     n_classes : int, optional
         Number of classes to predict.
 
@@ -135,6 +138,7 @@ class test_pair_data_generator(Dataset):
         preprocess_cfg: Optional[Dict] = None,
         data_shape: Tuple[int, ...] = (256, 256, 1),
         reflect_to_complete_shape: bool = True,
+        complete_shape_mode: str = "reflect",
         n_classes: int = 1,
         ignore_index: Optional[int]=None,
         is_y_mask: bool = True,
@@ -162,6 +166,7 @@ class test_pair_data_generator(Dataset):
         self.preprocess_data = preprocess_data
         self.preprocess_cfg = preprocess_cfg
         self.reflect_to_complete_shape = reflect_to_complete_shape
+        self.complete_shape_mode = "constant" if complete_shape_mode == "zeros" else complete_shape_mode
         self.data_shape = data_shape
         self.seed = seed
         self.ndim = ndim
@@ -377,6 +382,9 @@ class test_pair_data_generator(Dataset):
                 )
             sample_extra_info["discard"] = discard
 
+            # With zero filling the zeros stand for the normalized background (as Cellpose): normalize the image
+            # itself, before completing its shape
+            normalized = False
             if not discard:
                 # Preprocess test data
                 if self.preprocess_data:
@@ -397,10 +405,14 @@ class test_pair_data_generator(Dataset):
                 # Reflect data to complete the needed shape
                 if self.reflect_to_complete_shape:
                     reflected_orig_shape = img.shape
+                    if self.complete_shape_mode == "constant" and not first_load:
+                        img, norm_extra_info = self._normalize_x(img, sample)
+                        normalized = True
                     img = pad_to_shape(
                         img,
                         self.data_shape,
                         verbose=True,
+                        mode=self.complete_shape_mode,
                     )
                     if self.provide_Y and not self.keep_native_y:
                         assert mask is not None
@@ -408,17 +420,14 @@ class test_pair_data_generator(Dataset):
                             mask,
                             self.data_shape,
                             verbose=True,
+                            mode=self.complete_shape_mode,
                         )
                     sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
 
             if not first_load:
                 # Normalization
-                img = np.array(img)
-                xnorm_info = self.X.dataset_info[sample.fid].norm_info
-                if xnorm_info is None:
-                    xnorm_info = self.norm_module
-                img, norm_extra_info = normalize_image(img, norm_module=xnorm_info)
-                assert isinstance(img, np.ndarray)
+                if not normalized:
+                    img, norm_extra_info = self._normalize_x(img, sample)
                 if self.provide_Y:
                     mask = np.array(mask)
                     mask, _ = normalize_mask(mask, norm_module=self.mask_norm, is_training=False)
@@ -454,6 +463,15 @@ class test_pair_data_generator(Dataset):
                 )
                 
         return img, mask, sample, msample, sample_extra_info, norm_extra_info
+
+    def _normalize_x(self, img: NDArray, sample) -> Tuple[NDArray, Dict]:
+        """Normalize a test image with its own normalization info (or the generator's)."""
+        xnorm_info = self.X.dataset_info[sample.fid].norm_info
+        if xnorm_info is None:
+            xnorm_info = self.norm_module
+        img, norm_extra_info = normalize_image(np.array(img), norm_module=xnorm_info)
+        assert isinstance(img, np.ndarray)
+        return img, norm_extra_info
 
     def __len__(self) -> int:
         """Defines the length of the generator"""

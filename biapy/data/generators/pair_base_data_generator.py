@@ -93,27 +93,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         To make zoom on images.
 
     zoom_range : tuple of floats, optional
-        Zoom range to apply. E. g. ``(0.8, 1.2)``.
+        Zoom range to apply (see ``zoom_reference``). E. g. ``(0.8, 1.2)``.
 
     zoom_in_z: bool, optional
         Whether to apply or not zoom in Z axis.
 
-    random_resized_crop : bool, optional
-        Whether to resize the full (pre-crop) image/mask before the usual fixed-size random crop, so
-        the crop covers a random ``random_resized_crop_scale_range`` fraction of the whole image's area
-        instead of a fixed native-pixel window. The image is resized to ``patch_size / sqrt(s)`` per
-        axis (``s`` drawn from the range, never below the patch size), i.e. the resized size depends
-        only on the patch size, not on the original image size or aspect ratio. 2D only; skipped when
-        a probability map is used or an enlarged window is loaded for ZOOM/RANDOM_ROT.
-
-    random_resized_crop_scale_range : tuple of floats, optional
-        Area-fraction range of the whole image the eventual crop should cover. E.g. ``(0.7, 0.95)``.
-        Rolled against ``aug_prob["random_resized_crop"]``; when the roll fails no resize is done and
-        the fixed-size crop is taken from the image at its native resolution.
+    zoom_reference : str, optional
+        What ``zoom_range`` is relative to. ``"native"``: the pixel size (scale factor). ``"image"``: the
+        whole image, ``zoom_range`` being the fraction of its area the patch covers; the full image/mask is
+        resized to ``patch_size / sqrt(s)`` per axis (never below the patch size) before the random crop.
+        2D only.
 
     is_y_mask : bool, optional
         Whether Y is a categorical mask (nearest-neighbor resizing) or continuous data (same
-        interpolation as X), used by ``preprocess_f`` and ``random_resized_crop``.
+        interpolation as X), used by ``preprocess_f`` and the ``"image"`` zoom.
 
     shift : float, optional
         To make shifts.
@@ -387,18 +380,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Cellpose reference diameter (pixels) the model is trained at (``DIAM_MEAN``). When > 0 and flow
         channels are present, each training patch is rescaled in-plane by
         ``DIAM_MEAN / diameter`` (the per-file diameter, read from ``DatasetFile.diameter``) so cells
-        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale. The random scale jitter
-        applied on top of this normalization during training is controlled by ``cellpose_scale_range``
-        (Cellpose's ``scale_range``), independently of the general ``zoom`` augmentation.
-
-    cellpose_scale_range : float, optional
-        Cellpose-style random scale jitter (``CELLPOSE.SCALE_RANGE``) folded into the per-image diameter
-        rescale during training. Each patch is scaled by ``(1 - cellpose_scale_range / 2) +
-        cellpose_scale_range * U[0, 1)``, i.e. uniformly in ``[1 - cellpose_scale_range / 2,
-        1 + cellpose_scale_range / 2]``, and this factor multiplies ``DIAM_MEAN / diameter``. Only used
-        when ``cellpose_diam_mean > 0``, flow channels are present and augmentation is on
-        (``da=True``); validation/test apply the plain rescale with no jitter. ``0.0`` disables the
-        jitter. Default ``0.5`` matches Cellpose's rescale training path (range ``[0.75, 1.25]``).
+        become ~``DIAM_MEAN`` pixels. ``0.0`` (default) disables the rescale. ``zoom`` multiplies it.
 
     img_type : str or list of str, optional
         How ``X`` is interpolated by any in-plane scale/rotation warp. Either "image" (default,
@@ -437,8 +419,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         zoom: bool = False,
         zoom_range: Tuple[float, float] = (0.8, 1.2),
         zoom_in_z: bool = False,
-        random_resized_crop: bool = False,
-        random_resized_crop_scale_range: Tuple[float, float] = (0.7, 0.95),
+        zoom_reference: Literal["native", "image"] = "native",
         is_y_mask: bool = True,
         shift: bool = False,
         shift_range: Tuple[float, float] = (0.1, 0.2),
@@ -526,7 +507,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         channel_extra_opts: Dict = {},
         instance_channel: Optional[int] = None,
         cellpose_diam_mean: float = 0.0,
-        cellpose_scale_range: float = 0.5,
         img_type: Union[str, List[str]] = "image",
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
@@ -619,9 +599,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # on ``da``); DIAM_MEAN <= 0 disables it.
         self.cellpose_diam_mean = float(cellpose_diam_mean)
         self.do_cellpose_rescale = self.has_flow_channels and self.cellpose_diam_mean > 0
-        # Cellpose-style random scale jitter (CELLPOSE.SCALE_RANGE) applied on top of the diameter rescale
-        # during training only. See apply_transform for the sampling formula.
-        self.cellpose_scale_range = float(cellpose_scale_range)
         if isinstance(img_type, list) and len(img_type) != shape[-1]:
             raise ValueError(
                 f"'img_type' was given as a per-channel list of length {len(img_type)} but the "
@@ -629,13 +606,19 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
         self.img_type = img_type
         self.shape = shape
-        # Padding mode of the affine augmentations, also used by ``load_sample``, so it must be set
-        # before the data analysis below. Cellpose flows pad with zeros (reflecting a flow field
+        # Padding mode of the affine augmentations and the "image" zoom, also used by ``load_sample``, so they
+        # must be set before the data analysis below. Cellpose flows pad with zeros (reflecting a flow field
         # fabricates border cells); Omnipose completes border cells by reflection, so reflect suits it.
         self.gradient_type = self.channel_extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
         self.affine_mode = (
             "constant" if self.has_flow_channels and self.gradient_type == "cellpose" else affine_mode
         )
+        self.da = da
+        self.aug_prob = aug_prob
+        self.zoom = zoom
+        self.zoom_range = zoom_range
+        self.zoom_reference = zoom_reference
+        self.is_y_mask = is_y_mask
         self.default_resolution_zyx = tuple(resolution)
 
         # X data analysis
@@ -756,8 +739,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
         self.resolution = resolution
         self.o_indexes = np.arange(self.length)
-        self.da = da
-        self.aug_prob = aug_prob
         self.cutout = cutout
         self.cout_nb_iterations = cout_nb_iterations
         self.cout_size = cout_size
@@ -807,12 +788,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.rand_rot = rand_rot
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
-        self.zoom = zoom
-        self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
-        self.random_resized_crop = random_resized_crop
-        self.random_resized_crop_scale_range = random_resized_crop_scale_range
-        self.is_y_mask = is_y_mask
 
         # Extra size to extract so a later zoom-out / rotation samples real content instead of padding
         # (see geom_aug_load_shape). Folds in the largest-cell diameter downscale (DIAM_MEAN /
@@ -830,7 +806,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.aug_load_inc = geom_aug_load_shape(
                 tuple(self.shape[: self.ndim]),
                 self.ndim,
-                self.zoom,
+                self.zoom and self.zoom_reference == "native",
                 self.zoom_range,
                 self.rand_rot,
                 zoom_in_z=self.zoom_in_z,
@@ -1263,21 +1239,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             else:
                 img_prob = None
 
-            # RandomResizedCrop-style scale augmentation: resize the whole image/mask down so that the
-            # usual fixed-size crop below ends up covering a random 'random_resized_crop_scale_range'
-            # area-fraction of the original image, instead of a fixed native-pixel window. 2D only; skip
-            # when there's a probability map (crop-center coordinates aren't valid post-resize) or a
-            # bigger 'enlarge' window is already being extracted for a different geometric augmentation.
+            # "image" zoom: resize the whole image so the crop below covers a random fraction of its area
             if (
                 not first_load
-                and getattr(self, "random_resized_crop", False)
-                and self.ndim == 2
-                and not enlarge
+                and self.zoom
+                and self.zoom_reference == "image"
                 and img_prob is None
-                and self._roll("random_resized_crop")
+                and self._roll("zoom")
             ):
-                area_scale = random.uniform(*self.random_resized_crop_scale_range)
-                side_scale = area_scale**0.5
+                side_scale = random.uniform(*self.zoom_range) ** 0.5
                 resized_spatial = tuple(
                     max(self.shape[i], int(round(self.shape[i] / side_scale))) for i in range(self.ndim)
                 )
@@ -1592,28 +1562,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # normalization (diam_factor = DIAM_MEAN / diameter, in-plane) is applied whenever needed, even
         # when no augmentation roll fires.
         do_diam_rescale = self.do_cellpose_rescale and diam_factor > 0 and abs(diam_factor - 1.0) > 1e-3
-        # Cellpose-style random scale jitter around the diameter rescale, applied during training only
-        # (da=True). It provides the scale randomization for the Cellpose approach on its own, so the
-        # general 'zoom' augmentation is not additionally sampled when it is active.
-        apply_cellpose_jitter = self.do_cellpose_rescale and self.da and self.cellpose_scale_range > 0
-        apply_zoom = (not apply_cellpose_jitter) and self.zoom and self._roll("zoom")
+        apply_zoom = self.zoom and self.zoom_reference == "native" and self._roll("zoom")
         apply_rand_rot = self.rand_rot and self._roll("rand_rot")
         apply_rot90 = self.rotation90 and self._roll("rotation90")
-        if (
-            apply_cellpose_jitter
-            or apply_zoom
-            or apply_rand_rot
-            or apply_rot90
-            or do_diam_rescale
-        ):
-            if apply_cellpose_jitter:
-                # Cellpose sampling: scale = (1 - scale_range/2) + scale_range * U[0, 1)
-                # (cellpose/transforms.py:random_rotate_and_resize).
-                scale = (1.0 - self.cellpose_scale_range / 2.0) + self.cellpose_scale_range * random.random()
-            elif apply_zoom:
-                scale = random.uniform(self.zoom_range[0], self.zoom_range[1])
-            else:
-                scale = 1.0
+        if apply_zoom or apply_rand_rot or apply_rot90 or do_diam_rescale:
+            scale = random.uniform(self.zoom_range[0], self.zoom_range[1]) if apply_zoom else 1.0
             angle = 0.0
             if apply_rand_rot:
                 angle += random.uniform(float(self.rnd_rot_range[0]), float(self.rnd_rot_range[1]))

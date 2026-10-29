@@ -436,17 +436,9 @@ class Config:
         # (TEST_DOUBLE_INFERENCE), else uses the training-set median. Default: 0.0.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAMETER = 0.0
         # Reference cell diameter (px) the flow model is trained at (30 'cyto', 17 'nuclei'). Both
-        # training and test rescale cells to this size. Default: 30.0.
+        # training and test rescale cells to this size; AUGMENTOR.ZOOM jitters around it (Cellpose uses
+        # ZOOM_RANGE (0.75, 1.25) with ZOOM_PROB 1.0). Default: 30.0.
         _C.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN = 30.0
-        # Amount of random scale jitter applied on top of the per-image diameter rescale during training
-        # (data augmentation), mirroring Cellpose's 'scale_range'. Each training patch is scaled by a
-        # factor drawn as (1 - SCALE_RANGE/2) + SCALE_RANGE * U[0, 1), i.e. uniformly in
-        # [1 - SCALE_RANGE/2, 1 + SCALE_RANGE/2], and this factor multiplies the DIAM_MEAN / diameter
-        # normalization. Only applied when training with flow channels; validation/test use the plain
-        # diameter rescale with no jitter. 0.0 disables the jitter. Matches Cellpose's default for the
-        # rescale training path (cellpose/train.py: scale_range0 = 0.5 when rescale=True), giving the
-        # range [0.75, 1.25]. Default: 0.5.
-        _C.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_RANGE = 0.5
         # When DIAMETER == 0, estimate each test image's diameter with a cheap first inference pass (on
         # one central patch) instead of the training-set median, then rescale the input for the real
         # pass. Ignored when DIAMETER > 0, for the by-chunks/Zarr path, and for 'torchvision' models.
@@ -457,7 +449,7 @@ class Config:
         # with the step count derived from the predicted distance field, then DBSCAN clustering of the
         # convergence points (a faithful port of Omnipose's compute_masks). Requires a predicted distance
         # channel ('Db' with val_type 'omnipose'). Omnipose is diameter-agnostic, so the Cellpose
-        # DIAMETER/DIAM_MEAN/SCALE_RANGE rescaling does not apply.
+        # DIAMETER/DIAM_MEAN rescaling does not apply.
         _C.PROBLEM.INSTANCE_SEG.OMNIPOSE = CN()
         # Foreground threshold on the predicted distance field ('Db'): pixels with distance above this
         # are traced (Omnipose's mask_threshold, applied via hysteresis at [MASK_THRESHOLD-1,
@@ -1295,6 +1287,10 @@ class Config:
         _C.DATA.TEST.OVERLAP = (0, 0)
         # Padding to be done in (y,x)/(z,y,xz) when reconstructing test data. Useful to avoid patch 'border effect'
         _C.DATA.TEST.PADDING = (0, 0)
+        # Apply 'DATA.TEST.PADDING' also to images of exactly 'DATA.PATCH_SIZE' (or smaller, completed to it), which
+        # are otherwise predicted as a single patch without it. Needed by Cellpose flows, whose border cells are lost
+        # without Cellpose's zero border. No effect if 'DATA.TEST.PADDING' is 0.
+        _C.DATA.TEST.FORCE_PADDING = False
         # Whether to use median values to fill padded pixels or zeros
         _C.DATA.TEST.MEDIAN_PADDING = False
         # Region of interest (ROI) mask restricting where the inference is done. Anything greater than 0 in the mask is
@@ -1484,8 +1480,6 @@ class Config:
         # DA_PROB. The geometric augmentations (ZOOM, RANDOM_ROT, ROT90) are each rolled with their
         # own probability and then composed into a single resampling pass (see affine_transform).
         _C.AUGMENTOR.ZOOM_PROB = 0.5
-        # Samples that don't roll RANDOM_RESIZED_CROP are cropped at native resolution.
-        _C.AUGMENTOR.RANDOM_RESIZED_CROP_PROB = 0.5
         _C.AUGMENTOR.RANDOM_ROT_PROB = 0.5
         _C.AUGMENTOR.ROT90_PROB = 0.5
         _C.AUGMENTOR.SHEAR_PROB = 0.5
@@ -1535,18 +1529,19 @@ class Config:
         _C.AUGMENTOR.SHEAR = False
         # Shear range. Expected value range is around [-360, 360], with reasonable values being in the range of [-45, 45].
         _C.AUGMENTOR.SHEAR_RANGE = (-20, 20)
-        # Rescale the patch around its native resolution (e.g. 0.5 = content shown at half size).
+        # Rescale the patch randomly
         _C.AUGMENTOR.ZOOM = False
-        # Zoom range. Scaling factor to use, where 1.0 denotes “no change” and 0.5 is zoomed out to 50 percent of the original size.
+        # What ZOOM_RANGE is relative to:
+        #   - "native": the pixel size. ZOOM_RANGE is the scale factor, 1.0 = no change, 0.5 = content at half size.
+        #   - "image": the whole image. ZOOM_RANGE is the fraction of the image area the patch covers, in (0, 1],
+        #     e.g. (0.7, 0.95): the image is resized so the patch covers that fraction of it (as torchvision's
+        #     RandomResizedCrop). For test images resized whole to the patch size (DATA.PREPROCESS.RESIZE).
+        #     2D only, requires DATA.TRAIN.PATCH_SAMPLING = 'random' and can't be used with Cellpose flows.
+        _C.AUGMENTOR.ZOOM_REFERENCE = "native"
+        # Zoom range (see ZOOM_REFERENCE)
         _C.AUGMENTOR.ZOOM_RANGE = (0.5, 1.5)
-        # Whether to apply or not zoom in Z axis (for 3D volumes).
+        # Whether to apply or not zoom in Z axis (for 3D volumes, ZOOM_REFERENCE "native").
         _C.AUGMENTOR.ZOOM_IN_Z = False
-        # Resize the whole image before the random crop so the patch covers a random fraction of the
-        # field of view. Use it when test images are resized whole to the patch size (DATA.PREPROCESS.RESIZE).
-        # 2D only; requires DATA.TRAIN.PATCH_SAMPLING = 'random', and can't be combined with ZOOM or RANDOM_ROT.
-        _C.AUGMENTOR.RANDOM_RESIZED_CROP = False
-        # Area-fraction range of the whole image the crop should cover, e.g. (0.7, 0.95).
-        _C.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE = (0.7, 0.95)
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
         # Shift range. Translation as a fraction of the image height/width (x-translation, y-translation), where 0 denotes
@@ -1799,7 +1794,10 @@ class Config:
         #     Pretrained.
         #   - "celldino_vit": Cell-DINO's ViT-L/16 (https://doi.org/10.1371/journal.pcbi.1013828). 2D, 1 channel.
         #     Pretrained.
-        #   - "dinov3_vit": DINOv3's ViT-L/16 (https://arxiv.org/abs/2508.10104). 2D, 1 or 3 channels. Pretrained.
+        #   - "dinov3_vit": DINOv3's ViT-L/16 (https://arxiv.org/abs/2508.10104). 2D, 1 or 3 channels. Pretrained. With
+        #     the "cpdino" weights, 'MODEL.VIT_TOKEN_STRIDE' = 8 and the 'vit_readout' settings of "cellpose_sam_vit"
+        #     below it is the whole Cellpose-DINO model.
+        #   - "dinov3_vitb": DINOv3's ViT-B/16 (768 dims, 12 blocks, 12 heads), as "dinov3_vit". "cpdino-vitb" weights.
         #   - "cellpose_sam_vit": Cellpose-SAM's encoder (8x8 tokens). 2D, up to 3 channels, 'vit_readout' only.
         #     Pretrained. With 'MODEL.VIT_READOUT.FEATURES' = 3, 'MODEL.VIT_READOUT.REFINE_LAYERS' = 0 and
         #     'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' = ['F', 'Gv', 'Gh'] it is the whole Cellpose-SAM model (ready for
@@ -1807,7 +1805,7 @@ class Config:
         # "Pretrained": weights loaded with 'MODEL.VIT_PRETRAINED_WEIGHTS'.
         _C.MODEL.VIT_MODEL = "custom"
         # Pretrained weights for the ViT backbone. Leave empty to train from scratch. Only used with "sam3_vit",
-        # "celldino_vit", "dinov3_vit" or "cellpose_sam_vit":
+        # "celldino_vit", "dinov3_vit", "dinov3_vitb" or "cellpose_sam_vit":
         #   - "sam3_vit": a Hugging Face repo (e.g. "facebook/sam3") or local file path. Gated model: accept the
         #     license at https://huggingface.co/facebook/sam3 and authenticate ("hf auth login" or HF_TOKEN).
         #   - "celldino_vit": local path to the "channel_adaptive_dino_vitl16" checkpoint. Not on the HF Hub; request
@@ -1816,6 +1814,10 @@ class Config:
         #     path (original "dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth" or HF "model.safetensors"). Gated model:
         #     request access on its HF page and authenticate, or at https://ai.meta.com/resources/models-and-libraries/dinov3-downloads/.
         #     Its RGB patch embedding is adapted to 1 channel by adding up its kernels; other channel counts need "".
+        #     Also Cellpose-DINO: "cpdino" (https://huggingface.co/mouseland/cellpose-sam), a URL or a local copy
+        #     (name starting with "cpdino"), up to 3 channels. Use a 384 'DATA.PATCH_SIZE', as Cellpose.
+        #   - "dinov3_vitb": as "dinov3_vit" with the ViT-B/16 weights ("facebook/dinov3-vitb16-pretrain-lvd1689m",
+        #     "cpdino-vitb").
         #   - "cellpose_sam_vit": "cpsam", "cpsam_v2" (https://huggingface.co/mouseland/cellpose-sam), a URL or a
         #     local Cellpose-SAM checkpoint. Use a 256 'DATA.PATCH_SIZE' (other sizes interpolate the position embedding).
         # Ignored when 'MODEL.LOAD_CHECKPOINT' is enabled.

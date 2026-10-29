@@ -356,15 +356,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 if "DATA.PATCH_SIZE" in key and "model_arch" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
                     continue
                 old_val = get_cfg_key_value(cfg, key)
-                change = False
-
-                # Not changing patch size if only the channel dimension is different
-                if "DATA.PATCH_SIZE" in key:
-                    if old_val[:-1] != val[:-1]:
-                        change = True
-                elif old_val != val:
-                    change = True
-                if change:
+                if old_val != val:
                     print(f"[BMZ] Changed '{key}' from '{old_val}' to '{val}' as defined in the RDF")
                     option_list.append(key)
                     option_list.append(val)
@@ -1788,6 +1780,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 X_test=self.X_test,
                 Y_test=self.Y_test,
                 norm_module=self.test_norm_module,
+                complete_shape_mode=self.padding_type,
             )
             # Save BMZ data if not available
             if "cover_raw" not in self.bmz_config or "cover_gt" not in self.bmz_config:
@@ -2327,8 +2320,12 @@ class Base_Workflow(metaclass=ABCMeta):
             if not self.cfg.TEST.REUSE_PREDICTIONS:
                 original_data_shape = self.current_sample["X"].shape
 
-                # Crop if necessary
-                if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                # Crop if necessary. With 'DATA.TEST.FORCE_PADDING' also images of the patch size, so they get the
+                # padding too
+                tile_sample = self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1] or (
+                    self.cfg.DATA.TEST.FORCE_PADDING and any(p > 0 for p in self.cfg.DATA.TEST.PADDING)
+                )
+                if tile_sample:
                     # Copy X to be used later in full image
                     if self.cfg.PROBLEM.NDIM != "3D":
                         X_original = self.current_sample["X"].copy()
@@ -2403,7 +2400,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = self.predict_batches_in_test(self.current_sample["X"], self.current_sample["Y"])
 
                 # Reconstruct the predictions
-                if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                if tile_sample:
                     if self.cfg.PROBLEM.NDIM == "3D":
                         original_data_shape = original_data_shape[1:]
                     f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap

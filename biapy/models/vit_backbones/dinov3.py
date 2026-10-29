@@ -1,8 +1,10 @@
 """
-DINOv3 ViT-L/16 image encoder for BiaPy.
+DINOv3 ViT-L/16 and ViT-B/16 image encoders for BiaPy.
 
-This module reproduces DINOv3's ViT-L/16 (distilled from its 7B model on LVD-1689M) so its pretrained weights can be
-used as the backbone of BiaPy's ``vit``, ``unetr``, ``dpt`` and ``vit_readout`` architectures. It is not a plain ViT:
+This module reproduces DINOv3's ViT-L/16 and ViT-B/16 (distilled from its 7B model on LVD-1689M) so their pretrained
+weights can be used as the backbone of BiaPy's ``vit``, ``unetr``, ``dpt`` and ``vit_readout`` architectures. With 8x8
+token stride and ``vit_readout`` they are also Cellpose-DINO (``cpdino``, ``cpdino-vitb`` checkpoints). It is not a
+plain ViT:
 
 - There is no learned position embedding. The position of each token is encoded with 2D axial rotary embeddings
   (RoPE) applied to the queries and keys inside every block, with the token coordinates normalized to [-1, 1] so
@@ -24,7 +26,8 @@ Functions:
 
 - ``dinov3_rope_sincos``: rotary sin/cos of a token grid.
 - ``build_dinov3_blocks``: create the stack of blocks of the encoder.
-- ``load_dinov3_pretrained_encoder``: fetch the released weights and load them into a BiaPy model.
+- ``load_dinov3_pretrained_encoder``: fetch the released (DINOv3 or Cellpose-DINO) weights and load them into a BiaPy
+  model.
 
 Reference: `DINOv3 <https://arxiv.org/abs/2508.10104>`_, https://github.com/facebookresearch/dinov3.
 """
@@ -47,8 +50,7 @@ from biapy.models.vit_backbones.weights import (
     strip_tensor_prefix,
 )
 
-# Geometry of DINOv3's ViT-L/16 ('dinov3_vitl16'). These values are not configurable: they are the ones of the
-# released checkpoint, and any deviation would make its weights unusable.
+# Geometry of DINOv3's ViT-L/16 ('dinov3_vitl16'), fixed by the released checkpoints
 DINOV3_VIT_PARAMS = {
     "patch_size": 16,
     "embed_dim": 1024,
@@ -62,6 +64,11 @@ DINOV3_VIT_PARAMS = {
     "num_register_tokens": 4,
     "rope_base": 100.0,
 }
+# ViT-B/16 ('dinov3_vitb16')
+DINOV3_VITB_PARAMS = {**DINOV3_VIT_PARAMS, "embed_dim": 768, "depth": 12, "num_heads": 12}
+
+# Cellpose-DINO checkpoints (https://huggingface.co/mouseland/cellpose-sam) and the backbone each one needs
+CELLPOSE_DINO_WEIGHTS = {"cpdino": "dinov3_vit", "cpdino-vitb": "dinov3_vitb"}
 
 
 def dinov3_rope_sincos(
@@ -273,9 +280,10 @@ def build_dinov3_blocks(
     grid_size: Tuple[int, int],
     num_prefix_tokens: int,
     drop_path: Optional[Sequence[float]] = None,
+    params: Dict = DINOV3_VIT_PARAMS,
 ) -> nn.ModuleList:
     """
-    Create the stack of transformer blocks of DINOv3's ViT-L/16.
+    Create the stack of transformer blocks of DINOv3's encoder.
 
     Parameters
     ----------
@@ -288,12 +296,14 @@ def build_dinov3_blocks(
     drop_path : Sequence[float], optional
         Stochastic depth rate of each block. No stochastic depth by default.
 
+    params : Dict, optional
+        Geometry: ``DINOV3_VIT_PARAMS`` (ViT-L/16) or ``DINOV3_VITB_PARAMS`` (ViT-B/16).
+
     Returns
     -------
     blocks : nn.ModuleList
-        The ``24`` blocks of the encoder.
+        The blocks of the encoder.
     """
-    params = DINOV3_VIT_PARAMS
     drop_path = [0.0] * params["depth"] if drop_path is None else list(drop_path)
     return nn.ModuleList(
         [
@@ -319,19 +329,18 @@ def _dinov3_gated_message(weights: str, error: Exception) -> str:
     return (
         f"Could not get DINOv3's pretrained weights from '{weights}'.\n"
         "DINOv3 is a gated model, so its weights can only be downloaded after accepting its license:\n"
-        "  - Hugging Face: open https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m , log in and request "
-        "access. Once granted, authenticate this machine ('hf auth login' or 'export HF_TOKEN=hf_xxx').\n"
+        "  - Hugging Face: open https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m (or its vitb16 "
+        "version), log in and request access. Once granted, authenticate this machine ('hf auth login' or "
+        "'export HF_TOKEN=hf_xxx').\n"
         "  - Meta: request access at https://ai.meta.com/resources/models-and-libraries/dinov3-downloads/ and set "
-        "'MODEL.VIT_PRETRAINED_WEIGHTS' to the e-mailed URL of 'dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth' or to "
-        "a local copy of it.\n"
+        "'MODEL.VIT_PRETRAINED_WEIGHTS' to the e-mailed URL of the checkpoint or to a local copy of it.\n"
         "Alternatively, leave 'MODEL.VIT_PRETRAINED_WEIGHTS' empty ('') to train the model from scratch.\n"
         f"Error reported: {type(error).__name__}: {error}"
     )
 
 
-def _dinov3_read_encoder(path: str) -> Dict[str, torch.Tensor]:
+def _dinov3_read_encoder(checkpoint: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
     """Encoder tensors of an original (``.pth``) or Hugging Face (``.safetensors``) DINOv3 checkpoint, in the original naming."""
-    checkpoint = read_checkpoint_tensors(path, wrapper_keys=["teacher", "model", "state_dict"])
     if any("embeddings.patch_embeddings" in k for k in checkpoint):
         return _dinov3_from_hf(checkpoint)
     return strip_tensor_prefix(checkpoint, "storage_tokens", "DINOv3's ViT encoder (original naming)")
@@ -376,14 +385,17 @@ def _dinov3_from_hf(checkpoint: Dict[str, torch.Tensor]) -> Dict[str, torch.Tens
 def load_dinov3_pretrained_encoder(
     model: nn.Module,
     weights: str,
+    params: Dict = DINOV3_VIT_PARAMS,
     verbose: bool = True,
 ) -> Dict[str, int]:
     """
-    Load DINOv3's pretrained ViT-L/16 encoder into a BiaPy model.
+    Load DINOv3's pretrained encoder, or a whole Cellpose-DINO model, into a BiaPy model.
 
     The tensors are mapped into the ``patch_embed``, ``cls_token``, ``reg_token``, ``blocks`` and, if the model has
-    it, ``norm`` of the given model, adapting the patch embedding to the number of input channels. There is no
-    position embedding to adapt: the rotary embedding of each block is computed for the token grid actually used.
+    it, ``norm`` of the given model. There is no position embedding to adapt: the rotary embedding of each block is
+    computed for the token grid actually used. DINOv3's RGB patch embedding is adapted to the input channels; with a
+    Cellpose-DINO checkpoint its first kernels are kept (as Cellpose does) and the readout is loaded too when the model
+    can hold it (see ``cellpose_readout_tensors``).
 
     Parameters
     ----------
@@ -391,8 +403,12 @@ def load_dinov3_pretrained_encoder(
         Model to load the weights into, built with ``build_dinov3_blocks`` and a ``reg_token`` parameter.
 
     weights : str
-        Local path to a checkpoint (original ``.pth`` or Hugging Face ``.safetensors``), URL to download it from or
-        identifier of a Hugging Face Hub repository, e.g. ``'facebook/dinov3-vitl16-pretrain-lvd1689m'``.
+        Local path to a checkpoint (original ``.pth``, Hugging Face ``.safetensors`` or Cellpose-DINO), URL to download
+        it from, identifier of a Hugging Face Hub repository (e.g. ``'facebook/dinov3-vitl16-pretrain-lvd1689m'``) or
+        a Cellpose-DINO checkpoint name (``CELLPOSE_DINO_WEIGHTS``).
+
+    params : Dict, optional
+        Geometry the checkpoint must have: ``DINOV3_VIT_PARAMS`` or ``DINOV3_VITB_PARAMS``.
 
     verbose : bool, optional
         Whether to print a report of what was loaded.
@@ -402,35 +418,49 @@ def load_dinov3_pretrained_encoder(
     report : Dict[str, int]
         Number of tensors ``loaded`` into the model and number of them left ``missing``.
     """
+    from biapy.models.vit_backbones.cellpose_sam import (
+        CELLPOSE_SAM_WEIGHTS_URL,
+        cellpose_patch_embed,
+        cellpose_readout_tensors,
+    )
+
     if verbose:
         print(f"Loading DINOv3's pretrained ViT encoder from '{weights}' ...")
 
-    in_chans = model.patch_embed.proj.weight.shape[1]  # type: ignore
-    encoder = _dinov3_read_encoder(
-        fetch_vit_weights(weights, hf_filenames=["model.safetensors"], access_message=_dinov3_gated_message)
+    path = fetch_vit_weights(
+        weights,
+        hf_filenames=["model.safetensors"],
+        named_urls={name: CELLPOSE_SAM_WEIGHTS_URL + name for name in CELLPOSE_DINO_WEIGHTS},
+        cache_subdir="cellpose_dino" if weights in CELLPOSE_DINO_WEIGHTS else "",
+        access_message=_dinov3_gated_message,
     )
+    checkpoint = read_checkpoint_tensors(path, wrapper_keys=["teacher", "model", "state_dict"])
+    checkpoint = {(k[len("module.") :] if k.startswith("module.") else k): v for k, v in checkpoint.items()}
+    cellpose = "W2" in checkpoint and "encoder.storage_tokens" in checkpoint
+    if cellpose:
+        what = "Cellpose-DINO"
+        encoder = {k[len("encoder.") :]: v for k, v in checkpoint.items() if k.startswith("encoder.")}
+    else:
+        what = "DINOv3"
+        encoder = _dinov3_read_encoder(checkpoint)
 
-    params = DINOV3_VIT_PARAMS
     ckpt_depth = max_block_index(encoder)
     ckpt_embed_dim = encoder["cls_token"].shape[-1] if "cls_token" in encoder else -1
-    ckpt_mlp = encoder["blocks.0.mlp.fc1.weight"].shape[0] if "blocks.0.mlp.fc1.weight" in encoder else -1
-    if (
-        ckpt_depth != params["depth"]
-        or ckpt_embed_dim != params["embed_dim"]
-        or ckpt_mlp != int(params["embed_dim"] * params["mlp_ratio"])
-    ):
+    if ckpt_depth != params["depth"] or ckpt_embed_dim != params["embed_dim"]:
         raise RuntimeError(
-            f"The encoder stored in '{weights}' does not match 'dinov3_vit' (DINOv3's ViT-L/16): it has {ckpt_depth} "
-            f"blocks of {ckpt_embed_dim} dimensions and an MLP of {ckpt_mlp}, while it should have {params['depth']} "
-            f"blocks of {params['embed_dim']} dimensions and an MLP of {int(params['embed_dim'] * params['mlp_ratio'])}. "
-            "Use the 'dinov3_vitl16' weights (e.g. 'facebook/dinov3-vitl16-pretrain-lvd1689m')."
+            f"The {what} encoder stored in '{weights}' has {ckpt_depth} blocks of {ckpt_embed_dim} dimensions, but the "
+            f"model needs {params['depth']} of {params['embed_dim']}. ViT-L/16 weights ('dinov3_vitl16', 'cpdino') go "
+            "with 'dinov3_vit' and ViT-B/16 ones ('dinov3_vitb16', 'cpdino-vitb') with 'dinov3_vitb'."
         )
 
     new_state_dict = {}
     if "patch_embed.proj.weight" in encoder:
-        new_state_dict["patch_embed.proj.weight"] = adapt_rgb_patch_embed(
-            encoder["patch_embed.proj.weight"], in_chans, "DINOv3", verbose=verbose
-        )
+        if cellpose:
+            w = cellpose_patch_embed(encoder["patch_embed.proj.weight"], model, what, verbose)
+        else:
+            in_chans = model.patch_embed.proj.weight.shape[1]  # type: ignore
+            w = adapt_rgb_patch_embed(encoder["patch_embed.proj.weight"], in_chans, what, verbose=verbose)
+        new_state_dict["patch_embed.proj.weight"] = w
     for src, dst in [("patch_embed.proj.bias", "patch_embed.proj.bias"), ("cls_token", "cls_token"), ("storage_tokens", "reg_token")]:
         if src in encoder:
             new_state_dict[dst] = encoder[src]
@@ -447,10 +477,16 @@ def load_dinov3_pretrained_encoder(
                 v[v.shape[0] // 3 : 2 * v.shape[0] // 3] = 0
             new_state_dict[k] = v
 
+    readout = None
+    if cellpose and hasattr(model, "readout"):
+        readout = cellpose_readout_tensors(model, checkpoint["out.weight"], checkpoint["out.bias"], verbose)
+        if readout is not None:
+            new_state_dict.update(readout)
+
     return load_matching_tensors(
         model,
         new_state_dict,
-        ("patch_embed.", "blocks.", "cls_token", "reg_token", "norm."),
-        "DINOv3's encoder",
+        ("patch_embed.", "blocks.", "cls_token", "reg_token", "norm.") + (("readout.", "heads.") if readout else ()),
+        f"{what}'s " + ("encoder and readout" if readout else "encoder"),
         verbose=verbose,
     )

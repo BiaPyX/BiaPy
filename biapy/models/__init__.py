@@ -1422,6 +1422,26 @@ def read_local_bmz_model(path: str) -> Dict:
     return {"nickname": path, "alias": None, "raw": {"manifest": rdf}}
 
 
+# BiaPy's instance channel codes that a model can output
+BIAPY_INSTANCE_CHANNELS = [
+    "F", "B", "P", "C", "H", "V", "Z", "Db", "Dc", "Dn", "D", "R", "T", "A", "M",
+    "E_offset", "E_sigma", "E_seediness", "Gv", "Gh", "Gz", "F_pre", "F_post", "F_cleft",
+]
+
+
+def _bmz_instance_channel_codes(rdf: Dict) -> Optional[List[str]]:
+    """BiaPy channel codes of a BMZ model's single output, if its channels are named with them."""
+    outputs = rdf.get("outputs") or []
+    if len(outputs) != 1:
+        return None
+    for axis in outputs[0].get("axes") or []:
+        if isinstance(axis, dict) and axis.get("type") == "channel":
+            names = [str(n) for n in axis.get("channel_names") or []]
+            if names and all(n in BIAPY_INSTANCE_CHANNELS for n in names):
+                return names
+    return None
+
+
 def check_bmz_args(
     model_ID: str,
     cfg: Optional[CN] = None,
@@ -1729,7 +1749,15 @@ def check_bmz_model_compatibility(
             elif channels == 8:
                 channel_code = ["A"] # wild-whale
 
+        # Output channels named with BiaPy's channel codes (as BiaPy exports them) take precedence
+        named = _bmz_instance_channel_codes(m)
+        if named is not None:
+            channel_code = named
+
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
+        if any(c in channel_code for c in ("Gv", "Gh", "Gz")):
+            # Cellpose flows: pad also the images of the patch size
+            opts["DATA.TEST.FORCE_PADDING"] = True
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = tuple([1] * len(channel_code))
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES"] = []
         if any([x for x in ["F_pre", "F_post", "F_cleft"] if x in channel_code]):
@@ -1784,7 +1812,7 @@ def check_bmz_model_compatibility(
                     input_image_shape += [1]
                 elif axis["type"] == "channel":
                     _axes_order += "c"
-                    input_image_shape += [1]
+                    input_image_shape += [len(axis.get("channel_names") or [None])]
                 elif "id" in axis:
                     if isinstance(axis.get("size"), int):
                         input_image_shape += [axis["size"]]

@@ -10,7 +10,6 @@ PROBLEM:
             DIAMETER: 30.0
             DIAM_MEAN: 30.0
             FLOW_THRESHOLD: 0.4
-            SCALE_RANGE: 0.5
 DATA: 
     PATCH_SIZE: (224, 224, 1)  
     REFLECT_TO_COMPLETE_SHAPE: FALSE
@@ -37,11 +36,14 @@ DATA:
         IN_MEMORY: False
         LOAD_GT: True
         PADDING: (32, 32)
+        FORCE_PADDING: True
 
 AUGMENTOR:
     ENABLE: True
     RANDOM_ROT_PROB: 1.0
     ZOOM_PROB: 1.0
+    ZOOM: True
+    ZOOM_RANGE: (0.75, 1.25)
     RANDOM_ROT: True                                                                                                    
     VFLIP: True                                                                                                         
     HFLIP: True                                                                                                                                                                                                                                                                                     

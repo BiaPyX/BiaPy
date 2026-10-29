@@ -32,6 +32,8 @@ DATA:
         OVERLAP: (0.1, 0.1)
         # Zero padding, as Cellpose; avoids losing border cells
         PADDING: (8, 8)
+        # Also for images of the patch size
+        FORCE_PADDING: True
 
 MODEL:
     ARCHITECTURE: vit_readout

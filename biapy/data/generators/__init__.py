@@ -291,7 +291,6 @@ def create_train_val_augmentors(
     # augmentation is rolled independently against its own probability (there is no global DA_PROB).
     aug_prob = {
         "zoom": cfg.AUGMENTOR.ZOOM_PROB,
-        "random_resized_crop": cfg.AUGMENTOR.RANDOM_RESIZED_CROP_PROB,
         "rand_rot": cfg.AUGMENTOR.RANDOM_ROT_PROB,
         "rotation90": cfg.AUGMENTOR.ROT90_PROB,
         "shear": cfg.AUGMENTOR.SHEAR_PROB,
@@ -388,8 +387,7 @@ def create_train_val_augmentors(
             zoom=cfg.AUGMENTOR.ZOOM,
             zoom_range=cfg.AUGMENTOR.ZOOM_RANGE,
             zoom_in_z=cfg.AUGMENTOR.ZOOM_IN_Z,
-            random_resized_crop=cfg.AUGMENTOR.RANDOM_RESIZED_CROP,
-            random_resized_crop_scale_range=cfg.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE,
+            zoom_reference=cfg.AUGMENTOR.ZOOM_REFERENCE,
             is_y_mask=cfg.PROBLEM.TYPE not in ("IMAGE_TO_IMAGE", "DENOISING", "SUPER_RESOLUTION", "SELF_SUPERVISED"),
             shift=cfg.AUGMENTOR.SHIFT,
             affine_mode=cfg.AUGMENTOR.AFFINE_MODE,
@@ -492,8 +490,6 @@ def create_train_val_augmentors(
                 # on DatasetFile.diameter; the generator computes the per-sample rescale factor
                 # DIAM_MEAN / diameter itself.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
-                # Cellpose-style random scale jitter applied on top of the rescale during training.
-                dic["cellpose_scale_range"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.SCALE_RANGE)
         elif membrane_repair:
             dic.update(_membrane_repair_generator_kwargs(cfg))
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
@@ -718,6 +714,7 @@ def create_test_generator(
     X_test: Any,
     Y_test: Any,
     norm_module: Dict,
+    complete_shape_mode: str = "reflect",
 ) -> Tuple[test_pair_data_generator | test_single_data_generator, NDArray, NDArray, NDArray]:
     """
     Create test data generator.
@@ -736,6 +733,9 @@ def create_test_generator(
 
     norm_module : Dict
         Normalization module that defines the normalization steps to apply.
+
+    complete_shape_mode : str, optional
+        How images smaller than the patch are padded: "reflect" or "zeros".
 
     Returns
     -------
@@ -770,6 +770,7 @@ def create_test_generator(
         preprocess_data=preprocess_data if cfg.DATA.PREPROCESS.TEST else None,
         preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TEST else None,
         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+        complete_shape_mode=complete_shape_mode,
         data_shape=cfg.DATA.PATCH_SIZE,
     )
 

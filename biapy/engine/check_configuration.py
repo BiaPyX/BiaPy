@@ -3297,6 +3297,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "sam3_vit",
                 "celldino_vit",
                 "dinov3_vit",
+                "dinov3_vitb",
                 "cellpose_sam_vit",
             ]
             if model_arch == "unetr":
@@ -3365,7 +3366,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if not check_value(cfg.MODEL.VIT_DROP_PATH_RATE):
                     raise ValueError("'MODEL.VIT_DROP_PATH_RATE' not in [0, 1] range")
                 if model_arch == "dpt":
-                    depth = cfg.MODEL.VIT_NUM_LAYERS if custom_vit else {"vit_base_patch16": 12, "vit_large_patch16": 24, "vit_huge_patch14": 32, "celldino_vit": 24, "dinov3_vit": 24}[vit_backbone]
+                    depth = cfg.MODEL.VIT_NUM_LAYERS if custom_vit else {"vit_base_patch16": 12, "vit_large_patch16": 24, "vit_huge_patch14": 32, "celldino_vit": 24, "dinov3_vit": 24, "dinov3_vitb": 12}[vit_backbone]
                     layers = list(cfg.MODEL.DPT.LAYERS)
                     if len(layers) > 0 and (
                         len(layers) != 4
@@ -3428,10 +3429,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError(
                         f"'celldino_vit' needs 1 input channel, 'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}."
                     )
-            elif vit_backbone == "dinov3_vit":
+            elif vit_backbone in ["dinov3_vit", "dinov3_vitb"]:
                 if cfg.PROBLEM.NDIM == "3D":
-                    raise ValueError(f"'{vit_backbone_var}' can not be 'dinov3_vit' with 3D data.")
-                if cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "" and cfg.DATA.PATCH_SIZE[-1] not in [1, 3]:
+                    raise ValueError(f"'{vit_backbone_var}' can not be '{vit_backbone}' with 3D data.")
+                if _is_cellpose_dino_weights(cfg.MODEL.VIT_PRETRAINED_WEIGHTS):
+                    if cfg.DATA.PATCH_SIZE[-1] > 3:
+                        raise ValueError(
+                            "Cellpose-DINO's pretrained weights support up to 3 input channels, "
+                            f"'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}"
+                        )
+                    from biapy.models.vit_backbones.dinov3 import CELLPOSE_DINO_WEIGHTS
+
+                    expected = CELLPOSE_DINO_WEIGHTS.get(cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
+                    if expected is not None and expected != vit_backbone:
+                        raise ValueError(
+                            f"'{cfg.MODEL.VIT_PRETRAINED_WEIGHTS}' weights need '{vit_backbone_var}' = '{expected}'"
+                        )
+                elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "" and cfg.DATA.PATCH_SIZE[-1] not in [1, 3]:
                     raise ValueError(
                         "DINOv3's pretrained weights can only be loaded with 1 or 3 input channels, but "
                         f"'DATA.PATCH_SIZE' has {cfg.DATA.PATCH_SIZE[-1]}. DINOv3 was trained on RGB images, and BiaPy "
@@ -3452,7 +3466,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             elif cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "":
                 raise ValueError(
                     "'MODEL.VIT_PRETRAINED_WEIGHTS' can only be used when the ViT backbone is 'sam3_vit', "
-                    f"'celldino_vit', 'dinov3_vit' or 'cellpose_sam_vit', as those are the only ones with pretrained "
+                    f"'celldino_vit', 'dinov3_vit', 'dinov3_vitb' or 'cellpose_sam_vit', as those are the only ones with pretrained "
                     "weights available. "
                     f"'{vit_backbone_var}' is set to '{vit_backbone}'."
                 )
@@ -3586,11 +3600,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             except ImportError:
                 raise ImportError("Please install safetensors package to be able to load .safetensors checkpoints")
 
-    # Built as Cellpose-SAM, its pretrained weights are the whole model, so it can be tested without a checkpoint
-    full_cellpose_sam = (
+    # Built as Cellpose-SAM or Cellpose-DINO, its pretrained weights are the whole model, so it can be tested without a
+    # checkpoint
+    full_cellpose = (
         cfg.MODEL.ARCHITECTURE == "vit_readout"
-        and cfg.MODEL.VIT_MODEL == "cellpose_sam_vit"
-        and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != ""
+        and (
+            (cfg.MODEL.VIT_MODEL == "cellpose_sam_vit" and cfg.MODEL.VIT_PRETRAINED_WEIGHTS != "")
+            or (
+                cfg.MODEL.VIT_MODEL in ["dinov3_vit", "dinov3_vitb"]
+                and cfg.MODEL.VIT_TOKEN_STRIDE == 8
+                and _is_cellpose_dino_weights(cfg.MODEL.VIT_PRETRAINED_WEIGHTS)
+            )
+        )
         and cfg.MODEL.VIT_READOUT.FEATURES == 3
         and cfg.MODEL.VIT_READOUT.REFINE_LAYERS == 0
         and cfg.PROBLEM.TYPE == "INSTANCE_SEG"
@@ -3601,7 +3622,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         and not cfg.MODEL.LOAD_CHECKPOINT
         and not cfg.TRAIN.ENABLE
         and cfg.TEST.ENABLE
-        and not full_cellpose_sam
+        and not full_cellpose
     ):
         raise ValueError("Seems that you want to test a model without training first. In this case, 'MODEL.LOAD_CHECKPOINT' needs to be set to True to load a pre-trained model.")
 
@@ -3775,21 +3796,29 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE values not in [0, 1] range")
             if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
                 raise ValueError("AUGMENTOR.GRID_ROTATE not in [0, 1] range")
-        if cfg.AUGMENTOR.RANDOM_RESIZED_CROP:
+        if cfg.AUGMENTOR.ZOOM_REFERENCE not in ["native", "image"]:
+            raise ValueError("AUGMENTOR.ZOOM_REFERENCE needs to be 'native' or 'image'")
+        if cfg.AUGMENTOR.ZOOM and cfg.AUGMENTOR.ZOOM_REFERENCE == "image":
             if dim_count != 2:
-                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP is only supported in 2D")
+                raise ValueError("AUGMENTOR.ZOOM_REFERENCE 'image' is only supported in 2D")
+            if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
+                cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+            ):
+                raise ValueError("AUGMENTOR.ZOOM_REFERENCE 'image' is not supported in this workflow")
             if cfg.DATA.TRAIN.PATCH_SAMPLING != "random":
-                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP requires DATA.TRAIN.PATCH_SAMPLING = 'random'")
+                raise ValueError("AUGMENTOR.ZOOM_REFERENCE 'image' requires DATA.TRAIN.PATCH_SAMPLING = 'random'")
             if cfg.DATA.TRAIN.PROBABILITY_MAP:
-                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP can't be combined with DATA.TRAIN.PROBABILITY_MAP")
-            if cfg.AUGMENTOR.ZOOM or cfg.AUGMENTOR.RANDOM_ROT:
+                raise ValueError("AUGMENTOR.ZOOM_REFERENCE 'image' can't be combined with DATA.TRAIN.PROBABILITY_MAP")
+            if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and any(
+                c in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for c in ("Gv", "Gh", "Gz")
+            ):
                 raise ValueError(
-                    "AUGMENTOR.RANDOM_RESIZED_CROP can't be combined with AUGMENTOR.ZOOM or AUGMENTOR.RANDOM_ROT"
+                    "AUGMENTOR.ZOOM_REFERENCE 'image' can't be used with flow channels: the cells are rescaled to "
+                    "PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN instead"
                 )
-            rrc_range = cfg.AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE
-            if min(rrc_range) <= 0 or not check_value(rrc_range, (0, 1)):
-                raise ValueError("AUGMENTOR.RANDOM_RESIZED_CROP_SCALE_RANGE values need to be in (0, 1]")
-        if cfg.AUGMENTOR.ZOOM:
+            if min(cfg.AUGMENTOR.ZOOM_RANGE) <= 0 or not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0, 1)):
+                raise ValueError("AUGMENTOR.ZOOM_RANGE values need to be in (0, 1] with ZOOM_REFERENCE 'image'")
+        elif cfg.AUGMENTOR.ZOOM:
             if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1, 10)):
                 raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")
             if cfg.AUGMENTOR.ZOOM_IN_Z and dim_count == 2:
@@ -3900,6 +3929,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
 
 # Helper for common check
+def _is_cellpose_dino_weights(weights: str) -> bool:
+    """Whether 'MODEL.VIT_PRETRAINED_WEIGHTS' names a Cellpose-DINO checkpoint ("cpdino", "cpdino-vitb" or a copy)."""
+    return weights != "" and os.path.basename(weights).startswith("cpdino")
+
+
 def _assert_bool(d, k, ctx):
     assert k in d, f"'{ctx}' must have '{k}' key"
     assert isinstance(d[k], bool), f"'{ctx}' '{k}' must be a boolean"
@@ -4418,6 +4452,24 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MODE"]
                 if "APPLICATION_MODE" in old_cfg["DATA"]["NORMALIZATION"]:
                     del old_cfg["DATA"]["NORMALIZATION"]["APPLICATION_MODE"]
+
+    # CELLPOSE.SCALE_RANGE and AUGMENTOR.RANDOM_RESIZED_CROP were replaced by AUGMENTOR.ZOOM
+    inst = old_cfg.get("PROBLEM", {}).get("INSTANCE_SEG", {})
+    cellpose = inst.get("CELLPOSE", {})
+    if "SCALE_RANGE" in cellpose:
+        scale_range = float(cellpose.pop("SCALE_RANGE"))
+        extra = (inst.get("DATA_CHANNELS_EXTRA_OPTS") or [{}])[0] or {}
+        omnipose = any((extra.get(c) or {}).get("gradient_type") == "omnipose" for c in ("Gv", "Gh", "Gz"))
+        flows = any(c in inst.get("DATA_CHANNELS", []) for c in ("Gv", "Gh", "Gz"))
+        if scale_range > 0 and flows and not omnipose and float(cellpose.get("DIAM_MEAN", 30.0)) > 0:
+            old_cfg.setdefault("AUGMENTOR", {}).update(
+                {"ZOOM": True, "ZOOM_RANGE": (1 - scale_range / 2, 1 + scale_range / 2), "ZOOM_PROB": 1.0}
+            )
+    aug = old_cfg.get("AUGMENTOR", {})
+    rrc_range = aug.pop("RANDOM_RESIZED_CROP_SCALE_RANGE", (0.7, 0.95))
+    rrc_prob = aug.pop("RANDOM_RESIZED_CROP_PROB", 0.5)
+    if aug.pop("RANDOM_RESIZED_CROP", False):
+        aug.update({"ZOOM": True, "ZOOM_REFERENCE": "image", "ZOOM_RANGE": rrc_range, "ZOOM_PROB": rrc_prob})
 
     if "AUGMENTOR" in old_cfg:
         if "DA_PROB" in old_cfg["AUGMENTOR"]:

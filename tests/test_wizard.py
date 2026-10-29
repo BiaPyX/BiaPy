@@ -874,7 +874,7 @@ def test_config_instance_seg_representation(tmp_path):
 @pytest.mark.parametrize(
     "representation, augmentor, weights",
     [
-        ("F_G", {"AFFINE_MODE": "constant", "ZOOM": False, "RANDOM_ROT_PROB": 1.0}, [1, 0.25, 0.25]),
+        ("F_G", {"AFFINE_MODE": "constant", "ZOOM_RANGE": "(0.75, 1.25)", "ZOOM_PROB": 1.0}, [1, 0.25, 0.25]),
         ("Db_R", {"ROT90": True, "RANDOM_ROT": False, "ZOOM": False}, [1, 0.2]),
         ("F_HV", {"AFFINE_MODE": "reflect", "ZOOM_RANGE": "(0.5, 1.5)", "ZOOM_PROB": 1.0}, [1, 0.25, 0.25]),
         ("F_C", {"AFFINE_MODE": "reflect", "ZOOM": True}, None),
@@ -915,11 +915,23 @@ def test_representation_settings_bmz_cellpose(tmp_path):
         model_restrictions=restrictions, **{"MODEL.SOURCE": "bmz", "MODEL.BMZ.SOURCE_MODEL_ID": "some-model"},
     )
     cfg, report = build_config(answers, GPU)
-    assert cfg["AUGMENTOR"]["AFFINE_MODE"] == "constant" and not cfg["AUGMENTOR"]["ZOOM"]
+    assert cfg["AUGMENTOR"]["AFFINE_MODE"] == "constant" and cfg["AUGMENTOR"]["ZOOM_RANGE"] == "(0.75, 1.25)"
     inst = cfg["PROBLEM"]["INSTANCE_SEG"]
     assert inst["DATA_CHANNEL_WEIGHTS"] == [1, 0.25, 0.25]
     assert inst["CLASS_REBALANCE_WITHIN_CHANNELS"] is False
     assert any(line.startswith("Cellpose flows") for line in report["lines"])
+
+
+@pytest.mark.parametrize("channels,forced", [(["F", "Gv", "Gh"], True), (["F", "H", "V"], None)])
+def test_representation_settings_force_padding(channels, forced):
+    """Inference: Cellpose's flows pad also the images of the patch size (DATA.TEST.FORCE_PADDING), the rest don't."""
+    cfg = _cfg("2D")
+    cfg["PROBLEM"]["TYPE"] = "INSTANCE_SEG"
+    cfg["PROBLEM"]["INSTANCE_SEG"] = {"DATA_CHANNELS": channels, "DATA_CHANNELS_EXTRA_OPTS": [{}]}
+    cfg["TRAIN"]["ENABLE"] = False
+    cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+    plan_config(cfg, {}, [])
+    assert cfg.get("DATA", {}).get("TEST", {}).get("FORCE_PADDING") == forced
 
 
 def test_representation_settings_omnipose_checkpoint(tmp_path):

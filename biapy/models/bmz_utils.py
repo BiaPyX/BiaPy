@@ -331,7 +331,60 @@ def extract_BMZ_sample_and_cover(
 
     return rimg, cover_raw, cover_gt
 
-def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workflow="semantic-segmentation"):
+# Meaning of BiaPy's instance channel codes, for the cover labels
+BIAPY_CHANNEL_DESCRIPTIONS = {
+    "F": "foreground",
+    "B": "background",
+    "P": "central part",
+    "C": "contour",
+    "H": "horizontal distance",
+    "V": "vertical distance",
+    "Z": "depth distance",
+    "Db": "distance to boundary",
+    "Dc": "distance to center",
+    "Dn": "distance to neighbor",
+    "D": "signed distance",
+    "T": "touching area",
+    "Gv": "vertical flow",
+    "Gh": "horizontal flow",
+    "Gz": "depth flow",
+    "F_pre": "presynaptic sites",
+    "F_post": "postsynaptic sites",
+}
+
+
+def _channel_to_uint8(x: NDArray) -> NDArray:
+    """One channel to uint8 for display: [0, 1] or [min, max] to [0, 255], zero at mid-gray if it is signed."""
+    x = x.astype(np.float32)
+    if x.min() < 0:
+        return np.clip(127.5 + 127.5 * x / max(float(np.abs(x).max()), 1e-8), 0, 255).astype(np.uint8)
+    if x.max() <= 1:
+        return (255 * x).astype(np.uint8)
+    return np.clip(255 * (x - x.min()) / max(float(x.max() - x.min()), 1e-8), 0, 255).astype(np.uint8)
+
+
+def _add_labels(panels: NDArray, labels: list, patch_size: int) -> NDArray:
+    """Write ``labels`` in a strip under each ``patch_size``-wide panel of an RGB image."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    strip = max(24, patch_size // 9)
+    try:
+        font = ImageFont.load_default(size=int(strip * 0.6))
+    except TypeError:  # Pillow < 10.1
+        font = ImageFont.load_default()
+    out = Image.new("RGB", (panels.shape[1], panels.shape[0] + strip), (255, 255, 255))
+    out.paste(Image.fromarray(panels), (0, 0))
+    draw = ImageDraw.Draw(out)
+    for i, label in enumerate(labels):
+        x0, x1 = i * patch_size, (i + 1) * patch_size
+        w = draw.textlength(label, font=font)
+        draw.text(((x0 + x1 - w) / 2, panels.shape[0] + strip * 0.15), label, fill=(0, 0, 0), font=font)
+    return np.array(out)
+
+
+def create_model_cover(
+    img, img_gt, out_path, patch_size=256, is_3d=False, workflow="semantic-segmentation", channel_names=None
+):
     """
     Create a cover based on the files that will be read from ``file_pointers``.
 
@@ -356,6 +409,10 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
         Workflow to create the cover to. Options are: [``"semantic-segmentation"``, ``"instance-segmentation"``,
         ``"detection"``, ``"denoising"``, ``"super-resolution"``, ``"self-supervised"``, ``"classification"``,
         ``"image-to-image"``]
+
+    channel_names : List[str], optional
+        Names of the ``img_gt`` channels. With several channels each one is shown in its own panel and labeled (BiaPy
+        channel codes are labeled with their meaning, e.g. "Gv: vertical flow").
 
     Returns
     -------
@@ -416,24 +473,29 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
     elif workflow in ["classification"]:
         # In classification the img_gt is a class index, so just create a cover with the image
         out = img.copy()
+    elif img_gt.shape[-1] > 1:
+        # Image and each img_gt channel side-by-side
+        out = np.ones((patch_size, patch_size * (img_gt.shape[-1] + 1), 3), dtype=np.uint8)
+        out[:, :patch_size] = img.copy()
+        for c in range(img_gt.shape[-1]):
+            out[:, patch_size * (c + 1) : patch_size * (c + 2)] = _channel_to_uint8(img_gt[..., c])[..., None]
+        if channel_names is not None and len(channel_names) == img_gt.shape[-1]:
+            labels = ["input"] + [
+                f"{n}: {BIAPY_CHANNEL_DESCRIPTIONS[n]}" if n in BIAPY_CHANNEL_DESCRIPTIONS else str(n)
+                for n in channel_names
+            ]
+            out = _add_labels(out, labels, patch_size)
     else:
         if img_gt.max() <= 1:
             img_gt = (img_gt * 255).astype(np.uint8)
 
         # Create cover with image and img_gt split by the diagonal
-        if img_gt.shape[-1] == 1:
-            out = np.ones(img.shape, dtype="uint8")
-            for c in range(img.shape[-1]):
-                outc = np.tril(img[..., c])
-                img_gt_tril = outc == 0
-                outc[img_gt_tril] = np.triu(img_gt[..., 0])[img_gt_tril]
-                out[..., c] = outc
-        else:
-            # Create cover with image and img_gt side-by-side considering all channels of the img_gt
-            out = np.ones((patch_size, patch_size * (img_gt.shape[-1] + 1), 3), dtype=img.dtype)
-            out[:, :patch_size] = img.copy()
-            for c in range(img_gt.shape[-1]):
-                out[:, patch_size * (c + 1) : patch_size * (c + 2)] = np.stack((img_gt[..., c],) * 3, axis=-1)
+        out = np.ones(img.shape, dtype="uint8")
+        for c in range(img.shape[-1]):
+            outc = np.tril(img[..., c])
+            img_gt_tril = outc == 0
+            outc[img_gt_tril] = np.triu(img_gt[..., 0])[img_gt_tril]
+            out[..., c] = outc
 
     # Save the cover
     os.makedirs(out_path, exist_ok=True)

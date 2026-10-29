@@ -86,6 +86,9 @@ class test_single_data_generator(Dataset):
 
     reflect_to_complete_shape : bool, optional
         Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
+
+    complete_shape_mode : str, optional
+        Padding of ``reflect_to_complete_shape``: "reflect" or "zeros" (Cellpose flows).
     """
 
     def __init__(
@@ -104,6 +107,7 @@ class test_single_data_generator(Dataset):
         preprocess_cfg: Optional[Dict] = None,
         data_shape: Tuple[int, ...] = (256, 256, 1),
         reflect_to_complete_shape: bool = True,
+        complete_shape_mode: str = "reflect",
     ):
 
         self.X = X
@@ -116,6 +120,7 @@ class test_single_data_generator(Dataset):
         self.preprocess_data = preprocess_data
         self.preprocess_cfg = preprocess_cfg
         self.reflect_to_complete_shape = reflect_to_complete_shape
+        self.complete_shape_mode = "constant" if complete_shape_mode == "zeros" else complete_shape_mode
         self.data_shape = data_shape
         self.crop_center = crop_center
         # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
@@ -223,6 +228,7 @@ class test_single_data_generator(Dataset):
                     img,
                     self.data_shape,
                     verbose=True,
+                    mode=self.complete_shape_mode,
                 )
                 sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
 

@@ -269,14 +269,19 @@ REPRESENTATION_SETTINGS = {
             "AUGMENTOR.AFFINE_MODE": "constant",
             "AUGMENTOR.RANDOM_ROT": True,
             "AUGMENTOR.RANDOM_ROT_PROB": 1.0,
-            # Cellpose rescales the cells to CELLPOSE.DIAM_MEAN, with its own jitter (CELLPOSE.SCALE_RANGE)
-            "AUGMENTOR.ZOOM": False,
+            # Around the size CELLPOSE.DIAM_MEAN rescales the cells to, as Cellpose
+            "AUGMENTOR.ZOOM": True,
+            "AUGMENTOR.ZOOM_RANGE": str((0.75, 1.25)),
+            "AUGMENTOR.ZOOM_PROB": 1.0,
             "PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS": False,
         },
         "weights": {"Gv": 0.25, "Gh": 0.25, "Gz": 0.25},
         "train_summary": "every patch rotated, filled with zeros instead of reflecting the image (it would mirror the "
-        "cells cut by the border and break their flows), no zoom (Cellpose rescales the cells itself), flows weighted "
-        "0.25 in the loss, no rebalancing",
+        "cells cut by the border and break their flows), zoomed x0.75 to x1.25 around the cell size Cellpose rescales "
+        "to, flows weighted 0.25 in the loss, no rebalancing",
+        # Cellpose zero-pads every image; without it the cells touching the border are lost
+        "test": {"DATA.TEST.FORCE_PADDING": True},
+        "test_summary": "images of the patch size padded too (zeros), as the cells touching the border need it",
     },
     "omnipose": {
         "name": "Omnipose flows",

@@ -1,0 +1,61 @@
+# BiaPy version: 3.7.1
+# Cellpose-DINO inference (no cellpose package needed). To fine-tune, enable TRAIN and set DATA.TRAIN.
+# ViT-B version: VIT_MODEL 'dinov3_vitb' and VIT_PRETRAINED_WEIGHTS 'cpdino-vitb'.
+
+SYSTEM:
+    NUM_CPUS: -1
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: ['F', 'Gv', 'Gh']
+        CELLPOSE:
+            # No rescaling, as Cellpose-DINO
+            DIAMETER: 30.0
+            DIAM_MEAN: 30.0
+            FLOW_THRESHOLD: 0.4
+
+DATA:
+    # Cellpose-DINO's tile size; up to 3 channels
+    PATCH_SIZE: (384, 384, 1)
+    # Cellpose's normalization (1-99 percentiles, no clipping)
+    NORMALIZATION:
+        TYPE: scale_range
+        SCALE_RANGE:
+            LOWER_PERC: 1.0
+            UPPER_PERC: 99.0
+    TEST:
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: True
+        LOAD_GT: False
+        OVERLAP: (0.1, 0.1)
+        # Zero padding, as Cellpose; avoids losing border cells
+        PADDING: (8, 8)
+        # Also for images of the patch size
+        FORCE_PADDING: True
+
+MODEL:
+    ARCHITECTURE: vit_readout
+    VIT_MODEL: dinov3_vit
+    VIT_PRETRAINED_WEIGHTS: cpdino
+    # 8x8 token stride, as Cellpose-DINO
+    VIT_TOKEN_STRIDE: 8
+    VIT_READOUT:
+        FEATURES: 3
+        REFINE_LAYERS: 0
+        INPUT_SKIP: False
+
+TRAIN:
+    ENABLE: False
+
+TEST:
+    ENABLE: True
+    FULL_IMG: False
+    POST_PROCESSING:
+        # Cellpose's fill holes + min_size 15
+        INSTANCE_REFINEMENT:
+            ENABLE: True
+            OPERATIONS: ['fill_holes', 'remove_small_objects']
+            VALUES: ['none', 14]
