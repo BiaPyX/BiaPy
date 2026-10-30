@@ -363,6 +363,17 @@ def _channel_to_uint8(x: NDArray) -> NDArray:
     return np.clip(255 * (x - x.min()) / max(float(x.max() - x.min()), 1e-8), 0, 255).astype(np.uint8)
 
 
+def _flows_to_rgb(gv: NDArray, gh: NDArray) -> NDArray:
+    """Flows as an RGB image, as Cellpose's ``dx_to_circ``: the direction is the hue, the magnitude the brightness."""
+    mag = np.sqrt(gv.astype(np.float32) ** 2 + gh.astype(np.float32) ** 2)
+    lo, hi = np.percentile(mag, 1), np.percentile(mag, 99)
+    mag = 255 * np.clip((mag - lo) / (hi - lo), 0, 1) / 2 if hi - lo > 1e-3 else np.zeros_like(mag)
+    angles = np.arctan2(gh, gv) + np.pi
+    return np.stack(
+        [np.clip(mag * (np.cos(angles + k * 2 * np.pi / 3) + 1), 0, 255) for k in range(3)], axis=-1
+    ).astype(np.uint8)
+
+
 def _add_labels(panels: NDArray, labels: list, patch_size: int) -> NDArray:
     """Write ``labels`` in a strip under each ``patch_size``-wide panel of an RGB image."""
     from PIL import Image, ImageDraw, ImageFont
@@ -474,16 +485,21 @@ def create_model_cover(
         # In classification the img_gt is a class index, so just create a cover with the image
         out = img.copy()
     elif img_gt.shape[-1] > 1:
-        # Image and each img_gt channel side-by-side
-        out = np.ones((patch_size, patch_size * (img_gt.shape[-1] + 1), 3), dtype=np.uint8)
-        out[:, :patch_size] = img.copy()
+        # Image and each img_gt channel side-by-side; Cellpose flows (Gv, Gh) in a single panel colored as Cellpose
+        names = list(channel_names) if channel_names is not None and len(channel_names) == img_gt.shape[-1] else None
+        panels, labels = [img], ["input"]
         for c in range(img_gt.shape[-1]):
-            out[:, patch_size * (c + 1) : patch_size * (c + 2)] = _channel_to_uint8(img_gt[..., c])[..., None]
-        if channel_names is not None and len(channel_names) == img_gt.shape[-1]:
-            labels = ["input"] + [
-                f"{n}: {BIAPY_CHANNEL_DESCRIPTIONS[n]}" if n in BIAPY_CHANNEL_DESCRIPTIONS else str(n)
-                for n in channel_names
-            ]
+            n = names[c] if names else None
+            if names and n == "Gh" and "Gv" in names:
+                continue
+            if names and n == "Gv" and "Gh" in names:
+                panels.append(_flows_to_rgb(img_gt[..., c], img_gt[..., names.index("Gh")]))
+                labels.append("Gv+Gh: flows")
+                continue
+            panels.append(np.repeat(_channel_to_uint8(img_gt[..., c])[..., None], 3, axis=-1))
+            labels.append(f"{n}: {BIAPY_CHANNEL_DESCRIPTIONS[n]}" if n in BIAPY_CHANNEL_DESCRIPTIONS else str(n))
+        out = np.concatenate(panels, axis=1).astype(np.uint8)
+        if names:
             out = _add_labels(out, labels, patch_size)
     else:
         if img_gt.max() <= 1:

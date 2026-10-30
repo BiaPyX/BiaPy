@@ -180,6 +180,7 @@ def get_citations(
     cfg: Any,
     extra: Optional[Iterable[Dict[str, Any]]] = None,
     path: Optional[str] = None,
+    for_model: bool = False,
 ) -> List[Citation]:
     """
     Works to cite for a configuration, in the order of the rules (BiaPy first), each with the reasons it is cited.
@@ -198,6 +199,10 @@ def get_citations(
     path : str, optional
         Another references file (by default the one of BiaPy).
 
+    for_model : bool, optional
+        Only the works about the model (the BioImage Model Zoo model's ``cite`` field): leaves out the ``run_only``
+        rules.
+
     Returns
     -------
     citations : list of :class:`Citation`
@@ -205,7 +210,7 @@ def get_citations(
     data = load_references(path)
     out: Dict[str, Citation] = {}
     for rule in data["rules"]:
-        if not _holds(cfg, rule.get("when")):
+        if (for_model and rule.get("run_only")) or not _holds(cfg, rule.get("when")):
             continue
         for ref in rule["cite"]:
             c = out.setdefault(ref, Citation(ref, [], data["references"][ref]))
@@ -353,6 +358,8 @@ def _matches(v: Any, expected: Any) -> bool:
             return any(_same(x, arg) for x in _as_list(v))
         if op == "contains_any":
             return any(_same(x, a) for x in _as_list(v) for a in arg)
+        if op == "contains_all":
+            return all(any(_same(x, a) for x in _as_list(v)) for a in arg)
         if op == "not_in":
             return not any(_same(v, a) for a in arg)
         if op == "startswith":

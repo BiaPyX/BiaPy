@@ -16,11 +16,14 @@
 #              {KEY: value, ...}  all of them must hold. KEY is the variable's path, e.g. MODEL.ARCHITECTURE,
 #                                 with numbers for list items (e.g. PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS.0)
 #              value: a value (equal; texts ignore case), a list (any of them), or an operator:
-#                {contains: x} / {contains_any: [x, y]}  the variable (a list) has x / any of them
+#                {contains: x} / {contains_any: [x, y]} / {contains_all: [x, y]}  the variable (a list) has x /
+#                                                                       any of them / all of them
 #                {not_in: [x, y]}  none of them (also true when the variable is missing)
 #                {startswith: x}
 #              {any: [condition, ...]}  at least one of them holds
 #              {not: condition}
+#   run_only (optional) true if it is about the run and not the model (e.g. the evaluation metrics): left out of
+#            the BioImage Model Zoo model's "cite" field (its documentation keeps it)
 
 references:
   biapy:
@@ -1029,9 +1032,14 @@ rules:
     when: {MODEL.SOURCE: torchvision}
 
   # Instance segmentation
-  - reason: "Instance segmentation: BiaPy's bottom-up approach"
+  - reason: "Instance representation: foreground (or background) and contours (F + C or B + C)"
     cite: [biapy_instance_seg]
-    when: {PROBLEM.TYPE: INSTANCE_SEG}
+    when:
+      PROBLEM.TYPE: INSTANCE_SEG
+      PROBLEM.INSTANCE_SEG.TYPE: regular
+      any:
+        - {PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains_all: [F, C]}}
+        - {PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains_all: [B, C]}}
   - reason: "Instance representation: star-convex distances (StarDist)"
     cite: [stardist]
     when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.INSTANCE_SEG.TYPE: regular, PROBLEM.INSTANCE_SEG.DATA_CHANNELS: {contains: R}}
@@ -1063,6 +1071,7 @@ rules:
   - reason: "Instance matching metrics (code adapted from StarDist)"
     cite: [stardist]
     when: {PROBLEM.TYPE: INSTANCE_SEG, TEST.ENABLE: true, TEST.MATCHING_STATS: true}
+    run_only: true
 
   # Denoising
   - reason: "Self-supervised denoising: Noise2Void"

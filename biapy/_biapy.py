@@ -1825,7 +1825,7 @@ class BiaPy:
         from biapy.citations import get_citations
 
         cited = {(str(c.doi).lower() if c.doi else c.text.lower()) for c in citations}
-        for c in get_citations(self.cfg):
+        for c in get_citations(self.cfg, for_model=True):
             if (c.doi or c.title.lower()) in cited or c.title.lower() in cited:
                 continue
             # The title as the text: BiaPy's own is how the Model Zoo models trained with BiaPy are recognized
