@@ -33,7 +33,7 @@ import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
 from pathlib import Path
 from yacs.config import CfgNode as CN
-from functools import partial
+from functools import partial, wraps
 import collections.abc
 import gc
 from typing import (
@@ -77,6 +77,27 @@ def _biapy_print(*args, **kwargs):
         now = datetime.datetime.now().time()
         original_print("[{}] ".format(now), end="")  # print with time stamp
         original_print(*args, **kwargs)
+
+
+def restore_std_streams_on_error(func):
+    """
+    Decorator that puts back the ``sys.stdout``/``sys.stderr`` found on entry if ``func`` raises.
+
+    For functions that redirect them while running (e.g. the :class:`biapy.BiaPy` constructor,
+    which sends its output to a buffer, the run log or /dev/null): without it, the error raised
+    and everything printed afterwards would be swallowed.
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        prev_out, prev_err = sys.stdout, sys.stderr
+        try:
+            return func(*args, **kwargs)
+        except BaseException:
+            sys.stdout, sys.stderr = prev_out, prev_err
+            raise
+
+    return wrapper
 
 
 def setup_for_distributed(is_master):

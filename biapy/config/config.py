@@ -5,13 +5,16 @@ This module defines the Config class, which encapsulates all configuration optio
 for BiaPy workflows using a YACS CfgNode. It provides default values and hierarchical
 organization for system, data, augmentation, model, loss, training, inference,
 post-processing, and logging parameters. Utility functions are included for updating
-dependent configuration variables after merging user-provided configs.
+dependent configuration variables after merging user-provided configs, and for cleaning a
+saved configuration so it can be loaded back into another job.
 """
 import os
+import functools
 from yacs.config import CfgNode as CN
 import copy
 from typing import (
     Dict,
+    Optional,
 )
 
 class Config:
@@ -2942,3 +2945,98 @@ def update_dependencies(cfg) -> None:
         call.PATHS.RESULT_DIR.PATH,
         "test_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )
+
+
+def filter_cfg_to_schema(cfg_dict: dict, schema: CN) -> dict:
+    """
+    Keep only the keys of ``cfg_dict`` that exist in the ``schema`` CfgNode (recursively).
+
+    Used to drop runtime-derived keys (e.g. ``PATHS.TEST_FULL_GT_H5``) that a saved config
+    embeds but that are not part of the default configuration schema, so it can be merged
+    back cleanly.
+    """
+    out = {}
+    for k, v in cfg_dict.items():
+        if k not in schema:
+            continue
+        sv = schema[k]
+        if isinstance(v, dict) and isinstance(sv, CN):
+            out[k] = filter_cfg_to_schema(v, sv)
+        else:
+            out[k] = v
+    return out
+
+
+@functools.lru_cache(maxsize=1)
+def _job_derived_keys() -> frozenset:
+    """
+    Dotted keys whose default is built from the job's ``result_dir``/``name`` (``PATHS.*``
+    output folders and ``LOG.*``), found by comparing the defaults of two different jobs.
+    """
+
+    def _walk(node_a: CN, node_b: CN, prefix: str):
+        for k, v in node_a.items():
+            if isinstance(v, CN):
+                yield from _walk(v, node_b[k], prefix + k + ".")
+            elif v != node_b[k]:
+                yield prefix + k
+
+    defaults_a = Config("/job_a", "job_a_1").get_cfg_defaults()
+    defaults_b = Config("/job_b", "job_b_1").get_cfg_defaults()
+    return frozenset(_walk(defaults_a, defaults_b, ""))
+
+
+def remove_job_paths(cfg_dict: dict, job_dir: Optional[str] = None, job_identifier: Optional[str] = None) -> dict:
+    """
+    Remove (in-place) the output locations derived from a job from a configuration dict.
+
+    These are the keys whose default is built from ``result_dir``/``name`` (``PATHS.*`` result,
+    checkpoint and debug folders, ``LOG.*``). Once removed, they are derived again from the
+    ``result_dir``/``name`` of the job the configuration is loaded into, instead of pointing to
+    the original job's folders. Nodes left empty are dropped too.
+
+    Parameters
+    ----------
+    cfg_dict : dict
+        Configuration as a plain dict.
+
+    job_dir : str, optional
+        Folder of the job the configuration comes from. If given, only the locations inside it
+        (or equal to ``job_identifier``) are removed, so the ones the user set elsewhere are
+        kept. If not, all of them are removed (e.g. for a configuration embedded in a
+        checkpoint, whose job folder is unknown).
+
+    job_identifier : str, optional
+        Identifier of that job (``<name>_<run_id>``), used e.g. as ``LOG.LOG_FILE_PREFIX``.
+
+    Returns
+    -------
+    dict
+        ``cfg_dict``, for convenience.
+    """
+    if job_dir is not None:
+        job_dir = os.path.abspath(job_dir)
+
+    def _from_job(value) -> bool:
+        if job_dir is None:
+            return True
+        if not isinstance(value, str) or value == "":
+            return False
+        path = os.path.abspath(value)
+        return value == job_identifier or path == job_dir or path.startswith(job_dir + os.sep)
+
+    for key in _job_derived_keys():
+        *parents, leaf = key.split(".")
+        nodes = [cfg_dict]
+        for name in parents:
+            if not isinstance(nodes[-1].get(name), dict):
+                break
+            nodes.append(nodes[-1][name])
+        else:
+            if leaf in nodes[-1] and _from_job(nodes[-1][leaf]):
+                del nodes[-1][leaf]
+                for parent, node, name in reversed(list(zip(nodes[:-1], nodes[1:], parents))):
+                    if node:
+                        break
+                    del parent[name]
+    return cfg_dict

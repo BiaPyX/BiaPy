@@ -68,6 +68,7 @@ from biapy.utils.misc import (
     setup_for_distributed,
     compute_threads_and_workers,
     load_checkpoint_file,
+    restore_std_streams_on_error,
 )
 from biapy.models.bmz_utils import (
     create_model_doc,
@@ -76,7 +77,7 @@ from biapy.models.bmz_utils import (
     get_bmz_model_info,
 )
 from biapy.models import adapt_bmz_model_kwargs
-from biapy.config.config import Config, update_dependencies
+from biapy.config.config import Config, update_dependencies, filter_cfg_to_schema, remove_job_paths
 from biapy.engine.check_configuration import (
     check_configuration,
     convert_old_model_cfg_to_current_version,
@@ -138,6 +139,7 @@ def _as_file_descr(source: Any) -> Any:
 
 
 class BiaPy:
+    @restore_std_streams_on_error
     def __init__(
         self,
         config: Union[str, dict, CN],
@@ -345,10 +347,16 @@ class BiaPy:
         cfg_manager._C.merge_from_list(opts)
         self.cfg: CN = cfg_manager.get_cfg_defaults()
 
-        # Back up in-memory configs once fully resolved (mirrors the copyfile done for paths)
+        # Back up in-memory configs once fully resolved (mirrors the copyfile done for paths).
+        # The output locations derived from this job are left out, so running the backup again
+        # with another result_dir/name writes there instead of into this job's folders.
         if self.save_files and is_main_process() and not isinstance(self.args.config, str):
+            cfg_backup = filter_cfg_to_schema(
+                self._load_raw_config(self.cfg), Config(self.job_dir, self.job_identifier).get_cfg_defaults()
+            )
+            remove_job_paths(cfg_backup, self.job_dir, self.job_identifier)
             with open(self.cfg_file, "w", encoding="utf8") as stream:
-                stream.write(self.cfg.dump())
+                yaml.safe_dump(cfg_backup, stream, default_flow_style=False)
 
         # Rank is settled: on rank 0 open the log file (unless disabled) and flush the buffer
         # into it. In verbose mode the buffer was already shown live on the console.
@@ -844,8 +852,6 @@ class BiaPy:
         if not os.path.isfile(source):
             raise FileNotFoundError("Checkpoint file not found: {}".format(source))
 
-        from biapy.config.config import Config as _Config
-
         checkpoint = load_checkpoint_file(source, map_location="cpu")
         if "cfg" not in checkpoint:
             raise ValueError(
@@ -854,11 +860,12 @@ class BiaPy:
                 "pass it to BiaPy(...) instead.".format(source)
             )
 
-        defaults = _Config("load_workflow", "load_workflow").get_cfg_defaults()
-        cfg_dict = _filter_cfg_to_schema(cls._load_raw_config(checkpoint["cfg"]), defaults)
-        # Drop the embedded PATHS (they point to the original training job) so they are
-        # re-derived from the new result_dir/name at construction time.
-        cfg_dict.pop("PATHS", None)
+        defaults = Config("load_workflow", "load_workflow").get_cfg_defaults()
+        cfg_dict = filter_cfg_to_schema(cls._load_raw_config(checkpoint["cfg"]), defaults)
+        # Drop the embedded output and log locations (they point to the original training job,
+        # e.g. '/content/...' when trained on Colab) so they are re-derived from the new
+        # result_dir/name at construction time.
+        remove_job_paths(cfg_dict)
         _deep_merge(
             cfg_dict,
             {
@@ -2100,26 +2107,6 @@ def _deep_merge(base: dict, override: dict) -> dict:
         else:
             base[k] = v
     return base
-
-
-def _filter_cfg_to_schema(cfg_dict: dict, schema: CN) -> dict:
-    """
-    Keep only the keys of ``cfg_dict`` that exist in the ``schema`` CfgNode (recursively).
-
-    Used to drop runtime-derived keys (e.g. ``PATHS.TEST_FULL_GT_H5``) that a saved config
-    embeds but that are not part of the default configuration schema, so it can be merged
-    back cleanly.
-    """
-    out = {}
-    for k, v in cfg_dict.items():
-        if k not in schema:
-            continue
-        sv = schema[k]
-        if isinstance(v, dict) and isinstance(sv, CN):
-            out[k] = _filter_cfg_to_schema(v, sv)
-        else:
-            out[k] = v
-    return out
 
 
 def build_config(
