@@ -17,22 +17,29 @@ import ast
 import socket
 import json
 
+from gpu_utils import DEFAULT_MAX_USED_MEMORY_MB, free_gpus, gpu_report
+
 # ---------------------------------------------------------
 # ARGUMENT PARSING
 # ---------------------------------------------------------
 parser = argparse.ArgumentParser(description="Check BiaPy code consistency",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--out_folder", type=str, help="Output folder")
-parser.add_argument("--gpus", type=str, help="GPUs to use")
+parser.add_argument("--gpus", type=str, default="",
+                    help="GPUs the checks can use, e.g. '0,1,2,3'. Empty to consider all the GPUs of the machine. Right before "
+                    "each check the free ones among them are taken (see --max_gpus), and the check is skipped if none is free")
+parser.add_argument("--max_gpus", type=int, default=2,
+                    help="GPUs taken by the multi-GPU checks (fewer if not so many are free)")
+parser.add_argument("--max_used_memory", type=int, default=DEFAULT_MAX_USED_MEMORY_MB,
+                    help="Memory in use (MiB) from which a GPU is considered busy (by other jobs)")
 parser.add_argument("--biapy_folder", default="", help="BiaPy code directory to test")
 args = parser.parse_args()
 
-gpu = args.gpus.split(",")[0] 
-gpus = args.gpus 
-gpu_list = gpus.split(",")
-ngpus = len(gpu_list)
-
-print(f"Using GPU: '{gpu}' (single-gpu checks) ; GPUs: '{gpus}' (multi-gpu checks)")
+CANDIDATE_GPUS = [g.strip() for g in args.gpus.split(",") if g.strip()] or None
+MAX_GPUS = args.max_gpus
+MAX_USED_MEMORY_MB = args.max_used_memory
+print(f"GPUs considered: {'all' if CANDIDATE_GPUS is None else CANDIDATE_GPUS} ; up to {MAX_GPUS} per multi-GPU "
+      f"check, taking only those with no process and less than {MAX_USED_MEMORY_MB} MiB in use")
 
 data_folder = os.path.join(os.getcwd(), args.out_folder) 
 BIAPY_FOLDER = os.getcwd() if args.biapy_folder == "" else args.biapy_folder
@@ -54,7 +61,8 @@ all_test_info = {}
 all_test_info["Test1"] = {
     "enable": True,
     "jobname": "test1",
-    "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering. BMZ export through YAML.",
+    "description": "2D Semantic seg. Lucchi++. Basic DA. hrnet32. Random patch sampling with probability map. "
+        "IoU + Dice + accuracy metrics. 2D stack as 3D. Post-proc: z-filtering. BMZ export through YAML.",
     "template_path": os.path.join(data_folder, "semantic_seg", "2d_semantic_segmentation.yaml"),
     "yaml": "test1.yaml",
     "yaml_modifications": {
@@ -63,6 +71,10 @@ all_test_info["Test1"] = {
                 "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "train", "raw"),
                 "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "train", "label"),
                 "IN_MEMORY": True,
+                # One patch per image and time, centred on the mitochondria most of the times (~12 tiles per image)
+                "PATCH_SAMPLING": "random",
+                "PROBABILITY_MAP": True,
+                "REPLICATE": 12,
             },
             "TEST": {
                 "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "test", "raw"),
@@ -79,6 +91,7 @@ all_test_info["Test1"] = {
             "ENABLE": True,
             "EPOCHS": 4,
             "PATIENCE": -1,
+            "METRICS": ["iou", "dice", "accuracy"],
         },
         "MODEL": {
             "ARCHITECTURE": "hrnet32",
@@ -103,6 +116,7 @@ all_test_info["Test1"] = {
             "AUGMENTATION": True,
             "FULL_IMG": True,
             "ANALIZE_2D_IMGS_AS_3D_STACK": True,
+            "METRICS": ["iou", "dice", "accuracy"],
             "POST_PROCESSING": {
                 "MEDIAN_FILTER": True,
                 "MEDIAN_FILTER_AXIS": ["z"],
@@ -112,6 +126,9 @@ all_test_info["Test1"] = {
     },
     "internal_checks": [
         {"type": "regular", "pattern": "Test Foreground IoU (per image)", "gt": True, "value": 0.7},
+        {"type": "regular", "pattern": "Test Foreground Dice (per image)", "gt": True, "value": 0.8},
+        # ~0.94 predicting only background
+        {"type": "regular", "pattern": "Test Accuracy (per image)", "gt": True, "value": 0.97},
         {"type": "regular", "pattern": "Test Foreground IoU (as 3D stack - post-processing)", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "lucchi2Dsegmentation.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},     
@@ -314,7 +331,8 @@ all_test_info["Test4"] = {
 all_test_info["Test5"] = {
     "enable": True,
     "jobname": "test5",
-    "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
+    "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Foreground oversampling (nnU-Net). "
+        "Post-proc: Clear border + Voronoi + remove by props",
     "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
     "yaml": "test5.yaml",
     "yaml_modifications": {
@@ -337,6 +355,8 @@ all_test_info["Test5"] = {
                 "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "train_M2", "x"),
                 "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "train_M2", "y"),
                 "IN_MEMORY": True,
+                "PATCH_SAMPLING": "foreground_oversampling",
+                "REPLICATE": 2,
             },
             "VAL": {
                 "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "x"),
@@ -378,10 +398,11 @@ all_test_info["Test5"] = {
         },    
     },
     "internal_checks": [
+        # 0.98 and 0.94 measured
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.4},
+            "gt": True, "value": 0.85},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": True, "value": 0.1}, # Post-processing
+            "gt": True, "value": 0.8}, # Post-processing
     ]
 }
 
@@ -1124,7 +1145,8 @@ all_test_info["Test18"] = {
 all_test_info["Test19"] = {
     "enable": True,
     "jobname": "test19",
-    "description": "2D classification. DermaMNIST 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "description": "2D classification. DermaMNIST 2D data. preprocess: resize, Cross-val. Basic DA. ViT with a "
+        "pretrained DINOv3 ViT-B backbone (Cellpose-DINO weights, downloaded by URL).",
     "template_path": os.path.join(data_folder, "classification", "2d_classification.yaml"),
     "yaml": "test19.yaml",
     "yaml_modifications": {
@@ -1135,10 +1157,11 @@ all_test_info["Test19"] = {
                 "TEST": True,
                 "RESIZE": {
                     "ENABLE": True,
-                    "OUTPUT_SHAPE": "(56,56)"
+                    # Multiple of DINOv3's 16x16 tokens
+                    "OUTPUT_SHAPE": "(64,64)"
                 }
             },
-            "PATCH_SIZE": "(56,56,3)",
+            "PATCH_SIZE": "(64,64,3)",
             "TRAIN": {
                 "PATH": os.path.join(data_folder, "classification", "DermaMNIST_2D", "data", "train"),
                 "IN_MEMORY": True,
@@ -1162,6 +1185,8 @@ all_test_info["Test19"] = {
         },
         "MODEL": {
             "ARCHITECTURE": "vit",
+            "VIT_MODEL": "dinov3_vitb",
+            "VIT_PRETRAINED_WEIGHTS": "cpdino-vitb",
             "LOAD_CHECKPOINT": False,
             "N_CLASSES": 7
         },
@@ -1173,6 +1198,8 @@ all_test_info["Test19"] = {
     "bmz_package": "biapy_model.zip",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation Top 5 accuracy:", "gt": True, "value": 0.8},
+        # Every backbone tensor found in the checkpoint
+        {"type": "not_in_log", "pattern": "tensors were NOT found in the checkpoint"},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
     ]
@@ -1292,7 +1319,8 @@ all_test_info["Test21"] = {
 all_test_info["Test22"] = {
     "enable": True,
     "jobname": "test22",
-    "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
+    "description": "2D image to image. Dapi 2D data. Random patch sampling + random resized crop (ZOOM_REFERENCE "
+        "'image'). Test images resized whole to the patch size (metrics against the native GT). Basic DA. multiresunet",
     "template_path": os.path.join(data_folder, "image_to_image", "2d_image_to_image.yaml"),
     "yaml": "test22.yaml",
     "yaml_modifications": {
@@ -1300,11 +1328,22 @@ all_test_info["Test22"] = {
              "NORMALIZATION": {
                 "TYPE": "div",
             },
+            # The 1024x1024 test images are resized whole to the patch size, as the training patches cover 60-100% of
+            # the image area (ZOOM_REFERENCE 'image' below)
+            "PREPROCESS": {
+                "TEST": True,
+                "RESIZE": {
+                    "ENABLE": True,
+                    "OUTPUT_SHAPE": "(256,256)"
+                }
+            },
             "PATCH_SIZE": "(256,256,1)",
             "TRAIN": {
                 "PATH": os.path.join(data_folder, "image_to_image", "Dapi_dataset", "data", "train", "raw"),
                 "GT_PATH": os.path.join(data_folder, "image_to_image", "Dapi_dataset", "data", "train", "target"),
                 "IN_MEMORY": True,
+                "PATCH_SAMPLING": "random",
+                "REPLICATE": 4,
             },
             "VAL": {
                 "FROM_TRAIN": True,
@@ -1322,6 +1361,13 @@ all_test_info["Test22"] = {
             "EPOCHS": 10,
             "PATIENCE": -1,
         },
+        "AUGMENTOR": {
+            "ENABLE": True,
+            "ZOOM": True,
+            "ZOOM_REFERENCE": "image",
+            "ZOOM_RANGE": "(0.6, 1.0)",
+            "ZOOM_PROB": 1.0,
+        },
         "MODEL": {
             "ARCHITECTURE": "multiresunet",
             "LOAD_CHECKPOINT": False,
@@ -1333,7 +1379,8 @@ all_test_info["Test22"] = {
     "bmz_by_command": True,
     "bmz_package": "biapy_model.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 19.0},
+        # 26.2 measured
+        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 23.0},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
     ]
@@ -2053,6 +2100,32 @@ all_test_info["Test33"] = {
 }
 
 
+all_test_info["Test34"] = {
+    "enable": True,
+    "jobname": "test34",
+    "description": "2D Instance seg. Cellpose-SAM inference (no training) on DSB2018 with the Cellpose-SAM template: "
+        "pretrained ViT backbone downloaded by URL, 'vit_readout' architecture, Cellpose flows (F, Gv, Gh), test "
+        "padding forced for images of the patch size, instance refinement.",
+    "template_path": os.path.join(data_folder, "instance_seg", "2d_cellpose_sam.yaml"),
+    "yaml": "test34.yaml",
+    "yaml_modifications": {
+        "DATA": {
+            "TEST": {
+                "PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "test", "images"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "test", "masks"),
+                "LOAD_GT": True,
+            },
+        },
+    },
+    "internal_checks": [
+        # 0.96 measured (Cellpose's own pipeline gives the same within 0.01)
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1", "gt": True, "value": 0.93},
+        # Every Cellpose-SAM tensor found in the checkpoint
+        {"type": "not_in_log", "pattern": "tensors were NOT found in the checkpoint"},
+    ]
+}
+
+
 # ---------------------------------------------------------
 # 4. DATASET DEFINITIONS
 # ---------------------------------------------------------
@@ -2120,6 +2193,10 @@ DATASETS = [
             {
                 "url": "https://drive.google.com/uc?id=1QGV0gP8N8B8-EmcAPNQAudr2dqXYzhss",
                 "filename": "Conic.zip",
+            },
+            {
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_cellpose_sam.yaml",
+                "filename": "2d_cellpose_sam.yaml",
             }
         ]
     },
@@ -2397,15 +2474,17 @@ def check_DatasetMatching(last_lines, pattern_to_find, ref_value, gt=True, value
     for line in last_lines:
         if pattern_to_find in line:
             if c == value_to_check:
-                for part in line.split(' '):
-                    if metric in part:
-                        match = re.search(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', part.split('=')[-1][:-1])
-                        val = float(match.group())
-                        if gt and val >= ref_value:
-                            finished_good = True
-                        elif not gt and val < ref_value:
-                            finished_good = True
-                        break
+                # The value may be printed wrapped by its NumPy type, e.g. 'f1=np.float64(0.34)' (NumPy >= 2)
+                match = re.search(r'\b' + re.escape(metric) + r'=(?:np\.\w+\()?([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)', line)
+                if match is None:
+                    print(f"Could not find '{metric}' in: {line.strip()}")
+                    break
+                val = float(match.group(1))
+                if gt and val >= ref_value:
+                    finished_good = True
+                elif not gt and val < ref_value:
+                    finished_good = True
+                break
             else:
                 c += 1
     return finished_good
@@ -2435,6 +2514,19 @@ def check_ome_zarr(path, version, axes, levels):
         and len(found_levels) == levels
         and all(os.path.isdir(os.path.join(path, p)) for p in found_levels)
     )
+
+def check_not_in_log(test_info, pattern_to_find):
+    """
+    Checks that 'pattern_to_find' does not appear anywhere in the log (not only in its last lines, as the rest of
+    checks), e.g. warnings printed when the model is built.
+    """
+    jobout_file = os.path.join(RESULTS_FOLDER, test_info["jobname"], test_info["jobname"] + "_1")
+    with open(jobout_file, 'r') as logfile:
+        for line in logfile:
+            if pattern_to_find in line:
+                print(f"Found in the log: {line.strip()}")
+                return False
+    return True
 
 def check_finished(test_info):
     # get the last lines of the output file
@@ -2479,7 +2571,11 @@ def _get_free_master_port(low=1500, high=7000):
         return port
 
 
-def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
+def runjob(test_info, yaml_file, gpus, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
+    """Runs the job of a test on the GPUs ``gpus`` (list of ids), with DDP if there is more than one."""
+    multigpu = len(gpus) > 1
+    ngpus = len(gpus)
+    gpus = ",".join(gpus)
     # Declare the log file
     jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
     jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
@@ -2502,7 +2598,7 @@ def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_packa
             "--result_dir", RESULTS_FOLDER, 
             "--model_name", str(bmz_package.split(".")[:-1][0]),
             "--bmz_folder", BMZ_FOLDER,
-            "--gpu", gpus if multigpu else gpu
+            "--gpu", gpus
         ])
 
         if reuse_original_bmz_config:
@@ -2515,7 +2611,7 @@ def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_packa
                 "--gpu", gpus]
         else:
             cmd = ["python", "-u", "main.py", "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name",
-                test_info["jobname"], "--run_id", "1", "--gpu", gpu]
+                test_info["jobname"], "--run_id", "1", "--gpu", gpus]
             
     print(f"Command: {' '.join(cmd)}")
     print("Running job . . .")
@@ -2581,9 +2677,10 @@ for category in DATASETS:
 # 5. TEST EXECUTION LOOP
 # ---------------------------------------------------------
 test_results = []
+skipped_tests = []
 count_correct = 0
 
-# Dynamic Loop: Runs through Test 1 to Test 36
+# Dynamic Loop: runs every test in all_test_info
 for test_key, test_info in all_test_info.items():
     if not test_info.get("enable", True):
         print(f"Skipping {test_key} as it is not enabled.")
@@ -2614,11 +2711,19 @@ for test_key, test_info in all_test_info.items():
             yaml.dump(biapy_config, f, default_flow_style=False)
         print(f"Generated specific config: {yaml_out_file}")
 
-        # 1. Run the BiaPy Execution
+        # 1. Run the BiaPy Execution, on the GPUs free right now (skipped if there are none, so it neither crashes for
+        # lack of memory nor disturbs the jobs running on them)
+        gpus_free = free_gpus(CANDIDATE_GPUS, MAX_USED_MEMORY_MB)
+        if len(gpus_free) == 0:
+            print(f"** {test_info['jobname']} job: [SKIPPED] no free GPU at the moment:\n{gpu_report()}")
+            skipped_tests.append(test_key)
+            continue
+        gpus_job = gpus_free[: MAX_GPUS if test_info.get("multigpu", True) else 1]
+        print(f"Free GPUs: {gpus_free} ; using {gpus_job}")
         args = {
             "test_info": test_info,
             "yaml_file": yaml_out_file,
-            "multigpu": test_info.get("multigpu", True),
+            "gpus": gpus_job,
             "bmz_by_command": test_info.get("bmz_by_command", False),
             "bmz_package": test_info.get("bmz_package", None),
             "reuse_original_bmz_config": test_info.get("reuse_original_bmz_config", False)
@@ -2650,6 +2755,8 @@ for test_key, test_info in all_test_info.items():
                                               checks["version"], checks["axes"], checks["levels"]))
             elif checks["type"] == "file":
                 results.append(os.path.exists(os.path.join(RESULTS_FOLDER, test_info["jobname"], checks["path"])))
+            elif checks["type"] == "not_in_log":
+                results.append(check_not_in_log(test_info, checks["pattern"]))
 
             int_checks += 1
             if not results[-1]:
@@ -2676,8 +2783,11 @@ for res in test_results:
         count_correct += 1
 
 print(f"Test passed: ({count_correct}/{len(test_results)})")
+if skipped_tests:
+    # Not run, so not known to pass: reported as a failure of the whole check
+    print(f"Tests skipped as there was no free GPU ({len(skipped_tests)}): {', '.join(skipped_tests)}")
 
-if count_correct == len(test_results):
+if count_correct == len(test_results) and not skipped_tests:
     sys.exit(0)
 else:
     sys.exit(1)

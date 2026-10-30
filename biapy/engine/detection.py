@@ -486,13 +486,14 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     points_pred_mask = np.expand_dims(points_pred_mask, -1)
 
-                save_tif(
-                    np.expand_dims(points_pred_mask, 0),
-                    out_dir,
-                    [self.current_sample["X_filename"]],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(points_pred_mask, 0),
+                        out_dir,
+                        [self.current_sample["X_filename"]],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
                 if self.separated_class_channel:
                     points_pred_mask = points_pred_mask[..., 0]
@@ -502,14 +503,19 @@ class Detection_Workflow(Base_Workflow):
             # Detection watershed
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                 data_filename = os.path.join(self.cfg.DATA.TEST.PATH, self.current_sample["X_filename"])
+                # An in-memory image (BiaPy.predict) has no file to read back, so use the sample itself
+                watershed_image = None if os.path.isfile(data_filename) else self.current_sample["X"][0]
                 w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, self.current_sample["X_filename"])
-                check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
-                assert isinstance(pred_points, list)
+                check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW and self.save_to_disk else None
+                # peak_local_max/blob_log return an array (a list only after REMOVE_CLOSE_POINTS)
+                if isinstance(pred_points, np.ndarray):
+                    pred_points = pred_points.tolist()
                 points_pred_mask = detection_watershed(
                     points_pred_mask,
                     pred_points,
                     data_filename,
                     self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
+                    image=watershed_image,
                     save_dir=check_wa,
                     ndim=self.dims,
                     donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
@@ -529,13 +535,14 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
-                save_tif(
-                    np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                    [self.current_sample["X_filename"]],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                        [self.current_sample["X_filename"]],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
             del points_pred_mask
 
         # Save coords in a couple of csv files
@@ -650,7 +657,7 @@ class Detection_Workflow(Base_Workflow):
             if not self.separated_class_channel:
                 df = df.drop(columns=["class"])
 
-            if not self.cfg.TEST.BY_CHUNKS.ENABLE:
+            if not self.cfg.TEST.BY_CHUNKS.ENABLE and self.save_to_disk:
                 # Save just the points and their probabilities
                 os.makedirs(out_dir, exist_ok=True)
                 df.to_csv(
@@ -765,7 +772,7 @@ class Detection_Workflow(Base_Workflow):
                     if fp is not None:
                         fp = fp.drop(columns=["axis-0"])
                         fp = fp.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
-                if gt_assoc is not None:
+                if gt_assoc is not None and self.save_to_disk:
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                     gt_assoc.to_csv(
                         os.path.join(
@@ -774,7 +781,7 @@ class Detection_Workflow(Base_Workflow):
                         ),
                         index=False,
                     )
-                if fp is not None:
+                if fp is not None and self.save_to_disk:
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                     fp.to_csv(
                         os.path.join(
@@ -831,13 +838,14 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(gt_id_img.shape[0]):
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
 
-                save_tif(
-                    np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
-                    self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                    [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
+                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
                 # FP
                 if fp is not None:
@@ -855,13 +863,14 @@ class Detection_Workflow(Base_Workflow):
                     for j in range(points_pred_mask_color.shape[-1]):
                         points_pred_mask_color[i, ..., j] = dilation(points_pred_mask_color[i, ..., j], disk(3))
 
-                save_tif(
-                    np.expand_dims(points_pred_mask_color, 0),
-                    self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                    [self.current_sample["X_filename"]],
-                    verbose=self.cfg.TEST.VERBOSE,
-                    meta=self.current_sample.get("img_meta"),
-                )
+                if self.save_to_disk:
+                    save_tif(
+                        np.expand_dims(points_pred_mask_color, 0),
+                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        [self.current_sample["X_filename"]],
+                        verbose=self.cfg.TEST.VERBOSE,
+                        meta=self.current_sample.get("img_meta"),
+                    )
 
         return df
 
@@ -1180,7 +1189,7 @@ class Detection_Workflow(Base_Workflow):
         pred = self.model(in_img)
 
         bboxes = pred[0]["boxes"].cpu().numpy()
-        if not is_train and len(bboxes) != 0:
+        if not is_train and len(bboxes) != 0 and self.save_to_disk:
             # Extract each output from prediction
             labels = pred[0]["labels"].cpu().numpy()
             scores = pred[0]["scores"].cpu().numpy()

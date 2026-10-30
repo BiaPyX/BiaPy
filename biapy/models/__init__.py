@@ -321,6 +321,8 @@ def build_model(
                 alpha=1.67,
                 z_down=cfg.MODEL.Z_DOWN,
                 output_channels=output_channels,
+                output_channel_info=output_channel_info,
+                head_activations=head_activations,
                 explicit_activations=False,
             )
             if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":

@@ -30,9 +30,10 @@ jobs:
       if: always()
       run: |
           mkdir biapy_checks
-          python -u tests/run_checks.py --out_folder biapy_checks --gpus "0,1"
+          # Each check takes the GPUs free right before it starts (skipped if there are none)
+          python -u tests/run_checks.py --out_folder biapy_checks
     - name: Checking BiaPy Python API (build_config / predict)
       if: always()
       run: |
           mkdir -p biapy_checks
-          python -u tests/check_api.py --out_folder biapy_checks --gpu "0"
+          python -u tests/check_api.py --out_folder biapy_checks --gpu auto

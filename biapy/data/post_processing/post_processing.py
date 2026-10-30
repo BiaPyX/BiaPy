@@ -2129,6 +2129,7 @@ def detection_watershed(
     donuts_patch: List[int]=[13, 120, 120],
     donuts_nucleus_diameter: int=30,
     save_dir: Optional[str] = None,
+    image: Optional[NDArray] = None,
 ) -> NDArray:
     """
     Grow given detection seeds.
@@ -2164,6 +2165,10 @@ def detection_watershed(
     save_dir :  str, optional
         Directory to save watershed output into.
 
+    image : NDArray, optional
+        Image paired with seeds, used instead of reading ``data_filename`` (e.g. for an
+        in-memory image that has no file on disk).
+
     Returns
     -------
     segm : 2D/3D Numpy array
@@ -2172,7 +2177,10 @@ def detection_watershed(
     print("Applying detection watershed . . .")
 
     # Read the test image
-    img = read_img_as_ndarray(data_filename, is_3d=(ndim == 3)).squeeze()
+    if image is not None:
+        img = np.asarray(image).squeeze()
+    else:
+        img = read_img_as_ndarray(data_filename, is_3d=(ndim == 3)).squeeze()
     img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type="uint8")
     img = equalize_adapthist(img)
 

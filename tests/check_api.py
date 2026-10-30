@@ -11,6 +11,9 @@ Steps:
   3) Assert that a predict-only workflow (built with ``save_files=False``) writes NOTHING to
      disk: the output folder is never even created, neither at construction nor after
      ``predict``.
+  4) Load the workflow from the trained ``.pth`` with a ``result_dir`` and run ``test()``:
+     logs and results must go to the new job folder, never to the training job's paths
+     embedded in the checkpoint.
 
 Run: ``python tests/check_api.py --out_folder <dir> --gpu 0``
 """
@@ -31,8 +34,20 @@ PATCH = (256, 256, 1)
 
 parser = argparse.ArgumentParser(description="Check BiaPy Python API consistency")
 parser.add_argument("--out_folder", required=True, help="Working/output folder")
-parser.add_argument("--gpu", default="", help="GPU id (e.g. '0') or '' for CPU")
+parser.add_argument("--gpu", default="",
+                    help="GPU id (e.g. '0'), '' for CPU or 'auto' for a GPU free right now (skipping the check if none is)")
 args = parser.parse_args()
+
+if args.gpu == "auto":
+    # The machine is shared with other jobs: take a GPU nobody is using instead of crashing them (or this check)
+    from gpu_utils import free_gpus, gpu_report
+
+    gpus_free = free_gpus()
+    if len(gpus_free) == 0:
+        print(f"[SKIPPED] No free GPU at the moment, so the API check was not run:\n{gpu_report()}")
+        sys.exit(1)
+    args.gpu = gpus_free[0]
+    print(f"Free GPUs: {gpus_free} ; using {args.gpu}")
 
 inst_dir = os.path.join(args.out_folder, "instance_seg")
 data_dir = os.path.join(inst_dir, "Stardist_v2_2D", "data")
@@ -236,6 +251,34 @@ for entry, label in (
     except Exception as e:  # noqa: BLE001
         print(f"FAIL: [{label}] raised: {type(e).__name__}: {e}")
         overall_ok = False
+
+# With a result_dir, the loaded workflow must write only inside the new job folder: the paths
+# embedded in the checkpoint (logs, results...) belong to the training job, which may not exist
+# here (e.g. a model trained on Colab embeds '/content/...').
+print("\n=== [4] load the workflow from the trained .pth with a result_dir + test() ===")
+name = "api_load_with_result_dir"
+train_jobdir = os.path.join(result_dir, train_name)
+train_files_before = list_files(train_jobdir)
+try:
+    b = BiaPy.load_workflow_from_model(checkpoint, result_dir=result_dir, name=name, gpu=args.gpu)
+    expected_log_dir = os.path.join(result_dir, name, "logs")
+    if os.path.abspath(b.cfg.LOG.LOG_DIR) != os.path.abspath(expected_log_dir):
+        print(f"FAIL: LOG.LOG_DIR is '{b.cfg.LOG.LOG_DIR}', expected '{expected_log_dir}'")
+        overall_ok = False
+    b.update_config({"TEST.ENABLE": True, "DATA.TEST.PATH": test_x})
+    b.test()
+    if not list_files(os.path.join(result_dir, name, "results")):
+        print(f"FAIL: [{name}] test() wrote no results")
+        overall_ok = False
+    new_in_train_job = list_files(train_jobdir) - train_files_before
+    if new_in_train_job:
+        print(f"FAIL: [{name}] wrote into the training job folder: {sorted(new_in_train_job)[:5]}")
+        overall_ok = False
+    else:
+        print(f"[{name}] OK: results and logs written only inside the new job folder")
+except Exception as e:  # noqa: BLE001
+    print(f"FAIL: [{name}] raised: {type(e).__name__}: {e}")
+    overall_ok = False
 
 # A .safetensors checkpoint must be rejected (no embedded config)
 try:

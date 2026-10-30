@@ -89,6 +89,9 @@
   "check_folder(instance masks)/data_constraints/DATA.TRAIN.GT_PATH",
   "check_folder(instance masks)/data_constraints/DATA.TRAIN.GT_PATH_path",
   "check_folder(instance masks)/data_constraints/DATA.TRAIN.GT_PATH_path_shapes",
+  "check_folder(instance masks)/data_constraints/DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA",
+  "check_folder(instance masks)/data_constraints/DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH",
+  "check_folder(instance masks)/data_constraints/DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH",
   "check_folder(instance masks)/error",
   "check_folder(instance masks)/error_message",
   "check_folder(instance masks)/sample_info",
@@ -110,6 +113,7 @@
   "check_folder(raw images)/sample_info",
   "check_folder(raw images)/sample_info/dir_name",
   "check_folder(raw images)/sample_info/fingerprint",
+  "check_folder(raw images)/sample_info/ome_zarr_labels",
   "preview(detection points)/columns",
   "preview(detection points)/notes",
   "preview(detection points)/samples",
@@ -211,6 +215,16 @@
      "progress",
      "POSITIONAL_OR_KEYWORD",
      true
+    ],
+    [
+     "percentage",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ],
+    [
+     "data_path",
+     "POSITIONAL_OR_KEYWORD",
+     true
     ]
    ]
   },
@@ -241,6 +255,11 @@
     ],
     [
      "target_folder",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ],
+    [
+     "target_data_path",
      "POSITIONAL_OR_KEYWORD",
      true
     ]

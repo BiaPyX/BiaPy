@@ -998,7 +998,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be a list")
         if any(y == -1 for y in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
             raise ValueError(
-                "Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'"
+                "Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED'"
             )
         if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION) != dim_count:
             raise ValueError(
