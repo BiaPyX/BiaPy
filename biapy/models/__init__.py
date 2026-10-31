@@ -1169,6 +1169,96 @@ def update_bmz_model_kwargs_to_biapy(new_biapy_model_kwargs: Dict, model: ModelD
             bmz_model_kwargs[k] = v
     return bmz_model_kwargs
 
+# bioimageio.spec finds a zoo model by its id (e.g. "playful-scorpion") only through Hypha's ".../files/rdf.yaml" and,
+# failing that, an id_map.json that is no longer updated (since 2025-09). But the zoo stores the description of a model
+# with the name it was uploaded with ("bioimageio.yaml" in many recent ones), so those models are found by looking for it
+# among the model's files.
+BMZ_HYPHA_FILES_URL = "https://hypha.aicell.io/bioimage-io/artifacts/{}/files/"
+# Names the description of a zoo model usually has, tried first; any other YAML file of the model is checked after them
+BMZ_DESCRIPTION_NAMES = ["rdf.yaml", "bioimageio.yaml"]
+# Description URL found for each model id (the search checks many models, and the same model is loaded several times)
+_bmz_description_urls: Dict[str, str] = {}
+
+
+def find_bmz_description_url(model_id: str, timeout: int = 30) -> Optional[str]:
+    """
+    URL of the description (RDF) of a BioImage Model Zoo model among its files, whatever its name.
+
+    Parameters
+    ----------
+    model_id : str
+        Model id (nickname), e.g. ``"playful-scorpion"``.
+
+    timeout : int
+        Timeout of each HTTP request in seconds.
+
+    Returns
+    -------
+    url : str or None
+        URL of the description, or ``None`` if the model has none (or its files could not be listed).
+    """
+    if model_id in _bmz_description_urls:
+        return _bmz_description_urls[model_id]
+    base = BMZ_HYPHA_FILES_URL.format(model_id)
+    try:
+        r = requests.get(base, timeout=timeout)
+        r.raise_for_status()
+        files = [f for f in r.json() if isinstance(f, dict) and f.get("type", "file") == "file"]
+    except Exception:
+        return None
+    names = [str(f.get("name", "")) for f in files]
+    yamls = [n for n in names if n.lower().endswith((".yaml", ".yml"))]
+    candidates = [n for n in BMZ_DESCRIPTION_NAMES if n in yamls]
+    candidates += sorted(n for n in yamls if n not in candidates)
+    for name in candidates:
+        try:
+            r = requests.get(base + name, timeout=timeout)
+            r.raise_for_status()
+            content = yaml.safe_load(r.text)
+        except Exception:
+            continue
+        # A description has its resource type and format version (environment.yaml and others don't)
+        if isinstance(content, dict) and content.get("type") and content.get("format_version"):
+            _bmz_description_urls[model_id] = base + name
+            return base + name
+    return None
+
+
+def _load_description(source: str, **kwargs):
+    """
+    :func:`bioimageio.spec.load_description` that also finds the zoo models whose description is not called
+    ``rdf.yaml`` (see :func:`find_bmz_description_url`).
+
+    Parameters
+    ----------
+    source : str
+        Model id, URL or file, as for :func:`bioimageio.spec.load_description`.
+
+    **kwargs
+        Passed to :func:`bioimageio.spec.load_description`.
+
+    Returns
+    -------
+    description : ResourceDescr
+        The description loaded.
+    """
+    url = _bmz_description_urls.get(source)
+    if url is not None:
+        return load_description(url, **kwargs)
+    try:
+        return load_description(source, **kwargs)
+    except Exception as e:
+        if os.path.exists(source) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)+", str(source)):
+            raise
+        url = find_bmz_description_url(source)
+        if url is None:
+            raise
+        try:
+            return load_description(url, **kwargs)
+        except Exception:
+            raise e
+
+
 def load_bmz_model_description(source: str) -> ModelDescr_v0_4 | ModelDescr_v0_5:
     """
     Description of a BioImage Model Zoo model (its id, e.g. "affable-shark", URL or file), checked: when it can't be
@@ -1187,7 +1277,7 @@ def load_bmz_model_description(source: str) -> ModelDescr_v0_4 | ModelDescr_v0_5
     """
     import bioimageio.spec
 
-    description = load_description(source)
+    description = _load_description(source)
     if not isinstance(description, (ModelDescr_v0_4, ModelDescr_v0_5)):
         try:
             details = description.validation_summary.format()
@@ -2004,7 +2094,7 @@ def check_bmz_model_compatibility(
             # perform_io_checks=False: we only need the parsed RDF metadata to inspect the
             # dependencies field, not to download/hash weights, sample and test files, which
             # are otherwise fetched eagerly and can be hundreds of MBs per model.
-            current_model = load_description(nickname, perform_io_checks=False)
+            current_model = _load_description(nickname, perform_io_checks=False)
         except Exception:
             return _result(True, f"[{specific_workflow}] Couldn't load model for dependency check.\n")
         
