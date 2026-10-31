@@ -21,6 +21,7 @@ import os
 import warnings
 import math
 import re
+import threading
 import torch
 import torch.nn as nn
 from torchinfo import summary
@@ -1178,6 +1179,15 @@ BMZ_HYPHA_FILES_URL = "https://hypha.aicell.io/bioimage-io/artifacts/{}/files/"
 BMZ_DESCRIPTION_NAMES = ["rdf.yaml", "bioimageio.yaml"]
 # Description URL found for each model id (the search checks many models, and the same model is loaded several times)
 _bmz_description_urls: Dict[str, str] = {}
+# bioimageio.spec's YAML parser is not thread-safe: descriptions loaded at the same time (e.g. the models checked in
+# parallel by BiaPy-Fiji's search) mix up their parsing and fail at random, so they are loaded one at a time
+_load_description_lock = threading.Lock()
+
+
+def _locked_load_description(source: str, **kwargs):
+    """:func:`bioimageio.spec.load_description`, one call at a time (see :data:`_load_description_lock`)."""
+    with _load_description_lock:
+        return load_description(source, **kwargs)
 
 
 def find_bmz_description_url(model_id: str, timeout: int = 30) -> Optional[str]:
@@ -1244,9 +1254,9 @@ def _load_description(source: str, **kwargs):
     """
     url = _bmz_description_urls.get(source)
     if url is not None:
-        return load_description(url, **kwargs)
+        return _locked_load_description(url, **kwargs)
     try:
-        return load_description(source, **kwargs)
+        return _locked_load_description(source, **kwargs)
     except Exception as e:
         if os.path.exists(source) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)+", str(source)):
             raise
@@ -1254,7 +1264,7 @@ def _load_description(source: str, **kwargs):
         if url is None:
             raise
         try:
-            return load_description(url, **kwargs)
+            return _locked_load_description(url, **kwargs)
         except Exception:
             raise e
 
