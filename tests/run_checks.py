@@ -6,6 +6,7 @@ import gdown
 import urllib
 import yaml
 from zipfile import ZipFile
+import subprocess
 from subprocess import Popen
 import numpy as np
 import argparse
@@ -49,6 +50,10 @@ print(f"Running in folder: {BIAPY_FOLDER}")
 
 BMZ_FOLDER = os.path.join(data_folder, "bmz_files")
 bmz_script = os.path.join(BIAPY_FOLDER, "tests", "export_bmz_test.py")
+bmz_reproducibility_script = os.path.join(BIAPY_FOLDER, "tests", "bmz_reproducibility.py")
+# Fraction of the elements of a BMZ test output that may disagree with the expected ones (small numerical differences
+# that do not affect the model performance)
+MAX_BMZ_DISAGREEMENT = 0.15
 RESULTS_FOLDER = os.path.join(data_folder, "output")
 
 if not os.path.exists(BIAPY_FOLDER):
@@ -2410,40 +2415,49 @@ def check_bmz_file_created(last_lines, pattern_to_find):
             return True
     return False
 
-def check_bmz_weight_agreement(last_lines, pattern_to_find):
+def check_bmz_weight_agreement(last_lines, pattern_to_find, gpu=None):
     """
-    Checks BMZ model weight agreement. E.g. "weights.pytorch_state_dict" in the logs.
-    Returns False if there is an error (i.e. the pattern is found but it is related to a disagreement), False otherwise.
-    """
-    for i, line in enumerate(last_lines):
-        if pattern_to_find in line:
-            if "✔️" in line:
-                return True
-            else: # "❌" or "⚠" in line
-                error_lines = "".join(last_lines[i:min(i+5, len(last_lines)-1)])
-                if  "disagrees with" in error_lines:
-                    # We try to find the ratio of disagreeing weights. If it is very low, we consider it an agreement (there can be 
-                    # some small numerical differences that do not affect the model performance). If it is higher than a threshold,
-                    # we consider it a disagreement and return False.
-                    try:
-                        # We expect the line to be something like:
-                        # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
-                        # Find all integers in the string
-                        numbers = re.findall(r' \d+ ', error_lines)
-                        if len(numbers) == 2:
-                            # Convert first two to integers, 12 and 131072 in the example
-                            first = float(numbers[0])
-                            second = float(numbers[1])
+    Checks that the exported BMZ package reproduces its test outputs. Instead of parsing bioimageio's validation
+    message (its wording changes between versions), the package of the "Package path:" line is run again with
+    bioimageio.core by ``bmz_reproducibility_script``, which reports the disagreeing output elements as JSON.
+    Small numerical differences are accepted: it fails only if more than ``MAX_BMZ_DISAGREEMENT`` of the
+    elements of an output disagree.
 
-                            # Compute ratio
-                            ratio = first / second
-                            if ratio < 15: # If more than 15% of the weights disagree, we consider it a disagreement
-                                return True
-                    except Exception as e:
-                        raise ValueError(f"Error parsing BMZ output agreement error message. Message: {''.join(error_lines)}. Error: {e}")
-                message = "".join(error_lines)
-                raise ValueError(f"Error checking BMZ output agreement. Error message reported by bioimageio:\n{message}")
-    return True
+    ``pattern_to_find`` names the weights to run, e.g. "weights.pytorch_state_dict". The model runs on ``gpu``
+    (id) if given, on the CPU otherwise.
+    """
+    package_lines = [line for line in last_lines if "Package path:" in line]
+    if len(package_lines) == 0:
+        print("BMZ agreement check: no 'Package path:' line found in the log")
+        return False
+    package = package_lines[-1].split("Package path:", 1)[1].strip()
+    weight_format = pattern_to_find.split("weights.", 1)[-1]
+
+    env = dict(os.environ)
+    if gpu is not None:
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    process = subprocess.run(
+        [sys.executable, "-u", bmz_reproducibility_script, package, "--weight_format", weight_format,
+         "--device", "cuda" if gpu is not None else "cpu"],
+        capture_output=True, text=True, env=env,
+    )
+    result_lines = [line for line in process.stdout.splitlines() if line.startswith("BMZ_REPRODUCIBILITY ")]
+    if process.returncode != 0 or len(result_lines) == 0:
+        print(f"BMZ agreement check: could not run {package}:\n{process.stderr[-3000:]}")
+        return False
+
+    outputs = json.loads(result_lines[-1].split(" ", 1)[1])["outputs"]
+    agreement = True
+    for name, out in outputs.items():
+        if "error" in out:
+            print(f"BMZ agreement check: {out['error']}")
+            agreement = False
+        else:
+            print(f"BMZ agreement check: output '{name}': {out['mismatched']} of {out['total']} elements disagree "
+                  f"({100 * out['fraction']:.2f}%, max abs diff {out['max_abs_diff']:.3g})")
+            if out["fraction"] > MAX_BMZ_DISAGREEMENT:
+                agreement = False
+    return agreement
 
 def check_value(last_lines, pattern_to_find, ref_value, gt=True):
     """
@@ -2749,7 +2763,7 @@ for test_key, test_info in all_test_info.items():
             elif checks["type"] == "BMZ":
                 results.append(check_bmz_file_created(last_lines, checks["pattern"]))
             elif checks["type"] == "BMZ_weight_agreement":
-                results.append(check_bmz_weight_agreement(last_lines, checks["pattern"]))
+                results.append(check_bmz_weight_agreement(last_lines, checks["pattern"], gpu=gpus_job[0]))
             elif checks["type"] == "OME-Zarr":
                 results.append(check_ome_zarr(os.path.join(RESULTS_FOLDER, test_info["jobname"], checks["path"]),
                                               checks["version"], checks["axes"], checks["levels"]))
