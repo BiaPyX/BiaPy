@@ -284,11 +284,20 @@ def build_model(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 activation=cfg.MODEL.ACTIVATION.lower(),
                 n_classes=cfg.DATA.N_CLASSES,
+                explicit_activations=False,
+                head_activations=head_activations,
+                output_channel_info=output_channel_info,
             )
             model = simple_CNN(**args)  # type: ignore
             callable_model = simple_CNN  # type: ignore
         elif "efficientnet" in modelname:
-            args = dict(efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), n_classes=cfg.DATA.N_CLASSES)
+            args = dict(
+                efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(),
+                n_classes=cfg.DATA.N_CLASSES,
+                explicit_activations=False,
+                head_activations=head_activations,
+                output_channel_info=output_channel_info,
+            )
             model = efficientnet(**args)  # type: ignore
             callable_model = efficientnet  # type: ignore
         elif modelname == "vit":
@@ -1332,11 +1341,18 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
         Torch model.
     """
     assert model.weights.pytorch_state_dict
+    # Adapt the kwargs on (shallow) copies, so the original description, which is used as is when exporting the
+    # model again, is not changed. Not a deep copy: it would validate again the description's relative paths
     weight_spec = model.weights.pytorch_state_dict
     if isinstance(weight_spec, v0_4.PytorchStateDictWeightsDescr):
-        weight_spec.kwargs = adapt_bmz_model_kwargs(weight_spec.kwargs, model_to_consume=True)
+        weight_spec = weight_spec.model_copy(
+            update={"kwargs": adapt_bmz_model_kwargs(weight_spec.kwargs, model_to_consume=True)}
+        )
     elif isinstance(weight_spec, v0_5.PytorchStateDictWeightsDescr):
-        weight_spec.architecture.kwargs = adapt_bmz_model_kwargs(weight_spec.architecture.kwargs, model_to_consume=True)
+        architecture = weight_spec.architecture.model_copy(
+            update={"kwargs": adapt_bmz_model_kwargs(weight_spec.architecture.kwargs, model_to_consume=True)}
+        )
+        weight_spec = weight_spec.model_copy(update={"architecture": architecture})
 
     model_instance = load_torch_model(weight_spec, load_state=True, devices=[device])
 

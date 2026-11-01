@@ -2207,15 +2207,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Apply normalization
             if apply_norm:
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    # Transpose to (b,y,x,c) for normalization and back to (b,c,y,x) after
-                    self.bmz_config[sample_key], bmz_norm_used = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 1), self.norm_module)
-                    self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 3, 1, 2)
-                else:  
-                    # Transpose to (b,z,y,x,c) for normalization and back to (b,c,z,y,x) after
-                    self.bmz_config[sample_key], bmz_norm_used = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 4, 1), self.norm_module)
-                    self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 4, 1, 2, 3)
-                print("Normalization used in when creating BMZ data: {}".format(bmz_norm_used))
+                self.bmz_config[sample_key] = self.normalize_bmz_sample(self.bmz_config[sample_key])
 
         # Save test_input without the normalization if not already saved
         if "test_input" not in self.bmz_config:
@@ -2226,35 +2218,8 @@ class Base_Workflow(metaclass=ABCMeta):
             _prepare_bmz_sample("test_input_norm", img)
 
         # Model prediction
-        assert self.model and self.model_without_ddp
         assert isinstance(self.bmz_config["test_input_norm"], np.ndarray)
-        pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
-
-        # MAE
-        if isinstance(pred, dict) and "mask" in pred:
-            pred = self.apply_model_activations(pred)
-            assert isinstance(pred, dict), "The model output should be a dictionary containing 'pred' and 'mask' for the MAE pretext task."
-            assert "pred" in pred and "mask" in pred, "The model output should contain 'pred' and 'mask' for the MAE pretext task."
-            mask = pred["mask"]
-            pred = pred["pred"]
-            pred, p_mask, _ = self.model_without_ddp.save_images(
-                torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device),
-                pred,
-                mask,
-                self.dtype,
-            ) # type: ignore
-
-            # We call MAE again with "return_just_preds" that sets a seed in the random masking to ensure that the same mask is applied here 
-            # and in the BMZ exported model. If not BMZ check will crash reproducing the output 
-            pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device), return_just_preds=True)
-        else:
-            pred = self.apply_model_activations(pred)
-            # Multi-head concatenation
-            if isinstance(pred, dict):
-                if "class" in pred:
-                    pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
-                else:
-                    pred = pred["pred"]
+        pred, p_mask = self._bmz_model_output(self.bmz_config["test_input_norm"])
 
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
@@ -2267,6 +2232,97 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
             if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
                 self.bmz_config["cover_gt"] = np.expand_dims(np.argmax(self.bmz_config["cover_gt"], -1), -1)
+
+    def normalize_bmz_sample(self, img: NDArray) -> NDArray:
+        """
+        Normalize an image as done to create the BMZ test data.
+
+        Parameters
+        ----------
+        img : 4D/5D Numpy array
+            Unnormalized image in Torch axes order, i.e. ``(b,c,y,x)`` for 2D or ``(b,c,z,y,x)`` for 3D.
+
+        Returns
+        -------
+        img : 4D/5D Numpy array
+            Normalized float32 image, with the same axes.
+        """
+        if self.cfg.PROBLEM.NDIM == "2D":
+            # Transpose to (b,y,x,c) for normalization and back to (b,c,y,x) after
+            img, bmz_norm_used = normalize_image(img.transpose(0, 2, 3, 1), self.norm_module)
+            img = img.astype(np.float32).transpose(0, 3, 1, 2)
+        else:
+            # Transpose to (b,z,y,x,c) for normalization and back to (b,c,z,y,x) after
+            img, bmz_norm_used = normalize_image(img.transpose(0, 2, 3, 4, 1), self.norm_module)
+            img = img.astype(np.float32).transpose(0, 4, 1, 2, 3)
+        print("Normalization used in when creating BMZ data: {}".format(bmz_norm_used))
+        return img
+
+    @torch.no_grad()
+    def _bmz_model_output(self, img_norm: NDArray) -> Tuple[torch.Tensor, Optional[NDArray]]:
+        """
+        Run the model over a normalized image as done to create the BMZ test output (activations included).
+
+        Parameters
+        ----------
+        img_norm : 4D/5D Numpy array
+            Normalized image in Torch axes order.
+
+        Returns
+        -------
+        pred : Torch tensor
+            Model output.
+
+        p_mask : Numpy array or None
+            Masked input of the MAE pretext task, ``None`` otherwise.
+        """
+        # The model without DDP: when exporting, only the main process runs it
+        assert self.model_without_ddp
+        model = self.model_without_ddp
+        x = torch.from_numpy(img_norm).to(self.device)
+        pred = model(x)
+        p_mask = None
+
+        # MAE
+        if isinstance(pred, dict) and "mask" in pred:
+            pred = self.apply_model_activations(pred)
+            assert isinstance(pred, dict), "The model output should be a dictionary containing 'pred' and 'mask' for the MAE pretext task."
+            assert "pred" in pred and "mask" in pred, "The model output should contain 'pred' and 'mask' for the MAE pretext task."
+            mask = pred["mask"]
+            pred = pred["pred"]
+            pred, p_mask, _ = model.save_images(x, pred, mask, self.dtype)  # type: ignore
+
+            # We call MAE again with "return_just_preds" that sets a seed in the random masking to ensure that the same mask is applied here 
+            # and in the BMZ exported model. If not BMZ check will crash reproducing the output 
+            pred = model(x, return_just_preds=True)
+        else:
+            pred = self.apply_model_activations(pred)
+            # Multi-head concatenation
+            if isinstance(pred, dict):
+                if "class" in pred:
+                    pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    pred = pred["pred"]
+        return pred, p_mask
+
+    def predict_bmz_sample(self, img: NDArray) -> NDArray:
+        """
+        Predict an image as done to create the BMZ test output (BiaPy's normalization, the model and its
+        activations), without storing anything. Used for BMZ test inputs not created by BiaPy, e.g. the original
+        one of a fine-tuned BMZ model.
+
+        Parameters
+        ----------
+        img : 4D/5D Numpy array
+            Unnormalized image in Torch axes order, i.e. ``(b,c,y,x)`` for 2D or ``(b,c,z,y,x)`` for 3D.
+
+        Returns
+        -------
+        pred : 4D/5D Numpy array
+            float32 prediction in Torch axes order.
+        """
+        pred, _ = self._bmz_model_output(self.normalize_bmz_sample(img.astype(np.float32)))
+        return pred.cpu().numpy().astype(np.float32)
 
     def apply_roi_mask(self, pred: NDArray) -> NDArray:
         """

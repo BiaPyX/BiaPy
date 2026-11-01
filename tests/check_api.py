@@ -15,12 +15,18 @@ Steps:
      logs and results must go to the new job folder, never to the training job's paths
      embedded in the checkpoint.
 
+The output is organized as in ``run_checks.py``: each check prints a header, the path of the log file that
+receives everything BiaPy prints while it runs, and a final ``[OK]``/``[ERROR]`` line.
+
 Run: ``python tests/check_api.py --out_folder <dir> --gpu 0``
 """
 import os
 import sys
 import glob
 import argparse
+import builtins
+import traceback
+from contextlib import contextmanager
 from zipfile import ZipFile
 
 import numpy as np
@@ -28,6 +34,10 @@ import gdown
 from skimage.io import imread
 
 from biapy import BiaPy, build_config
+
+# BiaPy replaces builtins.print (adding a timestamp) once a workflow is built: keep the original one so the
+# lines of this script look like those of run_checks.py
+_print = builtins.print
 
 STARDIST_DRIVE_URL = "https://drive.google.com/uc?id=1b7_WDDGEEaEoIpO_1EefVr0w0VQaetmg"
 PATCH = (256, 256, 1)
@@ -38,16 +48,22 @@ parser.add_argument("--gpu", default="",
                     help="GPU id (e.g. '0'), '' for CPU or 'auto' for a GPU free right now (skipping the check if none is)")
 args = parser.parse_args()
 
+
+def report(*values):
+    """Print to the console (not to the log of the running check)."""
+    _print(*values, flush=True)
+
+
 if args.gpu == "auto":
     # The machine is shared with other jobs: take a GPU nobody is using instead of crashing them (or this check)
     from gpu_utils import free_gpus, gpu_report
 
     gpus_free = free_gpus()
     if len(gpus_free) == 0:
-        print(f"[SKIPPED] No free GPU at the moment, so the API check was not run:\n{gpu_report()}")
+        report(f"[SKIPPED] No free GPU at the moment, so the API check was not run:\n{gpu_report()}")
         sys.exit(1)
     args.gpu = gpus_free[0]
-    print(f"Free GPUs: {gpus_free} ; using {args.gpu}")
+    report(f"Free GPUs: {gpus_free} ; using {args.gpu}")
 
 inst_dir = os.path.join(args.out_folder, "instance_seg")
 data_dir = os.path.join(inst_dir, "Stardist_v2_2D", "data")
@@ -56,6 +72,9 @@ train_y = os.path.join(data_dir, "train", "label")
 test_x = os.path.join(data_dir, "test", "raw")
 test_y = os.path.join(data_dir, "test", "label")
 result_dir = os.path.join(args.out_folder, "api_output")
+# Outside result_dir: some checks assert that nothing is written in their job folder
+log_dir = os.path.join(args.out_folder, "api_logs")
+os.makedirs(log_dir, exist_ok=True)
 
 
 def list_files(d):
@@ -65,16 +84,12 @@ def list_files(d):
     return {os.path.join(dp, f) for dp, _, fs in os.walk(d) for f in fs}
 
 
-def assert_no_output(tag, jobdir, when):
-    """Assert that ``jobdir`` was not created and holds no files. Returns True when clean."""
+def check_no_output(checks, jobdir, when):
+    """Add to ``checks`` whether ``jobdir`` was not created and holds no files."""
     exists = os.path.isdir(jobdir)
     files = list_files(jobdir)
-    if exists or files:
-        print(f"[{tag}] FAIL ({when}): expected nothing on disk, but dir_exists={exists}, "
-              f"files={sorted(files)[:5]}")
-        return False
-    print(f"[{tag}] OK ({when}): no output folder / files created")
-    return True
+    checks.append((not exists and not files,
+                   f"expected nothing on disk {when}, but dir_exists={exists}, files={sorted(files)[:5]}"))
 
 
 def first_image(folder):
@@ -83,6 +98,79 @@ def first_image(folder):
     if not files:
         raise FileNotFoundError(f"No files in {folder}")
     return imread(files[0])
+
+
+@contextmanager
+def logged_to(log_file):
+    """
+    Send everything written to stdout/stderr to ``log_file`` instead of the console. It is done at file
+    descriptor level so that the output of C code and child processes (e.g. data loader workers) goes there too.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    saved = os.dup(1), os.dup(2)
+    with open(log_file, "w") as f:
+        os.dup2(f.fileno(), 1)
+        os.dup2(f.fileno(), 2)
+        try:
+            yield
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os.dup2(saved[0], 1)
+            os.dup2(saved[1], 2)
+            os.close(saved[0])
+            os.close(saved[1])
+
+
+test_results = []
+
+
+def run_check(key, description, func, critical=True):
+    """
+    Run one check as ``run_checks.py`` runs a test. ``func(checks)`` appends ``(passed, message)`` tuples
+    to ``checks``. If ``critical`` is False, its failures are reported but do not fail the API check.
+    Returns whether it passed.
+    """
+    report("\n==============================================")
+    report(f"Running {key}: {description}")
+    report("==============================================")
+    log_file = os.path.join(log_dir, key + ".log")
+    report(f"Log: {log_file}")
+    report("Running job . . .")
+    checks = []
+    try:
+        with logged_to(log_file):
+            try:
+                func(checks)
+            except Exception:
+                traceback.print_exc()
+                raise
+    except Exception as e:  # noqa: BLE001
+        report(f"An error occurred during {key} execution.")
+        report(f"{type(e).__name__}: {e}")
+        checks.append((False, "raised an exception"))
+
+    for passed, message in checks:
+        if not passed:
+            report(f"Internal check not passed: {message}")
+    n_passed = sum(passed for passed, _ in checks)
+    if n_passed == len(checks):
+        report(f"** {key} job: [OK] ({len(checks)} internal checks passed)")
+    else:
+        report(f"** {key} job: [ERROR] ({n_passed} of {len(checks)} internal checks passed)")
+        if not critical:
+            report("(non-critical workflow: not counted as a failure)")
+    passed = n_passed == len(checks) or not critical
+    test_results.append(passed)
+    return passed
+
+
+def finish():
+    """Print the final summary as run_checks.py does and exit."""
+    report("\nFinish tests!!")
+    report(f"Test passed: ({sum(test_results)}/{len(test_results)})")
+    sys.exit(0 if all(test_results) else 1)
 
 
 # ---------------------------------------------------------------------------
@@ -99,28 +187,33 @@ if not os.path.isdir(train_x):
 # ---------------------------------------------------------------------------
 # 1) Train + test instance seg (C channel, unet, 10 epochs) through the API
 # ---------------------------------------------------------------------------
-print("\n=== [1] API train + test: INSTANCE_SEG (C channel, unet, 10 epochs) ===")
 train_name = "api_instance_train"
-train_cfg = build_config(
-    workflow="INSTANCE_SEG",
-    dims="2D",
-    phase="both",
-    patch_size=PATCH,
-    model={"architecture": "unet"},
-    train_data={"path": train_x, "gt_path": train_y, "in_memory": True},
-    val_data={"split_train": 0.1},
-    test_data={"path": test_x, "gt_path": test_y, "in_memory": False, "load_gt": True},
-    extra_config={
-        "PROBLEM": {"INSTANCE_SEG": {"DATA_CHANNELS": "C"}},
-        "TRAIN": {"EPOCHS": 10, "PATIENCE": -1},
-    },
-)
-biapy = BiaPy(train_cfg, result_dir=result_dir, name=train_name, gpu=args.gpu)
-biapy.run_job()
-
 checkpoint = os.path.join(result_dir, train_name, "checkpoints", f"{train_name}_1-checkpoint-best.pth")
-assert os.path.exists(checkpoint), f"Checkpoint was not created: {checkpoint}"
-print(f"Checkpoint created: {checkpoint}")
+
+
+def train_and_test(checks):
+    train_cfg = build_config(
+        workflow="INSTANCE_SEG",
+        dims="2D",
+        phase="both",
+        patch_size=PATCH,
+        model={"architecture": "unet"},
+        train_data={"path": train_x, "gt_path": train_y, "in_memory": True},
+        val_data={"split_train": 0.1},
+        test_data={"path": test_x, "gt_path": test_y, "in_memory": False, "load_gt": True},
+        extra_config={
+            "PROBLEM": {"INSTANCE_SEG": {"DATA_CHANNELS": "C"}},
+            "TRAIN": {"EPOCHS": 10, "PATIENCE": -1},
+        },
+    )
+    biapy = BiaPy(train_cfg, result_dir=result_dir, name=train_name, gpu=args.gpu)
+    biapy.run_job()
+    checks.append((os.path.exists(checkpoint), f"checkpoint was not created: {checkpoint}"))
+
+
+if not run_check("API1", "train + test: INSTANCE_SEG (C channel, unet, 10 epochs)", train_and_test):
+    report("The rest of the checks reuse the model trained in API1, so they were not run")
+    finish()
 
 # A test image + its GT to predict over / compare against
 image = first_image(test_x)
@@ -135,26 +228,24 @@ gt = first_image(test_y)
 COMPARE_GT = {"INSTANCE_SEG", "SEMANTIC_SEG"}
 WORKFLOWS = ["INSTANCE_SEG", "SEMANTIC_SEG", "DENOISING", "SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]
 
-overall_ok = True
-for wf in WORKFLOWS:
-    print(f"\n=== [2] predict via API: {wf} ===")
-    name = f"api_predict_{wf.lower()}"
-    jobdir = os.path.join(result_dir, name)
 
-    extra = {
-        "PATHS": {"CHECKPOINT_FILE": checkpoint},
-        "MODEL": {"ITEMS_TO_LOAD_FROM_CHECKPOINT": ["weights"]},
-    }
-    if wf == "INSTANCE_SEG":
-        extra["PROBLEM"] = {"INSTANCE_SEG": {"DATA_CHANNELS": "C"}}
-    elif wf == "SEMANTIC_SEG":
-        extra["DATA"] = {"N_CLASSES": 2}
-    elif wf == "SUPER_RESOLUTION":
-        extra["PROBLEM"] = {"SUPER_RESOLUTION": {"UPSCALING": (1, 1)}}  # restoration -> keep size
-        extra["DATA"] = {"NORMALIZATION": {"TYPE": "div"}}  # SR requires div/scale_range norm
+def predict_with_workflow(wf):
+    def check(checks):
+        name = f"api_predict_{wf.lower()}"
+        jobdir = os.path.join(result_dir, name)
 
-    hard = wf in COMPARE_GT
-    try:
+        extra = {
+            "PATHS": {"CHECKPOINT_FILE": checkpoint},
+            "MODEL": {"ITEMS_TO_LOAD_FROM_CHECKPOINT": ["weights"]},
+        }
+        if wf == "INSTANCE_SEG":
+            extra["PROBLEM"] = {"INSTANCE_SEG": {"DATA_CHANNELS": "C"}}
+        elif wf == "SEMANTIC_SEG":
+            extra["DATA"] = {"N_CLASSES": 2}
+        elif wf == "SUPER_RESOLUTION":
+            extra["PROBLEM"] = {"SUPER_RESOLUTION": {"UPSCALING": (1, 1)}}  # restoration -> keep size
+            extra["DATA"] = {"NORMALIZATION": {"TYPE": "div"}}  # SR requires div/scale_range norm
+
         # save_files=False (and no result_dir): an ephemeral predict-only workflow that must
         # not touch the disk at all.
         test_cfg = build_config(
@@ -169,20 +260,13 @@ for wf in WORKFLOWS:
         b = BiaPy(test_cfg, name=name, gpu=args.gpu, save_files=False)
 
         # Nothing must be written: not at construction, and not by predict().
-        clean = assert_no_output(wf, jobdir, "after construction")
-        pred = b.predict(image, gt=gt) if hard else b.predict(image)
-        clean = assert_no_output(wf, jobdir, "after predict") and clean
-        if not clean:
-            overall_ok = False
+        check_no_output(checks, jobdir, "after construction")
+        pred = b.predict(image, gt=gt) if wf in COMPARE_GT else b.predict(image)
+        check_no_output(checks, jobdir, "after predict")
 
+        checks.append((pred is not None, "predict returned None (no prediction captured)"))
         if pred is None:
-            msg = f"[{wf}] predict returned None (no prediction captured)"
-            if hard:
-                print(f"FAIL: {msg}")
-                overall_ok = False
-            else:
-                print(f"WARN: {msg}")
-            continue
+            return
         print(f"[{wf}] prediction shape: {np.asarray(pred).shape}")
 
         # GT comparison only for instance/semantic segmentation
@@ -198,17 +282,13 @@ for wf in WORKFLOWS:
             n_pred = int(len(np.unique(pred)) - 1)  # minus background
             n_gt = int(len(np.unique(gt)) - 1)
             print(f"[INSTANCE_SEG] instances predicted={n_pred} vs GT={n_gt}")
-            if n_pred == 0:
-                print("FAIL: INSTANCE_SEG predicted 0 instances")
-                overall_ok = False
+            checks.append((n_pred > 0, "INSTANCE_SEG predicted 0 instances"))
 
-    except Exception as e:  # noqa: BLE001
-        msg = f"[{wf}] raised: {type(e).__name__}: {e}"
-        if hard:
-            print(f"FAIL: {msg}")
-            overall_ok = False
-        else:
-            print(f"WARN (non-critical workflow): {msg}")
+    return check
+
+
+for i, wf in enumerate(WORKFLOWS):
+    run_check(f"API2.{i + 1}", f"predict via API: {wf}", predict_with_workflow(wf), critical=wf in COMPARE_GT)
 
 # ---------------------------------------------------------------------------
 # 3) Load a whole workflow from the trained .pth checkpoint
@@ -217,82 +297,73 @@ for wf in WORKFLOWS:
 # and rebuilt automatically, both when passing the checkpoint straight to the constructor
 # (third instantiation option) and via BiaPy.load_workflow_from_model. A .safetensors has no
 # config inside, so it must be rejected with a message pointing to build_config().
-print("\n=== [3] load the workflow from the trained .pth ===")
-for entry, label in (
-    (lambda **kw: BiaPy(checkpoint, **kw), "BiaPy(checkpoint)"),
-    (lambda **kw: BiaPy.load_workflow_from_model(checkpoint, **kw), "load_workflow_from_model"),
-):
-    name = "api_load_" + label.split("(")[0].replace(".", "_")
-    jobdir = os.path.join(result_dir, name)
-    try:
+
+
+def load_from_checkpoint(entry, label):
+    def check(checks):
+        name = "api_load_" + label.split("(")[0].replace(".", "_")
+        jobdir = os.path.join(result_dir, name)
         # save_files=False (no result_dir): loading a model and predicting must write nothing.
         b = entry(save_files=False, name=name, gpu=args.gpu)
         print(f"[{label}] inferred workflow={b.cfg.PROBLEM.TYPE} dims={b.cfg.PROBLEM.NDIM}")
-        if b.cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-            print(f"FAIL: expected INSTANCE_SEG inferred from the .pth, got {b.cfg.PROBLEM.TYPE}")
-            overall_ok = False
+        checks.append((b.cfg.PROBLEM.TYPE == "INSTANCE_SEG",
+                       f"expected INSTANCE_SEG inferred from the .pth, got {b.cfg.PROBLEM.TYPE}"))
 
-        clean = assert_no_output(label, jobdir, "after construction")
+        check_no_output(checks, jobdir, "after construction")
         pred = b.predict(image)
-        clean = assert_no_output(label, jobdir, "after predict") and clean
-        if not clean:
-            overall_ok = False
+        check_no_output(checks, jobdir, "after predict")
 
-        if pred is None:
-            print(f"FAIL: [{label}] predict returned None")
-            overall_ok = False
-        else:
+        checks.append((pred is not None, "predict returned None"))
+        if pred is not None:
             n_pred = int(len(np.unique(pred)) - 1)
             n_gt = int(len(np.unique(gt)) - 1)
             print(f"[{label}] instances predicted={n_pred} vs GT={n_gt}")
-            if n_pred == 0:
-                print(f"FAIL: [{label}] predicted 0 instances")
-                overall_ok = False
-    except Exception as e:  # noqa: BLE001
-        print(f"FAIL: [{label}] raised: {type(e).__name__}: {e}")
-        overall_ok = False
+            checks.append((n_pred > 0, "predicted 0 instances"))
 
+    return check
+
+
+for i, (entry, label) in enumerate((
+    (lambda **kw: BiaPy(checkpoint, **kw), "BiaPy(checkpoint)"),
+    (lambda **kw: BiaPy.load_workflow_from_model(checkpoint, **kw), "load_workflow_from_model"),
+)):
+    run_check(f"API3.{i + 1}", f"load the workflow from the trained .pth: {label}", load_from_checkpoint(entry, label))
+
+# ---------------------------------------------------------------------------
+# 4) Load with a result_dir + test(), and reject .safetensors
+# ---------------------------------------------------------------------------
 # With a result_dir, the loaded workflow must write only inside the new job folder: the paths
 # embedded in the checkpoint (logs, results...) belong to the training job, which may not exist
 # here (e.g. a model trained on Colab embeds '/content/...').
-print("\n=== [4] load the workflow from the trained .pth with a result_dir + test() ===")
-name = "api_load_with_result_dir"
-train_jobdir = os.path.join(result_dir, train_name)
-train_files_before = list_files(train_jobdir)
-try:
+
+
+def load_with_result_dir(checks):
+    name = "api_load_with_result_dir"
+    train_jobdir = os.path.join(result_dir, train_name)
+    train_files_before = list_files(train_jobdir)
     b = BiaPy.load_workflow_from_model(checkpoint, result_dir=result_dir, name=name, gpu=args.gpu)
     expected_log_dir = os.path.join(result_dir, name, "logs")
-    if os.path.abspath(b.cfg.LOG.LOG_DIR) != os.path.abspath(expected_log_dir):
-        print(f"FAIL: LOG.LOG_DIR is '{b.cfg.LOG.LOG_DIR}', expected '{expected_log_dir}'")
-        overall_ok = False
+    checks.append((os.path.abspath(b.cfg.LOG.LOG_DIR) == os.path.abspath(expected_log_dir),
+                   f"LOG.LOG_DIR is '{b.cfg.LOG.LOG_DIR}', expected '{expected_log_dir}'"))
     b.update_config({"TEST.ENABLE": True, "DATA.TEST.PATH": test_x})
     b.test()
-    if not list_files(os.path.join(result_dir, name, "results")):
-        print(f"FAIL: [{name}] test() wrote no results")
-        overall_ok = False
+    checks.append((len(list_files(os.path.join(result_dir, name, "results"))) > 0, "test() wrote no results"))
     new_in_train_job = list_files(train_jobdir) - train_files_before
-    if new_in_train_job:
-        print(f"FAIL: [{name}] wrote into the training job folder: {sorted(new_in_train_job)[:5]}")
-        overall_ok = False
-    else:
-        print(f"[{name}] OK: results and logs written only inside the new job folder")
-except Exception as e:  # noqa: BLE001
-    print(f"FAIL: [{name}] raised: {type(e).__name__}: {e}")
-    overall_ok = False
+    checks.append((not new_in_train_job, f"wrote into the training job folder: {sorted(new_in_train_job)[:5]}"))
 
-# A .safetensors checkpoint must be rejected (no embedded config)
-try:
-    BiaPy.load_workflow_from_model("dummy_model.safetensors")
-    print("FAIL: '.safetensors' should have raised")
-    overall_ok = False
-except ValueError as e:
-    if "build_config" in str(e):
-        print("[load_workflow_from_model] OK: .safetensors correctly rejected with a helpful message")
-    else:
-        print(f"FAIL: unexpected .safetensors error message: {e}")
-        overall_ok = False
 
-print("\n==================================")
-print("API check: " + ("PASSED" if overall_ok else "FAILED"))
-print("==================================")
-sys.exit(0 if overall_ok else 1)
+run_check("API4", "load the workflow from the trained .pth with a result_dir + test()", load_with_result_dir)
+
+
+def reject_safetensors(checks):
+    # A .safetensors checkpoint must be rejected (no embedded config)
+    try:
+        BiaPy.load_workflow_from_model("dummy_model.safetensors")
+        checks.append((False, "'.safetensors' should have raised"))
+    except ValueError as e:
+        checks.append(("build_config" in str(e), f"unexpected .safetensors error message: {e}"))
+
+
+run_check("API5", "load_workflow_from_model rejects a .safetensors with a helpful message", reject_safetensors)
+
+finish()

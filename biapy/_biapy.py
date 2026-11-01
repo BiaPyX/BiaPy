@@ -55,6 +55,7 @@ from bioimageio.spec.model.v0_5 import (
 from packaging.version import Version
 from bioimageio.spec.common import Sha256
 from bioimageio.spec import save_bioimageio_package
+from bioimageio.spec.utils import load_array
 from bioimageio.spec.dataset.v0_3 import LinkedDataset
 
 import biapy
@@ -1711,6 +1712,11 @@ class BiaPy:
                 else:
                     outputs.append(output)
 
+            # The weights exported are the trained ones (see below), so the original test output, produced with the
+            # original weights, is replaced by BiaPy's prediction over the original test input
+            if self.workflow.checkpoint_path is not None:
+                outputs = self._bmz_test_outputs_of_trained_model(inputs, outputs, building_dir)
+
         # Name of the model
         if not reuse_original_bmz_config:
             model_name = bmz_cfg["model_name"]
@@ -1869,6 +1875,16 @@ class BiaPy:
             )
             covers.append(Path(cover_path))
 
+        def _checkpoint_state_dict():
+            """Weights of ``self.workflow.checkpoint_path``, isolating the model's state dict if it is a full checkpoint."""
+            state_dict_source = Path(self.workflow.checkpoint_path)
+            checkpoint = load_checkpoint_file(state_dict_source, map_location="cpu")
+            if "model" in checkpoint:
+                state_dict_source = os.path.join(building_dir, "checkpoint.pth")
+                os.makedirs(building_dir, exist_ok=True)
+                torch.save(checkpoint["model"], state_dict_source)
+            return state_dict_source
+
         # Weights + architecture
         # If it's a BiaPy model
         env_descriptor = None
@@ -1899,15 +1915,8 @@ class BiaPy:
                 callable=self.workflow.bmz_config["callable_model"],
                 kwargs=model_kwargs,
             )
-            state_dict_source = Path(self.workflow.checkpoint_path)
+            state_dict_source = _checkpoint_state_dict()
             state_dict_sha256 = None
-
-            # Isolate pytorch_state_dict from checkpoint
-            checkpoint = load_checkpoint_file(state_dict_source, map_location="cpu")
-            if "model" in checkpoint:
-                state_dict_source = os.path.join(building_dir, "checkpoint.pth")
-                os.makedirs(building_dir, exist_ok=True)
-                torch.save(checkpoint["model"], state_dict_source)
 
             # Only if timm is required we create the env file
             if any([x for x in self.workflow.bmz_config["all_import_lines"] if "timm" in x]):
@@ -1920,6 +1929,11 @@ class BiaPy:
                 self.workflow.bmz_config["original_bmz_config"],
                 original_model_version,
             )
+            # Keep the original architecture, but if the model was trained (fine-tuned) export those weights
+            # instead of the original ones
+            if self.workflow.checkpoint_path is not None:
+                state_dict_source = _checkpoint_state_dict()
+                state_dict_sha256 = None
 
         # Only exporting in pytorch_state_dict
         pytorch_state_dict = PytorchStateDictWeightsDescr(
@@ -1984,6 +1998,62 @@ class BiaPy:
         )
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
+
+    def _bmz_test_outputs_of_trained_model(self, inputs: List, outputs: List, building_dir: str) -> List:
+        """
+        Replace the test tensor of ``outputs`` with the prediction of the current (trained) model over the test
+        input of ``inputs``, made as BiaPy makes the BMZ test output. Used when the original BMZ description of a
+        model is reused but its weights were trained afterwards (fine-tuning).
+
+        Parameters
+        ----------
+        inputs : list of InputTensorDescr
+            Input descriptions of the model to export.
+
+        outputs : list of OutputTensorDescr
+            Output descriptions of the model to export.
+
+        building_dir : str
+            Directory where the new test output is saved.
+
+        Returns
+        -------
+        outputs : list of OutputTensorDescr
+            ``outputs`` with the new test tensor.
+        """
+        if len(inputs) != 1 or len(outputs) != 1:
+            raise ValueError(
+                "Exporting a trained BMZ model reusing its original description is only supported for models with "
+                "one input and one output"
+            )
+        torch_axes = ["batch", "channel"] + (["z", "y", "x"] if self.cfg.PROBLEM.NDIM == "3D" else ["y", "x"])
+
+        # Original test input in Torch axes order, adding the batch/channel axes if it has none
+        img = load_array(inputs[0].test_tensor)
+        in_axes = [str(a.id) for a in inputs[0].axes]
+        for axis in torch_axes:
+            if axis not in in_axes:
+                img = np.expand_dims(img, -1)
+                in_axes.append(axis)
+        img = img.transpose([in_axes.index(a) for a in torch_axes])
+
+        # Prediction in the axes order of the output, without the axes it does not have
+        pred = self.workflow.predict_bmz_sample(img)
+        out_axes = [str(a.id) for a in outputs[0].axes]
+        pred = pred.squeeze(tuple(i for i, a in enumerate(torch_axes) if a not in out_axes))
+        kept_axes = [a for a in torch_axes if a in out_axes]
+        pred = pred.transpose([kept_axes.index(a) for a in out_axes])
+
+        original_shape = load_array(outputs[0].test_tensor).shape
+        if pred.shape != original_shape:
+            raise ValueError(
+                f"The prediction of the original BMZ test input has shape {pred.shape} but the original test output "
+                f"{original_shape}, so the test output of the trained model can not be created"
+            )
+        test_output_path = os.path.join(building_dir, "test-output.npy")
+        os.makedirs(building_dir, exist_ok=True)
+        np.save(test_output_path, pred)
+        return [outputs[0].model_copy(update={"test_tensor": FileDescr(source=Path(test_output_path))})]
 
     def citations(self) -> List[Dict[str, Any]]:
         """
