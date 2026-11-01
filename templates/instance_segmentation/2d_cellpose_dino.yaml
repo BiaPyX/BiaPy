@@ -1,4 +1,4 @@
-# BiaPy version: 3.7.1
+# BiaPy version: 3.7.2
 # Cellpose-DINO inference (no cellpose package needed). To fine-tune, enable TRAIN and set DATA.TRAIN.
 # ViT-B version: VIT_MODEL 'dinov3_vitb' and VIT_PRETRAINED_WEIGHTS 'cpdino-vitb'.
 
