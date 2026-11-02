@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://files.pythonhosted.org/packages/source/b/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: c8ef5398de30dd690cd7db25c263f972f802ff1319573c1917b9fd726d73b43d
+  sha256: 93394037e056a1e1e3a736f28e2576cc0c8f3dbc792e44631f92c2aef496dc45
 
 build:
   noarch: python
@@ -30,6 +30,9 @@ requirements:
     - timm ==1.0.14
     - pytorch-msssim
     - torchmetrics >=1.4,<1.5
+    # torchmetrics[image] extra (FID / Inception Score); conda has no extras
+    - torch-fidelity <=0.4.0
+    - scipy >1.0.0
     - safetensors
     - matplotlib-base >=3.7.1
     - scikit-learn >=1.4.0
@@ -48,10 +51,14 @@ requirements:
     - h5py >=3.9.0
     - zarr >=3.1.5
     - bioimageio.core ==0.11.0
+    # bioimageio.spec 0.5.12.0 (required by bioimageio.core 0.11.0) fails to load any model with pydantic 2.14+
+    - pydantic <2.14
     - imagecodecs >=2024.1.1
     - pooch >=1.8.1
     - xarray ==2025.1.*
     - nibabel >=5.4.2
+    - pywavelets >=1.4.1
+    - einops >=0.7.0
 
 test:
   imports:
