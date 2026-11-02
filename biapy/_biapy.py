@@ -403,6 +403,7 @@ class BiaPy:
             f"world_size={get_world_size()}"
         )
         
+        merge_bmz_workflow_options(self.cfg)
         check_configuration(self.cfg, self.job_identifier)
         print("Configuration details:")
         print(self.cfg)
@@ -788,6 +789,8 @@ class BiaPy:
             # merge_from_list validates key names/types and raises a clear error on typos.
             self.cfg.merge_from_list(opts)
             update_dependencies(self.cfg)
+            if any(str(k).startswith("MODEL.") for k in merged):
+                merge_bmz_workflow_options(self.cfg)
             if check:
                 check_configuration(self.cfg, self.job_identifier)
             if rebuild:
@@ -916,7 +919,7 @@ class BiaPy:
         # Otherwise treat 'source' as a BMZ id/nickname and infer the workflow from its RDF.
         from biapy.models import check_bmz_args
 
-        _, opts, workflow_info = check_bmz_args(source)
+        _, _, workflow_info = check_bmz_args(source)
         workflow = workflow_info.get("workflow_type")
         if not workflow:
             raise ValueError(
@@ -930,16 +933,7 @@ class BiaPy:
             "TEST": {"ENABLE": True},
             "DATA": {"TEST": {"LOAD_GT": False, "USE_VAL_AS_TEST": False}},
         }
-        # The workflow-defining overrides from the RDF (e.g. the instance channels) must be in the
-        # config from the start: the constructor checks it before the workflow merges the BMZ
-        # options, and the schema defaults (e.g. 'B'+'C' channels) may not pass that check.
-        for key, val in opts.items():
-            if key.startswith("PROBLEM.") or key == "DATA.N_CLASSES":
-                *parents, leaf = key.split(".")
-                node = cfg_dict
-                for p in parents:
-                    node = node.setdefault(p, {})
-                node[leaf] = val
+        # The model's instance channels, classes... are set by the constructor (merge_bmz_workflow_options)
         return cls(cfg_dict, **run_kwargs)
 
     def train(self):
@@ -2189,6 +2183,30 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return base
 
 
+def merge_bmz_workflow_options(cfg: CN):
+    """
+    With a BioImage Model Zoo model (``MODEL.SOURCE: bmz``), set in ``cfg`` the options of its RDF that define the
+    workflow (e.g. the instance channels, ``DATA.N_CLASSES``), which the workflow imposes anyway when it is built. The
+    configuration is checked before that, and the user's values or the defaults (e.g. 'B'+'C' channels with their
+    empty watershed options) may not pass the check.
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Configuration to update (not frozen).
+    """
+    if cfg.MODEL.SOURCE != "bmz" or not cfg.MODEL.BMZ.SOURCE_MODEL_ID:
+        return
+    from biapy.models import check_bmz_args
+
+    _, opts, _ = check_bmz_args(cfg.MODEL.BMZ.SOURCE_MODEL_ID, cfg)
+    cfg.merge_from_list(
+        [x for key, val in opts.items() if key.startswith("PROBLEM.") or key == "DATA.N_CLASSES" for x in (key, val)]
+    )
+    # Paths named after the channels, among others
+    update_dependencies(cfg)
+
+
 def build_config(
     workflow: str,
     dims: str,
@@ -2307,5 +2325,6 @@ def validate_config(config: Union[str, dict, CN], check_data_paths: bool = True)
     update_dependencies(cfg_manager)
 
     cfg = cfg_manager.get_cfg_defaults()
+    merge_bmz_workflow_options(cfg)
     check_configuration(cfg, "validate", check_data_paths=check_data_paths)
     return cfg

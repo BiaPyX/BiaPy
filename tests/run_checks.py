@@ -1694,40 +1694,38 @@ all_test_info["Test27"] = {
 all_test_info["Test28"] = {
     "enable": True,
     "jobname": "test28",
-    "description": "2D instance segmentation. BMZ 'frank-boar' model import, finetunning and export (reusing model original info)."
-        "zero_mean_unit_variance + format_version: 0.5.3 ",
+    "description": "2D Instance seg. Fine-tuning of a pretrained Cellpose-SAM model from the BMZ ('passionate-rhino', "
+        "cpsam_v2 grayscale), as users do from the Fiji plugin/notebooks: generic template, so the Cellpose settings "
+        "and channels must come from the BMZ model. Cellpose flows (F, Gv, Gh) created from the masks for training, ViT-L. Export "
+        "reusing the model's original info (the trained weights + a test output predicted by BiaPy).",
     "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
     "yaml": "test28.yaml",
     "yaml_modifications": {
-        "PROBLEM": {
-            "INSTANCE_SEG": {
-                "DATA_CHANNELS": 'BC',
-                "DATA_MW_TH_TYPE": "auto",
-                "DATA_CHANNEL_WEIGHTS": "(0.5, 1)",
-            },
-        },
+        # No DATA_CHANNELS: the template's ones must be replaced by the model's (F, Gv, Gh) before the config is checked
         "DATA": {
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "train", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "train", "images"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "train", "masks"),
                 "IN_MEMORY": True,
             },
-            "TEST": {   
-                "PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "test", "label"),
-                "IN_MEMORY": False,
-                "LOAD_GT": True
+            "TEST": {
+                "PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "test", "images"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "test", "masks"),
+                "IN_MEMORY": True,
+                "LOAD_GT": True,
             },
         },
         "TRAIN": {
             "ENABLE": True,
-            "EPOCHS": 5,
+            "EPOCHS": 2,
             "PATIENCE": -1,
+            # A ViT-L: more does not fit in the 11 GB GPUs
+            "BATCH_SIZE": 1,
         },
         "MODEL": {
             "SOURCE": 'bmz',
             "BMZ": {
-                "SOURCE_MODEL_ID": 'frank-boar'
+                "SOURCE_MODEL_ID": 'passionate-rhino'
             }
         },
         "TEST": {
@@ -1736,12 +1734,13 @@ all_test_info["Test28"] = {
         },
     },
     "bmz_by_command": True,
-    "bmz_package": "2D U-NeXt V1 for nucleus segmentation.zip",
+    "bmz_package": "Cellpose-SAM (cpsam_v2) grayscale.zip",
     "reuse_original_bmz_config": True,
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
+        # 0.87 measured with 2 GPUs (0.91 with 1); a broken flow creation or weights loading drops it far lower
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1", "gt": True, "value": 0.80},
-        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "2D U-NeXt V1 for nucleus segmentation.zip"},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "Cellpose-SAM (cpsam_v2) grayscale.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
     ]
 }
