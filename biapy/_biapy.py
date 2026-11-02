@@ -916,7 +916,7 @@ class BiaPy:
         # Otherwise treat 'source' as a BMZ id/nickname and infer the workflow from its RDF.
         from biapy.models import check_bmz_args
 
-        _, _, workflow_info = check_bmz_args(source)
+        _, opts, workflow_info = check_bmz_args(source)
         workflow = workflow_info.get("workflow_type")
         if not workflow:
             raise ValueError(
@@ -930,6 +930,16 @@ class BiaPy:
             "TEST": {"ENABLE": True},
             "DATA": {"TEST": {"LOAD_GT": False, "USE_VAL_AS_TEST": False}},
         }
+        # The workflow-defining overrides from the RDF (e.g. the instance channels) must be in the
+        # config from the start: the constructor checks it before the workflow merges the BMZ
+        # options, and the schema defaults (e.g. 'B'+'C' channels) may not pass that check.
+        for key, val in opts.items():
+            if key.startswith("PROBLEM.") or key == "DATA.N_CLASSES":
+                *parents, leaf = key.split(".")
+                node = cfg_dict
+                for p in parents:
+                    node = node.setdefault(p, {})
+                node[leaf] = val
         return cls(cfg_dict, **run_kwargs)
 
     def train(self):
