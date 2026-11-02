@@ -1,0 +1,55 @@
+# BiaPy version: 3.7.2
+
+SYSTEM:
+    NUM_CPUS: -1
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: BC
+    TRACKING:
+        ENABLE: True
+        LINKER_MODEL: trackastra_general_2d
+        MASKS_PATH: ""  # folder with the masks of the frames, to link them without segmenting
+        ALLOW_DIVISIONS: True
+
+DATA:
+    PATCH_SIZE: (256, 256, 1)
+    TRAIN:
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        SPLIT_TRAIN: 0.1
+    TEST:
+        PATH: /path/to/data  # one sequence: one image per frame
+        IN_MEMORY: True
+        LOAD_GT: False
+        PADDING: (32,32)
+
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: True
+    VFLIP: True
+    HFLIP: True
+
+MODEL:
+    ARCHITECTURE: unet
+    LOAD_CHECKPOINT: False
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 8
+    EPOCHS: 100
+    PATIENCE: 20
+
+LOSS:
+    CLASS_REBALANCE: True
+
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    FULL_IMG: False

@@ -1501,6 +1501,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     eval_Y, eval_pred_labels_post, filenames, suffix="_post-proc"
                 )
 
+        self.last_instance_labels = pred_labels
         return results, results_post_proc, results_class, results_class_post_proc
 
     def synapse_seg_process(

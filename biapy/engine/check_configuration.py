@@ -1236,6 +1236,28 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "IMAGE_TO_IMAGE",
     ], "PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED', 'IMAGE_TO_IMAGE']"
 
+    if cfg.PROBLEM.TRACKING.ENABLE:
+        from biapy.models.trackastra import PRETRAINED_TRACKASTRA
+
+        if cfg.PROBLEM.TYPE != "INSTANCE_SEG" or cfg.PROBLEM.NDIM != "2D":
+            raise ValueError("'PROBLEM.TRACKING.ENABLE' requires 'PROBLEM.TYPE' = 'INSTANCE_SEG' and 'PROBLEM.NDIM' = '2D'")
+        if cfg.PROBLEM.TRACKING.LINKER_MODEL not in PRETRAINED_TRACKASTRA:
+            raise ValueError(f"'PROBLEM.TRACKING.LINKER_MODEL' must be one of {list(PRETRAINED_TRACKASTRA)}")
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE != "regular":
+            raise ValueError("'PROBLEM.TRACKING.ENABLE' requires 'PROBLEM.INSTANCE_SEG.TYPE' = 'regular'")
+        if not cfg.TEST.ENABLE:
+            raise ValueError("'PROBLEM.TRACKING.ENABLE' requires 'TEST.ENABLE', as the linking is done in the test phase")
+        if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be used with 'PROBLEM.TRACKING.ENABLE'")
+        if cfg.PROBLEM.TRACKING.MASKS_PATH:
+            if check_data_paths and not os.path.isdir(cfg.PROBLEM.TRACKING.MASKS_PATH):
+                raise ValueError(f"'PROBLEM.TRACKING.MASKS_PATH' not found: {cfg.PROBLEM.TRACKING.MASKS_PATH}")
+            if cfg.TRAIN.ENABLE or cfg.MODEL.BMZ.EXPORT.ENABLE:
+                raise ValueError(
+                    "'TRAIN.ENABLE' and 'MODEL.BMZ.EXPORT.ENABLE' must be False when 'PROBLEM.TRACKING.MASKS_PATH' is "
+                    "set, as no model is used"
+                )
+
     if cfg.PROBLEM.NDIM == "3D" and cfg.TEST.FULL_IMG:
         print(
             "WARNING: TEST.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
@@ -3630,6 +3652,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         and not cfg.TRAIN.ENABLE
         and cfg.TEST.ENABLE
         and not full_cellpose
+        and not (cfg.PROBLEM.TRACKING.ENABLE and cfg.PROBLEM.TRACKING.MASKS_PATH)
     ):
         raise ValueError("Seems that you want to test a model without training first. In this case, 'MODEL.LOAD_CHECKPOINT' needs to be set to True to load a pre-trained model.")
 

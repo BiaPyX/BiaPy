@@ -546,6 +546,25 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.2.6 Tracking (INSTANCE_SEG, 2D)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        _C.PROBLEM.TRACKING = CN()
+        # Links the instances of a time-lapse across frames (Tracking_Workflow). Needs PROBLEM.TYPE = "INSTANCE_SEG"
+        # and PROBLEM.NDIM = "2D". 'DATA.TEST.PATH' is one sequence: a folder with one image per frame, in time order
+        # when sorted by name. The instances of each frame are created by the model ('MODEL.*'), unless
+        # 'PROBLEM.TRACKING.MASKS_PATH' gives them. The tracks are saved in the Cell Tracking Challenge result format
+        # ('mask<t>.tif' + 'res_track.txt') in 'PATHS.RESULT_DIR.TRACKING'.
+        _C.PROBLEM.TRACKING.ENABLE = False
+        # Pretrained model that links the instances. Options: "trackastra_general_2d"
+        # (https://github.com/weigertlab/trackastra).
+        _C.PROBLEM.TRACKING.LINKER_MODEL = "trackastra_general_2d"
+        # Folder with the instance masks of the frames (one per frame, same order and size as 'DATA.TEST.PATH'). If set,
+        # no model is used to create them and 'TRAIN.ENABLE' must be False.
+        _C.PROBLEM.TRACKING.MASKS_PATH = ""
+        # Whether a cell can be linked to two cells in the next frame (cell division).
+        _C.PROBLEM.TRACKING.ALLOW_DIVISIONS = True
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.3 Detection problem specification
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         _C.PROBLEM.DETECTION = CN()
@@ -2772,6 +2791,7 @@ class Config:
         )
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "point_associations")
         _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "instance_associations")
+        _C.PATHS.RESULT_DIR.TRACKING = os.path.join(_C.PATHS.RESULT_DIR.PATH, "tracking")
         # Path to store the BMZ model created 
         _C.PATHS.BMZ_EXPORT_PATH = os.path.join(_C.PATHS.RESULT_DIR.PATH, "BMZ_files")
 

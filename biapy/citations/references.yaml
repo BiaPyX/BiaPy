@@ -912,6 +912,16 @@ references:
     year: 2016
     venue: "GitHub repository"
     url: "https://github.com/pytorch/vision"
+  trackastra:
+    type: inproceedings
+    title: "Trackastra: Transformer-based cell tracking for live-cell microscopy"
+    authors:
+      - "Gallusser, Benjamin"
+      - "Weigert, Martin"
+    year: 2024
+    venue: "European Conference on Computer Vision (ECCV)"
+    doi: "10.1007/978-3-031-73116-7_27"
+    code: "https://github.com/weigertlab/trackastra"
 
 rules:
   - reason: "BiaPy"
@@ -1071,6 +1081,10 @@ rules:
   - reason: "Instance matching metrics (code adapted from StarDist)"
     cite: [stardist]
     when: {PROBLEM.TYPE: INSTANCE_SEG, TEST.ENABLE: true, TEST.MATCHING_STATS: true}
+    run_only: true
+  - reason: "Tracking: linking of the instances across frames (Trackastra)"
+    cite: [trackastra]
+    when: {PROBLEM.TYPE: INSTANCE_SEG, PROBLEM.TRACKING.ENABLE: true}
     run_only: true
 
   # Denoising

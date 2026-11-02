@@ -440,6 +440,8 @@ class BiaPy:
         # Membrane repair lives in its own module (Membrane_Repair_Workflow), not image_to_image.py.
         if self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
             workflowname = "membrane_repair"
+        if self.cfg.PROBLEM.TYPE == "INSTANCE_SEG" and self.cfg.PROBLEM.TRACKING.ENABLE:
+            workflowname = "tracking"
         mdl = importlib.import_module("biapy.engine." + workflowname)
         names = [x for x in mdl.__dict__ if not x.startswith("_")]
         globals().update({k: getattr(mdl, k) for k in names})

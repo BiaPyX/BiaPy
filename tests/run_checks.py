@@ -17,6 +17,7 @@ import re
 import ast
 import socket
 import json
+import tifffile
 
 from gpu_utils import DEFAULT_MAX_USED_MEMORY_MB, free_gpus, gpu_report
 
@@ -2130,6 +2131,88 @@ all_test_info["Test34"] = {
     ]
 }
 
+all_test_info["Test35"] = {
+    "enable": True,
+    "jobname": "test35",
+    "description": "2D Tracking with the masks given (no segmentation). Trackastra's HeLa example (CTC "
+        "Fluo-N2DL-HeLa 02, 20 frames) and its ERR_SEG masks, linked by 'trackastra_general_2d' (greedy, divisions).",
+    "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "2d_tracking.yaml"),
+    "yaml": "test35.yaml",
+    "multigpu": False,
+    "yaml_modifications": {
+        "PROBLEM": {
+            "TRACKING": {
+                "MASKS_PATH": os.path.join(data_folder, "tracking", "hela", "masks"),
+            },
+        },
+        "DATA": {
+            "TEST": {
+                "PATH": os.path.join(data_folder, "tracking", "hela", "frames"),
+            },
+        },
+        "TRAIN": {
+            "ENABLE": False,
+        },
+    },
+    "internal_checks": [
+        # The trackastra package gives 269 tracks and 61 divisions on these masks (BiaPy's port is identical)
+        {"type": "regular", "pattern": "Number of tracks:", "gt": True, "value": 266},
+        {"type": "regular", "pattern": "Number of tracks:", "gt": False, "value": 273},
+        {"type": "regular", "pattern": "Number of divisions:", "gt": True, "value": 59},
+        {"type": "regular", "pattern": "Number of divisions:", "gt": False, "value": 64},
+        {"type": "file", "path": os.path.join("results", "test35_1", "tracking", "res_track.txt")},
+        {"type": "file", "path": os.path.join("results", "test35_1", "tracking", "mask019.tif")},
+    ]
+}
+
+all_test_info["Test36"] = {
+    "enable": True,
+    "jobname": "test36",
+    "description": "2D Tracking. Instance seg. model (BC, unet) trained on the frames of Trackastra's HeLa example "
+        "with its ERR_SEG masks as GT, then each frame segmented and the instances linked by 'trackastra_general_2d'. "
+        "BMZ export of the instance seg. model.",
+    "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "2d_tracking.yaml"),
+    "yaml": "test36.yaml",
+    "yaml_modifications": {
+        "PROBLEM": {
+            "INSTANCE_SEG": {
+                "WATERSHED": {
+                    "DATA_REMOVE_BEFORE_MW": True,
+                    "DATA_REMOVE_SMALL_OBJ_BEFORE": 50,
+                },
+            },
+        },
+        "DATA": {
+            "TRAIN": {
+                "PATH": os.path.join(data_folder, "tracking", "hela", "frames"),
+                "GT_PATH": os.path.join(data_folder, "tracking", "hela", "masks"),
+            },
+            "TEST": {
+                "PATH": os.path.join(data_folder, "tracking", "hela", "frames"),
+                "GT_PATH": os.path.join(data_folder, "tracking", "hela", "masks"),
+                "LOAD_GT": True,
+            },
+        },
+        "TRAIN": {
+            "EPOCHS": 50,
+            "PATIENCE": -1,
+        },
+    },
+    "bmz_by_command": True,
+    "bmz_package": "tracking_hela_instance_segmentation.zip",
+    "internal_checks": [
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.5,", "nApparition": 1, "metric": "f1", "gt": True, "value": 0.8},
+        # 312 measured (269 with the ERR_SEG masks, Test35); over-segmented frames give thousands
+        {"type": "regular", "pattern": "Number of tracks:", "gt": True, "value": 250},
+        {"type": "regular", "pattern": "Number of tracks:", "gt": False, "value": 400},
+        {"type": "file", "path": os.path.join("results", "test36_1", "tracking", "res_track.txt")},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "tracking_hela_instance_segmentation.zip"},
+        {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
+        # The exported model is the instance segmentation one
+        {"type": "BMZ_tags", "has": ["instance-segmentation"], "has_not": ["tracking"]},
+    ]
+}
+
 
 # ---------------------------------------------------------
 # 4. DATASET DEFINITIONS
@@ -2358,6 +2441,20 @@ DATASETS = [
                 "filename": "Nuclear_Pore_complex_3D.zip",
             }
         ]
+    },
+    {
+        # Trackastra's example sequence (subset of CTC Fluo-N2DL-HeLa 02), (T, Y, X) stacks split into frames below
+        "folder_name": "tracking",
+        "data": [
+            {
+                "url": "https://raw.githubusercontent.com/weigertlab/trackastra/aa57a95160002e0fc70b915ab74178b39c99fd6a/trackastra/data/resources/Fluo_Hela_02_img.tif",
+                "filename": "Fluo_Hela_02_img.tif",
+            },
+            {
+                "url": "https://raw.githubusercontent.com/weigertlab/trackastra/aa57a95160002e0fc70b915ab74178b39c99fd6a/trackastra/data/resources/Fluo_Hela_02_ERR_SEG.tif",
+                "filename": "Fluo_Hela_02_ERR_SEG.tif",
+            },
+        ]
     }
 ]
 
@@ -2458,6 +2555,17 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find, gpu=None):
             if out["fraction"] > MAX_BMZ_DISAGREEMENT:
                 agreement = False
     return agreement
+
+def check_bmz_tags(last_lines, has, has_not):
+    """Checks the tags of the BMZ package named in the log's "Package path:" line."""
+    package_lines = [line for line in last_lines if "Package path:" in line]
+    if len(package_lines) == 0:
+        print("BMZ tags check: no 'Package path:' line found in the log")
+        return False
+    with ZipFile(package_lines[-1].split("Package path:", 1)[1].strip()) as z:
+        tags = yaml.safe_load(z.read("rdf.yaml"))["tags"]
+    print(f"BMZ tags: {tags}")
+    return all(t in tags for t in has) and not any(t in tags for t in has_not)
 
 def check_value(last_lines, pattern_to_find, ref_value, gt=True):
     """
@@ -2687,6 +2795,13 @@ for category in DATASETS:
         else:
             print(f"Data already exists at {existence_path}, skipping download.")
 
+for subfolder, stack in (("frames", "Fluo_Hela_02_img.tif"), ("masks", "Fluo_Hela_02_ERR_SEG.tif")):
+    frames_dir = os.path.join(data_folder, "tracking", "hela", subfolder)
+    if not os.path.exists(frames_dir):
+        os.makedirs(frames_dir)
+        for t, frame in enumerate(tifffile.imread(os.path.join(data_folder, "tracking", stack))):
+            tifffile.imwrite(os.path.join(frames_dir, f"t{t:03d}.tif"), frame)
+
 # ---------------------------------------------------------
 # 5. TEST EXECUTION LOOP
 # ---------------------------------------------------------
@@ -2764,6 +2879,8 @@ for test_key, test_info in all_test_info.items():
                 results.append(check_bmz_file_created(last_lines, checks["pattern"]))
             elif checks["type"] == "BMZ_weight_agreement":
                 results.append(check_bmz_weight_agreement(last_lines, checks["pattern"], gpu=gpus_job[0]))
+            elif checks["type"] == "BMZ_tags":
+                results.append(check_bmz_tags(last_lines, checks["has"], checks["has_not"]))
             elif checks["type"] == "OME-Zarr":
                 results.append(check_ome_zarr(os.path.join(RESULTS_FOLDER, test_info["jobname"], checks["path"]),
                                               checks["version"], checks["axes"], checks["levels"]))
