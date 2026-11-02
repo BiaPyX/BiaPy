@@ -34,7 +34,7 @@ class test_pair_data_generator(Dataset):
     test_by_chunks : bool, optional
         Tell the generator that the data is going to be read by chunks and by H5/Zarr files.
 
-    provide_Y: bool, optional
+    provide_Y : bool, optional
         Whether to return ground truth or not.
 
     seed : int, optional
@@ -68,7 +68,8 @@ class test_pair_data_generator(Dataset):
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
         conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
-        Each property descrition:
+        Each property description:
+
           * ``'foreground'`` is defined as the mask foreground percentage.
           * ``'mean'`` is defined as the mean value.
           * ``'min'`` is defined as the min value.
@@ -246,7 +247,7 @@ class test_pair_data_generator(Dataset):
             Image read. E.g. ``(1, z, y, x, channels)`` for 3D or ``(1, y, x, channels)`` for 2D. 
             If by chunks is being used, the shape will be the loaded data as it is.
 
-        mask 4D/5D ndarray array
+        mask : 4D/5D ndarray array
             Mask read. E.g. ``(1, z, y, x, channels)`` for 3D or ``(1, y, x, channels)`` for 2D.
             If by chunks is being used, the shape will be the loaded data as it is.
 
@@ -255,6 +256,7 @@ class test_pair_data_generator(Dataset):
 
         sample_extra_info : dict
             Extra information of the loaded sample. Contains the following keys:
+
             * ``"gt_associated_id"``, int (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals``
@@ -490,6 +492,7 @@ class test_pair_data_generator(Dataset):
         -------
         dict : dict
             Test sample containing:
+
             * ``"X"``, ndarray: X data. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
             * ``"X_norm"``, dict: X element normalization steps.
             * ``"Y"``, ndarray: Y data. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
@@ -500,7 +503,7 @@ class test_pair_data_generator(Dataset):
             * ``"gt_associated_id"``, int (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals`` and
-            ``filter_signs`` were provided.
+             ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
               is ``True``.
             * ``"img_file_to_close"``, h5py.File (optional): file of the image to close. Present if the loaded file is H5.

@@ -17,13 +17,15 @@ import torch.nn.functional as F
 
 
 def reflect(x, minx, maxx):
-    """Reflect the values in matrix *x* about the scalar values *minx* and
-    *maxx*.  Hence a vector *x* containing a long linearly increasing series is
+    """
+    Reflect the values in matrix *x* about the scalar values *minx* and *maxx*.
+
+    Hence a vector *x* containing a long linearly increasing series is
     converted into a waveform which ramps linearly up and down between *minx*
     and *maxx*.  If *x* contains integers and *minx* and *maxx* are (integers +
     0.5), the ramps will have repeated max and min samples.
-    .. codeauthor:: Rich Wareham <rjw57@cantab.net>, Aug 2013
-    .. codeauthor:: Nick Kingsbury, Cambridge University, January 1999.
+
+    Authors: Rich Wareham <rjw57@cantab.net>, Aug 2013; Nick Kingsbury, Cambridge University, January 1999.
     """
     x = np.asanyarray(x)
     rng = maxx - minx
@@ -35,13 +37,23 @@ def reflect(x, minx, maxx):
 
 
 def mypad(x, pad, mode="constant", value=0):
-    """Function to do numpy like padding on tensors. Only works for 2-D
-    padding.
-    Inputs:
-        x (tensor): tensor to pad
-        pad (tuple): tuple of (left, right, top, bottom) pad sizes
-        mode (str): 'symmetric', 'wrap', 'constant, 'reflect', 'replicate', or
-            'zero'. The padding technique.
+    """
+    Do numpy like padding on tensors. Only works for 2-D padding.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Tensor to pad.
+
+    pad : tuple of int
+        ``(left, right, top, bottom)`` pad sizes.
+
+    mode : str, optional
+        Padding technique: ``'symmetric'``, ``'wrap'``, ``'constant'``, ``'reflect'``, ``'replicate'``,
+        ``'periodic'`` or ``'zero'``.
+
+    value : int or float, optional
+        Fill value used by the ``'constant'`` mode.
     """
     if mode == "symmetric":
         # Vertical only
@@ -97,19 +109,32 @@ def mypad(x, pad, mode="constant", value=0):
 
 def prep_filt_afb2d(h0_col, h1_col, h0_row=None, h1_row=None, device=None):
     """
-    Prepares the filters to be of the right form for the afb2d function.  In
-    particular, makes the tensors the right shape. It takes mirror images of
-    them as as afb2d uses conv2d which acts like normal correlation.
-    Inputs:
-        h0_col (array-like): low pass column filter bank
-        h1_col (array-like): high pass column filter bank
-        h0_row (array-like): low pass row filter bank. If none, will assume the
-            same as column filter
-        h1_row (array-like): high pass row filter bank. If none, will assume the
-            same as column filter
-        device: which device to put the tensors on to
-    Returns:
-        (h0_col, h1_col, h0_row, h1_row)
+    Prepare the filters to be of the right form for the ``afb2d`` function.
+
+    In particular, makes the tensors the right shape. It takes mirror images of
+    them as ``afb2d`` uses conv2d which acts like normal correlation.
+
+    Parameters
+    ----------
+    h0_col : array-like
+        Low pass column filter bank.
+
+    h1_col : array-like
+        High pass column filter bank.
+
+    h0_row : array-like, optional
+        Low pass row filter bank. If ``None``, it is assumed to be the same as the column filter.
+
+    h1_row : array-like, optional
+        High pass row filter bank. If ``None``, it is assumed to be the same as the column filter.
+
+    device : torch.device, optional
+        Device to put the tensors on.
+
+    Returns
+    -------
+    filters : tuple of torch.Tensor
+        ``(h0_col, h1_col, h0_row, h1_row)``.
     """
     h0_col = np.array(h0_col[::-1]).ravel()
     h1_col = np.array(h1_col[::-1]).ravel()
@@ -132,19 +157,32 @@ def prep_filt_afb2d(h0_col, h1_col, h0_row=None, h1_row=None, device=None):
 
 def prep_filt_sfb2d(g0_col, g1_col, g0_row=None, g1_row=None, device=None):
     """
-    Prepares the filters to be of the right form for the sfb2d function.  In
-    particular, makes the tensors the right shape. It does not mirror image them
-    as as sfb2d uses conv2d_transpose which acts like normal convolution.
-    Inputs:
-        g0_col (array-like): low pass column filter bank
-        g1_col (array-like): high pass column filter bank
-        g0_row (array-like): low pass row filter bank. If none, will assume the
-            same as column filter
-        g1_row (array-like): high pass row filter bank. If none, will assume the
-            same as column filter
-        device: which device to put the tensors on to
-    Returns:
-        (g0_col, g1_col, g0_row, g1_row)
+    Prepare the filters to be of the right form for the ``sfb2d`` function.
+
+    In particular, makes the tensors the right shape. It does not mirror image them
+    as ``sfb2d`` uses conv2d_transpose which acts like normal convolution.
+
+    Parameters
+    ----------
+    g0_col : array-like
+        Low pass column filter bank.
+
+    g1_col : array-like
+        High pass column filter bank.
+
+    g0_row : array-like, optional
+        Low pass row filter bank. If ``None``, it is assumed to be the same as the column filter.
+
+    g1_row : array-like, optional
+        High pass row filter bank. If ``None``, it is assumed to be the same as the column filter.
+
+    device : torch.device, optional
+        Device to put the tensors on.
+
+    Returns
+    -------
+    filters : tuple of torch.Tensor
+        ``(g0_col, g1_col, g0_row, g1_row)``.
     """
     g0_col = np.array(g0_col).ravel()
     g1_col = np.array(g1_col).ravel()
@@ -162,23 +200,37 @@ def prep_filt_sfb2d(g0_col, g1_col, g0_row=None, g1_row=None, device=None):
 
 
 def afb1d_atrous(x, h0, h1, mode="symmetric", dim=-1, dilation=1):
-    """1D analysis filter bank (along one dimension only) of an image without
-    downsampling. Does the a trous algorithm.
-    Inputs:
-        x (tensor): 4D input with the last two dimensions the spatial input
-        h0 (tensor): 4D input for the lowpass filter. Should have shape (1, 1,
-            h, 1) or (1, 1, 1, w)
-        h1 (tensor): 4D input for the highpass filter. Should have shape (1, 1,
-            h, 1) or (1, 1, 1, w)
-        mode (str): padding method
-        dim (int) - dimension of filtering. d=2 is for a vertical filter (called
-            column filtering but filters across the rows). d=3 is for a
-            horizontal filter, (called row filtering but filters across the
-            columns).
-        dilation (int): dilation factor. Should be a power of 2.
-    Returns:
-        lohi: lowpass and highpass subbands concatenated along the channel
-            dimension
+    """
+    1D analysis filter bank (along one dimension only) of an image without downsampling.
+
+    Does the a trous algorithm.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        4D input with the last two dimensions the spatial input.
+
+    h0 : torch.Tensor
+        4D input for the lowpass filter. Should have shape ``(1, 1, h, 1)`` or ``(1, 1, 1, w)``.
+
+    h1 : torch.Tensor
+        4D input for the highpass filter. Should have shape ``(1, 1, h, 1)`` or ``(1, 1, 1, w)``.
+
+    mode : str, optional
+        Padding method.
+
+    dim : int, optional
+        Dimension of filtering. ``2`` is for a vertical filter (called column filtering but filters
+        across the rows). ``3`` is for a horizontal filter (called row filtering but filters across
+        the columns).
+
+    dilation : int, optional
+        Dilation factor. Should be a power of 2.
+
+    Returns
+    -------
+    lohi : torch.Tensor
+        Lowpass and highpass subbands concatenated along the channel dimension.
     """
     C = x.shape[1]
     # Convert the dim to positive
@@ -209,22 +261,33 @@ def afb1d_atrous(x, h0, h1, mode="symmetric", dim=-1, dilation=1):
 
 
 def afb2d_atrous(x, filts, mode="symmetric", dilation=1):
-    """Does a single level 2d wavelet decomposition of an input. Does separate
-    row and column filtering by two calls to `afb1d_atrous`
-    Inputs:
-        x (torch.Tensor): Input to decompose
-        filts (list of ndarray or torch.Tensor): If a list of tensors has been
-            given, this function assumes they are in the right form (the form
-            returned by `prep_filt_afb2d`).
-            Otherwise, this function will prepare the filters to be of the right
-            form by calling `prep_filt_afb2d`.
-        mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
-            padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
-            half.
-        dilation (int): dilation factor for the filters. Should be 2**level
-    Returns:
-        y: Tensor of shape (N, C, 4, H, W)
+    """
+    Do a single level 2d wavelet decomposition of an input.
+
+    Does separate row and column filtering by two calls to ``afb1d_atrous``.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input to decompose.
+
+    filts : list of ndarray or torch.Tensor
+        If a list of tensors has been given, this function assumes they are in the right form (the
+        form returned by ``prep_filt_afb2d``). Otherwise, this function will prepare the filters to
+        be of the right form by calling ``prep_filt_afb2d``.
+
+    mode : str, optional
+        ``'zero'``, ``'symmetric'``, ``'reflect'`` or ``'periodization'``. Which padding to use. If
+        periodization, the output size will be half the input size. Otherwise, the output size will
+        be slightly larger than half.
+
+    dilation : int, optional
+        Dilation factor for the filters. Should be ``2**level``.
+
+    Returns
+    -------
+    y : torch.Tensor
+        Tensor of shape ``(N, C, 4, H, W)``.
     """
     tensorize = [not isinstance(f, torch.Tensor) for f in filts]
     if len(filts) == 2:
@@ -307,22 +370,39 @@ def sfb1d_atrous(lo, hi, g0, g1, mode="symmetric", dim=-1, dilation=1, pad1=None
 
 
 def sfb2d_atrous(ll, lh, hl, hh, filts, mode="symmetric"):
-    """Does a single level 2d wavelet reconstruction of wavelet coefficients.
-    Does separate row and column filtering by two calls to `sfb1d_atrous`
-    Inputs:
-        ll (torch.Tensor): lowpass coefficients
-        lh (torch.Tensor): horizontal coefficients
-        hl (torch.Tensor): vertical coefficients
-        hh (torch.Tensor): diagonal coefficients
-        filts (list of ndarray or torch.Tensor): If a list of tensors has been
-            given, this function assumes they are in the right form (the form
-            returned by `prep_filt_sfb2d`).
-            Otherwise, this function will prepare the filters to be of the right
-            form by calling `prep_filt_sfb2d`.
-        mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
-            padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
-            half.
+    """
+    Do a single level 2d wavelet reconstruction of wavelet coefficients.
+
+    Does separate row and column filtering by two calls to ``sfb1d_atrous``.
+
+    Parameters
+    ----------
+    ll : torch.Tensor
+        Lowpass coefficients.
+
+    lh : torch.Tensor
+        Horizontal coefficients.
+
+    hl : torch.Tensor
+        Vertical coefficients.
+
+    hh : torch.Tensor
+        Diagonal coefficients.
+
+    filts : list of ndarray or torch.Tensor
+        If a list of tensors has been given, this function assumes they are in the right form (the
+        form returned by ``prep_filt_sfb2d``). Otherwise, this function will prepare the filters to
+        be of the right form by calling ``prep_filt_sfb2d``.
+
+    mode : str, optional
+        ``'zero'``, ``'symmetric'``, ``'reflect'`` or ``'periodization'``. Which padding to use. If
+        periodization, the output size will be half the input size. Otherwise, the output size will
+        be slightly larger than half.
+
+    Returns
+    -------
+    y : torch.Tensor
+        Reconstructed tensor.
     """
     tensorize = [not isinstance(x, torch.Tensor) for x in filts]
     if len(filts) == 2:
@@ -350,17 +430,22 @@ def sfb2d_atrous(ll, lh, hl, hh, filts, mode="symmetric"):
 
 
 class SWTForward(nn.Module):
-    """Performs a 2d Stationary wavelet transform (or undecimated wavelet
-    transform) of an image
-    Args:
-        J (int): Number of levels of decomposition
-        wave (str or pywt.Wavelet): Which wavelet to use. Can be a string to
-            pass to pywt.Wavelet constructor, can also be a pywt.Wavelet class,
-            or can be a two tuple of array-like objects for the analysis low and
-            high pass filters.
-        mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. The
-            padding scheme. PyWavelets uses only periodization so we use this
-            as our default scheme.
+    """
+    Perform a 2d Stationary wavelet transform (or undecimated wavelet transform) of an image.
+
+    Parameters
+    ----------
+    J : int, optional
+        Number of levels of decomposition.
+
+    wave : str or pywt.Wavelet, optional
+        Which wavelet to use. Can be a string to pass to the ``pywt.Wavelet`` constructor, can also
+        be a ``pywt.Wavelet`` class, or can be a two tuple of array-like objects for the analysis
+        low and high pass filters.
+
+    mode : str, optional
+        ``'zero'``, ``'symmetric'``, ``'reflect'`` or ``'periodization'``. The padding scheme.
+        PyWavelets uses only periodization so we use this as our default scheme.
     """
 
     def __init__(self, J=1, wave="db1", mode="symmetric"):
@@ -389,14 +474,20 @@ class SWTForward(nn.Module):
         self.mode = mode
 
     def forward(self, x):
-        """Forward pass of the SWT.
-        Args:
-            x (tensor): Input of shape :math:`(N, C_{in}, H_{in}, W_{in})`
-        Returns:
-            List of coefficients for each scale. Each coefficient has
-            shape :math:`(N, C_{in}, 4, H_{in}, W_{in})` where the extra
-            dimension stores the 4 subbands for each scale. The ordering in
-            these 4 coefficients is: (A, H, V, D) or (ll, lh, hl, hh).
+        """
+        Forward pass of the SWT.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input of shape ``(N, C_in, H_in, W_in)``.
+
+        Returns
+        -------
+        coeffs : list of torch.Tensor
+            Coefficients for each scale. Each coefficient has shape ``(N, C_in, 4, H_in, W_in)``
+            where the extra dimension stores the 4 subbands for each scale. The ordering in these
+            4 coefficients is: ``(A, H, V, D)`` or ``(ll, lh, hl, hh)``.
         """
         ll = x
         coeffs = []
@@ -412,10 +503,16 @@ class SWTForward(nn.Module):
 
 
 class SWTInverse(nn.Module):
-    """Performs a 2d DWT Inverse reconstruction of an image
-    Args:
-        wave (str or pywt.Wavelet): Which wavelet to use
-        C: deprecated, will be removed in future
+    """
+    Perform a 2d DWT Inverse reconstruction of an image.
+
+    Parameters
+    ----------
+    wave : str or pywt.Wavelet, optional
+        Which wavelet to use.
+
+    C : optional
+        Deprecated, will be removed in future.
     """
 
     def __init__(self, wave="db1", mode="symmetric"):

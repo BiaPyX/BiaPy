@@ -38,10 +38,10 @@ class test_single_data_generator(Dataset):
     norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
-    provide_Y: bool, optional
+    provide_Y : bool, optional
         Whether the ground truth has been provided or not.
 
-    dims: str, optional
+    dims : str, optional
         Dimension of the data. Possible options: ``2D`` or ``3D``.
 
     seed : int, optional
@@ -62,7 +62,8 @@ class test_single_data_generator(Dataset):
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
         conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
-        Each property descrition:
+        Each property description:
+
           * ``'foreground'`` is defined as the mask foreground percentage.
           * ``'mean'`` is defined as the mean value.
           * ``'min'`` is defined as the min value.
@@ -170,6 +171,7 @@ class test_single_data_generator(Dataset):
 
         sample_extra_info : dict
             Extra information of the loaded sample. Contains the following keys:
+
             * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals``
               and ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
@@ -274,6 +276,7 @@ class test_single_data_generator(Dataset):
         -------
         dict : dict
             Test sample containing:
+
             * ``"X"``, ndarray: X data. It is a ndarray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
             * ``"X_norm"``, dict: X element normalization steps.
             * ``"Y"``, ndarray: Y data. It is a ndarray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.

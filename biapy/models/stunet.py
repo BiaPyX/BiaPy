@@ -2,6 +2,7 @@
 Standalone STU-Net (STUNet) implementation extracted from OrgMIM (https://github.com/yanchaoz/OrgMIM).
 
 This file is self-contained (PyTorch only) and provides:
+
 - BasicResBlock
 - Upsample_Layer_nearest
 - STUNet (3D segmentation network)
@@ -9,9 +10,11 @@ This file is self-contained (PyTorch only) and provides:
 - Optional pretrained-encoder loading helpers (compatible with OrgMIM checkpoints)
 
 Origin:
+
 - Adapted from OrgMIM: https://github.com/yanchaoz/OrgMIM
 
 Notes:
+
 - Supports both 2D (Conv2d/InstanceNorm2d) and 3D (Conv3d/InstanceNorm3d), selected from
   the number of dimensions in ``image_shape`` (see ``STUNet.ndim``).
 - By default, forward() returns a list with a single element: [full_res_logits].

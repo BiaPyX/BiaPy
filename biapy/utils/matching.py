@@ -2,6 +2,7 @@
 This module provides functions for evaluating detection and instance segmentation metrics, primarily based on object matching between ground truth and predicted label images. The core logic is adapted from the StarDist project.
 
 It includes utilities for:
+
 - Checking and manipulating label arrays.
 - Calculating overlap matrices between label images.
 - Defining various matching criteria (e.g., Intersection over Union - IoU).

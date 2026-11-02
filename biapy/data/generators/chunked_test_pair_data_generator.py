@@ -38,6 +38,7 @@ class chunked_test_pair_data_generator(IterableDataset):
     ----------
     sample_to_process : dict
         Sample to process. Expected keys are:
+
         * ``"X"``, Zarr/H5 data: X data to process
         * ``"img_file_to_close"``, Zarr/H5 file: X data file pointer
         * ``"Y"``, Zarr/H5 data (optional): Y data to process
@@ -61,7 +62,7 @@ class chunked_test_pair_data_generator(IterableDataset):
     path_to_gt_data : str
         Path to the ground truth data.
 
-    out_dir: str
+    out_dir : str
         Output directory to save the predicted data into.
 
     dtype_str : str
@@ -76,7 +77,8 @@ class chunked_test_pair_data_generator(IterableDataset):
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
         conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
-        Each property descrition:
+        Each property description:
+
           * ``'foreground'`` is defined as the mask foreground percentage.
           * ``'mean'`` is defined as the mean value.
           * ``'min'`` is defined as the min value.

@@ -6,6 +6,7 @@ Reference code: https://github.com/MiliLab/RDBM (files ``rdbm.py``, ``networks.p
 
 Standalone re-implementation: no einops/accelerate/ema_pytorch, just torch. Deviates from the
 reference in three ways:
+
 - ``_bounded`` uses a straight-through clamp instead of a plain ``torch.clamp`` (avoids a
   zero-gradient dead zone outside [-1, 1]).
 - 2D only; 3D is rejected by ``check_configuration.py``.
