@@ -14,6 +14,9 @@ Steps:
   4) Load the workflow from the trained ``.pth`` with a ``result_dir`` and run ``test()``:
      logs and results must go to the new job folder, never to the training job's paths
      embedded in the checkpoint.
+  5) ``load_workflow_from_model`` rejects a ``.safetensors`` with a helpful message.
+  6) Load the workflow from a BMZ nickname and run ``test()`` with GT: the model's channels must
+     be in the config from the start (it used to fail the constructor's config check).
 
 The output is organized as in ``run_checks.py``: each check prints a header, the path of the log file that
 receives everything BiaPy prints while it runs, and a final ``[OK]``/``[ERROR]`` line.
@@ -365,5 +368,27 @@ def reject_safetensors(checks):
 
 
 run_check("API5", "load_workflow_from_model rejects a .safetensors with a helpful message", reject_safetensors)
+
+# ---------------------------------------------------------------------------
+# 6) Load a workflow from a BMZ nickname + test() with GT
+# ---------------------------------------------------------------------------
+# The RDF-derived options (e.g. the instance channels) must be in the config from the start: the
+# constructor checks it before the workflow merges the BMZ options, and with the schema default
+# channels ('B'+'C') that check failed ("SEED_CHANNELS must not be empty").
+BMZ_INSTANCE_MODEL = "resourceful-otter"  # 2D F+C instance segmentation
+
+
+def load_from_bmz(checks):
+    name = "api_load_bmz"
+    b = BiaPy.load_workflow_from_model(BMZ_INSTANCE_MODEL, result_dir=result_dir, name=name, gpu=args.gpu)
+    checks.append((b.cfg.PROBLEM.TYPE == "INSTANCE_SEG", f"expected INSTANCE_SEG, got {b.cfg.PROBLEM.TYPE}"))
+    channels = list(b.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+    checks.append((channels[:2] == ["F", "C"], f"expected the model's F+C channels, got {channels}"))
+    b.update_config({"TEST.ENABLE": True, "DATA.TEST.PATH": test_x, "DATA.TEST.LOAD_GT": True, "DATA.TEST.GT_PATH": test_y})
+    b.test()
+    checks.append((len(list_files(os.path.join(result_dir, name, "results"))) > 0, "test() wrote no results"))
+
+
+run_check("API6", f"load the workflow from a BMZ nickname ({BMZ_INSTANCE_MODEL}) + test() with GT", load_from_bmz)
 
 finish()
