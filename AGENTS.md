@@ -9,24 +9,28 @@ YAML config (yacs). `PROBLEM.TYPE` selects the workflow, `PROBLEM.NDIM` selects 
 
 User documentation: https://biapy.readthedocs.io. For agents, start from its index https://biapy.readthedocs.io/en/latest/llms.txt (one link per page, as plain text); https://biapy.readthedocs.io/en/latest/llms-full.txt has the whole documentation in one file.
 
-## Using BiaPy
+## Workflows
 
-Pick the workflow from the task, prepare the data in its format and start from its template:
+`PROBLEM.TYPE` is one of `SEMANTIC_SEG`, `INSTANCE_SEG`, `DETECTION`, `DENOISING`, `SUPER_RESOLUTION`,
+`SELF_SUPERVISED`, `CLASSIFICATION`, `IMAGE_TO_IMAGE`. Each one has a 2D and a 3D template in
+`templates/<workflow>/` (`2d_*.yaml` / `3d_*.yaml`); their data formats are described in the documentation.
 
-| Task | `PROBLEM.TYPE` | Training data (input / ground truth) | 2D template |
-|------|----------------|--------------------------------------|-------------|
-| Assign a class to every pixel (e.g. mitochondria vs. background) | `SEMANTIC_SEG` | Image / mask of the same size with one class value per pixel | `templates/semantic_segmentation/2d_semantic_segmentation.yaml` |
-| Separate every individual object, even when they touch (e.g. nuclei, cells) | `INSTANCE_SEG` | Image / mask with **a different id per object** (0 = background) | `templates/instance_segmentation/2d_instance_segmentation.yaml` |
-| Locate objects by their center, without their shape | `DETECTION` | Image / **one CSV per image, with the same file name**, columns `axis-0`, `axis-1` (plus `class` if `DATA.N_CLASSES > 2`) | `templates/detection/2d_detection.yaml` |
-| Remove noise | `DENOISING` | Noisy image / **no ground truth** (Noise2Void) | `templates/denoising/2d_denoising.yaml` |
-| Increase the resolution (×2, ×4) | `SUPER_RESOLUTION` | Low-resolution image / the same image `UPSCALING` times larger | `templates/super-resolution/2d_super-resolution.yaml` |
-| Pretrain a model without labels, to fine-tune it later on another task | `SELF_SUPERVISED` | Image / **no ground truth** | `templates/self-supervised/2d_self-supervised.yaml` |
-| Assign one class to each whole image | `CLASSIFICATION` | **One sub-folder per class** with its images / the folder is the label | `templates/classification/2d_classification.yaml` |
-| Map an image to another image (e.g. inpainting, colorization, stain transfer) | `IMAGE_TO_IMAGE` | Image / target image of the same size | `templates/image-to-image/2d_image-to-image.yaml` |
+Ground truth expected by each workflow (`DATA.TRAIN.GT_PATH`, and `DATA.TEST.GT_PATH` when `DATA.TEST.LOAD_GT` is set):
 
-Every workflow also has a 3D template with the same name, replacing `2d_` with `3d_`.
+- `SEMANTIC_SEG`: mask of the same size, one class value per pixel.
+- `INSTANCE_SEG`: mask with a different id per object (0 = background); `PROBLEM.INSTANCE_SEG.TYPE = "synapses"`
+  uses another format.
+- `DETECTION`: one CSV per image, matched by file name, with columns `axis-0`, `axis-1` (`axis-2` in 3D),
+  i.e. (y, x) / (z, y, x), plus `class` when `DATA.N_CLASSES > 2`.
+- `CLASSIFICATION`: no masks; one sub-folder per class with its images.
+- `SUPER_RESOLUTION`: the same image `PROBLEM.SUPER_RESOLUTION.UPSCALING` times larger.
+- `IMAGE_TO_IMAGE`: target image of the same size.
+- `DENOISING`: none by default (Noise2Void); a clean image if `PROBLEM.DENOISING.LOAD_GT_DATA` is enabled
+  or `LOSS.TYPE` has an adversarial term (`BCE`/`HINGE`).
+- `SELF_SUPERVISED`: none.
 
-Before running a config, check it with `biapy validate-config my_config.yaml`: it checks every option without loading data or training, and prints `OK` (exit code 0) or the error naming the wrong key (exit code 1). Add `--no-data-check` if the data is not available yet. From Python: `biapy.validate_config(cfg, check_data_paths=False)`.
+Check a config without running it: `biapy validate-config my_config.yaml [--no-data-check]`
+(exit code 0/1), or `biapy.validate_config(cfg, check_data_paths=False)` from Python.
 
 ## Repository layout
 
@@ -36,28 +40,35 @@ Before running a config, check it with `biapy validate-config my_config.yaml`: i
 | `biapy/config/` | `config.py`: every config option with its default value |
 | `biapy/data/` | Data loading, normalization, pre/post-processing and data generators |
 | `biapy/models/` | One file per architecture; `__init__.py` has `build_model()` and BioImage Model Zoo loading |
+| `biapy/wizard/` | Logic of the configuration wizard shared by the front-ends (BiaPy-GUI, Fiji plugin): data checks, nnU-Net-like planning and config building. Must import without loading PyTorch |
+| `biapy/citations/` | `references.yaml`: works to cite and the config rules that decide when each applies (written as `CITATIONS.md`/`citations.bib` at the end of `run_job()` and used in BMZ exports) |
 | `biapy/utils/` | Helpers, callbacks and standalone scripts |
 | `templates/` | Ready-to-use YAML configs, one folder per workflow (plus `sota_implementations/`, with notebooks). Start here when writing a config |
-| `tests/` | One fast CPU test and several heavy GPU checks (see "Tests" below) |
+| `tests/` | Fast CPU tests and several heavy GPU checks (see "Tests" below) |
 
-The Python API (`BiaPy` class, `build_config()`) is in `biapy/_biapy.py` and the CLI (`biapy` command) in
-`biapy/__init__.py`.
+The Python API (`BiaPy` class with `train()`, `test()`, `predict()`, `load_workflow_from_model()`,
+`export_model_to_bmz()`; `build_config()`, `validate_config()`) is in `biapy/_biapy.py`, and the CLI
+(`biapy` command, `biapy validate-config`) in `biapy/__init__.py`. `biapy/__init__.py` imports the engine
+lazily: `import biapy` must not load PyTorch, so don't add top-level imports of torch or `biapy._biapy` there.
 
-## Install (CPU, for development)
+## Install
 
-Python >= 3.11.
+Python >= 3.11. Install PyTorch first, then BiaPy in editable mode:
 
 ```bash
+# No GPU (e.g. a sandbox): CPU build, enough for the unit tests and the cheap checks
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# With an NVIDIA GPU: the CUDA build instead, see https://pytorch.org/get-started/locally/
+
 pip install -e .
 python -c "from biapy import BiaPy, build_config; print('ok')"
 ```
 
-Install the CPU build of torch first: otherwise `pip install -e .` pulls the CUDA build (several GB).
+Without the first step, `pip install -e .` pulls the default (CUDA) torch build, several GB.
+If torch is already installed (e.g. an existing BiaPy environment), skip it.
 
-Device selection: CUDA is used only if `--gpu` (CLI) / `gpu=` (API) is given and CUDA is available;
-otherwise BiaPy uses `SYSTEM.DEVICE` (default `"cpu"`, set it to `"mps"` for Apple Silicon).
-No flag is needed to run on CPU.
+Device selection: `--gpu 0[,1]` (CLI) / `gpu=` (API) uses CUDA if available, `--gpu mps` the Apple Silicon GPU;
+otherwise BiaPy uses `SYSTEM.DEVICE` (default `"cpu"`). No flag is needed to run on CPU.
 
 ## Running
 
@@ -74,43 +85,46 @@ biapy --config /path/to/my_config.yaml --result_dir /path/to/output --name my_jo
 from biapy import BiaPy, build_config
 cfg = build_config("SEMANTIC_SEG", "2D", patch_size=(256, 256, 1),
                    train_data={"path": "/path/to/train/raw", "gt_path": "/path/to/train/label"},
-                   test_data={"path": "/path/to/test/raw", "gt_path": "/path/to/test/label"},
+                   test_data={"path": "/path/to/test/raw", "gt_path": "/path/to/test/label", "load_gt": True},
                    extra_config={"TRAIN": {"EPOCHS": 1}})
 biapy = BiaPy(cfg, result_dir="/path/to/output", name="my_job")  # validates the config
 biapy.train()
 biapy.test()
 ```
 
-`build_config` enables both training and test by default (`phase="both"`). Pass `test_data`, or
-`phase="train"` to skip the test: the test data path is not checked when `BiaPy(...)` is built, so a
-missing one only fails when `biapy.test()` runs.
+`build_config` enables train and test by default (`phase="both"`); the test data path is only checked when
+`biapy.test()` runs. Without `load_gt` the test ground truth is ignored and no metrics are computed.
+Don't reuse the `--result_dir`/`--name`/`--run_id` of an existing job unless asked: its outputs are written over.
 
 ## Tests
 
-Fast, CPU-only, no data needed (synthetic, ~10 s). `pytest` is not a BiaPy dependency, so install it
-first (`pip install pytest`):
+CPU-only unit tests, synthetic data, no GPU or network (`pip install pytest` first, it is not a BiaPy dependency):
 
 ```bash
-pytest tests/test_tta_equivariance.py -q
+pytest -q                                  # all of them (tests/test_*.py, ~40 s); CI runs exactly this
+pytest tests/test_wizard.py -q             # wizard: data checks, planning, configs built (~15 s)
+pytest tests/test_wizard_api.py -q         # wizard interface with the front-ends (see Rules)
+pytest tests/test_vit_backbones.py -q      # every ViT backbone/architecture combination, built on 'meta' device
+pytest tests/test_patch_sampling.py -q     # foreground oversampling (biapy/data/patch_sampling.py)
+pytest tests/test_tta_equivariance.py -q   # instance representations/channels and TTA (data/post_processing/tta.py)
 ```
 
 Do NOT run these unless explicitly asked; they need a GPU:
 
-- `tests/run_checks.py` — end-to-end training/inference for every workflow. Downloads datasets from
-  Google Drive (`gdown`) and takes hours.
-- `tests/check_api.py` — Python API (`build_config` / `BiaPy` / `predict`) consistency. Downloads a
-  dataset from Google Drive (`gdown`) and trains a model.
-- `tests/export_bmz_test.py` — runs the job of a given config and exports the model to BioImage Model
-  Zoo format. It is called by `run_checks.py`, not run on its own.
+- `tests/run_checks.py`: end-to-end training/inference of every workflow, BMZ export and reproducibility
+  (`export_bmz_test.py`, `bmz_reproducibility.py`). Downloads datasets from Google Drive (`gdown`).
+- `tests/check_api.py`: Python API consistency (`build_config` / `BiaPy` / `predict`). Downloads a dataset and trains.
+- `tests/calibrate_unet_memory.py`: refits the VRAM model of `biapy/wizard/unet.py`.
 
-`run_checks.py` and `check_api.py` run weekly on a self-hosted GPU runner
-(`.github/workflows/check_code_consistency.yml`).
+The CI (`.github/workflows/check_code_consistency.yml`, weekly on a self-hosted GPU runner) runs `pytest -q`,
+then `run_checks.py` and `check_api.py`. Likewise, don't start trainings or large downloads outside the tests
+unless asked.
 
 Cheap checks an agent can always do:
 
 ```bash
 python -m compileall -q biapy
-python -c "import biapy, biapy.engine.check_configuration, biapy.models"
+python -c "import biapy, biapy.engine.check_configuration, biapy.models, biapy.wizard"
 ```
 
 ## Rules when changing code
@@ -139,6 +153,7 @@ Only when it applies:
 4. Renamed, removed or changed type: update `convert_old_model_cfg_to_current_version()` in
    `check_configuration.py` so old YAML configs and checkpoints keep loading.
 5. Option users normally set: add it to the relevant YAML files in `templates/`.
+6. Option the wizard sets (`biapy/wizard/config_builder.py`, the planners, `instance_seg.REPRESENTATIONS`): run `pytest tests/test_wizard.py -q`, which validates the configs it builds with `check_configuration()`.
 
 ### Adding a model architecture
 To see the pattern in existing code, `grep -rn -i nafnet biapy/` (or `wavelettention`, `rdbm`).
@@ -165,12 +180,27 @@ Always:
      the patch size divisibility check.
 
    Also add checks for its own constraints (e.g. NAFNet always needs a discriminator and an adversarial loss).
+5. `biapy/citations/references.yaml`: add the reference (with `code:` if the implementation is adapted from a
+   repo) and a rule `when: {MODEL.SOURCE: biapy, MODEL.ARCHITECTURE: <arch>}` (see the `nafnet` one).
+   Same for new losses, post-processing methods or representations that come from a paper.
 
 Only when it applies:
 
-5. Model split across several files: list the extra files in `extra_model_files` in `build_model()`,
+6. Model split across several files: list the extra files in `extra_model_files` in `build_model()`,
    or BioImage Model Zoo export will miss them.
-6. Add a template in `templates/<workflow>/` and a test case in `tests/run_checks.py`.
+7. Add a template in `templates/<workflow>/` and a test case in `tests/run_checks.py`.
+
+### Changing the wizard (`biapy/wizard/`)
+The front-ends (BiaPy-GUI, the Fiji plugin) call what `biapy.wizard.INTERFACE` lists. `tests/test_wizard_api.py`
+compares its signatures and result keys with the snapshot `tests/wizard_api.json`:
+
+- Additions (optional argument, new result key, new function): update the snapshot with
+  `python tests/test_wizard_api.py --update`.
+- Anything that breaks a front-end (removed/renamed item, argument made required, removed key, or a change in the
+  meaning of a value the snapshot can't see): also increase `API_VERSION` in `biapy/wizard/__init__.py`, and say
+  that BiaPy-GUI and the Fiji plugin must be updated.
+
+Wizard modules must stay importable without PyTorch: import BiaPy's readers inside the functions that use them.
 
 ### Style
 - NumPy-style docstrings (`Parameters` / `Returns` sections), as in the rest of the code.
