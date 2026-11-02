@@ -261,7 +261,7 @@ def build_model(
             image_shape=cfg.DATA.PATCH_SIZE,
             output_channels=output_channels,
             variant=cfg.MODEL.STUNET.VARIANT,
-            deep_supervision=False,
+            deep_supervision=cfg.MODEL.STUNET.DEEP_SUPERVISION,
             explicit_activations=False,
             head_activations=head_activations,
             output_channel_info=output_channel_info,

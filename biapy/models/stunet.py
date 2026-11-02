@@ -17,9 +17,9 @@ Notes:
 
 - Supports both 2D (Conv2d/InstanceNorm2d) and 3D (Conv3d/InstanceNorm3d), selected from
   the number of dimensions in ``image_shape`` (see ``STUNet.ndim``).
-- By default, forward() returns a list with a single element: [full_res_logits].
-  If deep supervision is enabled (deep_supervision=True),
-  it returns a tuple like nnU-Net: (full_res, upscaled_aux1, upscaled_aux2, ...)
+- forward() returns the full resolution output. If deep supervision is enabled (deep_supervision=True),
+  in training mode it also returns the outputs of the lower resolution decoder stages, like nnU-Net:
+  [full_res, aux1, aux2, ...] (see ``STUNet.forward``).
 """
 
 from __future__ import annotations
@@ -156,7 +156,10 @@ class STUNet(nn.Module):
         Activation functions to apply to the outputs if `explicit_activations` is True.
 
     deep_supervision : bool
-        Whether to enable deep supervision (multiple outputs).
+        Whether to enable deep supervision: in training mode the model also returns the output of each
+        lower resolution decoder stage (see ``STUNet.forward``), to be used with
+        ``biapy.engine.metrics.deep_supervision_loss``. In evaluation mode only the full resolution
+        output is returned, so inference is not affected.
 
     class_set_idxs : sequence of int, optional
         Indices (into ``image_shape``'s channel axis) of an "exchangeable" group of input
@@ -251,7 +254,6 @@ class STUNet(nn.Module):
 
         self.final_nonlin = nn.Identity()  # logits
         self._deep_supervision = bool(deep_supervision)
-        self.upscale_logits = False
 
         if conv_kernel_sizes is None or pool_op_kernel_sizes is None:
             raise ValueError("pool_op_kernel_sizes and conv_kernel_sizes must be provided (see STUNet_* helpers).")
@@ -345,18 +347,14 @@ class STUNet(nn.Module):
             self.conv_blocks_localization.append(stage)
 
         # -----------------------------------------
-        # Outputs (one per decoder stage, nnU-Net style)
+        # Outputs (one per decoder stage with deep supervision, nnU-Net style)
         # -----------------------------------------
-        self.seg_outputs = nn.ModuleList()
+        self.seg_outputs = nn.ModuleList([self.conv_op(dims[0], output_channels[0], kernel_size=1, padding="same")])
+        # Apart from 'seg_outputs' so checkpoints without deep supervision keep loading
+        self.aux_seg_outputs = nn.ModuleList()
         if self._deep_supervision:
-            for ds in range(len(self.conv_blocks_localization)):
-                self.seg_outputs.append(self.conv_op(dims[-2 - ds], output_channels[0], kernel_size=1, padding="same"))
-        else:
-            # Only create the final resolution head
-            self.seg_outputs.append(self.conv_op(dims[0], output_channels[0], kernel_size=1, padding="same"))
-
-        # Deep supervision upscalers (OrgMIM uses identity lambdas)
-        self.upscale_logits_ops = nn.ModuleList([nn.Identity() for _ in range(num_pool - 1)])
+            for u in range(num_pool - 1):
+                self.aux_seg_outputs.append(self.conv_op(dims[-2 - u], output_channels[0], kernel_size=1, padding="same"))
 
         # To store which head corresponds to which output channel in the multi-head scenario
         self.heads = nn.Sequential()
@@ -376,12 +374,14 @@ class STUNet(nn.Module):
 
         Returns
         -------
-        Dict or torch.Tensor
+        Dict, torch.Tensor or list
             Model output. Returns a dictionary if multi-head or contrastive outputs are enabled,
-            otherwise returns the main prediction tensor.
+            otherwise returns the main prediction tensor. With deep supervision, and only in training
+            mode, there is one output per decoder stage, from the full resolution one to the lowest
+            resolution one: a list of tensors, or a dictionary of lists if it is multi-head.
         """
         skips: List[torch.Tensor] = []
-        seg_outputs: List[torch.Tensor] = []
+        aux_outputs: List[torch.Tensor] = []
 
         if self.class_set_encoder is not None:
             regular = x[:, self.regular_idxs]
@@ -397,26 +397,35 @@ class STUNet(nn.Module):
         x = self.conv_blocks_context[-1](x)
 
         # decoder
-        seg_output_cont = 0
         for u in range(len(self.conv_blocks_localization)):
             x = self.upsample_layers[u](x)
             x = torch.cat((x, skips[-(u + 1)]), dim=1)
             x = self.conv_blocks_localization[u](x)
-            if self._deep_supervision or u == len(self.conv_blocks_localization) - 1:
-                seg_outputs.append(self.final_nonlin(self.seg_outputs[seg_output_cont](x)))
-                seg_output_cont += 1
+            if self.training and u < len(self.aux_seg_outputs):
+                aux_outputs.append(self.final_nonlin(self.aux_seg_outputs[u](x)))
 
-        # Regular output
-        # if self._deep_supervision:
-        #     feats = [seg_outputs[-1]] + [
-        #             op(aux) for op, aux in zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])
-        #         ]
-        # else:
-        # For now we deactivate deep supervision 
-        feats = seg_outputs[-1]
+        seg_outputs = [self.final_nonlin(self.seg_outputs[0](x))] + aux_outputs[::-1]
+        outputs = [self._heads_forward(feats) for feats in seg_outputs]
+        if len(outputs) == 1:
+            return outputs[0]
+        if isinstance(outputs[0], dict):
+            return {k: [o[k] for o in outputs] for k in outputs[0]}
+        return outputs
 
-        out_dict = {}
+    def _heads_forward(self, feats: torch.Tensor):
+        """
+        Pass the features of one decoder stage through the output heads.
 
+        Parameters
+        ----------
+        feats : torch.Tensor
+            Output of a ``seg_outputs``/``aux_seg_outputs`` layer.
+
+        Returns
+        -------
+        Dict or torch.Tensor
+            Output of the heads, as described in :meth:`forward` for a single output.
+        """
         # Pass the features through the output heads
         class_outs, outs = [], []
         for i, head in enumerate(self.heads):
@@ -586,7 +595,10 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
     head_activations : List[List[str]]
         Activation functions for outputs.
     deep_supervision : bool
-        Whether to enable deep supervision (multiple outputs).
+        Whether to enable deep supervision: in training mode the model also returns the output of each
+        lower resolution decoder stage (see ``STUNet.forward``), to be used with
+        ``biapy.engine.metrics.deep_supervision_loss``. In evaluation mode only the full resolution
+        output is returned, so inference is not affected.
     pretrained : Union[bool, str]
         If True, load default pretrained weights for the variant.
         If str, it can be a key in PRETRAINED_STUNET or a URL.

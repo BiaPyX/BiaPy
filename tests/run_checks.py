@@ -143,7 +143,7 @@ all_test_info["Test1"] = {
 all_test_info["Test2"] = {
     "enable": True,
     "jobname": "test2",
-    "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
+    "description": "3D Semantic seg. Lucchi++. stunet (pretrained, deep supervision). Basic DA.",
     "template_path": os.path.join(data_folder, "semantic_seg", "3d_semantic_segmentation.yaml"),
     "yaml": "test2.yaml",
     "yaml_modifications": {
@@ -173,7 +173,8 @@ all_test_info["Test2"] = {
             "ARCHITECTURE": "stunet",
             "STUNET": {
                 "VARIANT": "base",
-                "PRETRAINED": True
+                "PRETRAINED": True,
+                "DEEP_SUPERVISION": True,
             },
         },
         "TEST": {

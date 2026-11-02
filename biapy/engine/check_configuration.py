@@ -3556,6 +3556,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'OCR' head is not available for 3D 'HRNET' models. Please choose another head type: 'ASPP', 'PSP' or 'FCN'")
         elif model_arch == "stunet":
             assert cfg.MODEL.STUNET.VARIANT in ['small', 'base', 'large', 'custom'], "'MODEL.STUNET.VARIANT' not in ['small', 'base', 'large', 'custom']"
+            if cfg.MODEL.STUNET.DEEP_SUPERVISION:
+                if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+                    raise ValueError(
+                        "'MODEL.STUNET.DEEP_SUPERVISION' can only be used in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows"
+                    )
+                if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                    raise ValueError("'MODEL.STUNET.DEEP_SUPERVISION' can not be used with 'E_offset' in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'")
             if cfg.MODEL.STUNET.VARIANT == "custom":
                 n_stages = len(cfg.MODEL.STUNET.DIMS)
                 assert len(cfg.MODEL.STUNET.DEPTH) == n_stages, (

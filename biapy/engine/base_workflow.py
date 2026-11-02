@@ -79,7 +79,7 @@ from biapy.utils.util import (
     PhaseProgress,
 )
 from biapy.engine.train_engine import train_one_epoch, evaluate
-from biapy.engine.metrics import FOREGROUND_METRIC_NAMES
+from biapy.engine.metrics import FOREGROUND_METRIC_NAMES, split_outputs
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
@@ -922,11 +922,13 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "biapy":
             assert self.model
             pred = self.model(in_img)
+            outputs = split_outputs(pred)
 
             # Recover the original shape of the input, as not all the model return a prediction
             # of the same size as the input image
             if (
-                not (self.cfg.LOSS.CONTRAST.ENABLE and is_train)
+                len(outputs) == 1
+                and not (self.cfg.LOSS.CONTRAST.ENABLE and is_train)
                 and not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
                 and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
@@ -944,14 +946,15 @@ class Base_Workflow(metaclass=ABCMeta):
                         sshape = (in_img.shape[0],) + (pred.shape[1],) + in_img.shape[2:]
                         pred = resize(pred, sshape, mode=mode)
             
-            # Allow multiple outputs
-            if isinstance(pred, list):
-                for i in range(len(pred)):
-                    if apply_act:
-                        pred[i] = self.apply_model_activations(pred[i], training=is_train)
-            else:
-                if apply_act:
-                    pred = self.apply_model_activations(pred, training=is_train) # type: ignore
+            # Allow multiple outputs (see split_outputs)
+            if apply_act:
+                outputs = [self.apply_model_activations(o, training=is_train) for o in split_outputs(pred)]
+                if isinstance(pred, list):
+                    pred = outputs
+                elif isinstance(pred, dict) and len(outputs) > 1:
+                    pred = {k: [o[k] for o in outputs] if isinstance(v, list) else v for k, v in pred.items()}
+                else:
+                    pred = outputs[0]
         elif self.cfg.MODEL.SOURCE == "bmz":
             pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train), training=is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":

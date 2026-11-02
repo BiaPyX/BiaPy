@@ -1958,6 +1958,11 @@ class Config:
         _C.MODEL.STUNET.VARIANT = 'base'
         # Whether to use a pretrained version of STUNet on ImageNet
         _C.MODEL.STUNET.PRETRAINED = False
+        # Deep supervision (as in nnU-Net): during training each lower resolution decoder stage also
+        # predicts the output, and the loss is the weighted mean of all of them (the main output weighs
+        # the most). Inference is not affected. Only for 'SEMANTIC_SEG', 'INSTANCE_SEG' (not with
+        # 'E_offset' channel) and 'DETECTION' workflows
+        _C.MODEL.STUNET.DEEP_SUPERVISION = False
         # Residual blocks per stage. Only used when VARIANT = "custom"; length must equal len(DIMS).
         _C.MODEL.STUNET.DEPTH = [1, 1, 1, 1, 1, 1]
         # Channels per stage. Only used when VARIANT = "custom".
