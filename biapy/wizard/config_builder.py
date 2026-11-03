@@ -414,6 +414,20 @@ def build_config_from_answers(answers):
     # Asked only for denoising, but it may remain answered after switching to another workflow
     if biapy_cfg.get("PROBLEM.TYPE") != "DENOISING":
         biapy_cfg.pop("PROBLEM.DENOISING.LOAD_GT_DATA", None)
+    # Tracking (asked for instance segmentation) links the instances in the test phase: a training-only job just
+    # trains the instance segmentation model
+    if (
+        biapy_cfg.get("PROBLEM.TRACKING.ENABLE") is True
+        and biapy_cfg.get("PROBLEM.TYPE") == "INSTANCE_SEG"
+        and biapy_cfg.get("TEST.ENABLE") is True
+        and not biapy_cfg.get("TEST.ANALIZE_2D_IMGS_AS_3D_STACK")
+    ):
+        # trackastra_general_2d is 2D only and the better choice there; trackastra_ctc works in 3D too
+        biapy_cfg["PROBLEM.TRACKING.LINKER_MODEL"] = (
+            "trackastra_ctc" if biapy_cfg["PROBLEM.NDIM"] == "3D" else "trackastra_general_2d"
+        )
+    else:
+        biapy_cfg.pop("PROBLEM.TRACKING.ENABLE", None)
 
     out_config = {}
     for key, value in biapy_cfg.items():

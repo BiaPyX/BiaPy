@@ -321,6 +321,32 @@ def test_check_errors(tmp_path):
     assert r["error"] and "channels" in r["error_message"]
 
 
+def test_check_tracking_frames(tmp_path):
+    """The test images of a tracking job are the frames of one time-lapse: one single-channel image per frame."""
+    def check(folder, tracking=True):
+        return check_folder(str(folder), "DATA.TEST.PATH", "INSTANCE_SEG", "2D", tracking=tracking)
+
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    _write_2d(str(frames / "t0.tif"), np.zeros((32, 32), np.uint8))
+    assert "one image per frame" in check(frames)["error_message"]
+    assert not check(frames, tracking=False)["error"]
+    _write_2d(str(frames / "t1.tif"), np.zeros((32, 32), np.uint8))
+    assert not check(frames)["error"]
+    _write_2d(str(frames / "t2.tif"), np.zeros((32, 40), np.uint8))
+    assert "same size" in check(frames)["error_message"]
+
+    rgb = tmp_path / "rgb"
+    rgb.mkdir()
+    for t in range(2):
+        _write_2d(str(rgb / "t{}.tif".format(t)), np.zeros((32, 32, 3), np.uint8))
+    assert "single-channel" in check(rgb)["error_message"]
+
+    sequences = tmp_path / "sequences"
+    (sequences / "01").mkdir(parents=True)
+    assert "select one of them" in check(sequences)["error_message"]
+
+
 def test_check_points(tmp_path):
     r = _check(_points(tmp_path, False), "DATA.TRAIN.GT_PATH", "DETECTION", "2D")
     assert r["data_constraints"]["DATA.TRAIN.GT_PATH"] == 3
@@ -855,6 +881,34 @@ def test_config_semantic_seg(tmp_path):
     assert cfg["TRAIN"]["PATIENCE"] == 100
     assert cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] == -(-epochs // 100)
     _biapy_check(cfg, tmp_path)
+
+
+def test_config_tracking(tmp_path):
+    folder = _instances(tmp_path, "round")
+    raw = _raw_like(tmp_path, folder)
+    answers = _answers(
+        "INSTANCE_SEG", "2D", [("DATA.TRAIN.PATH", raw), ("DATA.TRAIN.GT_PATH", folder)],
+        **{"PROBLEM.TRACKING.ENABLE": True},
+    )
+    # Training only: the instance segmentation model is trained, the linking is done when testing
+    cfg, _ = build_config(answers, GPU)
+    assert "TRACKING" not in cfg["PROBLEM"]
+
+    r = check_folder(raw, "DATA.TEST.PATH", "INSTANCE_SEG", "2D", tracking=True)
+    assert not r["error"], r["error_message"]
+    answers.update({"TEST.ENABLE": True, "DATA.TEST.PATH": raw, "DATA.TEST.LOAD_GT": False})
+    answers["data_constraints"].update(r["data_constraints"])
+    answers["sample_info"]["DATA.TEST.PATH"] = r["sample_info"]
+    cfg, report = build_config(answers, GPU)
+    assert report["applied"], report
+    assert cfg["PROBLEM"]["TRACKING"] == {"ENABLE": True, "LINKER_MODEL": "trackastra_general_2d"}
+    _biapy_check(cfg, tmp_path)
+
+    # Answered before switching to another workflow
+    answers["PROBLEM.TYPE"] = "SEMANTIC_SEG"
+    from biapy.wizard.config_builder import build_config_from_answers
+
+    assert "TRACKING" not in build_config_from_answers(answers)["PROBLEM"]
 
 
 def test_config_instance_seg_representation(tmp_path):

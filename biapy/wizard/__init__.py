@@ -32,4 +32,6 @@ INTERFACE = (
 # version: something removed or renamed, an argument that becomes required, a result key removed... (the test above
 # tells). The front-ends accept only the version they were written for, so they must be updated then. Additions
 # (optional arguments, result keys, functions) don't need it. Neither does a change in the planning strategy.
-API_VERSION = 1
+# 2 (BiaPy 3.7.3): tracking (check_folder's 'tracking', the 'PROBLEM.TRACKING.ENABLE' answer), which the front-ends
+# can only ask about when the BiaPy installed supports it.
+API_VERSION = 2

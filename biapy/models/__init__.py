@@ -2113,7 +2113,13 @@ def check_bmz_model_compatibility(
     # --------- Dependency checks ---------
     if "dependencies" in weights and weights["dependencies"] is not None:
         try:
-            nickname = model_rdf.get("nickname") or model_rdf.get("alias")
+            # A raw RDF (e.g. the zoo CI passes the downloaded rdf.yaml) has no nickname/alias, only its id
+            nickname = (
+                model_rdf.get("nickname")
+                or model_rdf.get("alias")
+                or ((m.get("config") or {}).get("bioimageio") or {}).get("nickname")
+                or str(m.get("id") or "").split("/")[-1]
+            )
         except Exception:
             return _result(True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n")
         try:

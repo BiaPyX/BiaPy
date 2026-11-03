@@ -210,7 +210,7 @@ def _channels_message(expected, found, path):
     )
 
 
-def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, data_path=""):
+def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, data_path="", tracking=False):
     """
     Checks the data of a folder selected in the wizard.
 
@@ -233,6 +233,9 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
     data_path : str, optional
         Path of the targets within the Zarr files of ``folder``, e.g. "labels.mito" to use the label images of
         OME-Zarr images as targets (see :func:`ome_zarr_labels`).
+    tracking : bool, optional
+        Whether the objects are tracked (``PROBLEM.TRACKING.ENABLE``): the test raw images are then the frames of one
+        time-lapse, which must be single-channel images of the same size, one file per frame.
 
     Returns
     -------
@@ -257,9 +260,18 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
     kind = None
     if is_gt:
         kind = {"SEMANTIC_SEG": "semantic", "INSTANCE_SEG": "instance"}.get(workflow, "image")
+    frames = tracking and key == "DATA.TEST.PATH"
+    if frames:
+        problem = _frames_problem(folder)
+        if problem:
+            return _result(True, problem)
     res = _check_images(folder, key, workflow, is_3d, kind, progress, percentage / 100.0, data_path)
     if res["error"]:
         return res
+    if frames:
+        problem = _frames_shape_problem(folder, res["data_constraints"][key + "_path_shapes"])
+        if problem:
+            return _result(True, problem)
     if is_gt:
         # Targets within the raw images' files (BiaPy reads them from 'DATA.*.GT_PATH' with these variables)
         phase = key.split(".")[1]
@@ -271,6 +283,53 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
     else:
         res["sample_info"]["ome_zarr_labels"] = ome_zarr_labels(folder)
     return res
+
+
+def _frames_problem(folder):
+    """Why the files of a folder can't be the frames of a time-lapse to track, or None."""
+    files = list_files(folder)
+    if not files:
+        try:
+            subfolders = next(os.walk(folder))[1]
+        except StopIteration:
+            subfolders = []
+        if subfolders:
+            return (
+                f"No images found in folder:\n{folder}\nTracking takes one time-lapse: a folder with one image per "
+                f"frame. If each subfolder ({', '.join(sorted(subfolders)[:3])}...) is a time-lapse, select one of them."
+            )
+        return f"No images found in folder:\n{folder}"
+    chunked = [f for f in files if is_chunked(f)]
+    if chunked:
+        return (
+            f"Tracking reads each frame whole, so the frames must be images such as TIFF or PNG, not Zarr/H5:\n"
+            f"{os.path.join(folder, chunked[0])}"
+        )
+    if len(files) == 1:
+        return (
+            f"Only one image was found in the folder, but tracking needs one image per frame of the time-lapse:\n"
+            f"{os.path.join(folder, files[0])}\nIf it holds all the frames (a stack), save them as separate images, "
+            "e.g. in Fiji with File > Save As > Image Sequence..."
+        )
+    return None
+
+
+def _frames_shape_problem(folder, shapes):
+    """Why the frames read (their shapes, ``(z, )y, x, c``) can't be tracked, or None."""
+    files = list_files(folder)
+    if shapes[0][-1] != 1:
+        return (
+            f"Tracking needs single-channel frames, but they have {shapes[0][-1]} channels. If the channels are "
+            "the frames of a stack, save them as separate images, e.g. in Fiji with File > Save As > Image Sequence..."
+        )
+    for f, sh in zip(files, shapes):
+        if tuple(sh) != tuple(shapes[0]):
+            return (
+                f"All the frames of the time-lapse must have the same size, but {files[0]} is "
+                f"{'x'.join(map(str, shapes[0][:-1]))} and this one is {'x'.join(map(str, sh[:-1]))}:\n"
+                f"{os.path.join(folder, f)}"
+            )
+    return None
 
 
 def _check_images(folder, key, workflow, is_3d, kind, progress, fraction=1.0, data_path=""):

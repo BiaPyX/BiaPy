@@ -1,5 +1,5 @@
 {
- "API_VERSION": 1,
+ "API_VERSION": 2,
  "results": [
   "REPRESENTATIONS/A",
   "REPRESENTATIONS/A/channels",
@@ -223,6 +223,11 @@
     ],
     [
      "data_path",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ],
+    [
+     "tracking",
      "POSITIONAL_OR_KEYWORD",
      true
     ]

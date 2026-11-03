@@ -198,7 +198,9 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
 
     files = test_files(cfg["DATA"].get("TEST", {}).get("PATH", ""))
     chunked_files = bool(files) and all(f.lower().endswith(CHUNKED_FORMATS) for f in files)
-    chunks_possible = cfg["PROBLEM"]["NDIM"] == "3D" and workflow in CHUNK_WORKFLOWS
+    # Tracking links the instances of the frames held in memory, so it can't run by chunks
+    tracking = cfg["PROBLEM"].get("TRACKING", {}).get("ENABLE", False)
+    chunks_possible = cfg["PROBLEM"]["NDIM"] == "3D" and workflow in CHUNK_WORKFLOWS and not tracking
 
     whole = estimate_bytes("whole", voxels, in_ch, out_ch, factor, image_bytes)
     if whole <= budget and not (chunks_possible and chunked_files):
