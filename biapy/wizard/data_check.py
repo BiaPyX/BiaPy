@@ -1,7 +1,7 @@
 """
-Check of a data folder selected in the wizard: the files are read with BiaPy's readers, in the order BiaPy lists
-(and pairs) them, to verify that BiaPy can use them, to deduce some variables (channels, classes...) and to
-build the folder's fingerprint (:mod:`biapy.wizard.fingerprint`) in the same pass.
+Check of a data folder selected in the wizard: its images are read with BiaPy's readers, in BiaPy's order, to verify
+that BiaPy can use them, to deduce some variables (channels, classes...) and to build their fingerprint
+(:mod:`biapy.wizard.fingerprint`).
 """
 import math
 import os
@@ -9,23 +9,18 @@ import os
 import numpy as np
 
 from biapy.wizard import fingerprint as fpr
-from biapy.wizard.inference import CHUNKED_FORMATS
 
 # Labels above this are not taken as class numbers
 MAX_CLASSES = 256
-# Zarr/H5 data larger than this in a folder is checked on a part of it, chosen at random, as reading it all may take
-# long (the user chooses how much, see folder_size())
+# Zarr/H5 data larger than this is checked on a random part of it, chosen by the user (see folder_size())
 LARGE_DATA_BYTES = 2 * 1024**3
-# Data the part suggested to check reads
 SUGGESTED_CHECK_BYTES = 1024**3
-# Voxels of each block read from a large Zarr/H5 image: its axes longer than BLOCK_MIN_SIDE are cut in proportion to
-# their length, never below BLOCK_MIN_SIDE, so the block keeps the axes sizes order BiaPy guesses the axes from for
-# the images whose axes are not stored with them (all but OME-Zarr)
+# Blocks read from large Zarr/H5 images: axes longer than BLOCK_MIN_SIDE are cut in proportion, so the block keeps
+# the order of axis sizes BiaPy guesses the axes from (when they are not stored, as in OME-Zarr)
 BLOCK_VOXELS = 4 * 1024**2
 BLOCK_MIN_SIDE = 64
-# Larger images are previewed on a central block of this size
 PREVIEW_VOXELS = 16 * 1024**2
-# data_range() of each part of an image, from the narrowest: an image spans the widest of its parts
+# data_range() values from the narrowest: an image read in blocks spans the widest of them
 RANGES = ("01 range", "uint8 range", "uint16 range", "none_range")
 
 
@@ -38,45 +33,22 @@ def _result(error, message="", constraints=None, sample_info=None):
     }
 
 
-def list_files(folder):
-    """Images of a folder: its files and its Zarr images (folders ending in '.zarr')."""
-    from biapy.utils.misc import os_walk_clean
+def folder_images(folder):
+    """Images of a folder as BiaPy lists them, or none."""
+    from biapy.data.data_manipulation import list_data_files
 
     try:
-        _, dirs, files = next(os_walk_clean(folder))
-    except StopIteration:
+        return list_data_files(folder)[0]
+    except ValueError:
         return []
-    return files + [d for d in dirs if d.endswith(".zarr")]
-
-
-def is_chunked(path):
-    """Whether BiaPy reads the image by parts (Zarr/H5), so the wizard can too."""
-    return path.lower().endswith(CHUNKED_FORMATS)
 
 
 def _open_chunked(path, data_path=""):
-    """
-    Data of a Zarr/H5 image, not read yet, and its axes if they are stored with it (OME-Zarr), ``None`` otherwise
-    (BiaPy guesses them from the shape). ``data_path`` is a path within the file, e.g. "labels.mito".
-    """
-    from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data
-    from biapy.data.ome_zarr import image_info
+    """Zarr/H5 data, not read yet, and its OME-Zarr axes (None when BiaPy guesses them from the shape)."""
+    from biapy.data.data_manipulation import load_img_data
 
-    info = image_info(path, data_path) if path.endswith(".zarr") else None
-    _, data = read_chunked_nested_data(path, data_path) if data_path else read_chunked_data(path)
-    return data, (info.axes if info is not None else None), ({"ome_zarr": info} if info is not None else None)
-
-
-def _to_biapy(data, axes, is_3d, path):
-    """Data of a Zarr/H5 image as BiaPy reads it, ``(z, )y, x, c`` (see read_img_as_ndarray)."""
-    from biapy.data.data_3D_manipulation import ensure_3d_shape
-    from biapy.data.data_manipulation import ensure_2d_shape
-    from biapy.data.ome_zarr import to_biapy_order
-
-    if axes is not None:
-        return to_biapy_order(data, axes, is_3d)
-    data = np.squeeze(data)
-    return ensure_3d_shape(data, path) if is_3d else ensure_2d_shape(data, path)
+    data, _, meta = load_img_data(path, data_within_zarr_path=data_path or None, load_meta=True)
+    return data, meta["ome_zarr"].axes if meta else None, meta
 
 
 def _block_shape(shape, voxels):
@@ -96,6 +68,13 @@ def _blocks(shape, fraction, rng):
         return [tuple(slice(None) for _ in shape)]
     starts = [rng.integers(0, v - b + 1, count) for v, b in zip(shape, block)]
     return [tuple(slice(int(st[k]), int(st[k]) + b) for st, b in zip(starts, block)) for k in range(count)]
+
+
+def _biapy_shape(data, axes, is_3d, path):
+    """Shape of Zarr/H5 data as BiaPy reads it, without reading it."""
+    from biapy.data.data_manipulation import to_biapy_shape
+
+    return tuple(to_biapy_shape(np.broadcast_to(np.zeros((), np.uint8), data.shape), is_3d, path, ome_axes=axes).shape)
 
 
 def image_parts(path, is_3d, fraction=1.0, data_path="", rng=None):
@@ -124,7 +103,8 @@ def image_parts(path, is_3d, fraction=1.0, data_path="", rng=None):
     meta : dict or None
         Metadata of the image (see read_img_as_ndarray).
     """
-    from biapy.data.data_manipulation import read_img_as_ndarray
+    from biapy.data.data_3D_manipulation import is_chunked
+    from biapy.data.data_manipulation import read_img_as_ndarray, to_biapy_shape
 
     if not is_chunked(path):
         img, meta = read_img_as_ndarray(path, is_3d=is_3d, load_meta=True)
@@ -135,25 +115,23 @@ def image_parts(path, is_3d, fraction=1.0, data_path="", rng=None):
             f"The image is 3D (axes {axes}, shape {tuple(data.shape)}), but the images were said to be 2D: answer "
             "'Yes' to the question 'Are your images in 3D?'"
         )
-    # Shape it is read with, without reading it: the same reordering applied to an array that takes no memory
-    shape = _to_biapy(np.broadcast_to(np.zeros((), np.uint8), data.shape), axes, is_3d, path).shape
     rng = rng or np.random.default_rng(0)
-    parts = [_to_biapy(np.asarray(data[sl]), axes, is_3d, path) for sl in _blocks(data.shape, fraction, rng)]
-    return parts, tuple(shape), meta
+    parts = [to_biapy_shape(np.asarray(data[sl]), is_3d, path, ome_axes=axes) for sl in _blocks(data.shape, fraction, rng)]
+    return parts, _biapy_shape(data, axes, is_3d, path), meta
 
 
 def preview_image(path, is_3d, data_path=""):
-    """
-    Image to preview as BiaPy reads it (a central block of it if it is a large Zarr/H5 image) and the shape of the
-    whole image.
-    """
+    """Image to preview as BiaPy reads it (a central block of a large Zarr/H5 image) and the whole image's shape."""
+    from biapy.data.data_3D_manipulation import is_chunked
+    from biapy.data.data_manipulation import to_biapy_shape
+
     if not is_chunked(path):
-        return image_parts(path, is_3d)[0][0], None
+        img = image_parts(path, is_3d)[0][0]
+        return img, img.shape
     data, axes, _ = _open_chunked(path, data_path)
     block = _block_shape(data.shape, PREVIEW_VOXELS)
     center = tuple(slice((v - b) // 2, (v - b) // 2 + b) for v, b in zip(data.shape, block))
-    shape = _to_biapy(np.broadcast_to(np.zeros((), np.uint8), data.shape), axes, is_3d, path).shape
-    return _to_biapy(np.asarray(data[center]), axes, is_3d, path), tuple(shape)
+    return to_biapy_shape(np.asarray(data[center]), is_3d, path, ome_axes=axes), _biapy_shape(data, axes, is_3d, path)
 
 
 def folder_size(folder):
@@ -164,10 +142,11 @@ def folder_size(folder):
     -------
     size : dict
         ``files`` and ``chunked_files`` (Zarr/H5), ``chunked_bytes`` (their size uncompressed), ``large`` (whether
-        they are so large that only a part of them should be checked) and ``suggested_percentage`` (the percentage
-        of them to check, about SUGGESTED_CHECK_BYTES).
+        only a part of them should be checked) and ``suggested_percentage`` (about SUGGESTED_CHECK_BYTES of them).
     """
-    files = list_files(folder)
+    from biapy.data.data_3D_manipulation import is_chunked
+
+    files = folder_images(folder)
     chunked, total = 0, 0
     for f in files:
         path = os.path.join(folder, f)
@@ -194,20 +173,12 @@ def ome_zarr_labels(folder):
     from biapy.data.ome_zarr import image_info
 
     common = None
-    for f in list_files(folder):
+    for f in folder_images(folder):
         info = image_info(os.path.join(folder, f))
         if info is None:
             return []
         common = [x for x in info.labels if common is None or x in common]
     return common or []
-
-
-def _channels_message(expected, found, path):
-    return (
-        "All images need to have the same number of channels and represent same information to ensure the deep "
-        f"learning model can be trained correctly. However, the following image (with {found} channels) appears "
-        f"to have a different number of channels than the first image (with {expected} channels) in the folder:\n{path}"
-    )
 
 
 def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, data_path="", tracking=False):
@@ -262,18 +233,28 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
         kind = {"SEMANTIC_SEG": "semantic", "INSTANCE_SEG": "instance"}.get(workflow, "image")
     frames = tracking and key == "DATA.TEST.PATH"
     if frames:
-        problem = _frames_problem(folder)
+        from biapy.data.data_manipulation import list_data_files
+        from biapy.data.tracks_io import frames_problem
+
+        try:
+            names, chunked = list_data_files(folder)
+        except ValueError as e:
+            return _result(True, e)
+        if chunked:
+            return _result(True, f"Tracking reads one time-lapse, one image file (e.g. TIFF) per frame, but this folder "
+                           f"has Zarr/H5 images or subfolders. If each subfolder is a time-lapse, select one:\n{folder}")
+        problem = frames_problem(names)
         if problem:
-            return _result(True, problem)
+            return _result(True, f"{problem}\n{folder}")
     res = _check_images(folder, key, workflow, is_3d, kind, progress, percentage / 100.0, data_path)
     if res["error"]:
         return res
     if frames:
-        problem = _frames_shape_problem(folder, res["data_constraints"][key + "_path_shapes"])
+        problem = frames_problem(names, res["data_constraints"][key + "_path_shapes"])
         if problem:
-            return _result(True, problem)
+            return _result(True, f"{problem}\n{folder}")
     if is_gt:
-        # Targets within the raw images' files (BiaPy reads them from 'DATA.*.GT_PATH' with these variables)
+        # Targets within the raw images' Zarr files
         phase = key.split(".")[1]
         res["data_constraints"].update({
             "DATA.{}.INPUT_ZARR_MULTIPLE_DATA".format(phase): bool(data_path),
@@ -285,62 +266,16 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
     return res
 
 
-def _frames_problem(folder):
-    """Why the files of a folder can't be the frames of a time-lapse to track, or None."""
-    files = list_files(folder)
-    if not files:
-        try:
-            subfolders = next(os.walk(folder))[1]
-        except StopIteration:
-            subfolders = []
-        if subfolders:
-            return (
-                f"No images found in folder:\n{folder}\nTracking takes one time-lapse: a folder with one image per "
-                f"frame. If each subfolder ({', '.join(sorted(subfolders)[:3])}...) is a time-lapse, select one of them."
-            )
-        return f"No images found in folder:\n{folder}"
-    chunked = [f for f in files if is_chunked(f)]
-    if chunked:
-        return (
-            f"Tracking reads each frame whole, so the frames must be images such as TIFF or PNG, not Zarr/H5:\n"
-            f"{os.path.join(folder, chunked[0])}"
-        )
-    if len(files) == 1:
-        return (
-            f"Only one image was found in the folder, but tracking needs one image per frame of the time-lapse:\n"
-            f"{os.path.join(folder, files[0])}\nIf it holds all the frames (a stack), save them as separate images, "
-            "e.g. in Fiji with File > Save As > Image Sequence..."
-        )
-    return None
-
-
-def _frames_shape_problem(folder, shapes):
-    """Why the frames read (their shapes, ``(z, )y, x, c``) can't be tracked, or None."""
-    files = list_files(folder)
-    if shapes[0][-1] != 1:
-        return (
-            f"Tracking needs single-channel frames, but they have {shapes[0][-1]} channels. If the channels are "
-            "the frames of a stack, save them as separate images, e.g. in Fiji with File > Save As > Image Sequence..."
-        )
-    for f, sh in zip(files, shapes):
-        if tuple(sh) != tuple(shapes[0]):
-            return (
-                f"All the frames of the time-lapse must have the same size, but {files[0]} is "
-                f"{'x'.join(map(str, shapes[0][:-1]))} and this one is {'x'.join(map(str, sh[:-1]))}:\n"
-                f"{os.path.join(folder, f)}"
-            )
-    return None
-
-
 def _check_images(folder, key, workflow, is_3d, kind, progress, fraction=1.0, data_path=""):
     """
     ``kind``: None for raw images, "semantic"/"instance" masks or "image" targets. ``fraction``: part of each
     Zarr/H5 image read, in random blocks that are analyzed as separate images. ``data_path``: path of the images
     within the Zarr/H5 files.
     """
-    from biapy.data.data_manipulation import data_range
+    from biapy.data.data_3D_manipulation import is_chunked
+    from biapy.data.data_manipulation import check_image_consistency, data_range
 
-    files = list_files(folder)
+    files = folder_images(folder)
     if not files:
         return _result(True, f"No images found in folder:\n{folder}")
     if data_path:
@@ -350,8 +285,7 @@ def _check_images(folder, key, workflow, is_3d, kind, progress, fraction=1.0, da
                            f"{os.path.join(folder, missing[0])}")
     n = len(files)
     rng = np.random.default_rng(0)
-    # The blocks read of each image are added to the fingerprint as separate images: count them
-    n_parts = 0
+    n_parts = 0  # blocks are added to the fingerprint as separate images
     for f in files:
         path = os.path.join(folder, f)
         try:
@@ -368,31 +302,22 @@ def _check_images(folder, key, workflow, is_3d, kind, progress, fraction=1.0, da
     else:
         acc = None
 
-    channels, drange, shapes, labels, inst_classes, part = None, None, [], set(), 0, 0
+    expected, shapes, labels, inst_classes, part = None, [], set(), 0, 0
     for i, f in enumerate(files):
         path = os.path.join(folder, f)
         try:
             parts, shape, meta = image_parts(path, is_3d, fraction, data_path, rng)
+            drange = None
+            if kind in (None, "image"):
+                drange = (RANGES[max(RANGES.index(data_range(img)) for img in parts)], parts[0].dtype)
+            # The wizard's normalizations don't depend on the data range
+            expected = check_image_consistency(path, shape[-1], expected, drange=drange, strict=False)
         except Exception as e:
             return _result(True, f"Couldn't load image:\n{path}\n{e}")
-        if channels is None:
-            channels = shape[-1]
-        if shape[-1] != channels:
-            return _result(True, _channels_message(channels, shape[-1], path))
+        channels = shape[-1]
         shapes.append(shape)
 
-        if kind in (None, "image"):
-            r = RANGES[max(RANGES.index(data_range(img)) for img in parts)]
-            if drange is None:
-                drange = r
-            if r != drange:
-                return _result(
-                    True,
-                    f"All images must be within the same data range. However, the following image (with a range of "
-                    f"{r}) appears to be in a different data range than the first image (with a range of {drange}) in "
-                    f"the folder:\n{path}",
-                )
-        elif kind == "semantic":
+        if kind == "semantic":
             if channels != 1:
                 return _result(True, f"Semantic masks are expected to have just one channel. Image analized:\n{path}")
             for img in parts:
@@ -458,7 +383,7 @@ def _check_points(folder, key, is_3d, progress):
     """CSV files with the points to detect (columns axis-0, axis-1[, axis-2] and optionally class)."""
     from biapy.data.data_manipulation import read_points_csv
 
-    files = list_files(folder)
+    files = folder_images(folder)
     if not files:
         return _result(True, f"No CSV files found in folder:\n{folder}")
     acc = fpr.PointsFingerprint(len(files))
@@ -483,7 +408,7 @@ def _check_points(folder, key, is_3d, progress):
 
 def _check_classification(folder, key, is_3d, progress):
     """One subfolder per class, with its images."""
-    from biapy.data.data_manipulation import data_range, read_img_as_ndarray
+    from biapy.data.data_manipulation import check_image_consistency, data_range, read_img_as_ndarray
     from biapy.utils.misc import os_walk_clean
 
     try:
@@ -492,34 +417,23 @@ def _check_classification(folder, key, is_3d, progress):
         class_names = []
     if not class_names:
         return _result(True, f"There is no folder/class in folder:\n{folder}")
-    class_files = {c: list_files(os.path.join(folder, c)) for c in class_names}
+    class_files = {c: next(os_walk_clean(os.path.join(folder, c)))[2] for c in class_names}
     for c, files in class_files.items():
         if not files:
             return _result(True, f"There are no images in class folder:\n{os.path.join(folder, c)}")
     total = sum(len(files) for files in class_files.values())
-    channels, drange, done = None, None, 0
+    expected, done = None, 0
     for c, files in class_files.items():
         for f in files:
             path = os.path.join(folder, c, f)
             try:
                 img = read_img_as_ndarray(path, is_3d=is_3d)
+                expected = check_image_consistency(
+                    path, img.shape[-1], expected, drange=(data_range(img), img.dtype), strict=False
+                )
             except Exception as e:
                 return _result(True, f"Couldn't load image:\n{path}\n{e}")
-            if channels is None:
-                channels = img.shape[-1]
-            if img.shape[-1] != channels:
-                return _result(True, _channels_message(channels, img.shape[-1], path))
-            r = data_range(img)
-            if drange is None:
-                drange = r
-            if r != drange:
-                return _result(
-                    True,
-                    f"All images must be within the same data range. However, the following image (with a range of "
-                    f"{r}) appears to be in a different data range than the first image (with a range of {drange}) in "
-                    f"the folder:\n{path}",
-                )
             done += 1
             progress(done, total, os.path.join(c, f))
-    constraints = {"DATA.PATCH_SIZE_C": channels, "DATA.N_CLASSES": len(class_names), key: total, key + "_path": folder}
+    constraints = {"DATA.PATCH_SIZE_C": expected[0], "DATA.N_CLASSES": len(class_names), key: total, key + "_path": folder}
     return _result(False, "", constraints, {"dir_name": key})

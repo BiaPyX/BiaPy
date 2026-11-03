@@ -16,7 +16,7 @@ from typing import Optional, Sequence, Tuple
 from numpy.typing import NDArray
 
 from biapy.data.dataset import PatchCoords
-from biapy.data.data_3D_manipulation import looks_like_hdf5
+from biapy.data.data_3D_manipulation import is_chunked
 from biapy.utils.misc import os_walk_clean, is_main_process
 
 
@@ -299,7 +299,7 @@ def load_roi_mask(
     mask_file = find_roi_mask_file(path, sample_filename)
     # Read the mask as it is stored: read_img_as_ndarray() guesses the axes order of 3D data from the
     # shape (smallest axis first), which would silently transpose a coarse mask.
-    if mask_file.endswith((".zarr", ".n5")) or looks_like_hdf5(mask_file):
+    if is_chunked(mask_file):
         from biapy.data.data_3D_manipulation import read_chunked_data
         from biapy.data.ome_zarr import image_info
 

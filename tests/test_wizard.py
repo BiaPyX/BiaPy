@@ -23,7 +23,7 @@ import os
 import numpy as np
 import pytest
 
-from biapy.wizard import detection, instance_seg, unet
+from biapy.wizard import common, detection, instance_seg, unet
 from biapy.wizard.config_builder import WizardError, build_config, tuples_to_lists, write_config
 from biapy.wizard.data_check import check_folder, semantic_classes
 from biapy.wizard.planning import plan_config
@@ -344,7 +344,7 @@ def test_check_tracking_frames(tmp_path):
 
     sequences = tmp_path / "sequences"
     (sequences / "01").mkdir(parents=True)
-    assert "select one of them" in check(sequences)["error_message"]
+    assert "subfolders" in check(sequences)["error_message"]
 
 
 def test_check_points(tmp_path):
@@ -531,9 +531,7 @@ def test_resources_estimated(tmp_path):
     assert [l for l in report["lines"] if l.startswith("Estimated resources: Disk")]
     # The checkpoint: 12 bytes per parameter of the planned U-Net
     from biapy.wizard import unet
-    from biapy.wizard.inference import output_channels
-
-    params = unet.count_parameters(report["plan"], 1, output_channels(cfg), report["plan"]["feature_maps"])
+    params = unet.count_parameters(report["plan"], 1, common.output_channels(cfg), report["plan"]["feature_maps"])
     assert next(d["bytes"] for d in r["disk"] if d["what"] == "model checkpoint") == 12 * params
 
 
@@ -680,7 +678,7 @@ def test_representations_affinities_dense_3d(tmp_path):
     # Contours can't separate instances that fill the volume
     assert not reps["F_C"]["available"]
     assert instance_seg.representation_to_biapy("A", 3)[0] == ["A"]
-    assert instance_seg.output_channels(["A"], 3, 2) == 3
+    assert common.output_channels(_inst_cfg(["A"], "3D")) == 3
 
 
 def test_representations_dense_2d(tmp_path):
@@ -711,7 +709,14 @@ def test_representation_channels():
     assert instance_seg.representation_to_biapy("F_G", 3)[0] == ["F", "Gv", "Gh", "Gz"]
     assert instance_seg.representation_to_biapy("F_S", 2) == (["F", "P"], [{"P": {"type": "skeleton"}}])
     assert instance_seg.representation_of(("F", "P"), ({"P": {"type": "skeleton"}},), 2) == "F_S"
-    assert instance_seg.output_channels(["Db", "R"], 2, 2) == 33
+    assert common.output_channels(_inst_cfg(["Db", "R"], "2D")) == 33
+    # Affinities are a (z, y, x) triple per offset, in 2D too; classes add their channels
+    assert common.output_channels(_inst_cfg(["A"], "2D", n_classes=3)) == 3 + 3
+
+
+def _inst_cfg(channels, ndim, n_classes=2):
+    return {"PROBLEM": {"TYPE": "INSTANCE_SEG", "NDIM": ndim, "INSTANCE_SEG": {"DATA_CHANNELS": channels}},
+            "DATA": {"N_CLASSES": n_classes}}
 
 
 def test_plan_instance_seg(tmp_path):
@@ -796,7 +801,7 @@ def test_preview_swapped_and_names(tmp_path):
 def test_preview_shape_mismatch(tmp_path):
     raw, tgt = _pairs(tmp_path, ["a.tif"], ["a.tif"], tgt_shape=(32, 64))
     warnings = preview("SEMANTIC_SEG", "2D", raw, tgt)["warnings"]
-    assert any("should be the size of the raw image" in w for w in warnings)
+    assert any("but 64x64 was expected" in w for w in warnings), warnings
 
 
 def test_preview_super_resolution_targets_smaller(tmp_path):
@@ -1124,10 +1129,10 @@ def test_config_super_resolution(tmp_path):
     "test_sizes,message",
     [
         # High-resolution test images as raw images: their targets look smaller
-        ((128, 64), r"test targets are smaller than their raw images:\n    - raw image 0.tif: 128x128"),
-        ((64, 96), r"target is x1.5 larger"),
+        ((128, 64), r"Some targets are smaller than their raw images"),
+        ((64, 96), r"'0.tif': 64x64  ->  its target '0.tif': 96x96, but 128x128 was expected"),
         # High-resolution images in both test folders: x1 instead of the training's x2
-        ((128, 128), r"It is x2 in the training data \(e.g. raw image 0.tif: 64x64, its target: 128x128\), but x1"),
+        ((128, 128), r"upscaled by \(1, 1\)"),
     ],
 )
 def test_config_super_resolution_wrong_test_data(tmp_path, test_sizes, message):
@@ -1156,3 +1161,19 @@ def test_bmz_blacklist():
     manifest["config"]["bioimageio"]["nickname"] = "other-model"
     r = check_bmz_model_compatibility(manifest, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
     assert not r["error"], r["reason_message"]
+
+
+def test_bmz_dependency_check_raw_rdf(monkeypatch):
+    import biapy.models as bm
+
+    # The zoo CI (bioimage-io/collection) passes the raw 0.5 RDF, whose only name is its "id"
+    seen = []
+    monkeypatch.setattr(bm, "_load_description", lambda source, **kw: seen.append(source) or 1 / 0)
+    rdf = {
+        "id": "playful-scorpion",
+        "tags": ["instance-segmentation"],
+        "weights": {"pytorch_state_dict": {"dependencies": {"source": "environment.yaml"}}},
+        "inputs": [{"axes": "bcyx", "shape": {"min": [1, 1, 64, 64]}}],
+    }
+    bm.check_bmz_model_compatibility(rdf)
+    assert seen == ["playful-scorpion"]

@@ -1,21 +1,12 @@
 """
-Strategy for the instance segmentation workflow.
-
-* Representation of the instances (what the network learns to predict and the instances are rebuilt from):
-  the Wizard offers the ones that suit the shape of the instances in the training masks
-  (propose_representations()), and the one chosen is translated into BiaPy's channels
-  (representation_to_biapy()).
-* Training: as for semantic segmentation (nnU-Net-like U-Net, patch and batch size, foreground
-  oversampling, no elastic deformations), with the losses BiaPy sets for each channel.
-* What some representations need besides their channels (augmentations, weights of the channels in the loss,
-  creation of the instances), as the original methods (apply_representation_settings()), also when a pretrained
-  model imposes them.
+Strategy for the instance segmentation workflow: the representations that suit the shape of the instances
+(propose_representations()), translated into BiaPy's channels (representation_to_biapy()), with what each one needs
+to reproduce its original method (apply_representation_settings()). Training is planned as in semantic segmentation.
 """
 from . import common
 
-# Representations offered in the Wizard: id -> name, description, BiaPy channels ("Gz"/"Z" are added in 3D) and
-# how BiaPy builds the instances from them ("creation", set explicitly: BiaPy 3.7.1 picks "watershed" for 'R'
-# when left empty, as its "Gv" check is an "if" instead of an "elif" in check_configuration.py)
+# Representations offered in the wizard: id -> name, description, BiaPy channels ("Gz"/"Z" added in 3D) and how the
+# instances are built from them ("creation")
 REPRESENTATIONS = {
     "F_C": {
         "name": "Foreground + contour",
@@ -94,10 +85,7 @@ FLOWS_MAX_BRANCHED = 0.2
 CROWDED = 0.3
 # Instances this thin (inscribed radius in pixels) are mostly contour
 THIN_RADIUS = 2.0
-# Radial distances predicted per pixel with BiaPy's default number of rays (memory planning)
-STARDIST_RAYS = {2: 32, 3: 96}
-# Dense instances (affinities, 3D only): they fill most of the volume and nearly all touch others, as neurons in
-# electron microscopy
+# Dense instances (affinities, 3D only), e.g. neurons in electron microscopy
 DENSE_FOREGROUND = 0.5  # min. median foreground fraction
 DENSE_TOUCHING = 0.8  # min. fraction of instances touching others
 
@@ -162,8 +150,7 @@ def propose_representations(fp, ndim):
 
     opts = {}
     if dense:
-        # Instances filling the image (e.g. neurons in electron microscopy): the contours between them would be a
-        # large part of the image, and a missed piece of contour merges two instances
+        # Instances filling the image: a missed piece of contour merges two of them
         opts["F_C"] = (False, "Your instances are dense (they cover {} of the image and {} touch others): contours "
                               "can't separate them reliably.".format(_pct(fg), _pct(touching)))
     else:
@@ -244,28 +231,13 @@ def representation_of(channels, extra, ndim):
     return None
 
 
-def output_channels(channels, ndim, n_classes):
-    """
-    Channels predicted by the network (each ray of 'R' is one, 'A' has one per axis with BiaPy's default
-    offsets), plus the classes if any.
-    """
-    n = sum(STARDIST_RAYS[ndim] if c == "R" else ndim if c == "A" else 1 for c in channels)
-    return n + (n_classes if n_classes > 2 else 0)
-
-
-# Settings some representations need besides their channels, as BiaPy's sanity checks of the "Representation
-# matters" paper set them to reproduce the original methods
-# (templates/instance_segmentation/Representation_matters_paper/sanity_experiments). Only what concerns the
-# representation: the geometric augmentations (the channels are rebuilt from the augmented masks), the weight of each
-# channel in the loss and how the instances are created. The optimizer, the intensity augmentations, the
-# normalization and the model are planned as for any representation. "train"/"test": variables set when training /
-# testing; "weights": loss weight of the channels not weighted 1; "losses": loss of all the channels.
+# What some representations need to reproduce their original method (as the "Representation matters" sanity
+# experiments): "train"/"test" variables, "weights" (loss weight of the channels not weighted 1) and "losses"
 REPRESENTATION_SETTINGS = {
     "cellpose": {
         "name": "Cellpose flows",
         "train": {
-            # Reflecting the image to fill the rotated patches would mirror the cells cut by the border, whose flows
-            # would then point outside the image
+            # Reflecting would mirror the cells cut by the border, whose flows would point outside the image
             "AUGMENTOR.AFFINE_MODE": "constant",
             "AUGMENTOR.RANDOM_ROT": True,
             "AUGMENTOR.RANDOM_ROT_PROB": 1.0,
@@ -387,8 +359,7 @@ def apply_representation_settings(cfg, lines):
         for key, value in s.get("test", {}).items():
             create_dict_from_key(key, value, cfg)
         if family == "hovernet":
-            # Only the thresholds: BiaPy sets the channels (seeds F, V, H, with Z after F in 3D; growth mask F) and
-            # keeps thresholds of their length, while setting the channels too makes it warn that they are custom
+            # Only the thresholds: setting BiaPy's channels too makes it warn that they are custom
             ws = inst.setdefault("WATERSHED", {})
             ws["SEED_CHANNELS_THRESH"] = [0.5] + [0.4] * sum(c in ("H", "V", "Z") for c in channels)
             ws["GROWTH_MASK_CHANNELS_THRESH"] = [0.5]
@@ -435,10 +406,7 @@ def plan_instance_seg(cfg, sample_info, vram_bytes, vram_source, training_length
     rep = representation_of(channels, inst.get("DATA_CHANNELS_EXTRA_OPTS"), ndim)
     if rep:
         lines.append("Representation: {} (channels {})".format(REPRESENTATIONS[rep]["name"], ", ".join(channels)))
-    n_classes = int(cfg["DATA"].get("N_CLASSES", 2))
-    plan = common.apply_unet_plan(
-        cfg, raw_fp, spacing, output_channels(channels, ndim, n_classes), vram_bytes, vram_source, lines
-    )
+    plan = common.apply_unet_plan(cfg, raw_fp, spacing, common.output_channels(cfg), vram_bytes, vram_source, lines)
     if plan is None:
         return {"applied": False, "reason": "the images are too small to plan a U-Net", "lines": lines}
     lines.append("Losses: BiaPy's default for each channel; no elastic deformations")

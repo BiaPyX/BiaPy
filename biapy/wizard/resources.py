@@ -1,29 +1,15 @@
 """
-What a Wizard configuration needs from the computer, estimated before running it so the front-ends can tell the
-user: RAM (training and test), GPU memory (training) and disk space (what the job writes in its folder).
+RAM (training and test), GPU memory (training) and disk a wizard configuration needs, estimated for the front-ends to
+tell the user. Measured constants:
 
-The constants were measured with the Wizard's configurations (see also :mod:`biapy.wizard.inference`, which
-estimates the RAM of the test and chooses how to predict so that it fits):
+* Training RAM, the largest of: computing the normalization of each image (1.3 GiB + image + 16 bytes per voxel, 8
+  more per extra channel), the class locations of foreground oversampling (1.3 GiB + mask + 5 bytes per voxel, 2 with
+  instance labels) and the training loop (2.5 GiB + workers * (image + mask)).
+* Disk: checkpoint, 12 bytes per parameter (weights and AdamW moments); raw predictions, 4 bytes per voxel and output
+  channel (2 with TEST.REDUCE_MEMORY); final segmentations, about 1 byte per voxel; class locations, about 75 KB per
+  training image.
 
-* RAM to train: the largest of three phases, measured on the largest training image (12 short trainings: Lucchi++
-  3D volumes of 124 and 495 MiB, 1 and 3 channels, uint8 and uint16, semantic and instance targets, tiles and
-  foreground oversampling, 0, 3 and 6 workers; CartoCell 3D and DSB2018 2D), within -3% and +32% of each:
-
-  - preparing the data: every training image is read whole to compute its normalization statistics (one at a time),
-    which takes two float64 copies of a channel: 1.3 GiB + the image + (16 + 8 * (channels - 1)) bytes per voxel.
-    E.g. 9.1-9.3 GiB for the 495 MiB volume whatever the workers.
-  - foreground oversampling: the class locations of each mask: 1.3 GiB + the mask + 5 bytes per voxel (the connected
-    components of each class), 2 with instance labels. Twelve 124 MiB volumes peaked at 3.2 GiB, in the statistics
-    above. (Before BiaPy found them slab by slab, np.unique sorted the whole volume: 23 and 37 bytes per voxel.)
-  - the training loop: each data loader worker holds the image (and mask) it takes a patch from: 2.5 GiB + workers *
-    (image + mask). 6.8 GiB for the 495 MiB volume with 6 workers.
-* Checkpoint: the weights and AdamW's two moments, 12 bytes per parameter (402 MB for the 33.5 M parameters of
-  DSB2018's 2D U-Net). Only the best one is kept.
-* Test predictions: the raw predictions are saved as float32 (float16 with TEST.REDUCE_MEMORY), about 4 bytes per
-  voxel and output channel (455 MB for a 124 MiB volume and one channel); the final segmentations are compressed
-  (2-26 MB for that volume), counted as 1 byte per voxel. By chunks only the final ones are written (Zarr, plus TIF
-  with TEST.BY_CHUNKS.SAVE_OUT_TIF).
-* Foreground oversampling: the class locations of every training image, about 75 KB each (30 MB for DSB2018).
+The test RAM is estimated in :mod:`biapy.wizard.inference`.
 """
 import os
 
@@ -93,9 +79,7 @@ def estimate_resources(cfg, sample_info, report, test_estimate=None, ram_bytes=N
     test = bool(cfg.get("TEST", {}).get("ENABLE"))
     plan = report.get("plan")
     patch = _patch(cfg)
-    from .inference import output_channels
-
-    out_ch = output_channels(cfg)
+    out_ch = common.output_channels(cfg)
 
     if train:
         raw = common.fingerprint(sample_info, "DATA.TRAIN.PATH", "images")

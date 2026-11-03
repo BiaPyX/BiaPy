@@ -80,6 +80,9 @@ from biapy.data.data_3D_manipulation import (
     ensure_3d_shape,
     looks_like_hdf5,
     looks_like_precomputed,
+    is_chunked,
+    read_chunked_data,
+    read_chunked_nested_data,
 )
 
 
@@ -339,225 +342,32 @@ def load_and_prepare_train_data(
     Y_val : list of dict
         Loaded validation Y dataset.
     """
-    train_shape_will_change = False
-    if train_preprocess_f:
-        if train_preprocess_cfg is None:
-            raise ValueError("'train_preprocess_cfg' needs to be provided with 'train_preprocess_f'")
-        if train_preprocess_cfg.RESIZE.ENABLE:
-            train_shape_will_change = True
-    val_shape_will_change = False
-    if val_preprocess_f:
-        if val_preprocess_cfg is None:
-            raise ValueError("'val_preprocess_cfg' needs to be provided with 'val_preprocess_f'")
-        if val_preprocess_cfg.RESIZE.ENABLE:
-            val_shape_will_change = True
-
+    assert len(y_upscaling) == len(crop_shape) - 1, "'y_upscaling' needs a value per spatial axis"
     print("### LOAD ###")
-    # Disable crops when random_crops_in_DA is selected
-    crop = False if random_crops_in_DA else True
+    split = dict(
+        norm_module=norm_module,
+        crop_shape=crop_shape,
+        y_upscaling=y_upscaling,
+        is_3d=is_3d,
+        reflect_to_complete_shape=reflect_to_complete_shape,
+        convert_to_rgb=convert_to_rgb,
+        is_y_mask=is_y_mask,
+        super_resolution=super_resolution,
+        multiple_raw_images=multiple_raw_images,
+        random_crops_in_DA=random_crops_in_DA,
+        filter_by_entire_image=filter_by_entire_image,
+        norm_before_filter=norm_before_filter,
+        save_filtered_images=save_filtered_images,
+        save_filtered_images_dir=save_filtered_images_dir,
+        save_filtered_images_num=save_filtered_images_num,
+    )
+    X_train, Y_train, train_using_zarr = _load_split(
+        "TRAIN", train_path, train_mask_path, train_ov, train_padding, train_zarr_data_information,
+        train_preprocess_f, train_preprocess_cfg, (train_filter_props, train_filter_vals, train_filter_signs), **split
+    )
 
-    # Check validation
-    if val_split > 0 or cross_val:
-        create_val_from_train = True
-    else:
-        create_val_from_train = False
-
-    X_train, Y_train, X_val, Y_val = None, None, None, None
-
-    # Create X_train and Y_train
-    train_using_zarr = False
-    if not multiple_raw_images:
-        ids = next(os_walk_clean(train_path))[2]
-        fids = next(os_walk_clean(train_path))[1]
-
-        print("Gathering raw images for training data . . .")
-        if len(ids) == 0 or (len(ids) > 0 and looks_like_hdf5(ids[0])):  # Zarr
-            if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
-                raise ValueError("No images found in dir {}".format(train_path))
-
-            # Working with Zarr
-            if not is_3d:
-                raise ValueError("Please check you data as only folders where found. In this case BiaPy expects Zarr "
-                                 "format images, but using these is only available for 3D problems")
-            train_using_zarr = True
-
-            assert train_zarr_data_information
-            X_train = samples_from_zarr(
-                list_of_data=fids if len(ids) == 0 else ids,
-                data_path=train_path,
-                zarr_data_info=train_zarr_data_information,
-                crop_shape=crop_shape,
-                ov=train_ov,
-                padding=train_padding,
-                is_mask=False,
-                is_3d=is_3d,
-                random_crops=random_crops_in_DA,
-            )
-        else:
-            X_train = samples_from_image_list(
-                list_of_data=ids,
-                data_path=train_path,
-                crop=crop,
-                crop_shape=crop_shape,
-                ov=train_ov,
-                padding=train_padding,
-                norm_module=norm_module,
-                is_mask=False,
-                is_3d=is_3d,
-                reflect_to_complete_shape=reflect_to_complete_shape,
-                convert_to_rgb=convert_to_rgb,
-                preprocess_f=train_preprocess_f if train_shape_will_change else None,
-                preprocess_cfg=train_preprocess_cfg if train_shape_will_change else None,
-            )
-
-        # Extract a list of all training gt images
-        if train_mask_path:
-            print("Gathering labels for training data . . .")
-            ids = next(os_walk_clean(train_mask_path))[2]
-            fids = next(os_walk_clean(train_mask_path))[1]
-            if len(ids) == 0 or (len(ids) > 0 and looks_like_hdf5(ids[0])):  # Zarr
-                if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
-                    raise ValueError("No images found in dir {}".format(train_mask_path))
-                assert train_zarr_data_information
-                Y_train = samples_from_zarr(
-                    list_of_data=fids if len(ids) == 0 else ids,
-                    data_path=train_mask_path,
-                    zarr_data_info=train_zarr_data_information,
-                    crop_shape=crop_shape,
-                    ov=train_ov,
-                    padding=train_padding,
-                    is_mask=True,
-                    is_3d=is_3d,
-                    random_crops=random_crops_in_DA,
-                )
-            else:
-
-                # Calculate shape with upsampling
-                if is_3d:
-                    assert len(crop_shape) == 4
-                    assert len(y_upscaling) == 3
-                    real_shape = (
-                        crop_shape[0] * y_upscaling[0],
-                        crop_shape[1] * y_upscaling[1],
-                        crop_shape[2] * y_upscaling[2],
-                        crop_shape[3],
-                    )
-                else:
-                    real_shape = (
-                        crop_shape[0] * y_upscaling[0],
-                        crop_shape[1] * y_upscaling[1],
-                        crop_shape[2],
-                    )
-                Y_train = samples_from_image_list(
-                    list_of_data=ids,
-                    data_path=train_mask_path,
-                    crop=crop,
-                    crop_shape=real_shape,
-                    ov=train_ov,
-                    padding=train_padding,
-                    norm_module=norm_module,
-                    is_mask=True,
-                    is_3d=is_3d,
-                    reflect_to_complete_shape=reflect_to_complete_shape,
-                    convert_to_rgb=convert_to_rgb,
-                    preprocess_f=train_preprocess_f if train_shape_will_change else None,
-                    preprocess_cfg=train_preprocess_cfg if train_shape_will_change else None,
-                )
-    else:
-        if train_mask_path is None:
-            raise ValueError("Implementation error. Contact BiaPy team")
-
-        print("Gathering raw and label images train information . . .")
-        X_train, Y_train = samples_from_image_list_multiple_raw_one_gt(
-            data_path=train_path,
-            gt_path=train_mask_path,
-            crop_shape=crop_shape,
-            ov=train_ov,
-            padding=train_padding,
-            norm_module=norm_module,
-            crop=crop,
-            is_3d=is_3d,
-            reflect_to_complete_shape=reflect_to_complete_shape,
-            convert_to_rgb=convert_to_rgb,
-            preprocess_f=train_preprocess_f if train_shape_will_change else None,
-            preprocess_cfg=train_preprocess_cfg if train_shape_will_change else None,
-        )
-
-    # Check that the shape of all images match
-    if train_mask_path and Y_train:
-        print("Checking training raw and label images' shapes . . .")
-        if not multiple_raw_images and (
-            len(X_train.sample_list) != len(Y_train.sample_list)
-            or mismatched_raw_target_files(X_train, Y_train, y_upscaling)
-        ):
-            raise ValueError(
-                raw_target_mismatch_message(
-                    X_train, Y_train, train_path, train_mask_path, y_upscaling, is_y_mask, super_resolution
-                )
-            )
-
-        for i in range(len(X_train.sample_list)):
-            xshape = X_train.sample_list[i].get_shape()
-            gt_associated_id = X_train.sample_list[i].get_gt_associated_id()
-            if gt_associated_id is not None:
-                yshape = Y_train.sample_list[gt_associated_id].get_shape()
-            else:
-                yshape = Y_train.sample_list[i].get_shape()
-
-            if not xshape:
-                xshape = crop_shape[:-1]
-            if not yshape:
-                yshape = crop_shape[:-1]
-
-            if is_3d:
-                assert len(y_upscaling) == 3 and len(xshape) == 3
-                upsampled_x_shape = (
-                    xshape[0] * y_upscaling[0],
-                    xshape[1] * y_upscaling[1],
-                    xshape[2] * y_upscaling[2],
-                )
-            else:
-                assert len(y_upscaling) == 2 and len(xshape) == 2
-                upsampled_x_shape = (
-                    xshape[0] * y_upscaling[0],
-                    xshape[1] * y_upscaling[1],
-                )
-            if upsampled_x_shape != yshape[: len(upsampled_x_shape)]:
-                if not multiple_raw_images:
-                    raise ValueError(
-                        raw_target_mismatch_message(
-                            X_train, Y_train, train_path, train_mask_path, y_upscaling, is_y_mask, super_resolution
-                        )
-                    )
-                filepath = X_train.dataset_info[X_train.sample_list[i].fid].path
-                raise ValueError(
-                    f"There is a mismatch between input image and its corresponding ground truth ({upsampled_x_shape} vs "
-                    f"{yshape}). Please check the images. Specifically, the sample that doesn't match is within "
-                    f"the file: {filepath})"
-                )
-
-    if len(train_filter_props) > 0:
-        save_example_dir = None
-        if save_filtered_images and save_filtered_images_dir:
-            save_example_dir = os.path.join(save_filtered_images_dir, "train")
-        filter_samples_by_properties(
-            X_train,
-            is_3d,
-            train_filter_props,
-            train_filter_vals,
-            train_filter_signs,
-            y_dataset=Y_train,
-            crop_shape=crop_shape,
-            reflect_to_complete_shape=reflect_to_complete_shape,
-            filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
-            norm_before_filter=norm_before_filter,
-            norm_module=norm_module,
-            zarr_data_information=train_zarr_data_information if train_using_zarr else None,
-            save_filtered_images=save_filtered_images,
-            save_filtered_images_dir=save_example_dir,
-            save_filtered_images_num=save_filtered_images_num,
-        )
-
+    X_val, Y_val = None, None
+    create_val_from_train = val_split > 0 or cross_val
     val_using_zarr = False
     if create_val_from_train:
         print("Creating validation data from train . . .")
@@ -656,293 +466,43 @@ def load_and_prepare_train_data(
             print("Raw images chosen for training: {}".format([x.path for x in X_train.dataset_info]))
             print("Raw images chosen for validation: {}".format([x.path for x in X_val.dataset_info]))
     else:
-        if not multiple_raw_images:
-            print("Gathering raw images for validation data . . .")
-            # Extract a list of all validation images
-            val_ids = next(os_walk_clean(val_path))[2]
-            val_fids = next(os_walk_clean(val_path))[1]
-            if len(val_ids) == 0:
-                if len(val_fids) == 0:  # Trying Zarr
-                    raise ValueError("No images found in dir {}".format(val_path))
+        X_val, Y_val, val_using_zarr = _load_split(
+            "VAL", val_path, val_mask_path, val_ov, val_padding, val_zarr_data_information,
+            val_preprocess_f, val_preprocess_cfg, (val_filter_props, val_filter_vals, val_filter_signs), **split
+        )
 
-                # Working with Zarr
-                if not is_3d:
-                    raise ValueError("Zarr image handle is only available for 3D problems")
-                val_using_zarr = True
-
-                assert val_zarr_data_information
-                X_val = samples_from_zarr(
-                    list_of_data=val_fids,
-                    data_path=val_path,
-                    zarr_data_info=val_zarr_data_information,
-                    crop_shape=crop_shape,
-                    ov=val_ov,
-                    padding=val_padding,
-                    is_mask=False,
-                    is_3d=is_3d,
-                )
-            else:
-                X_val = samples_from_image_list(
-                    list_of_data=val_ids,
-                    data_path=val_path,
-                    crop=crop,
-                    crop_shape=crop_shape,
-                    ov=val_ov,
-                    padding=val_padding,
-                    norm_module=norm_module,
-                    is_mask=False,
-                    is_3d=is_3d,
-                    reflect_to_complete_shape=reflect_to_complete_shape,
-                    convert_to_rgb=convert_to_rgb,
-                    preprocess_f=val_preprocess_f if val_shape_will_change else None,
-                    preprocess_cfg=val_preprocess_cfg if val_shape_will_change else None,
-                )
-
-            # Extract a list of all validation gt images
-            if val_mask_path:
-                print("Gathering labels for validation data . . .")
-                val_gt_ids = next(os_walk_clean(val_mask_path))[2]
-                val_gt_fids = next(os_walk_clean(val_mask_path))[1]
-                if len(val_gt_ids) == 0:
-                    if len(val_gt_fids) == 0:  # Trying Zarr
-                        raise ValueError("No images found in dir {}".format(val_mask_path))
-
-                    # Working with Zarr
-                    if not is_3d:
-                        raise ValueError("Zarr image handle is only available for 3D problems")
-
-                    assert val_zarr_data_information
-                    Y_val = samples_from_zarr(
-                        list_of_data=val_fids,
-                        data_path=val_mask_path,
-                        zarr_data_info=val_zarr_data_information,
-                        crop_shape=crop_shape,
-                        ov=val_ov,
-                        padding=val_padding,
-                        is_mask=True,
-                        is_3d=is_3d,
-                    )
-                else:
-                    assert len(val_gt_ids) == len(val_ids), (
-                        "Number of validation raw images ({}) and validation labels ({}) must be the same. "
-                        "Please, check your data. Raw directory: {} . Label directory: {}.".format(
-                            len(val_ids), len(val_gt_ids), val_path, val_mask_path
-                        )
-                    )
-                    # Calculate shape with upsampling
-                    if is_3d:
-                        assert len(y_upscaling) == 3 and len(crop_shape) == 4
-                        real_shape = (
-                            crop_shape[0] * y_upscaling[0],
-                            crop_shape[1] * y_upscaling[1],
-                            crop_shape[2] * y_upscaling[2],
-                            crop_shape[3],
-                        )
-                    else:
-                        assert len(crop_shape) == 3 and len(y_upscaling) == 2
-                        real_shape = (
-                            crop_shape[0] * y_upscaling[0],
-                            crop_shape[1] * y_upscaling[1],
-                            crop_shape[2],
-                        )
-                    Y_val = samples_from_image_list(
-                        list_of_data=val_gt_ids,
-                        data_path=val_mask_path,
-                        crop=crop,
-                        crop_shape=real_shape,
-                        ov=val_ov,
-                        padding=val_padding,
-                        norm_module=norm_module,
-                        is_mask=True,
-                        is_3d=is_3d,
-                        reflect_to_complete_shape=reflect_to_complete_shape,
-                        convert_to_rgb=convert_to_rgb,
-                        preprocess_f=val_preprocess_f if val_shape_will_change else None,
-                        preprocess_cfg=val_preprocess_cfg if val_shape_will_change else None,
-                    )
-        else:
-            if val_mask_path is None:
-                raise ValueError("Implementation error. Contact BiaPy team")
-
-            print("Gathering raw and label images for validation data . . .")
-            X_val, Y_val = samples_from_image_list_multiple_raw_one_gt(
-                data_path=val_path,
-                gt_path=val_mask_path,
-                crop_shape=crop_shape,
-                ov=val_ov,
-                padding=val_padding,
-                norm_module=norm_module,
-                crop=crop,
-                is_3d=is_3d,
-                reflect_to_complete_shape=reflect_to_complete_shape,
-                convert_to_rgb=convert_to_rgb,
-                preprocess_f=val_preprocess_f if val_shape_will_change else None,
-                preprocess_cfg=val_preprocess_cfg if val_shape_will_change else None,
-            )
-
-        # Check that the shape of all images match
-        if val_mask_path and Y_val:
-            print("Checking validation raw and label images' shapes . . .")
-            if not multiple_raw_images and (
-                len(X_val.sample_list) != len(Y_val.sample_list)
-                or mismatched_raw_target_files(X_val, Y_val, y_upscaling)
-            ):
-                raise ValueError(
-                    raw_target_mismatch_message(
-                        X_val, Y_val, val_path, val_mask_path, y_upscaling, is_y_mask, super_resolution, "VAL"
-                    )
-                )
-            for i in range(len(X_val.sample_list)):
-                xshape = X_val.sample_list[i].get_shape()
-                gt_associated_id = X_val.sample_list[i].get_gt_associated_id()
-                if gt_associated_id is not None:
-                    yshape = Y_val.sample_list[gt_associated_id].get_shape()
-                else:
-                    yshape = Y_val.sample_list[i].get_shape()
-
-                if not xshape:
-                    xshape = crop_shape[:-1]
-                if not yshape:
-                    yshape = crop_shape[:-1]
-
-                if is_3d:
-                    assert len(y_upscaling) == 3 and len(xshape) == 3
-                    upsampled_x_shape = (
-                        xshape[0] * y_upscaling[0],
-                        xshape[1] * y_upscaling[1],
-                        xshape[2] * y_upscaling[2],
-                    )
-                else:
-                    assert len(y_upscaling) == 2 and len(xshape) == 2
-                    upsampled_x_shape = (
-                        xshape[0] * y_upscaling[0],
-                        xshape[1] * y_upscaling[1],
-                    )
-                if upsampled_x_shape != yshape[: len(upsampled_x_shape)]:
-                    if not multiple_raw_images:
-                        raise ValueError(
-                            raw_target_mismatch_message(
-                                X_val, Y_val, val_path, val_mask_path, y_upscaling, is_y_mask, super_resolution, "VAL"
-                            )
-                        )
-                    filepath = X_val.dataset_info[X_val.sample_list[i].fid].path
-                    raise ValueError(
-                        f"There is a mismatch between input image and its corresponding ground truth ({upsampled_x_shape} vs "
-                        f"{yshape}). Please check the images. Specifically, the sample that doesn't match is within "
-                        f"the file {filepath})"
-                    )
-
-        if len(val_filter_props) > 0:
-            save_example_dir = None
-            if save_filtered_images and save_filtered_images_dir:
-                save_example_dir = os.path.join(save_filtered_images_dir, "val")
-            filter_samples_by_properties(
-                X_val,
-                is_3d,
-                val_filter_props,
-                val_filter_vals,
-                val_filter_signs,
-                y_dataset=Y_val,
-                crop_shape=crop_shape,
-                reflect_to_complete_shape=reflect_to_complete_shape,
-                filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
-                norm_before_filter=norm_before_filter,
-                norm_module=norm_module,
-                zarr_data_information=val_zarr_data_information if val_using_zarr else None,
-                save_filtered_images=save_filtered_images,
-                save_filtered_images_dir=save_example_dir,
-                save_filtered_images_num=save_filtered_images_num,
-            )
-
-        x_val_ids = np.array(range(0, len(X_val.sample_list)))
-        if val_mask_path and Y_val:
-            y_val_ids = np.array(range(0, len(Y_val.sample_list)))
-            if not multiple_raw_images and len(x_val_ids) != len(y_val_ids):
-                raise ValueError(
-                    f"Raw image number ({len(x_val_ids)}) and ground truth file mismatch ({len(y_val_ids)}). Please check the data!"
-                )
-
-    if train_in_memory:
-        print("* Loading train images . . .")
+    target_shape = tuple(a * u for a, u in zip(crop_shape[:-1], y_upscaling)) + (gt_channels_expected,)
+    for name, in_memory, X, Y, preprocess_f, preprocess_cfg, zarr_info in (
+        ("train", train_in_memory, X_train, Y_train, train_preprocess_f, train_preprocess_cfg,
+         train_zarr_data_information if train_using_zarr else None),
+        ("validation", val_in_memory, X_val, Y_val, val_preprocess_f, val_preprocess_cfg,
+         val_zarr_data_information if val_using_zarr else None),
+    ):
+        if not in_memory:
+            continue
+        print(f"* Loading {name} images . . .")
         load_images_to_dataset(
-            dataset=X_train,
+            dataset=X,
             crop_shape=crop_shape,
             reflect_to_complete_shape=reflect_to_complete_shape,
             convert_to_rgb=convert_to_rgb,
-            preprocess_cfg=train_preprocess_cfg,
-            preprocess_f=train_preprocess_f,
+            preprocess_cfg=preprocess_cfg,
+            preprocess_f=preprocess_f,
             is_3d=is_3d,
-            zarr_data_information=train_zarr_data_information if train_using_zarr else None,
+            zarr_data_information=zarr_info,
         )
-        if train_mask_path and Y_train:
-            print("* Loading train GT . . .")
-            if is_3d:
-                assert len(y_upscaling) == 3 and len(crop_shape) == 4
-                real_shape = (
-                    crop_shape[0] * y_upscaling[0],
-                    crop_shape[1] * y_upscaling[1],
-                    crop_shape[2] * y_upscaling[2],
-                    gt_channels_expected,
-                )
-            else:
-                assert len(y_upscaling) == 2 and len(crop_shape) == 3
-                real_shape = (
-                    crop_shape[0] * y_upscaling[0],
-                    crop_shape[1] * y_upscaling[1],
-                    gt_channels_expected,
-                )
+        if Y:
+            print(f"* Loading {name} GT . . .")
             load_images_to_dataset(
-                dataset=Y_train,
-                crop_shape=real_shape,
+                dataset=Y,
+                crop_shape=target_shape,
                 reflect_to_complete_shape=reflect_to_complete_shape,
                 convert_to_rgb=convert_to_rgb,
-                preprocess_cfg=train_preprocess_cfg,
+                preprocess_cfg=preprocess_cfg,
                 is_mask=is_y_mask,
-                preprocess_f=train_preprocess_f,
+                preprocess_f=preprocess_f,
                 is_3d=is_3d,
-                zarr_data_information=train_zarr_data_information if train_using_zarr else None,
-            )
-
-    if val_in_memory:
-        print("* Loading validation images . . .")
-        load_images_to_dataset(
-            dataset=X_val,
-            crop_shape=crop_shape,
-            reflect_to_complete_shape=reflect_to_complete_shape,
-            convert_to_rgb=convert_to_rgb,
-            preprocess_cfg=val_preprocess_cfg,
-            preprocess_f=val_preprocess_f,
-            is_3d=is_3d,
-            zarr_data_information=val_zarr_data_information if val_using_zarr else None,
-        )
-
-        if val_mask_path and Y_val:
-            print("* Loading validation GT . . .")
-            if is_3d:
-                assert len(y_upscaling) == 3 and len(crop_shape) == 4
-                real_shape = (
-                    crop_shape[0] * y_upscaling[0],
-                    crop_shape[1] * y_upscaling[1],
-                    crop_shape[2] * y_upscaling[2],
-                    gt_channels_expected,
-                )
-            else:
-                assert len(y_upscaling) == 2 and len(crop_shape) == 3
-                real_shape = (
-                    crop_shape[0] * y_upscaling[0],
-                    crop_shape[1] * y_upscaling[1],
-                    gt_channels_expected,
-                )
-            load_images_to_dataset(
-                dataset=Y_val,
-                crop_shape=real_shape,
-                reflect_to_complete_shape=reflect_to_complete_shape,
-                convert_to_rgb=convert_to_rgb,
-                preprocess_cfg=val_preprocess_cfg,
-                is_mask=is_y_mask,
-                preprocess_f=val_preprocess_f,
-                is_3d=is_3d,
-                zarr_data_information=val_zarr_data_information if val_using_zarr else None,
+                zarr_data_information=zarr_info,
             )
 
     print("### LOAD RESULTS ###")
@@ -950,36 +510,174 @@ def load_and_prepare_train_data(
         print(
             "The samples have not been cropped so they may have different shapes. Because of that only first sample's shape will be printed!"
         )
-    sample_shape = X_train.sample_list[0].get_shape()
-    if not sample_shape:
-        sample_shape = crop_shape
-    X_data_shape = (len(X_train.sample_list),) + sample_shape
-    print("*** Loaded train data shape is: {}".format(X_data_shape))
-    if Y_train:
-        sample_shape = Y_train.sample_list[0].get_shape()
-        if not sample_shape:
-            sample_shape = crop_shape
-        Y_data_shape = (len(Y_train.sample_list),) + sample_shape
-        print("*** Loaded train GT shape is: {}".format(Y_data_shape))
-    else:
-        Y_train = X_train.copy()
-
-    sample_shape = X_val.sample_list[0].get_shape()
-    if not sample_shape:
-        sample_shape = crop_shape
-    X_data_shape = (len(X_val.sample_list),) + sample_shape
-    print("*** Loaded validation data shape is: {}".format(X_data_shape))
-    if Y_val:
-        sample_shape = Y_val.sample_list[0].get_shape()
-        if not sample_shape:
-            sample_shape = crop_shape
-        Y_data_shape = (len(Y_val.sample_list),) + sample_shape
-        print("*** Loaded validation GT shape is: {}".format(Y_data_shape))
-    else:
-        Y_val = X_val.copy()
+    for name, data in (("train data", X_train), ("train GT", Y_train), ("validation data", X_val), ("validation GT", Y_val)):
+        if data:
+            print("*** Loaded {} shape is: {}".format(name, (len(data.sample_list),) + (data.sample_list[0].get_shape() or crop_shape)))
+    Y_train = Y_train if Y_train else X_train.copy()
+    Y_val = Y_val if Y_val else X_val.copy()
     print("### END LOAD ###")
 
     return X_train, Y_train, X_val, Y_val
+
+
+def _samples_from_folder(
+    path: str,
+    crop_shape: Tuple[int, ...],
+    is_mask: bool,
+    zarr_data_info: Optional[Dict],
+    random_crops: bool,
+    **kwargs,
+) -> Tuple[BiaPyDataset, bool]:
+    """Samples of the images of a folder (see :func:`list_data_files`) and whether they are read by chunks."""
+    ids, chunked = list_data_files(path)
+    if chunked:
+        if not kwargs["is_3d"]:
+            raise ValueError(f"Zarr/H5 images can only be used in 3D problems: {path}")
+        assert zarr_data_info
+        return samples_from_zarr(
+            list_of_data=ids,
+            data_path=path,
+            zarr_data_info=zarr_data_info,
+            crop_shape=crop_shape,
+            ov=kwargs["ov"],
+            padding=kwargs["padding"],
+            is_mask=is_mask,
+            is_3d=True,
+            random_crops=random_crops,
+        ), True
+    return samples_from_image_list(list_of_data=ids, data_path=path, crop_shape=crop_shape, is_mask=is_mask, **kwargs), False
+
+
+def _check_raw_target_shapes(
+    X: BiaPyDataset,
+    Y: BiaPyDataset,
+    raw_path: str,
+    target_path: str,
+    crop_shape: Tuple[int, ...],
+    y_upscaling: Tuple[int, ...],
+    is_y_mask: bool,
+    super_resolution: bool,
+    multiple_raw_images: bool,
+    phase: str,
+):
+    """Raise if the targets' shapes are not the raw images' times ``y_upscaling``."""
+    print("Checking {} raw and label images' shapes . . .".format("training" if phase == "TRAIN" else "validation"))
+    ndim = len(y_upscaling)
+
+    def mismatch():
+        return ValueError(
+            raw_target_mismatch_message(
+                files_and_shapes(X, ndim), files_and_shapes(Y, ndim), raw_path, target_path, y_upscaling, is_y_mask,
+                super_resolution, phase, patches=(len(X.sample_list), len(Y.sample_list)),
+            )
+        )
+
+    if not multiple_raw_images and (
+        len(X.sample_list) != len(Y.sample_list)
+        or mismatched_raw_target_files(files_and_shapes(X, ndim), files_and_shapes(Y, ndim), y_upscaling)
+    ):
+        raise mismatch()
+    for i, sample in enumerate(X.sample_list):
+        gt_id = sample.get_gt_associated_id()
+        xshape = sample.get_shape() or crop_shape[:-1]
+        yshape = Y.sample_list[gt_id if gt_id is not None else i].get_shape() or crop_shape[:-1]
+        expected = tuple(a * u for a, u in zip(xshape, y_upscaling))
+        if expected != tuple(yshape[:ndim]):
+            if not multiple_raw_images:
+                raise mismatch()
+            raise ValueError(
+                f"There is a mismatch between input image and its corresponding ground truth ({expected} vs "
+                f"{yshape}). Please check the images. Specifically, the sample that doesn't match is within "
+                f"the file: {X.dataset_info[sample.fid].path})"
+            )
+
+
+def _load_split(
+    phase: str,
+    path: str,
+    mask_path: Optional[str],
+    ov: Tuple[float, ...],
+    padding: Tuple[int, ...],
+    zarr_data_info: Optional[Dict],
+    preprocess_f: Optional[Callable],
+    preprocess_cfg: Optional[CN],
+    filters: Tuple[List, List, List],
+    norm_module: Dict,
+    crop_shape: Tuple[int, ...],
+    y_upscaling: Tuple[int, ...],
+    is_3d: bool,
+    reflect_to_complete_shape: bool,
+    convert_to_rgb: bool,
+    is_y_mask: bool,
+    super_resolution: bool,
+    multiple_raw_images: bool,
+    random_crops_in_DA: bool,
+    filter_by_entire_image: bool,
+    norm_before_filter: bool,
+    save_filtered_images: bool,
+    save_filtered_images_dir: Optional[str],
+    save_filtered_images_num: int,
+) -> Tuple[BiaPyDataset, Optional[BiaPyDataset], bool]:
+    """
+    Samples of the raw images and targets of ``phase`` ("TRAIN" or "VAL"), checked to match and filtered (see
+    :func:`load_and_prepare_train_data`), and whether they are read by chunks.
+    """
+    which = "training" if phase == "TRAIN" else "validation"
+    if preprocess_f and preprocess_cfg is None:
+        raise ValueError(f"'{phase.lower()}_preprocess_cfg' needs to be provided with '{phase.lower()}_preprocess_f'")
+    resize = bool(preprocess_f) and preprocess_cfg.RESIZE.ENABLE
+    common = dict(
+        ov=ov,
+        padding=padding,
+        norm_module=norm_module,
+        crop=not random_crops_in_DA,
+        is_3d=is_3d,
+        reflect_to_complete_shape=reflect_to_complete_shape,
+        convert_to_rgb=convert_to_rgb,
+        preprocess_f=preprocess_f if resize else None,
+        preprocess_cfg=preprocess_cfg if resize else None,
+    )
+    Y, using_zarr = None, False
+    if multiple_raw_images:
+        if not mask_path:
+            raise ValueError("Implementation error. Contact BiaPy team")
+        print(f"Gathering raw and label images for {which} data . . .")
+        X, Y = samples_from_image_list_multiple_raw_one_gt(data_path=path, gt_path=mask_path, crop_shape=crop_shape, **common)
+    else:
+        random_crops = random_crops_in_DA and phase == "TRAIN"
+        print(f"Gathering raw images for {which} data . . .")
+        X, using_zarr = _samples_from_folder(path, crop_shape, False, zarr_data_info, random_crops, **common)
+        if mask_path:
+            print(f"Gathering labels for {which} data . . .")
+            target_shape = tuple(a * u for a, u in zip(crop_shape[:-1], y_upscaling)) + crop_shape[-1:]
+            Y, _ = _samples_from_folder(mask_path, target_shape, True, zarr_data_info, random_crops, **common)
+
+    if mask_path and Y:
+        _check_raw_target_shapes(
+            X, Y, path, mask_path, crop_shape, y_upscaling, is_y_mask, super_resolution, multiple_raw_images, phase
+        )
+
+    if len(filters[0]) > 0:
+        filter_samples_by_properties(
+            X,
+            is_3d,
+            *filters,
+            y_dataset=Y,
+            crop_shape=crop_shape,
+            reflect_to_complete_shape=reflect_to_complete_shape,
+            filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
+            norm_before_filter=norm_before_filter,
+            norm_module=norm_module,
+            zarr_data_information=zarr_data_info if using_zarr else None,
+            save_filtered_images=save_filtered_images,
+            save_filtered_images_dir=(
+                os.path.join(save_filtered_images_dir, phase.lower())
+                if save_filtered_images and save_filtered_images_dir
+                else None
+            ),
+            save_filtered_images_num=save_filtered_images_num,
+        )
+    return X, Y, using_zarr
 
 
 def load_and_prepare_test_data(
@@ -1035,83 +733,41 @@ def load_and_prepare_test_data(
     if not os.path.exists(test_path):
         raise ValueError(f"{test_path} doesn't exist")
 
-    # A Neuroglancer precomputed volume (CloudVolume format) is itself a single chunked-data root
-    # (an 'info' file plus one subfolder per resolution), not a folder of separate samples, so it is
-    # treated as one sample directly instead of walking its internal layout like a folder of images.
+    zinfo = test_zarr_data_information
+    raw_in_zarr = zinfo["raw_path"] if zinfo else None
+    gt_in_zarr = zinfo["gt_path" if zinfo["use_gt_path"] else "raw_path"] if zinfo else None
+
+    def samples(paths, in_zarr):
+        info, samples = [], []
+        for i, path in enumerate(paths):
+            info.append(DatasetFile(path=path))
+            samples.append(DataSample(fid=i, coords=None))
+            if in_zarr is not None:
+                samples[-1].path_in_zarr = in_zarr
+        return info, samples
+
+    # A Neuroglancer precomputed volume is one image, not a folder of images
     if looks_like_precomputed(test_path):
         test_filenames = [os.path.basename(os.path.normpath(test_path))]
-        dataset_info.append(DatasetFile(path=test_path))
-        sample_data = DataSample(fid=0, coords=None)
-        if test_zarr_data_information:
-            sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
-        sample_list.append(sample_data)
-
+        dataset_info, sample_list = samples([test_path], raw_in_zarr)
         if test_mask_path:
             if not os.path.exists(test_mask_path):
                 raise ValueError(f"{test_mask_path} doesn't exist")
-            y_dataset_info = [DatasetFile(path=test_mask_path)]
-            y_sample_data = DataSample(fid=0, coords=None)
-            if test_zarr_data_information:
-                if test_zarr_data_information["use_gt_path"]:
-                    y_sample_data.path_in_zarr = test_zarr_data_information["gt_path"]
-                else:
-                    y_sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
-            y_sample_list = [y_sample_data]
+            y_dataset_info, y_sample_list = samples([test_mask_path], gt_in_zarr)
     else:
         ids = next(os_walk_clean(test_path))[2]
         if not multiple_raw_images or len(ids) > 0:
-            fids = next(os_walk_clean(test_path))[1]
-            if len(ids) == 0:
-                if len(fids) == 0:  # Trying Zarr
-                    raise ValueError("No images found in dir {}".format(test_path))
-                test_filenames = fids
-            else:
-                test_filenames = ids
-
-            for i in range(len(test_filenames)):
-                dataset_info.append(DatasetFile(path=os.path.join(test_path, test_filenames[i])))
-                sample_data = DataSample(fid=i, coords=None)
-                if test_zarr_data_information:
-                    sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
-                sample_list.append(sample_data)
-
-            # Extract a list of all gt images
+            test_filenames = list_data_files(test_path)[0]
+            dataset_info, sample_list = samples([os.path.join(test_path, f) for f in test_filenames], raw_in_zarr)
             if test_mask_path:
-                y_dataset_info = []
-                y_sample_list = []
-                if not os.path.exists(test_mask_path):
-                    raise ValueError(f"{test_mask_path} doesn't exist")
-
-                ids = next(os_walk_clean(test_mask_path))[2]
-                fids = next(os_walk_clean(test_mask_path))[1]
-                if len(ids) == 0:
-                    if len(fids) == 0:  # Trying Zarr
-                        raise ValueError("No images found in dir {}".format(test_mask_path))
-                    selected_ids = fids
-                else:
-                    selected_ids = ids
-
-                for i in range(len(selected_ids)):
-                    y_dataset_info.append(DatasetFile(path=os.path.join(test_mask_path, selected_ids[i])))
-                    sample_data = DataSample(fid=i, coords=None)
-                    if test_zarr_data_information:
-                        if test_zarr_data_information["use_gt_path"]:
-                            sample_data.path_in_zarr = test_zarr_data_information["gt_path"]
-                        else:
-                            sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
-                    y_sample_list.append(sample_data)
+                gt_files = list_data_files(test_mask_path)[0]
+                y_dataset_info, y_sample_list = samples([os.path.join(test_mask_path, f) for f in gt_files], gt_in_zarr)
         else:
             test_filenames = next(os_walk_clean(test_path))[1]
             if len(test_filenames) == 0:
                 raise ValueError("No folders found in dir {}".format(test_path))
 
-            # Extract a list of all gt images first (keyed by folder name) so each raw folder
-            # below can look up the list position of its own study's GT. Raw and GT samples
-            # can't be paired by walk order or by position: os_walk_clean's order over
-            # 'test_path' and 'test_mask_path' is not guaranteed to match, and in practice each
-            # raw folder holds a different number of images (e.g. a z-stack) than its single-
-            # image GT counterpart, so a naive positional pairing silently associates a raw
-            # sample with an unrelated study's GT (only the first study lines up by luck).
+            # Each raw folder holds several images and its GT folder one: they are paired by folder name
             gt_folder_to_ypos: Dict[str, int] = {}
             if test_mask_path:
                 y_dataset_info = []
@@ -1127,10 +783,6 @@ def load_and_prepare_test_data(
                     gt_folder_to_ypos[folder] = len(y_sample_list)
                     for i in range(len(ids)):
                         y_dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                        # Same fix as above: use the cumulative index into 'y_dataset_info', not the
-                        # per-folder local 'i' (which, since each GT folder holds exactly one file,
-                        # would otherwise stay 0 forever and make every sample point at the first
-                        # study's ground truth).
                         y_sample_list.append(DataSample(fid=len(y_dataset_info) - 1, coords=None))
 
             for folder in test_filenames:
@@ -1149,12 +801,6 @@ def load_and_prepare_test_data(
                     gt_pos = gt_folder_to_ypos[folder]
                 for i in range(len(ids)):
                     dataset_info.append(DatasetFile(path=os.path.join(sample_path, ids[i])))
-                    # 'fid' indexes into 'dataset_info', which grows across all folders, so it must
-                    # be the cumulative index (len(dataset_info) - 1), not the per-folder local 'i' -
-                    # otherwise every folder after the first points its samples at the wrong file.
-                    # 'gt_associated_id' links this raw sample to its own study's GT (looked up by
-                    # folder name above), since raw and GT samples are not in 1:1 positional
-                    # correspondence here.
                     sample_list.append(
                         DataSample(fid=len(dataset_info) - 1, coords=None, gt_associated_id=gt_pos)
                     )
@@ -1373,15 +1019,7 @@ def load_data_from_dir(data_path: str, is_3d: bool = False) -> List[NDArray]:
         raise ValueError(f"{data_path} folder does not exist")
     print(f"Loading images from {data_path} . . .")
 
-    ids = next(os_walk_clean(data_path))[2]
-    fids = next(os_walk_clean(data_path))[1]
-    if len(ids) == 0:
-        if len(fids) == 0:  # Trying Zarr
-            raise ValueError("No images found in dir {}".format(data_path))
-        else:
-            list_of_images = fids
-    else:
-        list_of_images = ids
+    list_of_images = list_data_files(data_path)[0]
 
     all_images = []
     for id_ in tqdm(list_of_images, total=len(list_of_images)):
@@ -1841,8 +1479,7 @@ def samples_from_image_list(
     crop_funct = crop_3D_data_with_overlap if is_3d else crop_data_with_overlap
     sample_list = []
     dataset_info = []
-    channel_expected = -1
-    data_range_expected = -1
+    expected = None
     local_indices = _rank_local_indices(len(list_of_data))
     for i in tqdm(local_indices, total=len(local_indices), disable=not is_main_process()):
         # Read image
@@ -1861,38 +1498,14 @@ def samples_from_image_list(
         if crop_shape[-1] == 3 and convert_to_rgb and img.shape[-1] != 3:
             img = np.repeat(img, 3, axis=-1)
 
-        # Channel check within dataset images
-        if channel_expected == -1:
-            channel_expected = img.shape[-1]
-        if img.shape[-1] != channel_expected:
-            raise ValueError(
-                f"All images need to have the same number of channels and represent same information to "
-                "ensure the deep learning model can be trained correctly. However, the current image (with "
-                f"{channel_expected} channels) appears to have a different number of channels than the first image"
-                f"(with {img.shape[-1]} channels) in the folder. Current image: {img_path}"
-            )
-
-        # Channel check compared with crop_shape
-        if not is_mask:
-            if crop_shape[-1] != img.shape[-1]:
-                raise ValueError(
-                    "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1])
-                )
-
-        # Data range check
-        if not is_mask:
-            if data_range_expected == -1:
-                data_range_expected = (data_range(img), img.dtype)
-            drange = data_range(img)
-            if not data_range_matches(
-                data_range_expected, drange, img.dtype, strict=norm_depends_on_data_range(norm_module)
-            ):
-                raise ValueError(
-                    f"All images must be within the same data range. However, the current image (with a "
-                    f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {data_range_expected[0]}) in the folder. Current image: {img_path}"
-                )
+        expected = check_image_consistency(
+            img_path,
+            img.shape[-1],
+            expected,
+            patch_channels=None if is_mask else crop_shape[-1],
+            drange=None if is_mask else (data_range(img), img.dtype),
+            strict=norm_depends_on_data_range(norm_module),
+        )
 
         original_data_shape = img.shape
         crop_coords = None
@@ -1996,7 +1609,7 @@ def samples_from_zarr(
     # Extract a list of all training samples within the Zarr
     sample_list = []
     dataset_info = []
-    channel_expected = -1
+    expected = None
     ome_images = {}
     for i in range(len(list_of_data)):
         sample_path = os.path.join(data_path, list_of_data[i])
@@ -2022,24 +1635,9 @@ def samples_from_zarr(
         else:
             channel = 1
 
-        # Channel check within dataset images
-        if channel_expected == -1:
-            channel_expected = channel
-        if channel != channel_expected:
-            raise ValueError(
-                f"All images need to have the same number of channels and represent same information to "
-                "ensure the deep learning model can be trained correctly. However, the current image (with "
-                f"{channel_expected} channels) appears to have a different number of channels than the first image"
-                f"(with {channel} channels) in the folder. Current image: {sample_path}"
-            )
-
-        # Channel check compared with crop_shape
-        if not is_mask:
-            if crop_shape[-1] != channel:
-                raise ValueError(
-                    "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(crop_shape[-1], channel)
-                )
+        expected = check_image_consistency(
+            sample_path, channel, expected, patch_channels=None if is_mask else crop_shape[-1]
+        )
 
         if random_crops:
             dataset_info.append(
@@ -2218,10 +1816,7 @@ def samples_from_image_list_multiple_raw_one_gt(
     if len(data_gt_path) == 0:
         raise ValueError("No image folder found in dir {}".format(data_gt_path))
 
-    gt_sample_channel_expected = -1
-    gt_sample_data_range_expected = -1
-    raw_sample_channel_expected = -1
-    raw_sample_data_range_expected = -1
+    gt_expected, raw_expected = None, None
     cont = 0
 
     # Balance ranks by number of raw images per id (a plain contiguous split can leave one rank
@@ -2260,40 +1855,14 @@ def samples_from_image_list_multiple_raw_one_gt(
         if crop_shape[-1] == 3 and convert_to_rgb and gt_sample.shape[-1] != 3:
             gt_sample = np.repeat(gt_sample, 3, axis=-1)
 
-        # Channel check within dataset images
-        if gt_sample_channel_expected == -1:
-            gt_sample_channel_expected = gt_sample.shape[-1]
-        if gt_sample.shape[-1] != gt_sample_channel_expected:
-            raise ValueError(
-                f"All images need to have the same number of channels and represent same information to "
-                "ensure the deep learning model can be trained correctly. However, the current image (with "
-                f"{gt_sample_channel_expected} channels) appears to have a different number of channels than the first image"
-                f"(with {gt_sample.shape[-1]} channels) in the folder. Current image: {gt_sample_path}"
-            )
-
-        # Channel check compared with crop_shape
-        if crop_shape:
-            if crop_shape[-1] != gt_sample.shape[-1]:
-                raise ValueError(
-                    "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(crop_shape[-1], gt_sample.shape[-1])
-                )
-
-        # Data range check
-        if gt_sample_data_range_expected == -1:
-            gt_sample_data_range_expected = (data_range(gt_sample), gt_sample.dtype)
-        drange = data_range(gt_sample)
-        if not data_range_matches(
-            gt_sample_data_range_expected,
-            drange,
-            gt_sample.dtype,
+        gt_expected = check_image_consistency(
+            gt_sample_path,
+            gt_sample.shape[-1],
+            gt_expected,
+            patch_channels=crop_shape[-1] if crop_shape else None,
+            drange=(data_range(gt_sample), gt_sample.dtype),
             strict=norm_depends_on_data_range(norm_module.get("target_norm_override") or norm_module),
-        ):
-            raise ValueError(
-                f"All images must be within the same data range. However, the current image (with a "
-                f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                f"of {gt_sample_data_range_expected[0]}) in the folder. Current image: {gt_sample_path}"
-            )
+        )
 
         # Extract all raw images for the current gt sample
         associated_raw_image_dir = os.path.join(data_path, id_)
@@ -2360,37 +1929,14 @@ def samples_from_image_list_multiple_raw_one_gt(
             if crop_shape[-1] == 3 and convert_to_rgb and raw_sample.shape[-1] != 3:
                 raw_sample = np.repeat(raw_sample, 3, axis=-1)
 
-            # Channel check within dataset images
-            if raw_sample_channel_expected == -1:
-                raw_sample_channel_expected = raw_sample.shape[-1]
-            if raw_sample.shape[-1] != raw_sample_channel_expected:
-                raise ValueError(
-                    f"All images need to have the same number of channels and represent same information to "
-                    "ensure the deep learning model can be trained correctly. However, the current image (with "
-                    f"{raw_sample_channel_expected} channels) appears to have a different number of channels than the first image"
-                    f"(with {raw_sample.shape[-1]} channels) in the folder. Current image: {raw_sample_path}"
-                )
-
-            # Channel check compared with crop_shape
-            if crop_shape:
-                if crop_shape[-1] != raw_sample.shape[-1]:
-                    raise ValueError(
-                        "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(crop_shape[-1], raw_sample.shape[-1])
-                    )
-
-            # Data range check
-            if raw_sample_data_range_expected == -1:
-                raw_sample_data_range_expected = (data_range(raw_sample), raw_sample.dtype)
-            drange = data_range(raw_sample)
-            if not data_range_matches(
-                raw_sample_data_range_expected, drange, raw_sample.dtype, strict=norm_depends_on_data_range(norm_module)
-            ):
-                raise ValueError(
-                    f"All images must be within the same data range. However, the current image (with a "
-                    f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {raw_sample_data_range_expected[0]}) in the folder. Current image: {raw_sample_path}"
-                )
+            raw_expected = check_image_consistency(
+                raw_sample_path,
+                raw_sample.shape[-1],
+                raw_expected,
+                patch_channels=crop_shape[-1] if crop_shape else None,
+                drange=(data_range(raw_sample), raw_sample.dtype),
+                strict=norm_depends_on_data_range(norm_module),
+            )
 
             original_data_shape = raw_sample.shape
             crop_coords = None
@@ -2561,8 +2107,7 @@ def samples_from_class_list(
         if len(ids) == 0:
             raise ValueError("There are no images in class {}".format(class_folder))
 
-        channel_expected = -1
-        data_range_expected = -1
+        expected = None
         for j, id_ in enumerate(ids):
             # Read image
             img_path = os.path.join(class_folder, id_)
@@ -2574,36 +2119,14 @@ def samples_from_class_list(
             if crop_shape and crop_shape[-1] == 3 and convert_to_rgb and img.shape[-1] != 3:
                 img = np.repeat(img, 3, axis=-1)
 
-            # Channel check within dataset images
-            if channel_expected == -1:
-                channel_expected = img.shape[-1]
-            if img.shape[-1] != channel_expected:
-                raise ValueError(
-                    f"All images need to have the same number of channels and represent same information to "
-                    "ensure the deep learning model can be trained correctly. However, the current image (with "
-                    f"{channel_expected} channels) appears to have a different number of channels than the first image"
-                    f"(with {img.shape[-1]} channels) in the folder. Current image: {img_path}"
-                )
-
-            # Channel check compared with crop_shape
-            if crop_shape and crop_shape[-1] != img.shape[-1]:
-                raise ValueError(
-                    "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1])
-                )
-
-            # Data range check
-            if data_range_expected == -1:
-                data_range_expected = (data_range(img), img.dtype)
-            drange = data_range(img)
-            if not data_range_matches(
-                data_range_expected, drange, img.dtype, strict=norm_depends_on_data_range(norm_module)
-            ):
-                raise ValueError(
-                    f"All images must be within the same data range. However, the current image (with a "
-                    f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                    f"of {data_range_expected[0]}) in the folder. Current image: {img_path}"
-                )
+            expected = check_image_consistency(
+                img_path,
+                img.shape[-1],
+                expected,
+                patch_channels=crop_shape[-1] if crop_shape else None,
+                drange=(data_range(img), img.dtype),
+                strict=norm_depends_on_data_range(norm_module),
+            )
 
             img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
             dataset_file = DatasetFile(
@@ -3301,8 +2824,7 @@ def load_images_to_dataset(
     if preprocess_f and preprocess_cfg == None:
         raise ValueError("The preprocessing configuration ('preprocess_cfg') is missing.")
 
-    channel_expected = -1
-    data_range_expected = -1
+    expected = None
     img_path = ""
     file = None
     for sample in tqdm(dataset.sample_list, total=len(dataset.sample_list), disable=not is_main_process()):
@@ -3322,8 +2844,7 @@ def load_images_to_dataset(
                     )
             data, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
-            # Axes of the Zarr/H5 data, which is not loaded in memory (the rest is read as (z, )y, x, c). Disable
-            # channel checking if they have no channel
+            # Zarr/H5 data is not loaded, its axes tell where the channels are (if it has them)
             axes = None
             if zarr_data_information:
                 key = "input_img_axes" if not is_mask else "input_mask_axes"
@@ -3331,48 +2852,14 @@ def load_images_to_dataset(
             channels = data.shape[axes.index("C")] if axes and "C" in axes else data.shape[-1]
             check_channel = axes is None or "C" in axes
 
-            # Channel check within dataset images
-            if channel_expected == -1:
-                channel_expected = channels if not convert_to_rgb else 3
-            if check_channel and not convert_to_rgb and channels != channel_expected:
-                raise ValueError(
-                    f"All images need to have the same number of channels and represent same information to "
-                    "ensure the deep learning model can be trained correctly. However, the current image (with "
-                    f"{channel_expected} channels) appears to have a different number of channels than the first image"
-                    f" (with {channels} channels) in the folder. Current image: {img_path}"
-                )
-
-            # Channel check compared with crop_shape
-            if check_channel and crop_shape and not is_mask:
-                channel_to_compare = channels if not convert_to_rgb else 3
-                if crop_shape[-1] != channel_to_compare:
-                    if not convert_to_rgb:
-                        raise ValueError(
-                            "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                            "Please, check the channels of the images!".format(crop_shape[-1], channel_to_compare)
-                        )
-                    else:
-                        raise ValueError(
-                            "Channel of the patch size given {} does not correspond with the loaded image {} "
-                            "(remember that 'DATA.FORCE_RGB' was selected). Please, check the channels of the "
-                            "images!".format(crop_shape[-1], channel_to_compare)
-                        )
-            # Data range check
-            if not is_mask and isinstance(data, np.ndarray):
-                if data_range_expected == -1:
-                    data_range_expected = (data_range(data), data.dtype)
-                drange = data_range(data)
-                if not data_range_matches(
-                    data_range_expected,
-                    drange,
-                    data.dtype,
-                    strict=norm_depends_on_data_range(dataset.dataset_info[sample.fid].norm_info),
-                ):
-                    raise ValueError(
-                        f"All images must be within the same data range. However, the current image (with a "
-                        f"range of {drange}) appears to be in a different data range than the first image (with a range "
-                        f"of {data_range_expected[0]}) in the folder. Current image: {img_path}"
-                    )
+            expected = check_image_consistency(
+                img_path,
+                3 if convert_to_rgb else channels if check_channel else 1,
+                expected,
+                patch_channels=crop_shape[-1] if check_channel and crop_shape and not is_mask else None,
+                drange=(data_range(data), data.dtype) if not is_mask and isinstance(data, np.ndarray) else None,
+                strict=norm_depends_on_data_range(dataset.dataset_info[sample.fid].norm_info),
+            )
 
             # Apply preprocessing
             if preprocess_f:
@@ -3706,12 +3193,7 @@ def load_img_data(
         Only returned when ``load_meta=True``. Metadata dict as described in
         :func:`imread`, or ``None`` when reading Zarr/HDF5 files.
     """
-    if looks_like_hdf5(path) or looks_like_precomputed(path) or any(path.endswith(x) for x in [".zarr", "n5", ".n5"]):
-        from biapy.data.data_3D_manipulation import (
-            read_chunked_data,
-            read_chunked_nested_data,
-        )
-
+    if is_chunked(path):
         if data_within_zarr_path:
             file, data = read_chunked_nested_data(path, data_within_zarr_path)
         else:
@@ -3772,15 +3254,12 @@ def read_img_as_ndarray(
         elif looks_like_hdf5(path):
             img = h5py.File(path, "r")
             img = np.array(img[list(img)[0]])
-        elif path.endswith(".zarr") or path.endswith(".n5") or path.endswith("n5"):
-            from biapy.data.data_3D_manipulation import read_chunked_data
-
+        elif path.endswith((".zarr", "n5")):
             _, img = read_chunked_data(path)
             img = np.array(img)
             ome_info = image_info(path)
             if ome_info is not None:
-                # The axes are known: no need to guess them from the shape
-                img = to_biapy_order(img, ome_info.axes, is_3d)
+                img = to_biapy_shape(img, is_3d, path, ome_axes=ome_info.axes)
                 if load_meta:
                     return img, {"ome_zarr": ome_info}
                 return img
@@ -3789,17 +3268,25 @@ def read_img_as_ndarray(
                 img, axes_position, metadata = imread(path, load_meta=True)
             else:
                 img, axes_position = imread(path)
-        img = np.squeeze(img)
-
-        if not is_3d:
-            img = ensure_2d_shape(img, path)
-        else:
-            img = ensure_3d_shape(img, path, data_axes_order=axes_position)
+        img = to_biapy_shape(img, is_3d, path, axes_order=axes_position)
     except Exception as e:
         raise ValueError(f"Error reading image from path {path}. Error message: {e}")
     if load_meta:
         return img, metadata
     return img
+
+
+def to_biapy_shape(
+    img: NDArray, is_3d: bool, path: str, ome_axes: Optional[str] = None, axes_order: Optional[str] = None
+) -> NDArray:
+    """
+    Image in BiaPy's axes order, ``(z, )y, x, c``: from its OME-Zarr axes (``ome_axes``) if known, otherwise guessed
+    from its shape (helped by ``axes_order``, the axes stored in a TIFF).
+    """
+    if ome_axes is not None:
+        return to_biapy_order(img, ome_axes, is_3d)
+    img = np.squeeze(img)
+    return ensure_3d_shape(img, path, data_axes_order=axes_order) if is_3d else ensure_2d_shape(img, path)
 
 
 def imread(
@@ -4259,6 +3746,87 @@ def data_range_matches(expected: Tuple[str, Any], drange: str, dtype: Any, stric
         return False
     return np.issubdtype(dtype, np.integer) and np.dtype(dtype) == np.dtype(expected_dtype)
 
+def list_data_files(folder: str) -> Tuple[List[str], bool]:
+    """
+    Images of a folder as BiaPy reads them: its files or, if it has none, its subfolders (Zarr/N5 images).
+
+    Returns
+    -------
+    names : list of str
+        Names of the images, in the order BiaPy pairs them.
+
+    chunked : bool
+        Whether they are read by chunks (Zarr/N5/H5).
+    """
+    try:
+        _, dirs, files = next(os_walk_clean(folder))
+    except FileNotFoundError:
+        raise ValueError(f"The folder does not exist: {folder}")
+    if files:
+        return files, looks_like_hdf5(files[0])
+    if not dirs:
+        raise ValueError(f"No images found in dir {folder}")
+    return dirs, True
+
+
+def check_image_consistency(
+    path: str,
+    channels: int,
+    expected: Optional[Tuple[int, Optional[Tuple[str, Any]]]] = None,
+    patch_channels: Optional[int] = None,
+    drange: Optional[Tuple[str, Any]] = None,
+    strict: bool = True,
+) -> Tuple[int, Optional[Tuple[str, Any]]]:
+    """
+    Check an image of a folder against the first one: same number of channels, the patch's (``patch_channels``) and,
+    if ``drange`` is given, a consistent data range (see :func:`data_range_matches`).
+
+    Parameters
+    ----------
+    path : str
+        Path of the image, for the error messages.
+
+    channels : int
+        Channels of the image.
+
+    expected : tuple, optional
+        What this function returned for the first image of the folder (None for the first image).
+
+    patch_channels : int, optional
+        Channels of the patch size.
+
+    drange : tuple of str and dtype, optional
+        ``(data_range(img), img.dtype)`` of the image.
+
+    strict : bool, optional
+        Whether the value-based data ranges must match exactly (see :func:`norm_depends_on_data_range`).
+
+    Returns
+    -------
+    expected : tuple
+        ``(channels, drange)`` of the first image, to check the next ones.
+    """
+    if expected is None:
+        expected = (channels, drange)
+    if channels != expected[0]:
+        raise ValueError(
+            "All images need to have the same number of channels and represent same information to ensure the deep "
+            f"learning model can be trained correctly. However, this image has {channels} channels and the first "
+            f"image of the folder {expected[0]}: {path}"
+        )
+    if patch_channels is not None and patch_channels != channels:
+        raise ValueError(
+            f"Channel of the patch size given {patch_channels} does not correspond with the loaded image {channels}. "
+            f"Please, check the channels of the images! Image: {path}"
+        )
+    if drange is not None and expected[1] is not None and not data_range_matches(expected[1], *drange, strict=strict):
+        raise ValueError(
+            f"All images must be within the same data range. However, this image is in {drange[0]} and the first image "
+            f"of the folder in {expected[1][0]}: {path}"
+        )
+    return expected
+
+
 def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     """
     Check whether the data masks have the correct labels inspection a few random images of the given path.
@@ -4283,7 +3851,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     m = ""
     error = False
     for i in tqdm(range(len(ids))):
-        if looks_like_hdf5(ids[i]) or any(ids[i].endswith(x) for x in [".zarr", "n5", ".n5"]):
+        if is_chunked(ids[i]):
             raise ValueError(
                 "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )
@@ -4345,7 +3913,7 @@ def check_binary_masks(
     error = False
     m = ""
     for i in tqdm(range(len(ids))):
-        if looks_like_hdf5(ids[i]) or any(ids[i].endswith(x) for x in [".zarr", "n5", ".n5"]):
+        if is_chunked(ids[i]):
             raise ValueError(
                 "Binary check with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )
@@ -4367,20 +3935,34 @@ def check_binary_masks(
         raise ValueError(m)
 
 
+def upscaling_of(raw_shape: Tuple[int, ...], target_shape: Tuple[int, ...]) -> Optional[Tuple[int, ...]]:
+    """Whole factor by which ``target_shape`` is ``raw_shape`` upscaled (spatial shapes), or None if it is not one."""
+    ratios = [t / r for r, t in zip(raw_shape, target_shape)]
+    return tuple(int(v) for v in ratios) if all(v >= 1 and v % 1 == 0 for v in ratios) else None
+
+
+def files_and_shapes(dataset: BiaPyDataset, ndim: int) -> List[Tuple[str, Optional[Tuple[int, ...]]]]:
+    """``(file name, spatial shape)`` of the files of a dataset; the shape is None when unknown (Zarr/H5)."""
+    out = []
+    for f in dataset.dataset_info:
+        known = not f.is_parallel() and f.shape is not None and len(f.shape) == ndim + 1
+        out.append((os.path.basename(f.path), tuple(int(v) for v in f.shape[:ndim]) if known else None))
+    return out
+
+
 def mismatched_raw_target_files(
-    X_data: BiaPyDataset, Y_data: BiaPyDataset, y_upscaling: Tuple[int, ...]
-) -> List[Tuple[DatasetFile, DatasetFile, Tuple[int, ...], Tuple[int, ...], Tuple[int, ...]]]:
+    raw: List[Tuple[str, Optional[Tuple[int, ...]]]],
+    targets: List[Tuple[str, Optional[Tuple[int, ...]]]],
+    y_upscaling: Tuple[int, ...],
+) -> List[Tuple[str, str, Tuple[int, ...], Tuple[int, ...], Tuple[int, ...]]]:
     """
-    Pairs of raw image and target files (paired by order) whose shapes don't match: the target's must be the raw
-    image's times ``y_upscaling``. Files of unknown shape (Zarr/H5) are not compared.
+    Raw image and target pairs (paired by order) whose shapes don't match: the target's must be the raw image's times
+    ``y_upscaling``.
 
     Parameters
     ----------
-    X_data : BiaPyDataset
-        Raw images.
-
-    Y_data : BiaPyDataset
-        Their targets.
+    raw, targets : list of tuple
+        ``(name, spatial shape)`` of the raw images and of their targets. Shapes that are None are not compared.
 
     y_upscaling : tuple of int
         Upscaling of the targets (``PROBLEM.SUPER_RESOLUTION.UPSCALING``; ones in the other workflows).
@@ -4388,58 +3970,42 @@ def mismatched_raw_target_files(
     Returns
     -------
     pairs : list of tuple
-        Raw image file, target file, their spatial shapes and the target shape expected.
+        Raw image name, target name, their shapes and the target shape expected.
     """
-    ndim = len(y_upscaling)
-
-    def spatial(info):
-        # Shape of the whole image, channels last (Zarr/H5 data may have its axes in any order)
-        shape = info.shape
-        if info.is_parallel() or shape is None or len(shape) != ndim + 1:
-            return None
-        return tuple(int(v) for v in shape[:ndim])
-
     pairs = []
-    if len(X_data.dataset_info) != len(Y_data.dataset_info):
-        return pairs
-    for xf, yf in zip(X_data.dataset_info, Y_data.dataset_info):
-        xs, ys = spatial(xf), spatial(yf)
+    for (xn, xs), (yn, ys) in zip(raw, targets):
         if xs is None or ys is None:
             continue
-        expected = tuple(a * int(u) for a, u in zip(xs, y_upscaling))
-        if ys != expected:
-            pairs.append((xf, yf, xs, ys, expected))
+        expected = tuple(int(a) * int(u) for a, u in zip(xs, y_upscaling))
+        if tuple(ys) != expected:
+            pairs.append((xn, yn, tuple(xs), tuple(ys), expected))
     return pairs
 
 
 def raw_target_mismatch_message(
-    X_data: BiaPyDataset,
-    Y_data: BiaPyDataset,
+    raw: List[Tuple[str, Optional[Tuple[int, ...]]]],
+    targets: List[Tuple[str, Optional[Tuple[int, ...]]]],
     raw_path: str,
     target_path: str,
     y_upscaling: Tuple[int, ...],
     is_y_mask: bool = False,
     super_resolution: bool = False,
     phase: str = "TRAIN",
+    patches: Optional[Tuple[int, int]] = None,
     max_pairs: int = 5,
 ) -> str:
     """
-    Build the error message for raw images and targets that do not match: the pairs of files whose shapes don't
-    (the target's must be the raw image's times ``y_upscaling``), a hint of why and the folders read.
+    Error message for raw images and targets that don't match: the pairs whose shapes don't, a hint of why and the
+    folders read.
 
     Parameters
     ----------
-    X_data : BiaPyDataset
-        Raw images.
+    raw, targets : list of tuple
+        ``(name, spatial shape)`` of the raw images and of their targets, paired by order (see
+        :func:`files_and_shapes`).
 
-    Y_data : BiaPyDataset
-        Their targets, paired by file order.
-
-    raw_path : str
-        Folder of the raw images.
-
-    target_path : str
-        Folder of the targets.
+    raw_path, target_path : str
+        Folders of the raw images and of the targets.
 
     y_upscaling : tuple of int
         Upscaling of the targets (``PROBLEM.SUPER_RESOLUTION.UPSCALING``; ones in the other workflows).
@@ -4451,7 +4017,10 @@ def raw_target_mismatch_message(
         Whether it is the super-resolution workflow.
 
     phase : str, optional
-        "TRAIN" or "VAL": the data the variables of the folders are for.
+        "TRAIN", "VAL" or "TEST".
+
+    patches : tuple of int, optional
+        Patches extracted from the raw images and from the targets, reported when no shapes are known.
 
     max_pairs : int, optional
         Maximum number of pairs listed.
@@ -4461,8 +4030,8 @@ def raw_target_mismatch_message(
     message : str
         Error message.
     """
-    which = "training" if phase == "TRAIN" else "validation"
-    targets, target = ("masks", "mask") if is_y_mask else ("targets", "target")
+    which = {"TRAIN": "training", "VAL": "validation", "TEST": "test"}[phase]
+    targets_word, target = ("masks", "mask") if is_y_mask else ("targets", "target")
     upscaling = tuple(int(u) for u in y_upscaling)
 
     def size(shape):
@@ -4479,45 +4048,44 @@ def raw_target_mismatch_message(
     check = "Check that both folders hold the right images: they are paired by file order."
 
     hint = check
-    if len(X_data.dataset_info) != len(Y_data.dataset_info):
+    pairs = mismatched_raw_target_files(raw, targets, upscaling)
+    if len(raw) != len(targets):
         problem = (
-            f"There are {len(X_data.dataset_info)} {which} raw images but {len(Y_data.dataset_info)} {targets}: each "
-            f"raw image needs its {target}."
+            f"There are {len(raw)} {which} raw images but {len(targets)} {targets_word}: each raw image needs its "
+            f"{target}."
         )
-    else:
-        pairs = mismatched_raw_target_files(X_data, Y_data, upscaling)
-        if pairs:
-            listed = [
-                f"    - raw image '{os.path.basename(xf.path)}': {size(xs)}  ->  its {target} "
-                f"'{os.path.basename(yf.path)}': {size(ys)}, but {size(expected)} was expected"
-                for xf, yf, xs, ys, expected in pairs[:max_pairs]
-            ]
-            if len(pairs) > max_pairs:
-                listed.append(f"    ... and {len(pairs) - max_pairs} more")
-            problem = f"{rule}, but these {which} pairs do not match:\n" + "\n".join(listed)
-        else:
-            # Shapes unknown: only the number of patches extracted is known
-            problem = (
-                f"{rule}, but {len(X_data.sample_list)} patches were extracted from the {which} raw images and "
-                f"{len(Y_data.sample_list)} from their {targets}."
-            )
-        ratios = [tuple(b / a for a, b in zip(xs, ys)) for _, _, xs, ys, _ in pairs]
-        if super_resolution and ratios:
-            if any(r < 1 for rs in ratios for r in rs):
+    elif pairs:
+        listed = [
+            f"    - raw image '{xn}': {size(xs)}  ->  its {target} '{yn}': {size(ys)}, but {size(expected)} was expected"
+            for xn, yn, xs, ys, expected in pairs[:max_pairs]
+        ]
+        if len(pairs) > max_pairs:
+            listed.append(f"    ... and {len(pairs) - max_pairs} more")
+        problem = f"{rule}, but these {which} pairs do not match:\n" + "\n".join(listed)
+        if super_resolution:
+            factors = {upscaling_of(xs, ys) for _, _, xs, ys, _ in pairs}
+            if any(t < s for _, _, xs, ys, _ in pairs for s, t in zip(xs, ys)):
                 hint = (
                     "Some targets are smaller than their raw images: in super-resolution the raw images are the "
                     "low-resolution ones and the targets the high-resolution ones. Are both folders swapped?"
                 )
-            elif len(set(ratios)) == 1 and all(r % 1 == 0 for r in ratios[0]):
-                factor = tuple(int(r) for r in ratios[0])
+            elif len(factors) == 1 and None not in factors:
+                factor = factors.pop()
                 hint = (
                     f"All these targets are their raw images upscaled by {factor}: if that is right, set "
                     f"PROBLEM.SUPER_RESOLUTION.UPSCALING to {factor}. If not, {check[0].lower() + check[1:]}"
                 )
+    elif patches:
+        problem = (
+            f"{rule}, but {patches[0]} patches were extracted from the {which} raw images and {patches[1]} from "
+            f"their {targets_word}."
+        )
+    else:
+        problem = f"{rule}."
     return (
-        f"The {which} raw images and their {targets} do not match.\n{problem}\n{hint}\nFolders read:\n"
+        f"The {which} raw images and their {targets_word} do not match.\n{problem}\n{hint}\nFolders read:\n"
         f"    - raw images (DATA.{phase}.PATH): {raw_path}\n"
-        f"    - {targets} (DATA.{phase}.GT_PATH): {target_path}"
+        f"    - {targets_word} (DATA.{phase}.GT_PATH): {target_path}"
     )
 
 

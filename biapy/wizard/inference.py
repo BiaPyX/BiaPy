@@ -1,30 +1,12 @@
 """
-Inference that fits in the computer's memory (RAM). From the shape of the largest test image, the peak memory of
-BiaPy's test phase is estimated for its ways of predicting an image, and the first one that fits is used:
-
-* whole images (BiaPy's default): the image, all its patches and their predictions (float32), merged into the full
-  prediction, then post-processed (e.g. the watershed of instance segmentation) in memory.
-* TEST.REDUCE_MEMORY: patches cropped and merged separately and float16 predictions. Less memory, but slower.
-* TEST.BY_CHUNKS (3D semantic segmentation, instance segmentation and detection): the patches are predicted and
-  written to a Zarr file one by one and post-processed tile by tile, so memory hardly grows with the image. Only the
-  image itself is held in memory when it is not an H5/Zarr file (those are read by chunks too).
-
-Whole (and with REDUCE_MEMORY), BiaPy holds the image, all its patches and their predictions, so the memory grows with
-the voxels of the image, its channels, the channels the model predicts and how much the patches overlap: ``f``, the
-voxels of all the patches over the voxels of the image (with DATA.TEST.PADDING of 1/6 of the patch, as the Wizard
-sets, ``f`` is about 3.3-5.6; without padding about 1.3). Measured (peak PSS of BiaPy and its workers) with 3D
-semantic (1 output channel) and instance (F, C) models on volumes of 124 to 495 MiB, 1 and 3 input channels, with and
-without padding, batch size 1, the peak memory is, within 5% of every measurement::
+Test mode that fits in the RAM: whole images, TEST.REDUCE_MEMORY or TEST.BY_CHUNKS (3D semantic segmentation,
+instance segmentation and detection), the first whose estimated peak memory fits. With ``f`` the voxels of all the
+patches over the image's (3.3-5.6 with the wizard's padding), measured within 5%::
 
     whole:          1.3 GiB + voxels * (4 * f * (inputs + outputs) + 11 * outputs + 7 * inputs) bytes
     REDUCE_MEMORY:  1.6 GiB + voxels * (1.5 * f * (inputs + outputs) + 12 * outputs + 8 * inputs) bytes
 
-(the first term: the patches and their predictions, float32 or float16; the others: the image and the full
-prediction). By chunks it took 1.6-2.4 GiB, plus the image when it is read whole.
-
-E.g. a 145x1364x1364 volume with 3 channels and an 18x160x160 patch (f = 3.75) needs about 33 GB to segment its
-instances whole and 22 GB with REDUCE_MEMORY, while 1-channel estimates said 13 GB (a 32 GB computer ran out of
-memory).
+By chunks: 1.6-2.4 GiB, plus the image when it is not Zarr/H5.
 """
 import os
 
@@ -45,7 +27,6 @@ SAVE_TIF_BYTES_PER_VOXEL = 16
 # Share of the RAM BiaPy may take: Fiji, the system and other programs need the rest
 RAM_FRACTION = 0.6
 CHUNK_WORKFLOWS = ("SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION")
-CHUNKED_FORMATS = (".h5", ".hdf5", ".hdf", ".zarr", ".n5")
 
 
 def host_ram_bytes():
@@ -76,37 +57,6 @@ def host_ram_bytes():
     except Exception:
         pass
     return None
-
-
-def output_channels(cfg):
-    """Channels the model predicts per voxel (approximate for the channels that expand, e.g. rays)."""
-    workflow = cfg["PROBLEM"]["TYPE"]
-    n_classes = int(cfg["DATA"].get("N_CLASSES", 2))
-    classes = n_classes if n_classes > 2 else 0
-    if workflow == "SEMANTIC_SEG":
-        return max(1, classes)
-    if workflow == "DETECTION":
-        return 1 + classes
-    if workflow == "INSTANCE_SEG":
-        inst = cfg["PROBLEM"].get("INSTANCE_SEG", {})
-        opts = (inst.get("DATA_CHANNELS_EXTRA_OPTS") or [{}])[0]
-        ndim = 3 if cfg["PROBLEM"]["NDIM"] == "3D" else 2
-        n = 0
-        for ch in inst.get("DATA_CHANNELS", ["F", "C"]):
-            if ch in ("I", "We"):
-                continue
-            if ch == "R":
-                n += opts.get("R", {}).get("nrays", 32 if ndim == 2 else 96)
-            elif ch in ("E_offset", "E_sigma"):
-                n += ndim
-            elif ch == "Db" and opts.get("Db", {}).get("val_type") == "discretize":
-                n += 11
-            elif ch == "A":
-                n += ndim
-            else:
-                n += 1
-        return max(1, n) + classes
-    return 1
 
 
 def patch_factor(shape, patch, padding, overlap=None):
@@ -148,13 +98,6 @@ def _tuple(value, n, default=0):
     return tuple(value)[:n]
 
 
-def test_files(folder):
-    try:
-        return [f for f in os.listdir(folder) if not f.startswith(".")]
-    except OSError:
-        return []
-
-
 def plan_inference(cfg, sample_info, lines, ram_bytes=None):
     """
     Sets how the test images are predicted so that BiaPy fits in the RAM (see the module's description), and adds
@@ -181,7 +124,7 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
     in_ch = int(fp.get("channels") or 1)
     itemsize = max([np.dtype(d).itemsize for d in fp.get("dtype") or ["uint8"]] or [1])
     image_bytes = voxels * itemsize * in_ch
-    out_ch = output_channels(cfg)
+    out_ch = common.output_channels(cfg)
     # How much the patches overlap: the patch size and test padding are set by now (planned, from the checkpoint...)
     n = len(shape)
     patch = _tuple(cfg["DATA"].get("PATCH_SIZE"), n, default=None)
@@ -196,8 +139,11 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
     def gib(b):
         return "{:.1f} GB".format(b / 1e9)
 
-    files = test_files(cfg["DATA"].get("TEST", {}).get("PATH", ""))
-    chunked_files = bool(files) and all(f.lower().endswith(CHUNKED_FORMATS) for f in files)
+    from biapy.wizard.data_check import folder_images
+    from biapy.data.data_3D_manipulation import is_chunked
+
+    files = folder_images(cfg["DATA"].get("TEST", {}).get("PATH", ""))
+    chunked_files = bool(files) and all(is_chunked(f) for f in files)
     # Tracking links the instances of the frames held in memory, so it can't run by chunks
     tracking = cfg["PROBLEM"].get("TRACKING", {}).get("ENABLE", False)
     chunks_possible = cfg["PROBLEM"]["NDIM"] == "3D" and workflow in CHUNK_WORKFLOWS and not tracking
@@ -225,8 +171,7 @@ def plan_inference(cfg, sample_info, lines, ram_bytes=None):
     by_chunks = test.setdefault("BY_CHUNKS", {})
     by_chunks["ENABLE"] = True
     by_chunks.setdefault("WORKFLOW_PROCESS", {})["TYPE"] = "chunk_by_chunk"
-    # The result is a Zarr file; a TIF too (the front-ends show TIFs) if it fits: read whole to write it, which took
-    # 16 bytes per voxel more (instances of a 248 MiB volume: 6.0 GiB instead of 1.9)
+    # A TIF too (the front-ends show TIFs) if it fits: writing it reads the result whole
     by_chunks["SAVE_OUT_TIF"] = bool(chunks + voxels * SAVE_TIF_BYTES_PER_VOXEL <= budget)
     # Images that can't be read by chunks (e.g. TIF) are read whole, in (Z, Y, X, C) order
     if files and not chunked_files:

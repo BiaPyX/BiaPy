@@ -1679,6 +1679,11 @@ def looks_like_precomputed(path: str) -> bool:
     return isinstance(info, dict) and (info.get("@type") == "neuroglancer_multiscale_volume" or "scales" in info)
 
 
+def is_chunked(path: str) -> bool:
+    """Whether BiaPy reads the image by chunks: HDF5, Zarr, N5 or a Neuroglancer precomputed volume."""
+    return looks_like_hdf5(path) or path.endswith((".zarr", "n5")) or looks_like_precomputed(path)
+
+
 class CloudVolumeArray:
     """
     Array-like adapter that exposes a local Neuroglancer precomputed volume, read through

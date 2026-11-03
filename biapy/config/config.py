@@ -666,8 +666,9 @@ class Config:
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = 1
         # To use a custom data loader to load a random image from each image sample folder. The data needs to be structured
         # in an special way, that is, instead of having images in the training/val folder a folder for each sample is expected,
-        # where in each of those different versions of the same data sample will be placed. Visit the following tutorial
-        # for a real use case and a more detailed description:
+        # where in each of those different versions of the same data sample will be placed. The validation data can't be
+        # extracted from the training data, so 'DATA.VAL.FROM_TRAIN' must be False and 'DATA.VAL.PATH' and
+        # 'DATA.VAL.GT_PATH' set. Visit the following tutorial for a real use case and a more detailed description:
         #   - https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html
         _C.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER = False
         # Draw training samples balanced across groups (e.g. studies) read from the raw file names

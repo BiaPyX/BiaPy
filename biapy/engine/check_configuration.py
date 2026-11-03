@@ -2280,6 +2280,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in image to image workflow")
         if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
+            if cfg.TRAIN.ENABLE and cfg.DATA.VAL.FROM_TRAIN:
+                raise ValueError(
+                    "'DATA.VAL.FROM_TRAIN' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' "
+                    "is enabled: set it to False and give the validation data in 'DATA.VAL.PATH' and 'DATA.VAL.GT_PATH'"
+                )
             if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE:
                 raise ValueError(
                     "'DATA.TRAIN.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too"

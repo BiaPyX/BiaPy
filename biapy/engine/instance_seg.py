@@ -42,6 +42,7 @@ from biapy.data.post_processing.polygon_nms import stardist_instances_from_predi
 from biapy.data.post_processing.gradient_tracking import cellpose_flows_to_instances, omnipose_flows_to_instances
 from biapy.data.pre_processing import (
     affinity_channel_names,
+    instance_channel_names,
     affinity_offsets_from_opts,
     create_instance_channels,
     labels_into_channels,
@@ -280,189 +281,69 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             self.separated_class_channel = True
             self.head_activations = ["ce_sigmoid", "ce_sigmoid", "ce_softmax", "ce_softmax", "ce_softmax"]
         """
-        dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-        if self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO != []:
-            set_model_output_channels = False
-            # CHANNELS_PER_HEAD_INFO groups the DATA_CHANNELS (logical channels) into output heads: each entry
-            # is the number of DATA_CHANNELS assigned to a head, so it sums to the number of DATA_CHANNELS (see
-            # check_configuration). A single DATA_CHANNEL may expand into several physical output channels
-            # (e.g. "Db" discretized into 11 bins, "A" into its affinities, "R" into its rays, "E_*" into its
-            # dimensions), so the physical output-channel count per head (model_output_channels) is computed
-            # here by expanding each DATA_CHANNEL into its sub-channels and accumulating them onto its head.
-            channels_per_head = list(self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO)
-            self.model_output_channels = [0] * len(channels_per_head)
-            self.model_output_channel_info = [""] * len(channels_per_head)
-
-            if any(c <= 0 for c in channels_per_head):
+        inst = self.cfg.PROBLEM.INSTANCE_SEG
+        dst = inst.DATA_CHANNELS_EXTRA_OPTS[0]
+        outputs = instance_channel_names(inst.DATA_CHANNELS, dst, self.dims)
+        # CHANNELS_PER_HEAD_INFO: output channels of each head, filled in order with whole DATA_CHANNELS
+        channels_per_head = list(inst.CHANNELS_PER_HEAD_INFO) or [len(outputs)]
+        if any(c <= 0 for c in channels_per_head):
+            raise ValueError(
+                f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has a non-positive entry "
+                f"({channels_per_head}); every head must output at least one channel."
+            )
+        head_ends = np.cumsum(channels_per_head)
+        self.model_output_channels = [0] * len(channels_per_head)
+        self.model_output_channel_info = [[] for _ in channels_per_head]
+        for channel in dict.fromkeys(c for c, _ in outputs):
+            names = [n for c, n in outputs if c == channel]
+            start = sum(self.model_output_channels)
+            if start >= head_ends[-1]:
                 raise ValueError(
-                    f"'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' has a non-positive entry "
-                    f"({channels_per_head}); every head must output at least one channel."
+                    f"Output-channel index {start} (while mapping '{channel}') exceeds the total output channels "
+                    f"declared in CHANNELS_PER_HEAD_INFO ({head_ends[-1]}). Make sure CHANNELS_PER_HEAD_INFO sums to "
+                    f"the number of output channels (a DATA_CHANNEL may expand into several, e.g. E_offset/E_sigma -> "
+                    f"{self.dims} each, E_seediness -> 1, 'R' -> nrays, discretized 'Db' -> 11)."
                 )
+            h = int(np.searchsorted(head_ends, start, side="right"))
+            self.model_output_channels[h] += len(names)
+            self.model_output_channel_info[h] += names
+        if any(c == 0 for c in self.model_output_channels):
+            raise ValueError(
+                f"CHANNELS_PER_HEAD_INFO={channels_per_head} produced an empty output head: the output channels "
+                f"routed per head are {self.model_output_channels} for DATA_CHANNELS={list(inst.DATA_CHANNELS)}. Each "
+                f"entry of CHANNELS_PER_HEAD_INFO must equal the number of output channels of the DATA_CHANNELS "
+                f"assigned to that head (E_offset/E_sigma -> {self.dims} each, E_seediness -> 1, 'R' -> nrays, "
+                f"discretized 'Db' -> 11). For a standard EmbedSeg setup use CHANNELS_PER_HEAD_INFO=[{2 * self.dims}, 1]."
+            )
+        self.model_output_channel_info = ["+".join(names) for names in self.model_output_channel_info]
 
-            # Cumulative PHYSICAL output-channel boundaries. CHANNELS_PER_HEAD_INFO counts the physical
-            # output channels assigned to each head (e.g. StarDist [1, 32] = 1 prob + 32 rays; EmbedSeg
-            # [4, 1] = 2 offsets + 2 sigmas in the first head, 1 seediness in the second). We therefore
-            # route each DATA_CHANNEL by the running count of physical channels already emitted, NOT by
-            # the logical DATA_CHANNEL index -- the latter mis-routes any channel that follows an
-            # expanding channel (E_*, R, discretized Db, A) within the same head, which would leave a
-            # later head empty and crash the model build with a "weight of size [0, ...]" conv error.
-            head_boundaries = []
-            cumulative = 0
-            for h in channels_per_head:
-                cumulative += h
-                head_boundaries.append(cumulative)
-
-            def _head_for(physical_ch, channel_label):
-                h = next((k for k, b in enumerate(head_boundaries) if physical_ch < b), None)
-                if h is None:
-                    total = head_boundaries[-1] if head_boundaries else 0
-                    raise ValueError(
-                        f"Output-channel index {physical_ch} (while mapping '{channel_label}') exceeds the "
-                        f"total output channels declared in CHANNELS_PER_HEAD_INFO ({total}). Make sure "
-                        f"CHANNELS_PER_HEAD_INFO sums to the number of physical output channels (a DATA_CHANNEL "
-                        f"may expand into several, e.g. E_offset/E_sigma -> {self.dims} each, E_seediness -> 1, "
-                        f"'R' -> nrays, discretized 'Db' -> 11)."
-                    )
-                return h
-
-            for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                if channel in ["I", "We"]:
-                    # Virtual channels: "I" is used by the generator to regenerate the flows and dropped before
-                    # the batch reaches the model; "We" is an extra weight map. Neither is predicted, so they
-                    # consume no output channel and map to no head (consistent with the activations loop below).
-                    continue
-                # A DATA_CHANNEL maps to a single head; route it by where its first physical channel falls
-                # and check afterwards that all of its physical sub-channels landed in that one head.
-                head_start = sum(self.model_output_channels)
-                h = _head_for(head_start, channel)
-                if channel == "A":
-                    for name in affinity_channel_names(dst.get("A", {})):
-                        self.model_output_channel_info[h] += "+" + name
-                        self.model_output_channels[h] += 1
-                elif channel == "R":
-                    for j in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
-                        self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
-                        self.model_output_channels[h] += 1
-                elif channel in ["E_offset", "E_sigma"]:
-                    for j in range(self.dims):
-                        self.model_output_channel_info[h] += "+" + channel + "_{}".format(j)
-                        self.model_output_channels[h] += 1
-                elif channel == "Db":
-                    if dst.get(channel, {}).get("val_type", "norm") == "discretize":
-                        for j in range(11):  # Default 10 bins + background
-                            self.model_output_channel_info[h] += "+" + channel + "_bin{}".format(j)
-                            self.model_output_channels[h] += 1
-                    else:
-                        self.model_output_channel_info[h] += "+" + channel
-                        self.model_output_channels[h] += 1
-                else:
-                    self.model_output_channel_info[h] += "+" + channel
-                    self.model_output_channels[h] += 1
-
-            # A head that ends up with 0 channels means CHANNELS_PER_HEAD_INFO mis-routed the channels
-            # (e.g. an earlier head declared more channels than its DATA_CHANNELS actually produce, so a
-            # later channel was absorbed into it). Catch it here with a clear message instead of letting
-            # the model build fail deep inside a conv with a cryptic "weight of size [0, ...]" error.
-            if any(c == 0 for c in self.model_output_channels):
-                raise ValueError(
-                    f"CHANNELS_PER_HEAD_INFO={channels_per_head} produced an empty output head: the physical "
-                    f"output channels routed per head are {self.model_output_channels} for "
-                    f"DATA_CHANNELS={list(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)}. Each entry of "
-                    f"CHANNELS_PER_HEAD_INFO must equal the number of physical output channels of the "
-                    f"DATA_CHANNELS assigned to that head (E_offset/E_sigma -> {self.dims} each, "
-                    f"E_seediness -> 1, 'R' -> nrays, discretized 'Db' -> 11). For a standard EmbedSeg setup "
-                    f"use CHANNELS_PER_HEAD_INFO=[{2 * self.dims}, 1]."
+        for i, channel in enumerate(inst.DATA_CHANNELS):
+            if channel in ["I", "We"]:
+                continue
+            opts = dst.get(channel, {})
+            regression = inst.DATA_CHANNELS_LOSSES[i] in ["mse", "l1", "mae"]
+            if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post", "F_cleft", "A"]:
+                act = "ce_sigmoid"
+            elif channel in ["Dc", "Dn", "Z", "V", "H"]:
+                act = "ce_sigmoid" if not regression or opts.get("act", "") == "sigmoid" else (
+                    "tanh" if opts.get("act", "") == "tanh" else "linear"
                 )
-        else:
-            self.model_output_channels = [0]
-            self.model_output_channel_info = [""]
-            set_model_output_channels = True
-        
-        for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
-                if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post", "F_cleft"]:
-                    self.head_activations.append("ce_sigmoid")
-                    if set_model_output_channels:
-                        self.model_output_channels[0] += 1
-                        self.model_output_channel_info[0] += "+" + channel
-                elif channel in ["Dc", "Dn", "Z", "V", "H"]:
-                    act = dst.get(channel, {}).get("act", "")
-                    if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or act == "sigmoid":
-                        self.head_activations.append("ce_sigmoid")
-                    elif act == "tanh":
-                        self.head_activations.append("tanh")
-                    else:
-                        self.head_activations.append("linear")
-                    if set_model_output_channels:
-                        self.model_output_channels[0] += 1
-                        self.model_output_channel_info[0] += "+" + channel
-                elif channel in ["Gv", "Gh", "Gz"]:
-                    self.head_activations.append("linear")
-                    if set_model_output_channels:
-                        self.model_output_channels[0] += 1
-                        self.model_output_channel_info[0] += "+" + channel
-                elif channel == "Db":
-                    val_type = dst.get(channel, {}).get("val_type", "norm")
-                    if val_type == "discretize":
-                        for i in range(11):  # Default 10 bins + background
-                            self.head_activations.append("ce_softmax")
-                            if set_model_output_channels:
-                                self.model_output_channels[0] += 1
-                                self.model_output_channel_info[0] += "+" + channel+"_bin{}".format(i)
-                    elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
-                        self.head_activations.append("ce_sigmoid")
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel
-                    else:
-                        self.head_activations.append("linear")
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel
-                elif channel == "D":
-                    self.head_activations.append(dst.get("D", {}).get("act", "tanh"))
-                    if set_model_output_channels:
-                        self.model_output_channels[0] += 1
-                        self.model_output_channel_info[0] += "+" + channel
-                elif channel == "A":
-                    for name in affinity_channel_names(dst.get("A", {})):
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + name
-                        self.head_activations.append("ce_sigmoid")
-                elif channel == "R":
-                    for i in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
-                        self.head_activations.append("linear")
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
-                elif channel == "E_offset":
-                    for i in range(self.dims):
-                        self.head_activations.append("tanh")
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
-                elif channel == "E_sigma":
-                    for i in range(self.dims):
-                        self.head_activations.append("linear")
-                        if set_model_output_channels:
-                            self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
-                elif channel == "E_seediness":
-                    self.head_activations.append("sigmoid")
-                    if set_model_output_channels:
-                        self.model_output_channels[0] += 1
-                        self.model_output_channel_info[0] += "+" + channel
-                elif channel == "We":
-                    continue
-                elif channel == "I":
-                    # Virtual channel: the generator uses it to regenerate the flows from the augmented
-                    # labels and drops it before the batch reaches the model, so it is never predicted.
-                    continue
+            elif channel == "Db":
+                if opts.get("val_type", "norm") == "discretize":
+                    act = "ce_softmax"
                 else:
-                    raise ValueError("Unknown channel: {}".format(channel))
-
-        for i in range(len(self.model_output_channel_info)):
-            self.model_output_channel_info[i] = self.model_output_channel_info[i].lstrip("+")
+                    act = "ce_sigmoid" if not regression or opts.get("act", "") == "sigmoid" else "linear"
+            elif channel == "D":
+                act = opts.get("act", "tanh")
+            elif channel in ["Gv", "Gh", "Gz", "R", "E_sigma"]:
+                act = "linear"
+            elif channel == "E_offset":
+                act = "tanh"
+            elif channel == "E_seediness":
+                act = "sigmoid"
+            else:
+                raise ValueError("Unknown channel: {}".format(channel))
+            self.head_activations += [act] * sum(1 for c, _ in outputs if c == channel)
 
         # Multi-head: instances + classification
         self.gt_channels_expected = len(self.head_activations)

@@ -1,18 +1,8 @@
 """
-Strategy for the detection workflow, from the fingerprints of the images and of the CSV files with the points.
-
-* Distances from the spacing of the points: BiaPy's training targets are disks around each point, and
-  detections closer than half the distance between the closest true neighbours are taken as duplicates.
-  With ``min_sep``, the 5th percentile of the distance from each point to its nearest one:
-
-  - points dilated with radius min_sep / 4 (clipped to [1, 5]), so the disks of neighbours never touch;
-  - duplicate removal radius, minimum distance between peaks and matching tolerance: min_sep / 2.
-
-  Distances are in XY pixels, with Z scaled by the voxel spacing (set as DATA.TEST.RESOLUTION).
-  This part is also applied without training (e.g. testing a pretrained model) if the test points were
-  analyzed.
-* Training: as for semantic segmentation (nnU-Net-like U-Net, patch and batch size, foreground
-  oversampling, no elastic deformations). BiaPy always uses cross-entropy for detection.
+Strategy for the detection workflow. Distances come from ``min_sep``, the 5th percentile of each point's distance to
+its nearest one (XY pixels, Z scaled by the voxel spacing): points dilated with radius min_sep / 4 (clipped to
+[1, 5]) and min_sep / 2 as duplicate removal radius, minimum distance between peaks and matching tolerance. Training
+is planned as in semantic segmentation.
 """
 import math
 

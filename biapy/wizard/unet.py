@@ -1,27 +1,12 @@
 """
-nnU-Net-like planning of BiaPy's U-Net ("unet" architecture) from the dataset fingerprint.
+nnU-Net v2-like planning of BiaPy's U-Net (its ExperimentPlanner, https://github.com/MIC-DKFZ/nnUNet). The patch
+starts at nnU-Net's size (256^3, 2048^2) with the aspect ratio of the voxel spacing, clipped to the median image shape;
+an axis is downsampled only while its spacing is under twice the finest one, with kernels 1 wide until then; the patch
+shrinks along its largest axis relative to the median shape until a batch of 2 fits; the batch is then the largest
+that fits, covering at most 5% of the dataset; feature maps start at 32 and double up to 320 (3D) or 512 (2D).
 
-Follows nnU-Net v2's ExperimentPlanner (https://github.com/MIC-DKFZ/nnUNet):
-
-* The patch starts as large as nnU-Net's (256^3 voxels in 3D, 2048^2 pixels in 2D) with the aspect ratio of
-  the voxel spacing, clipped to the median image shape.
-* The network topology follows the spacing: an axis is only downsampled while its (current) spacing is less
-  than twice the finest one and the feature maps are at least 8 voxels long along it, and its kernels are 1
-  wide (e.g. 1x3x3) until downsampling the other axes brings their spacing within a factor of 2. So
-  anisotropic stacks are first downsampled in XY only.
-* While the network does not fit in the GPU memory with the minimum batch size (2), the patch is shrunk along
-  the axis that is largest relative to the median image shape.
-* The batch size is then the largest that fits, but not covering more than 5% of the dataset per step, and
-  at least 2. So large patches are preferred over large batches (in 2D too: nnU-Net's reference batch size of
-  12 only sets the scale of its memory estimate, not the batch the patch must allow).
-* Feature maps start at 32 and double on every level, up to 320 (3D) or 512 (2D).
-
-Y and X can be downsampled differently (``MODEL.YX_DOWN`` takes ``[y, x]`` pairs), as nnU-Net does with the
-long axis of very elongated images. BiaPy differences taken into account: the Z kernels can only be 1 or 3
-wide (``MODEL.ISOTROPY``), and BiaPy trains in FP32 on the GPU it has, so the memory is estimated with a model fitted to measurements of BiaPy's U-Net (see
-estimate_vram_bytes()) instead of nnU-Net's reference values for its mixed-precision training on 8 GB, and
-the batch size is rounded down (not to the nearest) so the estimate is not exceeded. BiaPy does not resample
-the images to a common spacing either, so the median spacing and shape of the images are used as they are.
+Unlike nnU-Net: Z kernels are 1 or 3 wide (``MODEL.ISOTROPY``), the GPU memory comes from a model fitted to BiaPy's
+FP32 U-Net (estimate_vram_bytes()) and the images are not resampled to a common spacing.
 """
 import math
 
@@ -38,10 +23,7 @@ CONVS_PER_LEVEL = 2
 # for the spatial augmentations
 ANISOTROPY_THRESHOLD = 3
 
-# Memory model of a BiaPy U-Net training step in FP32, fitted to the peak memory PyTorch reserved with
-# several patch sizes, depths and batch sizes (2D and 3D, AdamW, CE+Dice loss) on an RTX 2080 Ti
-# (fits: 1.24 and 1.02 bytes per FP32 activation in 2D and 3D, rounded up so it errs on the safe side).
-# See tests/calibrate_unet_memory.py
+# GPU memory of a BiaPy U-Net training step in FP32, fitted (rounded up) with tests/calibrate_unet_memory.py
 VRAM_BYTES_PER_ACTIVATION = {2: 4.0 * 1.3, 3: 4.0 * 1.1}
 VRAM_BYTES_PER_PARAMETER = 16.0  # weights + gradients + 2 AdamW states
 VRAM_FIXED_BYTES = 0.1 * 1024**3

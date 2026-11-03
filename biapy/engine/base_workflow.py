@@ -90,8 +90,7 @@ from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
     order_dimensions,
-    looks_like_hdf5,
-    looks_like_precomputed,
+    is_chunked,
 )
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
@@ -1966,15 +1965,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Decide whether to infer by chunks or not
             discarded = False
-            _, file_extension = os.path.splitext(self.current_sample["X_filename"])
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 by_chunks = True
                 x_path = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
-                if (
-                    not looks_like_hdf5(self.current_sample["X_filename"])
-                    and file_extension not in [".zarr", ".n5"]
-                    and not looks_like_precomputed(x_path)
-                ):
+                if not is_chunked(x_path):
                     print(
                         "WARNING: You are not using an image format that can extract patches without loading it entirely into memory. "
                         "The image formats that support this are: '.hdf5', '.hdf', '.h5', '.zarr', '.n5' and Neuroglancer "

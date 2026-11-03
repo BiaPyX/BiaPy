@@ -11,8 +11,7 @@ FOREGROUND_OVERSAMPLING = 0.33
 # nnU-Net's training (nnUNetTrainer): 1000 epochs of 250 iterations (batches)
 NNUNET_EPOCHS = 1000
 NNUNET_ITERATIONS_PER_EPOCH = 250
-# A quick training (to check that everything works, or to show how BiaPy works): epochs of the same 250 iterations,
-# 2% of nnU-Net's. About 20 min in 2D and 35 min in 3D on an RTX 2080 Ti with the Wizard's plans (DSB2018, Lucchi++)
+# Quick training (to check that everything works): epochs of 250 iterations, 2% of nnU-Net's
 QUICK_EPOCHS = 20
 # Epochs without improvement of the validation loss before stopping (nnU-Net always trains all the epochs)
 PATIENCE_EPOCHS = 100
@@ -39,6 +38,28 @@ def not_plannable_reason(cfg):
     if cfg["MODEL"].get("SOURCE", "biapy") != "biapy" or cfg["MODEL"].get("LOAD_CHECKPOINT"):
         return "the model is pretrained, its architecture can't be changed"
     return None
+
+
+def output_channels(cfg):
+    """Channels the model predicts per voxel."""
+    problem = cfg["PROBLEM"]
+    n_classes = int(cfg["DATA"].get("N_CLASSES", 2))
+    classes = n_classes if n_classes > 2 else 0
+    if problem["TYPE"] == "SEMANTIC_SEG":
+        return max(1, classes)
+    if problem["TYPE"] == "DETECTION":
+        return 1 + classes
+    if problem["TYPE"] == "INSTANCE_SEG":
+        from biapy.data.pre_processing import instance_channel_names
+
+        inst = problem.get("INSTANCE_SEG", {})
+        channels = inst.get("DATA_CHANNELS", ["F", "C"])
+        if isinstance(channels, str):  # BiaPy-GUI's old format, e.g. "BC"
+            channels = ["F", "C"]
+        ndim = 3 if problem["NDIM"] == "3D" else 2
+        n = len(instance_channel_names(channels, (inst.get("DATA_CHANNELS_EXTRA_OPTS") or [{}])[0], ndim))
+        return max(1, n) + classes
+    return 1
 
 
 def fmt(v):
@@ -95,8 +116,7 @@ def train_fraction(cfg):
 def apply_unet_plan(cfg, raw_fp, spacing, out_channels, vram_bytes, vram_source, lines):
     """
     Plans the U-Net (unet.py) and writes it into ``cfg``: model, patch size, test padding, batch size and no
-    elastic deformations (nnU-Net v2 does not use them either; besides, BiaPy 3.7.1's can deadlock the data
-    loader workers with large patches). Returns the plan, or None if the images are too small for a U-Net.
+    elastic deformations (as nnU-Net v2). Returns the plan, or None if the images are too small for a U-Net.
     """
     ndim = len(spacing)
     plan = unet.plan_unet(

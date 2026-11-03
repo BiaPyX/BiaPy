@@ -1,8 +1,6 @@
 """
-Preview of the data selected in the wizard: a few raw images next to their targets, paired as BiaPy pairs them
-(by file order, or by name for the CSV files of detection), as small PNG images, and warnings about anything
-that looks wrong for the workflow (targets of another kind, raw and target folders swapped, shapes or names
-that do not match...).
+Preview of the data selected in the wizard: a few raw images next to their targets, paired as BiaPy pairs them, as PNG
+thumbnails, and warnings about anything that looks wrong for the workflow.
 """
 import base64
 import io
@@ -11,7 +9,7 @@ import re
 
 import numpy as np
 
-from biapy.wizard.data_check import list_files, preview_image
+from biapy.wizard.data_check import folder_images, preview_image
 from biapy.wizard.fingerprint import sample_indices
 
 
@@ -32,15 +30,6 @@ TARGET_KIND = {
     "SUPER_RESOLUTION": "high-resolution images",
     "IMAGE_TO_IMAGE": "target images",
 }
-
-
-def read_image(path, is_3d, data_path=""):
-    """
-    Image as BiaPy reads it, ``(y, x, c)`` or ``(z, y, x, c)``, and its shape. Large Zarr/H5 images are read on a
-    central block (see data_check.preview_image). ``data_path``: path of the image within a Zarr/H5 file.
-    """
-    img, shape = preview_image(path, is_3d, data_path)
-    return img, shape or img.shape
 
 
 ###############
@@ -66,7 +55,7 @@ def _resize(img, order):
 
 
 def _plane(img):
-    """2D view of an image read by read_image(): (y, x, c), the middle slice for 3D."""
+    """2D view of an image read by preview_image(): (y, x, c), the middle slice for 3D."""
     return img[img.shape[0] // 2] if img.ndim == 4 else img
 
 
@@ -213,37 +202,29 @@ def _check_image_targets(workflow, targets, warnings):
 
 
 def _check_shapes(workflow, shapes, warnings, notes):
-    bad, smaller, ratios = [], [], set()
-    for name, rs, ts in shapes:
-        if workflow == "SUPER_RESOLUTION":
-            r = tuple(t / s for s, t in zip(rs, ts))
-            if any(v < 1 for v in r):
-                smaller.append((name, rs, ts))
-            elif any(v % 1 for v in r):
-                bad.append((name, rs, ts))
-            else:
-                ratios.add(tuple(int(v) for v in r))
-        elif tuple(rs) != tuple(ts):
-            bad.append((name, rs, ts))
-    if smaller:
-        name, rs, ts = smaller[0]
+    """``shapes``: (raw name, raw shape, target shape) of each pair, spatial shapes."""
+    from biapy.data.data_manipulation import mismatched_raw_target_files, upscaling_of
+
+    raw = [(name, tuple(rs)) for name, rs, _ in shapes]
+    targets = [(name, tuple(ts)) for name, _, ts in shapes]
+    upscaling = (1,) * len(raw[0][1])
+    if workflow == "SUPER_RESOLUTION":
+        upscaling = upscaling_of(raw[0][1], targets[0][1]) or upscaling
+    bad = mismatched_raw_target_files(raw, targets, upscaling)
+    if not bad:
+        if upscaling != (1,) * len(upscaling):
+            notes.append("Upscaling between raw images and targets: x{}.".format("x".join(map(str, upscaling))))
+        return
+    name, _, rs, ts, expected = bad[0]
+    if workflow == "SUPER_RESOLUTION" and any(t < r for r, t in zip(rs, ts)):
         warnings.append(
             "The target of '{}' ({}) is smaller than its raw image ({}): in super-resolution the raw images are the "
             "low-resolution ones and the targets the high-resolution ones. Are the raw and target folders swapped?".format(
                 name, "x".join(map(str, ts)), "x".join(map(str, rs)))
         )
-    if bad:
-        name, rs, ts = bad[0]
-        what = "an integer upscaling of the raw image" if workflow == "SUPER_RESOLUTION" else "the size of the raw image"
-        warnings.append(
-            "The target of '{}' is {} but should be {} ({}).".format(
-                name, "x".join(map(str, ts)), what, "x".join(map(str, rs)))
-        )
-    if len(ratios) > 1:
-        warnings.append("The upscaling between raw images and targets is not always the same: {}.".format(
-            ", ".join("x".join(map(str, r)) for r in sorted(ratios))))
-    elif ratios:
-        notes.append("Upscaling between raw images and targets: x{}.".format("x".join(map(str, next(iter(ratios))))))
+    else:
+        warnings.append("The target of '{}' is {} but {} was expected.".format(
+            name, "x".join(map(str, ts)), "x".join(map(str, expected))))
 
 
 ###############
@@ -255,10 +236,10 @@ def _classification_preview(raw_folder, is_3d):
     classes = next(os_walk_clean(raw_folder))[1]
     samples, notes = [], []
     for c in classes[:ROWS]:
-        files = list_files(os.path.join(raw_folder, c))
+        files = folder_images(os.path.join(raw_folder, c))
         if not files:
             continue
-        img = read_image(os.path.join(raw_folder, c, files[0]), is_3d)[0]
+        img = preview_image(os.path.join(raw_folder, c, files[0]), is_3d)[0]
         samples.append({"raw_name": os.path.join(c, files[0]), "raw_png": _png(_resize(_intensity_rgb(_plane(img)), 1)),
                         "target_name": "class '{}'".format(c), "target_text": c})
     notes.append("{} classes: {}".format(len(classes), ", ".join(classes[:10]) + (" ..." if len(classes) > 10 else "")))
@@ -280,8 +261,8 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None, target_data_pat
     if workflow == "CLASSIFICATION" and raw_folder:
         return _classification_preview(raw_folder, is_3d)
     warnings, notes = [], []
-    raw_files = list_files(raw_folder) if raw_folder else []
-    tgt_files = list_files(target_folder) if target_folder else []
+    raw_files = folder_images(raw_folder) if raw_folder else []
+    tgt_files = folder_images(target_folder) if target_folder else []
     if raw_files and tgt_files and len(raw_files) != len(tgt_files):
         warnings.append(
             "There are {} raw images but {} targets: each raw image needs its target.".format(len(raw_files), len(tgt_files))
@@ -311,7 +292,7 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None, target_data_pat
     cropped = False  # large Zarr/H5 images read on a central block
     for i in idx:
         raw_name, tgt_name = pairs[i]
-        raw, raw_shape = read_image(os.path.join(raw_folder, raw_name), is_3d) if raw_name else (None, None)
+        raw, raw_shape = preview_image(os.path.join(raw_folder, raw_name), is_3d) if raw_name else (None, None)
         raw_cropped = raw is not None and tuple(raw.shape) != tuple(raw_shape)
         cropped |= raw_cropped
         s = {}
@@ -340,7 +321,7 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None, target_data_pat
                 if len(pts) == 0:
                     notes.append("'{}' has no points.".format(tgt_name))
             else:
-                tgt, tgt_shape = read_image(path, is_3d, target_data_path)
+                tgt, tgt_shape = preview_image(path, is_3d, target_data_path)
                 cropped |= tuple(tgt.shape) != tuple(tgt_shape)
                 targets.append(tgt)
                 if raw is not None:

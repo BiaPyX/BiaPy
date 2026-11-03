@@ -6,7 +6,7 @@ CTC: one label mask per frame, whose labels are the track labels, plus a text fi
 """
 
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import tifffile
@@ -14,7 +14,7 @@ import zarr
 from numpy.typing import NDArray
 from skimage.util import map_array
 
-from biapy.data.data_manipulation import read_img_as_ndarray
+from biapy.data.data_manipulation import list_data_files, read_img_as_ndarray
 from biapy.utils.misc import os_walk_clean
 
 GEFF_VERSION = "1.3"
@@ -54,12 +54,50 @@ def write_ctc_tracks(out_dir: str, masks: NDArray, tracks: NDArray, label_maps: 
     return tracked
 
 
+def frames_problem(names: List[str], shapes: Optional[List[Tuple[int, ...]]] = None) -> Optional[str]:
+    """
+    Why images can't be the frames of one time-lapse, or None: tracking needs one single-channel image per frame, all
+    of the same size.
+
+    Parameters
+    ----------
+    names : list of str
+        Names of the images, in time order.
+
+    shapes : list of tuple of int, optional
+        Their shapes, channels last. Without them only their number is checked.
+
+    Returns
+    -------
+    problem : str or None
+        What is wrong.
+    """
+    hint = "If it is a stack, save its frames as separate images, e.g. in Fiji with File > Save As > Image Sequence..."
+    if len(names) < 2:
+        return f"Tracking needs one image per frame of the time-lapse, but there is only {len(names)}. {hint}"
+    if shapes is None:
+        return None
+    if shapes[0][-1] != 1:
+        return f"Tracking needs single-channel frames, but '{names[0]}' has {shapes[0][-1]} channels. {hint}"
+    for name, shape in zip(names, shapes):
+        if tuple(shape) != tuple(shapes[0]):
+            return (
+                f"All the frames of the time-lapse must have the same size, but '{names[0]}' is "
+                f"{'x'.join(map(str, shapes[0][:-1]))} and '{name}' {'x'.join(map(str, shape[:-1]))}."
+            )
+    return None
+
+
 def read_frames(folder: str, is_3d: bool) -> NDArray:
     """``(T, (Z), Y, X)`` single-channel images of a folder, one per frame in name order (``.txt`` files skipped)."""
-    files = [f for f in next(os_walk_clean(folder))[2] if not f.endswith(".txt")]
-    frames = [read_img_as_ndarray(os.path.join(folder, f), is_3d=is_3d) for f in files]
-    if any(f.shape[-1] != 1 for f in frames):
-        raise ValueError(f"Tracking needs single-channel frames: {folder}")
+    names, chunked = list_data_files(folder)
+    if chunked:
+        raise ValueError(f"Tracking reads each frame whole: the frames must be images such as TIFF, not Zarr/H5: {folder}")
+    names = [f for f in names if not f.endswith(".txt")]
+    frames = [read_img_as_ndarray(os.path.join(folder, f), is_3d=is_3d) for f in names]
+    problem = frames_problem(names, [f.shape for f in frames])
+    if problem:
+        raise ValueError(f"{problem} Folder: {folder}")
     return np.stack([f[..., 0] for f in frames])
 
 

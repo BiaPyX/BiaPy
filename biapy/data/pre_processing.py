@@ -1127,6 +1127,48 @@ def affinity_channel_names(a_opts: Dict) -> List[str]:
     return names
 
 
+def instance_channel_names(data_channels: Sequence[str], extra_opts: Dict, ndim: int) -> List[Tuple[str, str]]:
+    """
+    Output channels a model predicts for ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``, in order.
+
+    'A' expands into its affinities, 'R' into its rays, 'E_offset' and 'E_sigma' into one channel per axis and a
+    discretized 'Db' into 11 bins (10 + background). 'I' and 'We' are not predicted.
+
+    Parameters
+    ----------
+    data_channels : list of str
+        ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``.
+
+    extra_opts : dict
+        ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]``.
+
+    ndim : int
+        Spatial dimensions, 2 or 3.
+
+    Returns
+    -------
+    list of tuple
+        ``(data channel, output channel name)`` of each output channel, e.g. ``[("F", "F"), ("R", "R_0"), ...]``.
+    """
+    out = []
+    for ch in data_channels:
+        opts = extra_opts.get(ch, {})
+        if ch in ("I", "We"):
+            continue
+        if ch == "A":
+            names = affinity_channel_names(opts)
+        elif ch == "R":
+            names = ["R_{}".format(j) for j in range(opts.get("nrays", 32 if ndim == 2 else 96))]
+        elif ch in ("E_offset", "E_sigma"):
+            names = ["{}_{}".format(ch, j) for j in range(ndim)]
+        elif ch == "Db" and opts.get("val_type", "norm") == "discretize":
+            names = ["Db_bin{}".format(j) for j in range(11)]
+        else:
+            names = [ch]
+        out += [(ch, n) for n in names]
+    return out
+
+
 def _affinity_lists_to_voxels(
     a_opts: Dict, ndim: int, resolution: Optional[List[int | float]]
 ) -> Tuple[List[int], ...]:

@@ -1,11 +1,7 @@
 """
-Configuration adapted to the data, in the spirit of nnU-Net (https://github.com/MIC-DKFZ/nnUNet): with the
-fingerprints of the data checked in the wizard (:mod:`biapy.wizard.fingerprint`), the workflow's strategy sets
-the model, patch size, batch size, loss and sampling (:mod:`biapy.wizard.unet` and one module per workflow).
-
-The wizard does not ask for the size of the objects to choose the patch size: workflows without a strategy yet,
-or when it can't be applied (e.g. a pretrained model), get the patch size of the checkpoint to load or a fixed
-one.
+Configuration adapted to the data, as nnU-Net: each workflow's strategy sets the model, patch and batch size, loss and
+sampling from the fingerprints (:mod:`biapy.wizard.fingerprint`). Without a strategy, or with a pretrained model, the
+patch size comes from the checkpoint or is fixed.
 """
 import ast
 import importlib

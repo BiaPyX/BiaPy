@@ -1,19 +1,8 @@
 """
-Dataset fingerprint: properties of the data of a folder that the wizard's strategies use to configure BiaPy, in
-the spirit of nnU-Net's dataset fingerprint (https://github.com/MIC-DKFZ/nnUNet).
-
-The fingerprints are accumulated while the folder is checked (:mod:`biapy.wizard.data_check`), which reads
-every file once with BiaPy's readers, so the data is not read again here:
-
-* raw images (:class:`ImagesFingerprint`): shapes, voxel size (from the image metadata) and intensities.
-* semantic masks (:class:`SemanticMasksFingerprint`): labels, how much of the data each class covers, the
-  foreground fraction of each image and the size of the objects of each class along each axis.
-* instance masks (:class:`InstanceMasksFingerprint`): number, size and shape of the instances (solidity,
-  elongation, thickness, branching, star-convexity) and how often they touch each other.
-* detection points (:class:`PointsFingerprint`): points per image and the distance from each point to its
-  nearest one.
-
-Detailed statistics are computed on up to :data:`MAX_FILES` files evenly spread over the folder.
+Dataset fingerprint, as nnU-Net's: properties of a folder's data the strategies use, gathered while the folder is
+checked (:mod:`biapy.wizard.data_check`). Raw images: shapes, voxel size and intensities. Semantic masks: labels,
+class coverage and object sizes. Instance masks: number, size and shape of the instances. Detection points: points per
+image and nearest-point distances. Detailed statistics use up to :data:`MAX_FILES` files.
 """
 import time
 
@@ -38,8 +27,7 @@ THIN = 0.25
 MAX_CROP_VOXELS = {2: 256**2, 3: 64**3}
 # Time for the detailed shape measures of a folder (sizes, foreground and touching use all analyzed images)
 SHAPE_TIME_BUDGET = 20.0
-# Nearest-neighbour displacements kept to plan detection (the distances depend on the voxel size, which is
-# known only when the raw images are analyzed)
+# Nearest-neighbour displacements kept for detection (their distances need the raw images' voxel size)
 MAX_NN_VECTORS = 5000
 
 

@@ -88,8 +88,7 @@ def set_default_config(cfg, sample_info):
     if cfg["TRAIN"]["ENABLE"]:
         cfg["TRAIN"]["EPOCHS"] = 150
         cfg["TRAIN"]["PATIENCE"] = 50
-        # Save the prediction of a few fixed samples after every epoch, so the front-ends can show how the model
-        # learns (TRAIN.SAVE_TRAIN_PREDS_FREQ: every N epochs)
+        # Predictions of a few samples after each epoch, for the front-ends to show how the model learns
         cfg["TRAIN"]["SAVE_TRAIN_PREDS_FREQ"] = 1
         cfg["TRAIN"]["SAVE_TRAIN_PREDS_NUM_SAMPLES"] = 2
         cfg["TRAIN"]["OPTIMIZER"] = ["ADAMW"]  # one per group of parameters (a single group)
@@ -98,8 +97,7 @@ def set_default_config(cfg, sample_info):
         cfg["TRAIN"]["LR_SCHEDULER"]["NAME"] = "warmupcosine"
         cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [1.0e-5]
         cfg["TRAIN"]["LR_SCHEDULER"]["WARMUP_COSINE_DECAY_EPOCHS"] = 10
-        # BiaPy-GUI writes LOSS.CLASS_REBALANCE: True, which BiaPy >= 3.7 converts to this (the boolean form
-        # is deprecated): rebalance within the channels for instance segmentation and detection
+        # BiaPy-GUI's LOSS.CLASS_REBALANCE: True in BiaPy >= 3.7
         if cfg["PROBLEM"]["TYPE"] in ["INSTANCE_SEG", "DETECTION"]:
             cfg["PROBLEM"].setdefault(cfg["PROBLEM"]["TYPE"], {})["CLASS_REBALANCE_WITHIN_CHANNELS"] = True
 
@@ -176,7 +174,6 @@ def set_default_config(cfg, sample_info):
         cfg["MODEL"]["UPSAMPLE_LAYER"] = "upsampling"
         cfg["MODEL"]["DROPOUT_VALUES"] = [0, 0, 0]
         cfg["MODEL"]["ACTIVATION"] = "relu"
-        # (BiaPy-GUI also sets MODEL.LAST_ACTIVATION, removed from BiaPy's configuration)
         cfg["MODEL"]["NORMALIZATION"] = "bn"
     elif cfg["PROBLEM"]["TYPE"] == "SUPER_RESOLUTION":
         if cfg["DATA"]["PATCH_SIZE"][0] == -1:
@@ -203,8 +200,7 @@ def set_default_config(cfg, sample_info):
     return cfg
 
 
-# How long to train ("training_length" answer, not a BiaPy variable): "quick", to check that everything works or to
-# show how BiaPy works (e.g. in a workshop), or "full", as long as nnU-Net trains (see biapy.wizard.planning)
+# "training_length" answer: "quick", to check that everything works, or "full", as long as nnU-Net trains
 TRAINING_LENGTHS = ("quick", "full")
 
 
@@ -212,92 +208,39 @@ class WizardError(Exception):
     pass
 
 
-def _size(shape):
-    """Image size as "512x512" (ZxYxX in 3D), from its shape without channels."""
-    return "x".join(str(int(v)) for v in shape)
-
-
-def _factor(ratios):
-    """Upsampling factor as "x2", or "x(1, 2, 2)" when it differs per axis."""
-    ratios = ["{:g}".format(r) for r in ratios]
-    return "x" + ratios[0] if len(set(ratios)) == 1 else "x(" + ", ".join(ratios) + ")"
-
-
-def _check_target_shapes(workflow, phase, raw, targets, upscaling=None):
+def _check_targets(workflow, phase, dc, upscaling):
     """
-    Checks that each target has the shape of its raw image or, in super-resolution, the shape of the raw image
-    upsampled by an integer factor: the same factor for all the images, training and test.
-
-    Parameters
-    ----------
-    workflow : str
-        ``PROBLEM.TYPE``.
-    phase : str
-        "TRAIN" or "TEST".
-    raw, targets : tuple
-        Shapes of the raw images and of the targets (channels last) and the folder they are in.
-    upscaling : dict, optional
-        Super-resolution: the factor found so far (``factor``) and in which images (``found``).
-
-    Returns
-    -------
-    upscaling : dict or None
-        Super-resolution: the factor (``factor``, one per axis) and in which images it was found (``found``).
+    Raise WizardError if the targets checked for ``phase`` ("TRAIN"/"TEST") don't match their raw images as BiaPy
+    requires. Returns the super-resolution factor: ``upscaling`` or, if None, the first pair's.
     """
-    from biapy.wizard.data_check import list_files
+    from biapy.data.data_manipulation import list_data_files, mismatched_raw_target_files, raw_target_mismatch_message
 
-    which = "training" if phase == "TRAIN" else "test"
-    (raw_shapes, raw_folder), (target_shapes, target_folder) = raw, targets
-    raw_names, target_names = list_files(raw_folder or ""), list_files(target_folder or "")
+    def pairs(key):
+        prefix = "DATA.{}.{}".format(phase, key)
+        folder, n = dc[prefix + "_path"], dc[prefix]
+        shapes = [tuple(sh[:-1]) for sh in dc.get(prefix + "_path_shapes") or []]
+        if len(shapes) != n:  # e.g. the CSV files of detection
+            shapes = [None] * n
+        try:
+            names = list_data_files(folder)[0]
+        except ValueError:
+            names = []
+        if len(names) != len(shapes):  # the folder changed since it was checked
+            names = ["number {}".format(i + 1) for i in range(len(shapes))]
+        return folder, list(zip(names, shapes))
 
-    for i, (x, y) in enumerate(zip(raw_shapes, target_shapes)):
-        x, y = tuple(x[:-1]), tuple(y[:-1])
-        # File names, in the order the data check read them (if the folders have not changed since)
-        raw_name = raw_names[i] if len(raw_names) == len(raw_shapes) else "number {}".format(i + 1)
-        target_name = target_names[i] if len(target_names) == len(target_shapes) else "number {}".format(i + 1)
-
-        def pair():
-            return "\n    - raw image {}: {}  (in {})\n    - its target {}: {}  (in {})".format(
-                raw_name, _size(x), raw_folder, target_name, _size(y), target_folder
+    (raw_folder, raw), (target_folder, targets) = pairs("PATH"), pairs("GT_PATH")
+    super_resolution = workflow == "SUPER_RESOLUTION"
+    if super_resolution and upscaling is None and raw[0][1] and targets[0][1]:
+        upscaling = tuple(max(1, round(t / r)) for r, t in zip(raw[0][1], targets[0][1]))
+    factor = upscaling if super_resolution and upscaling else (1,) * len(raw[0][1] or (1, 1))
+    if len(raw) != len(targets) or mismatched_raw_target_files(raw, targets, factor):
+        raise WizardError(
+            raw_target_mismatch_message(
+                raw, targets, raw_folder, target_folder, factor, is_y_mask=workflow in ("SEMANTIC_SEG", "INSTANCE_SEG"),
+                super_resolution=super_resolution, phase=phase,
             )
-
-        if workflow != "SUPER_RESOLUTION":
-            if x != y:
-                raise WizardError(
-                    "Each {} target must have the same size as its raw image, but this pair does not:{}\n"
-                    "Check that both folders hold the right images (they are paired by file order).".format(which, pair())
-                )
-            continue
-
-        ratios = [b / a for a, b in zip(x, y)]
-        if any(r < 1 for r in ratios):
-            raise WizardError(
-                "In super-resolution the raw images are the low-resolution ones and their targets the high-resolution "
-                "ones (e.g. 512x512 raw images and 1024x1024 targets for a x2 upsampling), but the {} targets are smaller "
-                "than their raw images:{}\nCheck that the {} raw images folder holds the low-resolution images and the "
-                "target folder the high-resolution ones: they may be swapped.".format(which, pair(), which)
-            )
-        if any(r % 1 != 0 for r in ratios):
-            raise WizardError(
-                "In super-resolution each target must be its raw image upsampled by a whole factor (e.g. 512x512 raw "
-                "images and 1024x1024 targets for a x2 upsampling), but in this {} pair the target is {} larger:{}\n"
-                "Check that both folders hold the right images (they are paired by file order).".format(
-                    which, _factor(ratios), pair()
-                )
-            )
-        factor = tuple(int(r) for r in ratios)
-        if upscaling is None:
-            upscaling = {"factor": factor, "found": "the {} data (e.g. raw image {}: {}, its target: {})".format(
-                which, raw_name, _size(x), _size(y))}
-        elif factor != upscaling["factor"]:
-            raise WizardError(
-                "In super-resolution all the targets must be their raw images upsampled by the same factor, in the "
-                "training and the test data. It is {} in {}, but {} in this {} pair:{}\nCheck that "
-                "the {} raw images are the low-resolution ones and their targets the high-resolution ones.".format(
-                    _factor(upscaling["factor"]), upscaling["found"], _factor(factor), which, pair(),
-                    which,
-                )
-            )
+        )
     return upscaling
 
 
@@ -310,8 +253,7 @@ def build_config_from_answers(answers):
     biapy_cfg["data_constraints"] = dict(biapy_cfg.get("data_constraints", {}))
     sample_info = biapy_cfg.pop("sample_info", {})
 
-    # Instance representation chosen in the wizard (not a BiaPy variable): translated into BiaPy's channels.
-    # Only asked for models trained from scratch (an answer given before changing that may remain).
+    # Instance representation chosen in the wizard, only for models trained from scratch (the answer may remain)
     representation = biapy_cfg.pop("instance_representation", -1)
     biapy_cfg.pop("training_length", None)  # used when planning (build_config)
     if (
@@ -349,8 +291,7 @@ def build_config_from_answers(answers):
             biapy_cfg[key] = value
         del biapy_cfg["model_restrictions"]
     else:
-        # The wizard does not ask for the object size to choose the patch size: it is set after the configuration
-        # is built, from the data or the checkpoint to load (biapy.wizard.planning)
+        # Patch size: planned afterwards from the data or the checkpoint (biapy.wizard.planning)
         biapy_cfg["DATA.PATCH_SIZE"] = (-1, biapy_cfg["data_constraints"]["DATA.PATCH_SIZE_C"])
 
     if isinstance(biapy_cfg["DATA.PATCH_SIZE"], str):  # imposed by a model as a string
@@ -370,34 +311,14 @@ def build_config_from_answers(answers):
     upscaling = None  # super-resolution: the same in the training and test data
     for phase in ["TRAIN", "TEST"]:
         if biapy_cfg["{}.ENABLE".format(phase)] and "DATA.{}.GT_PATH".format(phase) in dc:
-            if dc["DATA.{}.GT_PATH".format(phase)] != dc["DATA.{}.PATH".format(phase)]:
-                raise WizardError(
-                    "Incompatibility found: the number of raw images and ground truth images do not match. Each raw image must have a "
-                    "ground truth image. Please check both directories:\n    - {} items found in {}\n    - {} items "
-                    "found in {}\n".format(
-                        dc["DATA.{}.PATH".format(phase)],
-                        dc["DATA.{}.PATH_path".format(phase)],
-                        dc["DATA.{}.GT_PATH".format(phase)],
-                        dc["DATA.{}.GT_PATH_path".format(phase)],
-                    )
-                )
-            x_key, y_key = "DATA.{}.PATH_path_shapes".format(phase), "DATA.{}.GT_PATH_path_shapes".format(phase)
-            if x_key in dc and y_key in dc:
-                upscaling = _check_target_shapes(
-                    biapy_cfg["PROBLEM.TYPE"],
-                    phase,
-                    (dc[x_key], dc.get("DATA.{}.PATH_path".format(phase))),
-                    (dc[y_key], dc.get("DATA.{}.GT_PATH_path".format(phase))),
-                    upscaling,
-                )
-                if biapy_cfg["PROBLEM.TYPE"] == "SUPER_RESOLUTION":
-                    biapy_cfg["PROBLEM.SUPER_RESOLUTION.UPSCALING"] = upscaling["factor"]
+            upscaling = _check_targets(biapy_cfg["PROBLEM.TYPE"], phase, dc, upscaling)
+            if biapy_cfg["PROBLEM.TYPE"] == "SUPER_RESOLUTION" and upscaling:
+                biapy_cfg["PROBLEM.SUPER_RESOLUTION.UPSCALING"] = upscaling
 
         for suffix in ["PATH_path_shapes", "GT_PATH_path_shapes", "PATH", "PATH_path", "GT_PATH", "GT_PATH_path"]:
             dc.pop("DATA.{}.{}".format(phase, suffix), None)
 
-    # Targets read from the raw images' Zarr files (e.g. the label images of OME-Zarr images): their variables are
-    # only written when used
+    # Variables of targets within the raw images' Zarr files, only when used
     for phase in ["TRAIN", "TEST"]:
         key = "DATA.{}.INPUT_ZARR_MULTIPLE_DATA".format(phase)
         if not dc.get(key, True):
@@ -414,15 +335,14 @@ def build_config_from_answers(answers):
     # Asked only for denoising, but it may remain answered after switching to another workflow
     if biapy_cfg.get("PROBLEM.TYPE") != "DENOISING":
         biapy_cfg.pop("PROBLEM.DENOISING.LOAD_GT_DATA", None)
-    # Tracking (asked for instance segmentation) links the instances in the test phase: a training-only job just
-    # trains the instance segmentation model
+    # Tracking is done in the test phase: a training-only job just trains the instance segmentation model
     if (
         biapy_cfg.get("PROBLEM.TRACKING.ENABLE") is True
         and biapy_cfg.get("PROBLEM.TYPE") == "INSTANCE_SEG"
         and biapy_cfg.get("TEST.ENABLE") is True
         and not biapy_cfg.get("TEST.ANALIZE_2D_IMGS_AS_3D_STACK")
     ):
-        # trackastra_general_2d is 2D only and the better choice there; trackastra_ctc works in 3D too
+        # trackastra_general_2d is 2D only
         biapy_cfg["PROBLEM.TRACKING.LINKER_MODEL"] = (
             "trackastra_ctc" if biapy_cfg["PROBLEM.NDIM"] == "3D" else "trackastra_general_2d"
         )
@@ -435,8 +355,7 @@ def build_config_from_answers(answers):
             create_dict_from_key(key, value, out_config)
     out_config = set_default_config(out_config, sample_info)
 
-    # The questions may set variables BiaPy has renamed since (e.g. BiaPy-GUI's): translated as BiaPy does
-    # when it loads a configuration, so the file has the current ones
+    # Variables renamed since (e.g. BiaPy-GUI's), translated as BiaPy does when loading a configuration
     from biapy.engine.check_configuration import convert_old_model_cfg_to_current_version
 
     return convert_old_model_cfg_to_current_version(out_config)

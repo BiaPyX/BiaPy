@@ -1,22 +1,8 @@
 """
-Strategy for the semantic segmentation workflow, from the fingerprints of the training images and masks.
-
-What is set, following nnU-Net:
-
-* U-Net topology, patch size and batch size from the voxel spacing, the median image shape and the GPU
-  memory (see unet.py).
-* Loss: Dice + cross-entropy.
-* Foreground oversampling: when the foreground is scarce, patches are sampled so that at least a third of
-  them are centred on foreground (nnU-Net forces a third of the patches of each batch to contain it).
-* The number of classes, from all the labels found in the masks.
-* Amount of training: nnU-Net's 1000 epochs of 250 iterations, or 20 for a quick training, with DATA.TRAIN.REPLICATE
-  making an epoch about 250 iterations whatever the number and size of the images (see common.training_budget).
-* No elastic deformations (nnU-Net v2 does not use them either). Besides, BiaPy 3.7.1's (cv2.remap) can
-  deadlock the data loader workers with patches of 512x512 or larger.
-
-What is kept from the BiaPy defaults: normalization (z-score per image after percentile clipping, which is
-what nnU-Net does for non-CT images), optimizer, learning rate schedule and the other augmentations
-(BiaPy's 3D rotations are in-plane and its zoom leaves Z alone, as nnU-Net's for anisotropic data).
+Strategy for the semantic segmentation workflow, following nnU-Net: U-Net topology, patch and batch size from the
+voxel spacing, median image shape and GPU memory (:mod:`biapy.wizard.unet`), Dice + cross-entropy, foreground
+oversampling when the foreground is scarce, the classes found in the masks, nnU-Net's amount of training
+(common.training_budget) and no elastic deformations. The rest are BiaPy's defaults.
 """
 from . import common
 
