@@ -1239,10 +1239,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.PROBLEM.TRACKING.ENABLE:
         from biapy.models.trackastra import PRETRAINED_TRACKASTRA
 
-        if cfg.PROBLEM.TYPE != "INSTANCE_SEG" or cfg.PROBLEM.NDIM != "2D":
-            raise ValueError("'PROBLEM.TRACKING.ENABLE' requires 'PROBLEM.TYPE' = 'INSTANCE_SEG' and 'PROBLEM.NDIM' = '2D'")
+        if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+            raise ValueError("'PROBLEM.TRACKING.ENABLE' requires 'PROBLEM.TYPE' = 'INSTANCE_SEG'")
         if cfg.PROBLEM.TRACKING.LINKER_MODEL not in PRETRAINED_TRACKASTRA:
             raise ValueError(f"'PROBLEM.TRACKING.LINKER_MODEL' must be one of {list(PRETRAINED_TRACKASTRA)}")
+        if cfg.PROBLEM.NDIM == "3D" and cfg.PROBLEM.TRACKING.LINKER_MODEL == "trackastra_general_2d":
+            raise ValueError("'PROBLEM.TRACKING.LINKER_MODEL' = 'trackastra_general_2d' is 2D only, use 'trackastra_ctc' in 3D")
+        if cfg.TEST.BY_CHUNKS.ENABLE:
+            raise ValueError("'TEST.BY_CHUNKS.ENABLE' can not be used with 'PROBLEM.TRACKING.ENABLE'")
+        if check_data_paths and cfg.PROBLEM.TRACKING.GT_PATH and not os.path.isdir(cfg.PROBLEM.TRACKING.GT_PATH):
+            raise ValueError(f"'PROBLEM.TRACKING.GT_PATH' not found: {cfg.PROBLEM.TRACKING.GT_PATH}")
         if cfg.PROBLEM.INSTANCE_SEG.TYPE != "regular":
             raise ValueError("'PROBLEM.TRACKING.ENABLE' requires 'PROBLEM.INSTANCE_SEG.TYPE' = 'regular'")
         if not cfg.TEST.ENABLE:

@@ -19,17 +19,18 @@ REGION_FEATURES = ("equivalent_diameter_area", "intensity_mean", "inertia_tensor
 
 
 def normalize_movie(frames: NDArray) -> NDArray:
-    """Percentile (1, 99.8) normalization of the whole ``(T, Y, X)`` movie, subsampled 4x in Y/X if large."""
+    """Percentile (1, 99.8) normalization of the whole ``(T, (Z), Y, X)`` movie, subsampled 4x in Y/X if large."""
     frames = frames.astype(np.float32)
-    sample = frames[:, ::4, ::4] if all(s > 256 for s in frames.shape[-2:]) else frames
+    sample = frames[..., ::4, ::4] if all(s > 256 for s in frames.shape[-2:]) else frames
     mi, ma = np.percentile(sample, (1, 99.8)).astype(np.float32)
     return (frames - mi) / (ma - mi + 1e-8)
 
 
 def _border_dist(mask: NDArray, labels: NDArray, cutoff: int = 5) -> NDArray:
-    """Per instance, closeness to the image border: 1 touching it, 0 at ``cutoff`` pixels or more."""
-    ramps = [np.minimum(np.minimum(np.arange(s), np.arange(s)[::-1]).astype(np.float32) / cutoff, 1) for s in mask.shape]
-    return np.asarray(ndi.maximum(1 - np.minimum.outer(*ramps), labels=mask, index=labels), dtype=np.float32)
+    """Per instance, closeness to the Y/X image border: 1 touching it, 0 at ``cutoff`` pixels or more."""
+    ry, rx = [np.minimum(np.minimum(np.arange(s), np.arange(s)[::-1]).astype(np.float32) / cutoff, 1) for s in mask.shape[-2:]]
+    border = np.broadcast_to(np.minimum.outer(ry, rx), mask.shape)
+    return np.asarray(ndi.maximum(1 - border, labels=mask, index=labels), dtype=np.float32)
 
 
 def object_features(masks: NDArray, frames: NDArray) -> Tuple[NDArray, NDArray, NDArray, NDArray]:
@@ -39,10 +40,10 @@ def object_features(masks: NDArray, frames: NDArray) -> Tuple[NDArray, NDArray, 
     Parameters
     ----------
     masks : NDArray
-        ``(T, Y, X)`` instance labels.
+        ``(T, (Z), Y, X)`` instance labels.
 
     frames : NDArray
-        ``(T, Y, X)`` normalized images.
+        ``(T, (Z), Y, X)`` normalized images.
 
     Returns
     -------
@@ -53,17 +54,19 @@ def object_features(masks: NDArray, frames: NDArray) -> Tuple[NDArray, NDArray, 
         ``(N,)`` label of each instance in its frame.
 
     coords : NDArray
-        ``(N, 2)`` centroid ``(y, x)``.
+        ``(N, ndim)`` centroid ``((z), y, x)``.
 
     features : NDArray
-        ``(N, 7)`` equivalent diameter, mean intensity, inertia tensor (4) and closeness to the border.
+        ``(N, 7)`` in 2D, ``(N, 12)`` in 3D: equivalent diameter, mean intensity, inertia tensor and closeness to the
+        border.
     """
+    ndim = masks.ndim - 1
     timepoints, labels, coords, features = [], [], [], []
     for t, (mask, img) in enumerate(zip(masks, frames)):
         props = regionprops_table(mask, intensity_image=img, properties=("label", "centroid") + REGION_FEATURES)
         timepoints.append(np.full(len(props["label"]), t, dtype=np.int32))
         labels.append(props["label"].astype(np.int32))
-        coords.append(np.stack([props["centroid-0"], props["centroid-1"]], -1).astype(np.float32))
+        coords.append(np.stack([props[f"centroid-{i}"] for i in range(ndim)], -1).astype(np.float32))
         feats = [props[k] for k in props if k.startswith(REGION_FEATURES)]
         features.append(np.stack(feats + [_border_dist(mask, props["label"])], -1).astype(np.float32))
     return np.concatenate(timepoints), np.concatenate(labels), np.concatenate(coords), np.concatenate(features)

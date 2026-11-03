@@ -13,6 +13,7 @@ PROBLEM:
         LINKER_MODEL: trackastra_general_2d
         MASKS_PATH: ""  # folder with the masks of the frames, to link them without segmenting
         ALLOW_DIVISIONS: True
+        GT_PATH: ""  # ground truth tracks in Cell Tracking Challenge format, to compute the tracking metrics
 
 DATA:
     PATCH_SIZE: (256, 256, 1)

@@ -38,6 +38,7 @@ from biapy.models.vit_backbones.weights import fetch_vit_weights
 
 PRETRAINED_TRACKASTRA = {
     "trackastra_general_2d": "https://github.com/weigertlab/trackastra-models/releases/download/v0.3.0/general_2d.zip",
+    "trackastra_ctc": "https://github.com/weigertlab/trackastra-models/releases/download/v0.3.0/ctc.zip",
 }
 
 
@@ -251,6 +252,7 @@ class TrackingTransformer(nn.Module):
                 "Only Trackastra models with 'rope' positional bias, 'quiet_softmax' normalization and embedded "
                 "features are supported"
             )
+        self.coord_dim = coord_dim
         self.window = window
         self.spatial_pos_cutoff = spatial_pos_cutoff
         self.proj = nn.Linear((1 + coord_dim) * pos_embed_per_dim + feat_dim * feat_embed_per_dim, d_model)

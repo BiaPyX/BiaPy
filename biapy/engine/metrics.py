@@ -9,6 +9,8 @@ NumPy-based metrics are supported for 2D and 3D biomedical image analysis.
 """
 import torch
 import numpy as np
+from collections import Counter
+from numpy.typing import NDArray
 import pandas as pd
 from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
@@ -20,7 +22,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torchvision import transforms
 from torchvision.models import vgg16, VGG16_Weights
-from typing import Callable, Optional, List, Tuple, Dict, Union
+from typing import Callable, Optional, List, Set, Tuple, Dict, Union
 
 from biapy.engine.swt_loss import SWTLoss
 
@@ -3769,3 +3771,94 @@ class CLDiceComponentPenaltyLoss(nn.Module):
 
         penalty = self._spurious_component_penalty(membrane_pred, membrane_true)
         return cl_dice + self.component_weight * penalty
+
+
+# Tracking metrics between two sets of tracks in Cell Tracking Challenge (CTC) format (label masks + ``L B E P`` rows).
+#
+# - DET and TRA: CTC detection and tracking accuracy, from the cost of the operations needed to turn the predicted graph
+#   into the ground truth one (AOGM, Matula et al. 2015, https://doi.org/10.1371/journal.pone.0144959).
+# - Link and division precision, recall and F1.
+#
+# A predicted instance matches a ground truth instance of the same frame if it covers more than half of it.
+
+Node = Tuple[int, int]
+
+
+def _match_frame(gt: NDArray, pred: NDArray) -> Dict[int, int]:
+    """``{gt label: pred label}`` for the predicted instances covering more than half of a ground truth one."""
+    fg = gt > 0
+    g, p = gt[fg].astype(np.int64), pred[fg].astype(np.int64)
+    keys, counts = np.unique(g * (int(p.max(initial=0)) + 1) + p, return_counts=True)
+    gl, pl = np.divmod(keys, int(p.max(initial=0)) + 1)
+    areas = dict(zip(*np.unique(g, return_counts=True)))
+    return {int(a): int(b) for a, b, c in zip(gl, pl, counts) if b > 0 and c > 0.5 * areas[a]}
+
+
+def _graph(masks: NDArray, tracks: NDArray) -> Tuple[int, Dict[Tuple[Node, Node], int], Dict[Node, Set[Node]]]:
+    """Number of nodes, edges ``{(node, node): 0 within a track, 1 parent to daughter}`` and divisions."""
+    labels: List[Set[int]] = [set(np.unique(m).tolist()) - {0} for m in masks]
+    edges = {((t, l), (t + 1, l)): 0 for t in range(len(masks) - 1) for l in labels[t] & labels[t + 1]}
+    ends = {int(L): int(E) for L, _, E, _ in tracks}
+    daughters: Dict[Node, Set[Node]] = {}
+    for L, B, _, P in tracks:
+        if P:
+            edges[((ends[int(P)], int(P)), (int(B), int(L)))] = 1
+            daughters.setdefault((ends[int(P)], int(P)), set()).add((int(B), int(L)))
+    divisions = {p: d for p, d in daughters.items() if len(d) > 1}
+    return sum(map(len, labels)), edges, divisions
+
+
+def _prf(tp: int, n_pred: int, n_gt: int) -> Tuple[float, float, float]:
+    p = tp / n_pred if n_pred else float("nan")
+    r = tp / n_gt if n_gt else float("nan")
+    return p, r, (2 * tp / (n_pred + n_gt) if n_pred + n_gt else float("nan"))
+
+
+def tracking_metrics(gt_masks: NDArray, gt_tracks: NDArray, pred_masks: NDArray, pred_tracks: NDArray) -> Dict:
+    """
+    Tracking metrics of predicted tracks against ground truth ones.
+
+    Parameters
+    ----------
+    gt_masks, pred_masks : NDArray
+        ``(T, (Z), Y, X)`` masks labelled with the track labels.
+
+    gt_tracks, pred_tracks : NDArray
+        ``(K, 4)`` CTC ``L B E P`` rows.
+
+    Returns
+    -------
+    metrics : dict
+        ``DET``, ``TRA``, ``link_precision``, ``link_recall``, ``link_f1``, ``division_precision``,
+        ``division_recall``, ``division_f1`` and the AOGM error counts (``NS``, ``FN``, ``FP``, ``ED``, ``EA``, ``EC``).
+    """
+    n_gt, gt_edges, gt_divs = _graph(gt_masks, gt_tracks)
+    n_pred, pred_edges, pred_divs = _graph(pred_masks, pred_tracks)
+
+    gt_to_pred: Dict[Node, Node] = {}
+    for t, (g, p) in enumerate(zip(gt_masks, pred_masks)):
+        gt_to_pred.update({(t, a): (t, b) for a, b in _match_frame(g, p).items()})
+    n_matched = Counter(gt_to_pred.values())
+    pred_to_gt = {p: g for g, p in gt_to_pred.items() if n_matched[p] == 1}
+
+    m = {"FN": n_gt - len(gt_to_pred), "FP": n_pred - len(n_matched), "NS": sum(k - 1 for k in n_matched.values())}
+    mapped = {
+        (pred_to_gt[a], pred_to_gt[b]): s for (a, b), s in pred_edges.items() if a in pred_to_gt and b in pred_to_gt
+    }
+    m["ED"] = sum(e not in gt_edges for e in mapped)
+    m["EA"] = sum(e not in mapped for e in gt_edges)
+    m["EC"] = sum(e in gt_edges and gt_edges[e] != s for e, s in mapped.items())
+
+    aogm_d = 5 * m["NS"] + 10 * m["FN"] + m["FP"]
+    aogm = aogm_d + m["ED"] + 1.5 * m["EA"] + m["EC"]
+    aogm0 = 10 * n_gt + 1.5 * len(gt_edges)
+    m["DET"] = 1 - min(aogm_d, 10 * n_gt) / (10 * n_gt)
+    m["TRA"] = 1 - min(aogm, aogm0) / aogm0
+
+    tp = sum(e in gt_edges for e in mapped)
+    m["link_precision"], m["link_recall"], m["link_f1"] = _prf(tp, len(pred_edges), len(gt_edges))
+    tp = sum(
+        p in pred_to_gt and gt_divs.get(pred_to_gt[p]) == {pred_to_gt.get(d) for d in ds} for p, ds in pred_divs.items()
+    )
+    m["division_precision"], m["division_recall"], m["division_f1"] = _prf(tp, len(pred_divs), len(gt_divs))
+    return m

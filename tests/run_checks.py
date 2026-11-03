@@ -2162,6 +2162,7 @@ all_test_info["Test35"] = {
         {"type": "regular", "pattern": "Number of divisions:", "gt": False, "value": 64},
         {"type": "file", "path": os.path.join("results", "test35_1", "tracking", "res_track.txt")},
         {"type": "file", "path": os.path.join("results", "test35_1", "tracking", "mask019.tif")},
+        {"type": "file", "path": os.path.join("results", "test35_1", "tracking", "tracks.geff", ".zattrs")},
     ]
 }
 
@@ -2170,7 +2171,8 @@ all_test_info["Test36"] = {
     "jobname": "test36",
     "description": "2D Tracking. Instance seg. model (BC, unet) trained on the frames of Trackastra's HeLa example "
         "with its ERR_SEG masks as GT, then each frame segmented and the instances linked by 'trackastra_general_2d'. "
-        "BMZ export of the instance seg. model.",
+        "Tracking metrics against the tracks of Test35 (no CTC GT: the CTC data server is not reachable from the "
+        "runner). BMZ export of the instance seg. model.",
     "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "2d_tracking.yaml"),
     "yaml": "test36.yaml",
     "yaml_modifications": {
@@ -2180,6 +2182,9 @@ all_test_info["Test36"] = {
                     "DATA_REMOVE_BEFORE_MW": True,
                     "DATA_REMOVE_SMALL_OBJ_BEFORE": 50,
                 },
+            },
+            "TRACKING": {
+                "GT_PATH": os.path.join(RESULTS_FOLDER, "test35", "results", "test35_1", "tracking"),
             },
         },
         "DATA": {
@@ -2205,11 +2210,47 @@ all_test_info["Test36"] = {
         # 312 measured (269 with the ERR_SEG masks, Test35); over-segmented frames give thousands
         {"type": "regular", "pattern": "Number of tracks:", "gt": True, "value": 250},
         {"type": "regular", "pattern": "Number of tracks:", "gt": False, "value": 400},
+        # 0.983 / 0.982 / 0.928 measured (same as py-ctcmetrics for DET and TRA)
+        {"type": "regular", "pattern": "Tracking DET:", "gt": True, "value": 0.95},
+        {"type": "regular", "pattern": "Tracking TRA:", "gt": True, "value": 0.95},
+        {"type": "regular", "pattern": "Tracking link_f1:", "gt": True, "value": 0.85},
         {"type": "file", "path": os.path.join("results", "test36_1", "tracking", "res_track.txt")},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "tracking_hela_instance_segmentation.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
         # The exported model is the instance segmentation one
         {"type": "BMZ_tags", "has": ["instance-segmentation"], "has_not": ["tracking"]},
+    ]
+}
+
+all_test_info["Test37"] = {
+    "enable": True,
+    "jobname": "test37",
+    "description": "3D Tracking with the masks given (no segmentation). Trackastra's 3D example (CTC "
+        "Fluo-N3DH-CHO 02, 20 frames) and its ERR_SEG masks, linked by 'trackastra_ctc'.",
+    "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "3d_tracking.yaml"),
+    "yaml": "test37.yaml",
+    "multigpu": False,
+    "yaml_modifications": {
+        "PROBLEM": {
+            "TRACKING": {
+                "MASKS_PATH": os.path.join(data_folder, "tracking", "cho", "masks"),
+            },
+        },
+        "DATA": {
+            "TEST": {
+                "PATH": os.path.join(data_folder, "tracking", "cho", "frames"),
+            },
+        },
+        "TRAIN": {
+            "ENABLE": False,
+        },
+    },
+    "internal_checks": [
+        # The trackastra package gives 10 tracks and no divisions on these masks (BiaPy's port is identical)
+        {"type": "regular", "pattern": "Number of tracks:", "gt": True, "value": 10},
+        {"type": "regular", "pattern": "Number of tracks:", "gt": False, "value": 11},
+        {"type": "file", "path": os.path.join("results", "test37_1", "tracking", "res_track.txt")},
+        {"type": "file", "path": os.path.join("results", "test37_1", "tracking", "tracks.geff", ".zattrs")},
     ]
 }
 
@@ -2443,9 +2484,18 @@ DATASETS = [
         ]
     },
     {
-        # Trackastra's example sequence (subset of CTC Fluo-N2DL-HeLa 02), (T, Y, X) stacks split into frames below
+        # Trackastra's example sequences (subsets of CTC Fluo-N2DL-HeLa 02 and Fluo-N3DH-CHO 02), (T, (Z), Y, X)
+        # stacks split into frames below
         "folder_name": "tracking",
         "data": [
+            {
+                "url": "https://raw.githubusercontent.com/weigertlab/trackastra/aa57a95160002e0fc70b915ab74178b39c99fd6a/trackastra/data/resources/Fluo-N3DH-CHO_02_img.tif",
+                "filename": "Fluo-N3DH-CHO_02_img.tif",
+            },
+            {
+                "url": "https://raw.githubusercontent.com/weigertlab/trackastra/aa57a95160002e0fc70b915ab74178b39c99fd6a/trackastra/data/resources/Fluo-N3DH-CHO_02_ERR_SEG.tif",
+                "filename": "Fluo-N3DH-CHO_02_ERR_SEG.tif",
+            },
             {
                 "url": "https://raw.githubusercontent.com/weigertlab/trackastra/aa57a95160002e0fc70b915ab74178b39c99fd6a/trackastra/data/resources/Fluo_Hela_02_img.tif",
                 "filename": "Fluo_Hela_02_img.tif",
@@ -2795,8 +2845,13 @@ for category in DATASETS:
         else:
             print(f"Data already exists at {existence_path}, skipping download.")
 
-for subfolder, stack in (("frames", "Fluo_Hela_02_img.tif"), ("masks", "Fluo_Hela_02_ERR_SEG.tif")):
-    frames_dir = os.path.join(data_folder, "tracking", "hela", subfolder)
+for seq, subfolder, stack in (
+    ("hela", "frames", "Fluo_Hela_02_img.tif"),
+    ("hela", "masks", "Fluo_Hela_02_ERR_SEG.tif"),
+    ("cho", "frames", "Fluo-N3DH-CHO_02_img.tif"),
+    ("cho", "masks", "Fluo-N3DH-CHO_02_ERR_SEG.tif"),
+):
+    frames_dir = os.path.join(data_folder, "tracking", seq, subfolder)
     if not os.path.exists(frames_dir):
         os.makedirs(frames_dir)
         for t, frame in enumerate(tifffile.imread(os.path.join(data_folder, "tracking", stack))):

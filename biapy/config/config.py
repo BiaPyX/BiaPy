@@ -546,23 +546,28 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 2.2.6 Tracking (INSTANCE_SEG, 2D)
+        # 2.2.6 Tracking (INSTANCE_SEG)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM.TRACKING = CN()
-        # Links the instances of a time-lapse across frames (Tracking_Workflow). Needs PROBLEM.TYPE = "INSTANCE_SEG"
-        # and PROBLEM.NDIM = "2D". 'DATA.TEST.PATH' is one sequence: a folder with one image per frame, in time order
-        # when sorted by name. The instances of each frame are created by the model ('MODEL.*'), unless
-        # 'PROBLEM.TRACKING.MASKS_PATH' gives them. The tracks are saved in the Cell Tracking Challenge result format
-        # ('mask<t>.tif' + 'res_track.txt') in 'PATHS.RESULT_DIR.TRACKING'.
+        # Links the instances of a 2D or 3D time-lapse across frames (Tracking_Workflow). Needs PROBLEM.TYPE =
+        # "INSTANCE_SEG". 'DATA.TEST.PATH' is one sequence: a folder with one image per frame, in time order when sorted
+        # by name. The instances of each frame are created by the model ('MODEL.*'), unless 'PROBLEM.TRACKING.MASKS_PATH'
+        # gives them. The tracks are saved in 'PATHS.RESULT_DIR.TRACKING' in the Cell Tracking Challenge result format
+        # ('mask<t>.tif' + 'res_track.txt') and as GEFF ('tracks.geff').
         _C.PROBLEM.TRACKING.ENABLE = False
-        # Pretrained model that links the instances. Options: "trackastra_general_2d"
-        # (https://github.com/weigertlab/trackastra).
+        # Pretrained model that links the instances (https://github.com/weigertlab/trackastra). Options:
+        #   * "trackastra_general_2d": 2D, trained on diverse live-cell data.
+        #   * "trackastra_ctc": 2D and 3D, trained on the Cell Tracking Challenge datasets.
         _C.PROBLEM.TRACKING.LINKER_MODEL = "trackastra_general_2d"
         # Folder with the instance masks of the frames (one per frame, same order and size as 'DATA.TEST.PATH'). If set,
         # no model is used to create them and 'TRAIN.ENABLE' must be False.
         _C.PROBLEM.TRACKING.MASKS_PATH = ""
         # Whether a cell can be linked to two cells in the next frame (cell division).
         _C.PROBLEM.TRACKING.ALLOW_DIVISIONS = True
+        # Ground truth tracks to evaluate the result, in Cell Tracking Challenge format (e.g. a '01_GT/TRA' folder): one
+        # mask per frame labelled with the track labels and a '.txt' file with the 'L B E P' rows. If set, the CTC DET
+        # and TRA metrics and the link and division precision, recall and F1 are computed.
+        _C.PROBLEM.TRACKING.GT_PATH = ""
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.3 Detection problem specification
