@@ -11,10 +11,10 @@ This `__init__.py` file serves as the entry point for the BiaPy package,
 exposing the `BiaPy` class and defining the `main` function for command-line
 execution.
 
-Version: 3.7.2
+Version: 3.7.3
 """
 
-__version__ = "3.7.2"
+__version__ = "3.7.3"
 
 import argparse
 import os

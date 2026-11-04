@@ -1,4 +1,4 @@
-# BiaPy version: 3.7.2
+# BiaPy version: 3.7.3
 # Cellpose-SAM inference (no cellpose package needed). To fine-tune, enable TRAIN and set DATA.TRAIN.
 
 SYSTEM:
