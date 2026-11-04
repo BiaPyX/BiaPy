@@ -22,8 +22,8 @@ import sys
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -38,6 +38,7 @@ def __getattr__(name):
 
 def __dir__():
     return sorted(list(globals()) + list(_LAZY))
+
 
 def _validate_config_cli(argv):
     """
@@ -90,7 +91,89 @@ def _validate_config_cli(argv):
         sys.exit(1)
 
     print(f"OK: {args.config} is a valid {cfg.PROBLEM.TYPE} {cfg.PROBLEM.NDIM} configuration")
-    sys.exit(0)      
+    sys.exit(0)  
+
+
+def _check_data_cli(argv):
+    """
+    Check from the command line that some data can be used by BiaPy, without running anything.
+
+    Usage::
+
+        biapy check-data <path_to_config_file> [--percentage 10] [--json]
+        biapy check-data --workflow SEMANTIC_SEG --ndim 2D --raw <folder> [--gt <folder>] [--json]
+
+    With a configuration, the data folders it points to are checked and compared with it
+    (see :func:`biapy.check_data`). Without one, the folders given are checked for the workflow, as the
+    wizard does (see :func:`biapy.check_data_for_workflow`). ``--json`` prints the full report as JSON on
+    stdout, for agents and scripts.
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``check-data``.
+
+    Exit codes
+    ----------
+    0
+        The data can be used.
+    1
+        The data or the configuration is not valid (the errors are printed to stderr, or in the JSON).
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    import contextlib
+    import json
+
+    parser = argparse.ArgumentParser(
+        prog="biapy check-data",
+        description="Check that some data can be used by BiaPy: the data of a configuration, or folders for a workflow.",
+    )
+    parser.add_argument("config", nargs="?", help="Path to the YAML configuration file")
+    parser.add_argument("--workflow", help="Without a configuration: PROBLEM.TYPE, e.g. SEMANTIC_SEG")
+    parser.add_argument("--ndim", help="Without a configuration: 2D or 3D")
+    parser.add_argument("--raw", help="Without a configuration: folder with the raw images")
+    parser.add_argument("--gt", default="", help="Without a configuration: folder with the targets")
+    parser.add_argument(
+        "--percentage", type=float, default=100, help="Percentage of each Zarr/H5 image to check (default: 100)"
+    )
+    parser.add_argument("--json", action="store_true", help="Print the full report as JSON")
+    args = parser.parse_args(argv)
+
+    by_workflow = args.workflow or args.ndim or args.raw or args.gt
+    if args.config and by_workflow:
+        parser.error("give either a configuration or --workflow/--ndim/--raw, not both")
+    if not args.config and not (args.workflow and args.ndim and args.raw):
+        parser.error("give a configuration, or --workflow, --ndim and --raw")
+
+    from ._biapy import check_data, check_data_for_workflow
+
+    try:
+        # The checks print their progress: keep stdout for the result only
+        with contextlib.redirect_stdout(sys.stderr):
+            if args.config:
+                report = check_data(args.config, percentage=args.percentage)
+            else:
+                report = check_data_for_workflow(args.workflow, args.ndim, args.raw, args.gt, args.percentage)
+    except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
+        report = {"ok": False, "errors": [str(e)], "warnings": [], "folders": {}, "upscaling": None}
+
+    if args.json:
+        from biapy.wizard.config_builder import to_jsonable
+
+        print(json.dumps(to_jsonable(report), indent=2))
+    else:
+        for warn in report["warnings"]:
+            print(f"WARNING: {warn}", file=sys.stderr)
+        for err in report["errors"]:
+            print(f"ERROR: {err}", file=sys.stderr)
+        if report["ok"]:
+            for key, found in report["folders"].items():
+                print(f"OK: {key}: {found['n_files']} files, channels={found['channels']}, classes={found['classes']}")
+            if report["upscaling"]:
+                print(f"OK: upscaling {tuple(report['upscaling'])}")
+    sys.exit(0 if report["ok"] else 1)
+
 
 def main():
     r"""
@@ -155,9 +238,10 @@ def main():
     and calls its `run_job` method to start the workflow. The program exits
     with status 0 upon successful completion.
     """
-    # Subcommand: 'biapy validate-config ...' only checks a config; any other call runs a job
-    if len(sys.argv) > 1 and sys.argv[1] == "validate-config":
-        _validate_config_cli(sys.argv[2:])
+    # Subcommands only check things; any other call runs a job
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli}
+    if len(sys.argv) > 1 and sys.argv[1] in subcommands:
+        subcommands[sys.argv[1]](sys.argv[2:])
 
     ##########################
     #   ARGS COMPROBATION    #
@@ -181,7 +265,8 @@ def main():
     #     --gpu 0,1
 
     parser = argparse.ArgumentParser(
-        epilog="To check a configuration without running anything: biapy validate-config <config> [--no-data-check]",
+        epilog="To check without running anything: biapy validate-config <config> [--no-data-check] | "
+        "biapy check-data <config> | biapy check-data --workflow <TYPE> --ndim <2D|3D> --raw <folder> [--gt <folder>]",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")
