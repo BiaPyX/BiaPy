@@ -2298,6 +2298,7 @@ def build_config(
 
     return cfg
 
+
 def validate_config(config: Union[str, dict, CN], check_data_paths: bool = True) -> CN:
     """
     Validate a BiaPy configuration without running anything.
@@ -2330,3 +2331,200 @@ def validate_config(config: Union[str, dict, CN], check_data_paths: bool = True)
     merge_bmz_workflow_options(cfg)
     check_configuration(cfg, "validate", check_data_paths=check_data_paths)
     return cfg
+
+
+def _targets_required(cfg: CN) -> bool:
+    """Whether the workflow reads targets from DATA.*.GT_PATH (the rule of check_configuration's data path checks)."""
+    if cfg.PROBLEM.TYPE in ["CLASSIFICATION", "SELF_SUPERVISED"]:
+        return False
+    if cfg.PROBLEM.TYPE == "DENOISING":
+        # Supervised denoising needs targets; unsupervised does not
+        loss_type_upper = [str(n).upper() for n in cfg.LOSS.TYPE]
+        return cfg.PROBLEM.DENOISING.LOAD_GT_DATA or "BCE" in loss_type_upper or "HINGE" in loss_type_upper 
+    return True
+
+
+def _check_folders(
+    to_check: list, 
+    workflow: str, 
+    ndim: str, 
+    percentage: float, 
+    tracking: bool = False, 
+    upscaling: tuple = None
+) -> tuple:
+    """
+    Check each ``(key, folder, data_path)`` as the wizard does: each folder with ``check_folder``, then each raw
+    image against its target with ``_check_targets`` (same number of files and matching shapes; in
+    super-resolution, the targets ``upscaling`` times the raw images, or the first pair's factor if None).
+    Returns the report of :func:`check_data` (``ok`` still to be set) and the upscaling (or None).
+    """
+    from biapy.wizard.config_builder import WizardError, _check_targets
+    from biapy.wizard.data_check import check_folder
+
+    report = {"ok": True, "errors": [], "warnings": [], "folders": {}}
+    constraints = {}  # all the folders' constraints together, as the wizard keeps them in its answers
+    for key, folder, data_path in to_check:
+        res = check_folder(folder, key, workflow, ndim, percentage=percentage, data_path=data_path, tracking=tracking)
+        found = res["data_constraints"]
+        report["folders"][key] = {
+            "folder": folder,
+            "n_files": found.get(key),
+            "channels": found.get("DATA.PATCH_SIZE_C"),
+            "classes": found.get("DATA.N_CLASSES"),
+        }
+        if res["error"]:
+            report["errors"].append(f"{key}: {res['error_message']}")
+        else:
+            constraints.update(found)
+
+    # Each raw image against its target, in the phases whose folders could be read
+    for phase in dict.fromkeys(key.split(".")[1] for key, _, _ in to_check):
+        if f"DATA.{phase}.PATH" in constraints and f"DATA.{phase}.GT_PATH" in constraints:
+            try:
+                upscaling = _check_targets(workflow, phase, constraints, upscaling)
+            except WizardError as e:
+                report["errors"].append(str(e))
+    return report, upscaling
+
+
+def check_data(config: Union[str, dict, CN], percentage: float = 100) -> dict:
+    """
+    Check that the data of a BiaPy configuration can be used by its workflow, without running anything.
+
+    The configuration is read (and validated) with :func:`validate_config`. Then the data folders the job would read
+    are checked as the wizard does: each folder with :func:`biapy.wizard.data_check.check_folder` (images can be
+    read, all have the same channels and data range, masks have the right channels...) and each raw image against
+    its target (same number of files and matching shapes, upscaled by ``PROBLEM.SUPER_RESOLUTION.UPSCALING`` in
+    super-resolution). Finally, the channels found are compared with ``DATA.PATCH_SIZE`` and the classes with
+    ``DATA.N_CLASSES``.
+
+    To check data before having a configuration, see :func:`check_data_for_workflow`.
+
+    Parameters
+    ----------
+    config: str or dict or CfgNode
+        Path to a YAML config file, or a dict/CfgNode with the configuration.
+
+    percentage: float, optional
+        Percentage of each Zarr/H5 image to check, in random blocks. Other images are always read whole.
+        Default: 100.
+
+    Returns
+    -------
+    dict
+        * ``ok``: whether the data can be used with the configuration.
+        * ``errors``: list of str, what is wrong (empty if ``ok``).
+        * ``warnings``: list of str, what could not be checked.
+        * ``folders``: for each variable checked (e.g. ``DATA.TRAIN.PATH``), its ``folder``, number of files
+          (``n_files``), and the ``channels`` and ``classes`` found (None when they don't apply).
+        * ``upscaling``: super-resolution, the upscaling of the targets (one factor per axis), or None.
+
+    Raises
+    ------
+    ValueError, AssertionError, FileNotFoundError, KeyError
+        If the configuration itself is not valid (see :func:`validate_config`).
+    """
+    cfg = validate_config(config, check_data_paths=True)
+    warnings_found = []
+
+    # Phases whose data the job reads
+    phases = []
+    if cfg.TRAIN.ENABLE:
+        phases.append("TRAIN")
+        if not cfg.DATA.VAL.FROM_TRAIN:
+            phases.append("VAL")
+    if cfg.TEST.ENABLE:
+        if cfg.DATA.TEST.USE_VAL_AS_TEST:
+            warnings_found.append("DATA.TEST: DATA.TEST.USE_VAL_AS_TEST is set, the validation data is used as test")
+        else:
+            phases.append("TEST")
+
+    # Folders to check, as (key, folder, data_path)
+    to_check = []
+    for phase in phases:
+        data = cfg.DATA[phase]
+        # Raw images and targets may be within the same Zarr/H5 files (e.g. an OME-Zarr image and its labels)
+        zarr = data.INPUT_ZARR_MULTIPLE_DATA
+        to_check.append((f"DATA.{phase}.PATH", data.PATH, data.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH if zarr else ""))
+        if not _targets_required(cfg) or (phase == "TEST" and not cfg.DATA.TEST.LOAD_GT):
+            continue
+        if zarr and cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
+            warnings_found.append(f"DATA.{phase}.GT_PATH: the targets of synapses are not checked yet")
+            continue
+        if zarr:
+            to_check.append((f"DATA.{phase}.GT_PATH", data.PATH, data.INPUT_ZARR_MULTIPLE_DATA_GT_PATH))
+        else:
+            to_check.append((f"DATA.{phase}.GT_PATH", data.GT_PATH, ""))
+
+    sr_upscaling = tuple(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else None
+    report, upscaling = _check_folders(
+        to_check, cfg.PROBLEM.TYPE, cfg.PROBLEM.NDIM, percentage, cfg.PROBLEM.TRACKING.ENABLE, sr_upscaling
+    )
+    report["warnings"] = warnings_found + report["warnings"]
+    report["upscaling"] = upscaling
+
+    # What the data says against the configuration
+    for key, found in report["folders"].items():
+        if found["channels"] is not None and found["channels"] != cfg.DATA.PATCH_SIZE[-1]:
+            report["errors"].append(
+                f"{key}: the images have {found['channels']} channels, but the last value of DATA.PATCH_SIZE "
+                f"(the channels) is {cfg.DATA.PATCH_SIZE[-1]}"
+            )
+        if found["classes"] is not None and found["classes"] != cfg.DATA.N_CLASSES:
+            report["errors"].append(
+                f"{key}: the data has {found['classes']} classes, but DATA.N_CLASSES is {cfg.DATA.N_CLASSES}"
+            )
+
+    report["ok"] = not report["errors"]
+    return report
+
+
+def check_data_for_workflow(workflow: str, ndim: str, raw: str, gt: str = "", percentage: float = 100) -> dict:
+    """
+    Check that a data folder (and its targets) can be used by a workflow, before having a configuration.
+
+    The same as the wizard does once the workflow and the dimensions are answered: the folders are checked with
+    :func:`biapy.wizard.data_check.check_folder` and each raw image against its target. What is found
+    (``channels``, ``classes``, ``upscaling``) is what ``DATA.PATCH_SIZE`` (last value), ``DATA.N_CLASSES`` and
+    ``PROBLEM.SUPER_RESOLUTION.UPSCALING`` must be set to in the configuration.
+
+    Parameters
+    ----------
+    workflow: str
+        ``PROBLEM.TYPE``, e.g. "SEMANTIC_SEG". One of :data:`VALID_WORKFLOWS`.
+    ndim: str
+        "2D" or "3D".
+    raw: str
+        Folder with the raw images (for classification, one subfolder per class).
+    gt: str, optional
+        Folder with the targets (masks, CSV files, images...), if the workflow uses them.
+    percentage: float, optional
+        Percentage of each Zarr/H5 image to check. Default: 100.
+
+    Returns
+    -------
+    dict
+        Same keys as :func:`check_data`.
+
+    Raises
+    ------
+    ValueError
+        If ``workflow`` or ``ndim`` are not valid.
+    """
+    # Same checks as build_config
+    workflow = str(workflow).upper()
+    if workflow not in VALID_WORKFLOWS:
+        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
+
+    ndim = str(ndim).upper()
+    if ndim not in ["2D", "3D"]:
+        raise ValueError("'ndim' must be either '2D' or '3D'. Provided: {}".format(ndim))
+
+    to_check = [("DATA.TRAIN.PATH", raw, "")]
+    if gt:
+        to_check.append(("DATA.TRAIN.GT_PATH", gt, ""))
+
+    report, upscaling = _check_folders(to_check, workflow, ndim, percentage)
+    report["upscaling"] = upscaling
+    report["ok"] = not report["errors"]
+    return report
