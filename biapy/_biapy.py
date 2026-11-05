@@ -2175,6 +2175,18 @@ VALID_WORKFLOWS = [
 ]
 
 
+def list_workflows() -> List[str]:
+    """
+    List the workflows available in BiaPy, i.e. the values ``PROBLEM.TYPE`` can take.
+
+    Returns
+    -------
+    list of str
+        The workflows, e.g. ``["SEMANTIC_SEG", "INSTANCE_SEG", ...]``.
+    """
+    return list(VALID_WORKFLOWS)
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge ``override`` into ``base`` in-place (nested dicts merged) and return ``base``."""
     for k, v in override.items():
