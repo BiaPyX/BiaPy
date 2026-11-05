@@ -81,9 +81,10 @@ def set_default_config(cfg, sample_info):
         if "FULL_IMG" not in cfg["TEST"]:
             cfg["TEST"]["FULL_IMG"] = False
 
-    cfg["DATA"].setdefault("NORMALIZATION", {})
-    cfg["DATA"]["NORMALIZATION"]["TYPE"] = "zero_mean_unit_variance"
-    cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] = {"ENABLE": True, "LOWER_PERC": 0.2, "UPPER_PERC": 99.8}
+    norm = cfg["DATA"].setdefault("NORMALIZATION", {})
+    if "TYPE" not in norm:  # a pretrained model (e.g. from the Zoo) may impose its own
+        norm["TYPE"] = "zero_mean_unit_variance"
+        norm["PERC_CLIP"] = {"ENABLE": True, "LOWER_PERC": 0.2, "UPPER_PERC": 99.8}
 
     if cfg["TRAIN"]["ENABLE"]:
         cfg["TRAIN"]["EPOCHS"] = 150
@@ -269,12 +270,13 @@ def build_config_from_answers(answers):
         biapy_cfg["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS"] = extra
         biapy_cfg["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS"] = instance_creation(representation)
 
-    data_imposed_classes = biapy_cfg["data_constraints"].get("DATA.N_CLASSES", 2)
+    # Without targets (e.g. inference only) the data does not tell the classes: the model's are used
+    data_imposed_classes = biapy_cfg["data_constraints"].get("DATA.N_CLASSES")
     if "model_restrictions" in biapy_cfg and "DATA.N_CLASSES" in biapy_cfg["model_restrictions"]:
         model_imposed_classes = max(2, biapy_cfg["model_restrictions"]["DATA.N_CLASSES"])
     else:
         model_imposed_classes = data_imposed_classes
-    if data_imposed_classes != model_imposed_classes:
+    if data_imposed_classes is not None and data_imposed_classes != model_imposed_classes:
         raise WizardError(
             "Incompatibility found: the data provided seems to have {} classes whereas the pretrained model is prepared "
             "to work with {} classes. Please select another pretrained model.".format(

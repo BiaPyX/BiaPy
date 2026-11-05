@@ -164,6 +164,7 @@ def list_compatible_bmz_models(
     workflow: str = "all",
     ndim: str = "all",
     nclasses="all",
+    nchannels="all",
     progress: bool = False,
     quiet: bool = True,
     max_workers: int = 8,
@@ -184,6 +185,9 @@ def list_compatible_bmz_models(
 
     nclasses : int or str
         Classes of the data (``DATA.N_CLASSES``), or ``"all"``.
+
+    nchannels : int or str
+        Channels of the input images (e.g. 1 for grayscale, 3 for RGB), or ``"all"``.
 
     progress : bool
         Whether to show a progress bar (tqdm, also in notebooks).
@@ -217,6 +221,9 @@ def list_compatible_bmz_models(
             return nickname, None, str(e)
         if compat["error"]:
             return nickname, None, str(compat["reason_message"]).strip()
+        model_channels = compat["opts"]["DATA.PATCH_SIZE"][-1]
+        if nchannels != "all" and model_channels != int(nchannels):
+            return nickname, None, "it expects images with {} channel(s), not {}".format(model_channels, nchannels)
         return nickname, bmz_model_info(model, compat), ""
 
     bar = None
