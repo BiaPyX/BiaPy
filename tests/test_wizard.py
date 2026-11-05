@@ -321,6 +321,24 @@ def test_check_errors(tmp_path):
     assert r["error"] and "channels" in r["error_message"]
 
 
+def test_check_train_channels(tmp_path):
+    """Other raw images (e.g. the test ones) must have the channels of the training images, which the model takes."""
+    gray, rgb = tmp_path / "gray", tmp_path / "rgb"
+    for d, shape in [(gray, (32, 32)), (rgb, (32, 32, 3))]:
+        d.mkdir()
+        _write_2d(str(d / "a.tif"), np.zeros(shape, np.uint8))
+    r = check_folder(str(rgb), "DATA.TEST.PATH", "SEMANTIC_SEG", "2D", train_channels=1)
+    assert r["error"] and "training images have 1" in r["error_message"]
+    assert not check_folder(str(gray), "DATA.TEST.PATH", "SEMANTIC_SEG", "2D", train_channels=1)["error"]
+    assert not check_folder(str(rgb), "DATA.TEST.PATH", "SEMANTIC_SEG", "2D")["error"]  # not compared
+    # The folders of a configuration (biapy check-data): the test images against the training ones
+    from biapy._biapy import _check_folders
+
+    report, _ = _check_folders([("DATA.TRAIN.PATH", str(gray), ""), ("DATA.TEST.PATH", str(rgb), "")], "SEMANTIC_SEG",
+                               "2D", 100)
+    assert any(e.startswith("DATA.TEST.PATH") and "training images have 1" in e for e in report["errors"])
+
+
 def test_check_tracking_frames(tmp_path):
     """The test images of a tracking job are the frames of one time-lapse: one single-channel image per frame."""
     def check(folder, tracking=True):

@@ -2365,7 +2365,8 @@ def _check_folders(
     upscaling: tuple = None
 ) -> tuple:
     """
-    Check each ``(key, folder, data_path)`` as the wizard does: each folder with ``check_folder``, then each raw
+    Check each ``(key, folder, data_path)`` as the wizard does: each folder with ``check_folder`` (the other raw
+    images with the channels of the training ones, which come first), then each raw
     image against its target with ``_check_targets`` (same number of files and matching shapes; in
     super-resolution, the targets ``upscaling`` times the raw images, or the first pair's factor if None).
     Returns the report of :func:`check_data` (``ok`` still to be set) and the upscaling (or None).
@@ -2375,9 +2376,13 @@ def _check_folders(
 
     report = {"ok": True, "errors": [], "warnings": [], "folders": {}}
     constraints = {}  # all the folders' constraints together, as the wizard keeps them in its answers
+    train_channels = None  # the other raw images (validation, test) must have the training images' channels
     for key, folder, data_path in to_check:
-        res = check_folder(folder, key, workflow, ndim, percentage=percentage, data_path=data_path, tracking=tracking)
+        res = check_folder(folder, key, workflow, ndim, percentage=percentage, data_path=data_path, tracking=tracking,
+                           train_channels=None if key == "DATA.TRAIN.PATH" else train_channels)
         found = res["data_constraints"]
+        if key == "DATA.TRAIN.PATH" and not res["error"]:
+            train_channels = found.get("DATA.PATCH_SIZE_C")
         report["folders"][key] = {
             "folder": folder,
             "n_files": found.get(key),

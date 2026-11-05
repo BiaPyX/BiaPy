@@ -181,7 +181,8 @@ def ome_zarr_labels(folder):
     return common or []
 
 
-def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, data_path="", tracking=False):
+def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, data_path="", tracking=False,
+                 train_channels=None):
     """
     Checks the data of a folder selected in the wizard.
 
@@ -207,6 +208,9 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
     tracking : bool, optional
         Whether the objects are tracked (``PROBLEM.TRACKING.ENABLE``): the test raw images are then the frames of one
         time-lapse, which must be single-channel images of the same size, one file per frame.
+    train_channels : int, optional
+        Channels of the training images, when checking other raw images (e.g. the test ones): the model takes that
+        number of channels, so they must have it too. None: not compared.
 
     Returns
     -------
@@ -225,7 +229,7 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
         return _result(True, f"The folder does not exist:\n{folder}")
     progress = progress or (lambda done, total, name: None)
     if workflow == "CLASSIFICATION" and not is_gt:
-        return _check_classification(folder, key, is_3d, progress)
+        return same_channels(_check_classification(folder, key, is_3d, progress), train_channels)
     if workflow == "DETECTION" and is_gt:
         return _check_points(folder, key, is_3d, progress)
     kind = None
@@ -263,7 +267,23 @@ def check_folder(folder, key, workflow, ndim, progress=None, percentage=100, dat
         })
     else:
         res["sample_info"]["ome_zarr_labels"] = ome_zarr_labels(folder)
-    return res
+    return same_channels(res, train_channels)
+
+
+def same_channels(res, train_channels):
+    """
+    The result of a data check (see :func:`check_folder`), as an error if its images don't have ``train_channels``
+    channels, those of the training images (None: not compared).
+    """
+    channels = res["data_constraints"].get("DATA.PATCH_SIZE_C")
+    if res["error"] or train_channels is None or channels is None or channels == train_channels:
+        return res
+    return _result(
+        True,
+        f"These images have {channels} channel(s), but the training images have {train_channels}: the model takes "
+        f"{train_channels} channel(s), so these images must have the same number (e.g. 1 for grayscale, 3 for RGB). "
+        f"Convert them and check them again.",
+    )
 
 
 def _check_images(folder, key, workflow, is_3d, kind, progress, fraction=1.0, data_path=""):
