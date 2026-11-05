@@ -179,7 +179,7 @@ def create_plots(results, metrics, loss_names, job_id, chartOutDir):
             plt.legend([f"Train {loss_key}", f"Val. {loss_key}"], loc="upper left")
         else:
             plt.legend([f"Train {loss_key}"], loc="upper left")
-        plt.savefig(os.path.join(chartOutDir, job_id + "_" + loss_key + ".png"))
+        plt.savefig(os.path.join(chartOutDir, job_id + "_" + loss_key.replace("/", "-") + ".png"))
         plt.clf()
 
     # Metric
@@ -190,7 +190,7 @@ def create_plots(results, metrics, loss_names, job_id, chartOutDir):
         plt.ylabel("Value")
         plt.xlabel("Epoch")
         plt.legend([f"Train {metrics[i]}", f"Val. {metrics[i]}"], loc="upper left")
-        plt.savefig(os.path.join(chartOutDir, job_id + "_" + metrics[i] + ".png"))
+        plt.savefig(os.path.join(chartOutDir, job_id + "_" + metrics[i].replace("/", "-") + ".png"))
         plt.clf()
 
 
