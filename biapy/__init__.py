@@ -22,8 +22,8 @@ import sys
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -91,7 +91,7 @@ def _validate_config_cli(argv):
         sys.exit(1)
 
     print(f"OK: {args.config} is a valid {cfg.PROBLEM.TYPE} {cfg.PROBLEM.NDIM} configuration")
-    sys.exit(0)  
+    sys.exit(0)   
 
 
 def _check_data_cli(argv):
@@ -175,6 +175,36 @@ def _check_data_cli(argv):
     sys.exit(0 if report["ok"] else 1)
 
 
+def _list_workflows_cli(argv):
+    """
+    List from the command line the workflows available in BiaPy.
+
+    Usage::
+
+        biapy list-workflows
+        biapy list-workflows --json
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``list-workflows``.
+    """
+    import json
+
+    from ._biapy import list_workflows
+
+    parser = argparse.ArgumentParser(
+        prog="biapy list-workflows",
+        description="List the workflows available in BiaPy (the values of PROBLEM.TYPE).",
+    )
+    parser.add_argument("--json", action="store_true", help="Print the list as JSON")
+    args = parser.parse_args(argv)
+
+    workflows = list_workflows()
+    print(json.dumps(workflows) if args.json else "\n".join(workflows))
+    sys.exit(0)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -238,8 +268,8 @@ def main():
     and calls its `run_job` method to start the workflow. The program exits
     with status 0 upon successful completion.
     """
-    # Subcommands only check things; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli}
+    # Subcommands only check or list things; any other call runs a job
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -266,7 +296,8 @@ def main():
 
     parser = argparse.ArgumentParser(
         epilog="To check without running anything: biapy validate-config <config> [--no-data-check] | "
-        "biapy check-data <config> | biapy check-data --workflow <TYPE> --ndim <2D|3D> --raw <folder> [--gt <folder>]",
+        "biapy check-data <config> | biapy check-data --workflow <TYPE> --ndim <2D|3D> --raw <folder> [--gt <folder>]. "
+        "To list the workflows: biapy list-workflows",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")
