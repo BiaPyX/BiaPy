@@ -22,8 +22,8 @@ import sys
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -91,7 +91,7 @@ def _validate_config_cli(argv):
         sys.exit(1)
 
     print(f"OK: {args.config} is a valid {cfg.PROBLEM.TYPE} {cfg.PROBLEM.NDIM} configuration")
-    sys.exit(0)   
+    sys.exit(0)
 
 
 def _check_data_cli(argv):
@@ -205,6 +205,66 @@ def _list_workflows_cli(argv):
     sys.exit(0)
 
 
+def _inspect_image_cli(argv):
+    """
+    Describe from the command line an image as BiaPy reads it (see :func:`biapy.inspect_image`).
+
+    Usage::
+
+        biapy inspect-image <path_to_image>
+        biapy inspect-image <path_to_image> --json
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``inspect-image``.
+    """
+    import json
+
+    parser = argparse.ArgumentParser(
+        prog="biapy inspect-image",
+        description="Describe an image as BiaPy reads it, to know whether it is 2D or 3D.",
+    )
+    parser.add_argument("path", help="Path to the image")
+    parser.add_argument("--json", action="store_true", help="Print the report as JSON")
+    args = parser.parse_args(argv)
+
+    from ._biapy import inspect_image
+
+    try:
+        report = inspect_image(args.path)
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        s = report["stored"]
+        print(f"Stored:    shape {s['shape']}, axes {s['axes'] or 'unknown'}, {s['dtype']}")
+        for ndim in ("2D", "3D"):
+            r = report[ndim]
+            if "error" in r:
+                print(f"As {ndim}:     not possible ({r['error']})")
+                continue
+            shape = r["shape"]
+            # BiaPy's order is (y, x, c) in 2D and (z, y, x, c) in 3D
+            meaning = f"{shape[-1]} channel" + ("s" if shape[-1] != 1 else "")
+            if ndim == "3D":
+                meaning = f"{shape[0]} slices, " + meaning
+            print(f"As {ndim}:     {str(shape):<20}  -> {meaning}")
+        ndim = report["suggested_ndim"]
+        if ndim:
+            if report["axes_known"]:
+                why = "the file has a Z axis" if ndim == "3D" else "the file has no Z axis"
+            else:
+                why = "it can only be read this way"
+            print(f"Suggested: PROBLEM.NDIM: {ndim} ({why})")
+        else:
+            print("Suggested: unknown (the file doesn't store its axes): choose PROBLEM.NDIM from the readings above")
+    sys.exit(0)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -268,8 +328,8 @@ def main():
     and calls its `run_job` method to start the workflow. The program exits
     with status 0 upon successful completion.
     """
-    # Subcommands only check or list things; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli}
+    # Subcommands have their own options and don't run a job; any other call runs a job
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -295,9 +355,12 @@ def main():
     #     --gpu 0,1
 
     parser = argparse.ArgumentParser(
-        epilog="To check without running anything: biapy validate-config <config> [--no-data-check] | "
-        "biapy check-data <config> | biapy check-data --workflow <TYPE> --ndim <2D|3D> --raw <folder> [--gt <folder>]. "
-        "To list the workflows: biapy list-workflows",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Other commands (they don't run any job; see 'biapy <command> --help'):\n"
+        "  validate-config   check a configuration\n"
+        "  check-data        check the data of a configuration, or folders for a workflow\n"
+        "  list-workflows    list the workflows\n"
+        "  inspect-image     describe an image: 2D or 3D, channels",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")

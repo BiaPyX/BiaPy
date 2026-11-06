@@ -2545,3 +2545,46 @@ def check_data_for_workflow(workflow: str, ndim: str, raw: str, gt: str = "", pe
     report["upscaling"] = upscaling
     report["ok"] = not report["errors"]
     return report
+
+
+def inspect_image(path: str) -> dict:
+    """
+    Describe an image as BiaPy reads it, to know whether it is 2D or 3D before writing a configuration.
+
+    Images with 3 dimensions can be read both ways (e.g. a ZYX stack read as 2D gives one channel per slice), so the
+    suggested ``PROBLEM.NDIM`` is taken from the axes stored in the file, when it has them (e.g. TIFF).
+
+    Parameters
+    ----------
+    path : str
+        Path to the image (TIFF, PNG...).
+
+    Returns
+    -------
+    dict
+        * ``stored``: ``shape``, ``axes`` (None if not in the file) and ``dtype`` as stored in the file.
+        * ``2D`` and ``3D``: the ``shape`` BiaPy reads, ``(y, x, c)`` and ``(z, y, x, c)``, or ``error``.
+        * ``axes_known``: whether the stored axes are real (tifffile names unknown axes Q or I).
+        * ``suggested_ndim``: "3D" if the stored axes have Z, "2D" if they don't. Without real stored axes, the
+          only reading that is possible, or None if both are.
+    """
+    from biapy.data.data_manipulation import imread, to_biapy_shape
+
+    img, axes = imread(path)
+    report = {"stored": {"shape": tuple(img.shape), "axes": axes, "dtype": str(img.dtype)}}
+    for ndim in ("2D", "3D"):
+        try:
+            report[ndim] = {"shape": tuple(to_biapy_shape(img, ndim == "3D", path, axes_order=axes).shape)}
+        except ValueError as e:
+            report[ndim] = {"error": str(e)}
+    # Images with 3 dimensions can be read both ways: the axes stored in the file tell which one is right.
+    # tifffile names unknown axes Q (unknown) or I (sequence of images): those don't say it
+    report["axes_known"] = bool(axes) and not set(axes) & set("QI")
+    if report["axes_known"]:
+        report["suggested_ndim"] = "3D" if "Z" in axes else "2D"
+    else:  # without real axes, only when one of the readings is not possible
+        possible = [ndim for ndim in ("2D", "3D") if "shape" in report[ndim]]
+        report["suggested_ndim"] = possible[0] if len(possible) == 1 else None
+    return report
+
+
