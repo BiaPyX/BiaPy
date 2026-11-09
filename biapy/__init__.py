@@ -261,22 +261,22 @@ def _inspect_image_cli(argv):
     sys.exit(0)
 
 
-def _config_template_cli(argv):
+def _get_config_template_cli(argv):
     """
     Print or save from the command line the basic configuration template of a workflow (see
     :func:`biapy.get_config_template`).
 
     Usage::
 
-        biapy config-template --workflow SEMANTIC_SEG --ndim 2D [--store <yaml>] [--json]
+        biapy get-config-template --workflow SEMANTIC_SEG --ndim 2D [--store <yaml>] [--json]
 
     Parameters
     ----------
     argv : list of str
-        Command-line arguments after ``config-template``.
+        Command-line arguments after ``get-config-template``.
     """
     parser = argparse.ArgumentParser(
-        prog="biapy config-template",
+        prog="biapy get-config-template",
         description="Print or save the basic configuration template of a workflow.",
     )
     parser.add_argument("--workflow", required=True, help="PROBLEM.TYPE, e.g. SEMANTIC_SEG")
@@ -368,7 +368,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "config-template": _config_template_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -396,11 +396,11 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Other commands (they don't run any job; see 'biapy <command> --help'):\n"
-        "  validate-config   check a configuration\n"
-        "  check-data        check the data of a configuration, or folders for a workflow\n"
-        "  list-workflows    list the workflows\n"
-        "  inspect-image     describe an image: 2D or 3D, channels\n"
-        "  config-template   print or save the basic configuration template of a workflow\n"
+        "  validate-config       check a configuration\n"
+        "  check-data            check the data of a configuration, or folders for a workflow\n"
+        "  list-workflows        list the workflows\n"
+        "  inspect-image         describe an image: 2D or 3D, channels\n"
+        "  get-config-template   print or save the basic configuration template of a workflow\n"
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")
