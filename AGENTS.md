@@ -13,7 +13,7 @@ User documentation: https://biapy.readthedocs.io. For agents, start from its ind
 
 `PROBLEM.TYPE` is one of `SEMANTIC_SEG`, `INSTANCE_SEG`, `DETECTION`, `DENOISING`, `SUPER_RESOLUTION`,
 `SELF_SUPERVISED`, `CLASSIFICATION`, `IMAGE_TO_IMAGE`. Each one has a 2D and a 3D template in
-`templates/<workflow>/` (`2d_*.yaml` / `3d_*.yaml`); their data formats are described in the documentation.
+`biapy/config/templates/<workflow>/` (`2d_*.yaml` / `3d_*.yaml`); their data formats are described in the documentation.
 
 Ground truth expected by each workflow (`DATA.TRAIN.GT_PATH`, and `DATA.TEST.GT_PATH` when `DATA.TEST.LOAD_GT` is set):
 
@@ -43,7 +43,7 @@ Check a config without running it: `biapy validate-config my_config.yaml [--no-d
 | `biapy/wizard/` | Logic of the configuration wizard shared by the front-ends (BiaPy-GUI, Fiji plugin): data checks, nnU-Net-like planning and config building. Must import without loading PyTorch |
 | `biapy/citations/` | `references.yaml`: works to cite and the config rules that decide when each applies (written as `CITATIONS.md`/`citations.bib` at the end of `run_job()` and used in BMZ exports) |
 | `biapy/utils/` | Helpers, callbacks and standalone scripts |
-| `templates/` | Ready-to-use YAML configs, one folder per workflow (plus `sota_implementations/`, with notebooks). Start here when writing a config |
+| `biapy/config/templates` | Ready-to-use YAML configs, one folder per workflow (plus `sota_implementations/`, with notebooks). Start here when writing a config |
 | `tests/` | Fast CPU tests and several heavy GPU checks (see "Tests" below) |
 
 The Python API (`BiaPy` class with `train()`, `test()`, `predict()`, `load_workflow_from_model()`,
@@ -72,7 +72,7 @@ otherwise BiaPy uses `SYSTEM.DEVICE` (default `"cpu"`). No flag is needed to run
 
 ## Running
 
-Paths starting with `/path/to/` are placeholders. The YAML files in `templates/` use them for the data
+Paths starting with `/path/to/` are placeholders. The YAML files in `biapy/config/templates` use them for the data
 paths (`DATA.TRAIN.PATH`, `DATA.TRAIN.GT_PATH`, ...), so copy a template and replace them before running it.
 
 ```bash
@@ -152,7 +152,7 @@ Only when it applies:
 
 4. Renamed, removed or changed type: update `convert_old_model_cfg_to_current_version()` in
    `check_configuration.py` so old YAML configs and checkpoints keep loading.
-5. Option users normally set: add it to the relevant YAML files in `templates/`.
+5. Option users normally set: add it to the relevant YAML files in `biapy/config/templates`.
 6. Option the wizard sets (`biapy/wizard/config_builder.py`, the planners, `instance_seg.REPRESENTATIONS`): run `pytest tests/test_wizard.py -q`, which validates the configs it builds with `check_configuration()`.
 
 ### Adding a model architecture
@@ -188,7 +188,7 @@ Only when it applies:
 
 6. Model split across several files: list the extra files in `extra_model_files` in `build_model()`,
    or BioImage Model Zoo export will miss them.
-7. Add a template in `templates/<workflow>/` and a test case in `tests/run_checks.py`.
+7. Add a template in `biapy/config/templates/<workflow>/` and a test case in `tests/run_checks.py`.
 
 ### Changing the wizard (`biapy/wizard/`)
 The front-ends (BiaPy-GUI, the Fiji plugin) call what `biapy.wizard.INTERFACE` lists. `tests/test_wizard_api.py`
@@ -205,6 +205,6 @@ Wizard modules must stay importable without PyTorch: import BiaPy's readers insi
 ### Style
 - NumPy-style docstrings (`Parameters` / `Returns` sections), as in the rest of the code.
 - Comments and docstrings in English.
-- Keep backward compatibility: existing YAML configs in `templates/` and old checkpoints must keep loading.
+- Keep backward compatibility: existing YAML configs in `biapy/config/templates` and old checkpoints must keep loading.
 - Config errors: follow `check_configuration()`, i.e. `assert` or `raise ValueError` with a message
   that names the config key and says what is allowed.

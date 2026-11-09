@@ -65,6 +65,7 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "biapy.citations" = ["references.yaml"]
+"biapy.config" = ["templates/**/*.yaml"]
 
 [tool.setuptools.packages.find]
 include = ['biapy*']
