@@ -2136,7 +2136,7 @@ all_test_info["Test35"] = {
     "jobname": "test35",
     "description": "2D Tracking with the masks given (no segmentation). Trackastra's HeLa example (CTC "
         "Fluo-N2DL-HeLa 02, 20 frames) and its ERR_SEG masks, linked by 'trackastra_general_2d' (greedy, divisions).",
-    "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "2d_tracking.yaml"),
+    "template_path": os.path.join(BIAPY_FOLDER, "biapy", "config", "templates", "instance_segmentation", "2d_tracking.yaml"),
     "yaml": "test35.yaml",
     "multigpu": False,
     "yaml_modifications": {
@@ -2173,7 +2173,7 @@ all_test_info["Test36"] = {
         "with its ERR_SEG masks as GT, then each frame segmented and the instances linked by 'trackastra_general_2d'. "
         "Tracking metrics against the tracks of Test35 (no CTC GT: the CTC data server is not reachable from the "
         "runner). BMZ export of the instance seg. model.",
-    "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "2d_tracking.yaml"),
+    "template_path": os.path.join(BIAPY_FOLDER, "biapy", "config", "templates", "instance_segmentation", "2d_tracking.yaml"),
     "yaml": "test36.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -2227,7 +2227,7 @@ all_test_info["Test37"] = {
     "jobname": "test37",
     "description": "3D Tracking with the masks given (no segmentation). Trackastra's 3D example (CTC "
         "Fluo-N3DH-CHO 02, 20 frames) and its ERR_SEG masks, linked by 'trackastra_ctc'.",
-    "template_path": os.path.join(BIAPY_FOLDER, "templates", "instance_segmentation", "3d_tracking.yaml"),
+    "template_path": os.path.join(BIAPY_FOLDER, "biapy", "config", "templates", "instance_segmentation", "3d_tracking.yaml"),
     "yaml": "test37.yaml",
     "multigpu": False,
     "yaml_modifications": {
@@ -2263,7 +2263,7 @@ DATASETS = [
         "folder_name": "semantic_seg",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/2d_semantic_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/semantic_segmentation/2d_semantic_segmentation.yaml",
                 "filename": "2d_semantic_segmentation.yaml",
             },
             {
@@ -2271,7 +2271,7 @@ DATASETS = [
                 "filename": "fibsem_epfl_2D.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/3d_semantic_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/semantic_segmentation/3d_semantic_segmentation.yaml",
                 "filename": "3d_semantic_segmentation.yaml",
             },
             {
@@ -2288,7 +2288,7 @@ DATASETS = [
         "folder_name": "instance_seg",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_instance_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/instance_segmentation/2d_instance_segmentation.yaml",
                 "filename": "2d_instance_segmentation.yaml",
             },
             {
@@ -2300,7 +2300,7 @@ DATASETS = [
                 "filename": "dsb2018.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/3d_instance_segmentation.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/instance_segmentation/3d_instance_segmentation.yaml",
                 "filename": "3d_instance_segmentation.yaml",
             },
             {
@@ -2324,7 +2324,7 @@ DATASETS = [
                 "filename": "Conic.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_cellpose_sam.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/instance_segmentation/2d_cellpose_sam.yaml",
                 "filename": "2d_cellpose_sam.yaml",
             }
         ]
@@ -2333,7 +2333,7 @@ DATASETS = [
         "folder_name": "detection",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/2d_detection.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/detection/2d_detection.yaml",
                 "filename": "2d_detection.yaml",
             },
             {
@@ -2341,7 +2341,7 @@ DATASETS = [
                 "filename": "Stardist_v2_detection.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/3d_detection.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/detection/3d_detection.yaml",
                 "filename": "3d_detection.yaml",
             },
             {
@@ -2362,7 +2362,7 @@ DATASETS = [
         "folder_name": "denoising",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/denoising/2d_denoising.yaml",
                 "filename": "2d_denoising.yaml",
             },
             {
@@ -2370,7 +2370,7 @@ DATASETS = [
                 "filename": "Noise2Void_RGB.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/denoising/3d_denoising.yaml",
                 "filename": "3d_denoising.yaml",
             },
             {
@@ -2387,7 +2387,7 @@ DATASETS = [
         "folder_name": "sr",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/super-resolution/2d_super-resolution.yaml",
                 "filename": "2d_super_resolution.yaml",
             },
             {
@@ -2395,7 +2395,7 @@ DATASETS = [
                 "filename": "sr_data_2D.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/super-resolution/3d_super-resolution.yaml",
                 "filename": "3d_super_resolution.yaml",
             },
             {
@@ -2408,7 +2408,7 @@ DATASETS = [
         "folder_name": "ssl",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/self-supervised/2d_self-supervised.yaml",
                 "filename": "2d_self_supervision.yaml",
             },
             {
@@ -2420,7 +2420,7 @@ DATASETS = [
                 "filename": "test14_checkpoint.pth",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/self-supervised/3d_self-supervised.yaml",
                 "filename": "3d_self_supervision.yaml",
             },
             {
@@ -2433,7 +2433,7 @@ DATASETS = [
         "folder_name": "classification",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/classification/2d_classification.yaml",
                 "filename": "2d_classification.yaml",
             },
             {
@@ -2445,7 +2445,7 @@ DATASETS = [
                 "filename": "butterfly_data.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/classification/3d_classification.yaml",
                 "filename": "3d_classification.yaml",
             },
             {
@@ -2458,7 +2458,7 @@ DATASETS = [
         "folder_name": "image_to_image",
         "data": [
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/2d_image-to-image.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/image-to-image/2d_image-to-image.yaml",
                 "filename": "2d_image_to_image.yaml",
             },
             {
@@ -2466,7 +2466,7 @@ DATASETS = [
                 "filename": "Dapi_dataset.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells/lightmycells_actin.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/image-to-image/lightmycells/lightmycells_actin.yaml",
                 "filename": "2d_image_to_image_light.yaml",
             },
             {
@@ -2474,7 +2474,7 @@ DATASETS = [
                 "filename": "reduced_actin_lightmycells.zip",
             },
             {
-                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/3d_image-to-image.yaml",
+                "url": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/biapy/config/templates/image-to-image/3d_image-to-image.yaml",
                 "filename": "3d_image_to_image.yaml",
             },
             {

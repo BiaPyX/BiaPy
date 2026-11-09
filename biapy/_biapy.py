@@ -2175,6 +2175,20 @@ VALID_WORKFLOWS = [
 ]
 
 
+# Folder (and file name suffix) of each workflow's basic templates in biapy/config/templates,
+# e.g. semantic_segmentation/2d_semantic_segmentation.yaml
+TEMPLATE_NAMES = {
+    "SEMANTIC_SEG": "semantic_segmentation",
+    "INSTANCE_SEG": "instance_segmentation",
+    "CLASSIFICATION": "classification",
+    "DETECTION": "detection",
+    "DENOISING": "denoising",
+    "SUPER_RESOLUTION": "super-resolution",
+    "SELF_SUPERVISED": "self-supervised",
+    "IMAGE_TO_IMAGE": "image-to-image",
+}
+
+
 def list_workflows() -> List[str]:
     """
     List the workflows available in BiaPy, i.e. the values ``PROBLEM.TYPE`` can take.
@@ -2587,4 +2601,48 @@ def inspect_image(path: str) -> dict:
         report["suggested_ndim"] = possible[0] if len(possible) == 1 else None
     return report
 
+
+def get_config_template(workflow: str, ndim: str, store_yaml: Optional[str] = None) -> dict:
+    """
+    Get the basic configuration template of a workflow, the one in ``biapy/config/templates``.
+
+    Its data paths are placeholders (``/path/to/data``) to replace before running it. To create a configuration
+    adapted to some data instead, as the wizard does, see :func:`create_config`.
+
+    Parameters
+    ----------
+    workflow : str
+        ``PROBLEM.TYPE``, e.g. "SEMANTIC_SEG". One of :data:`VALID_WORKFLOWS`.
+    ndim : str
+        "2D" or "3D".
+    store_yaml : str, optional
+        Path of a YAML file to write the template to, as it is (with its comments).
+
+    Returns
+    -------
+    dict
+        The configuration of the template. Each call returns a new one.
+
+    Raises
+    ------
+    ValueError
+        If ``workflow`` or ``ndim`` are not valid.
+    """
+    from importlib.resources import files
+
+    # Same checks as build_config
+    workflow = str(workflow).upper()
+    if workflow not in VALID_WORKFLOWS:
+        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
+    ndim = str(ndim).upper()
+    if ndim not in ["2D", "3D"]:
+        raise ValueError("'ndim' must be either '2D' or '3D'. Provided: {}".format(ndim))
+
+    name = TEMPLATE_NAMES[workflow]
+    text = (files("biapy.config") / "templates" / name / f"{ndim.lower()}_{name}.yaml").read_text(encoding="utf-8")
+    if store_yaml:
+        os.makedirs(os.path.dirname(os.path.abspath(store_yaml)), exist_ok=True)
+        with open(store_yaml, "w", encoding="utf-8") as f:
+            f.write(text)  # as it is, with the template's comments
+    return yaml.safe_load(text)
 

@@ -17,13 +17,14 @@ Version: 3.7.3
 __version__ = "3.7.3"
 
 import argparse
+import json
 import os
 import sys
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -123,7 +124,6 @@ def _check_data_cli(argv):
         Wrong command-line arguments (raised by ``argparse``).
     """
     import contextlib
-    import json
 
     parser = argparse.ArgumentParser(
         prog="biapy check-data",
@@ -189,8 +189,6 @@ def _list_workflows_cli(argv):
     argv : list of str
         Command-line arguments after ``list-workflows``.
     """
-    import json
-
     from ._biapy import list_workflows
 
     parser = argparse.ArgumentParser(
@@ -219,8 +217,6 @@ def _inspect_image_cli(argv):
     argv : list of str
         Command-line arguments after ``inspect-image``.
     """
-    import json
-
     parser = argparse.ArgumentParser(
         prog="biapy inspect-image",
         description="Describe an image as BiaPy reads it, to know whether it is 2D or 3D.",
@@ -262,6 +258,49 @@ def _inspect_image_cli(argv):
             print(f"Suggested: PROBLEM.NDIM: {ndim} ({why})")
         else:
             print("Suggested: unknown (the file doesn't store its axes): choose PROBLEM.NDIM from the readings above")
+    sys.exit(0)
+
+
+def _config_template_cli(argv):
+    """
+    Print or save from the command line the basic configuration template of a workflow (see
+    :func:`biapy.get_config_template`).
+
+    Usage::
+
+        biapy config-template --workflow SEMANTIC_SEG --ndim 2D [--store <yaml>] [--json]
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``config-template``.
+    """
+    parser = argparse.ArgumentParser(
+        prog="biapy config-template",
+        description="Print or save the basic configuration template of a workflow.",
+    )
+    parser.add_argument("--workflow", required=True, help="PROBLEM.TYPE, e.g. SEMANTIC_SEG")
+    parser.add_argument("--ndim", required=True, help="2D or 3D")
+    parser.add_argument("--store", help="YAML file to write the template to")
+    parser.add_argument("--json", action="store_true", help="Print the template as JSON")
+    args = parser.parse_args(argv)
+
+    from ._biapy import get_config_template
+
+    try:
+        config = get_config_template(args.workflow, args.ndim, store_yaml=args.store)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(config, indent=2))
+    elif args.store:
+        print(f"OK: template written to {args.store}")
+    else:
+        import yaml
+
+        print(yaml.safe_dump(config, default_flow_style=False, sort_keys=False), end="")
     sys.exit(0)
 
 
@@ -329,7 +368,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "config-template": _config_template_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -360,7 +399,8 @@ def main():
         "  validate-config   check a configuration\n"
         "  check-data        check the data of a configuration, or folders for a workflow\n"
         "  list-workflows    list the workflows\n"
-        "  inspect-image     describe an image: 2D or 3D, channels",
+        "  inspect-image     describe an image: 2D or 3D, channels\n"
+        "  config-template   print or save the basic configuration template of a workflow\n"
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")
