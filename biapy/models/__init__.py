@@ -1620,13 +1620,17 @@ def check_bmz_args(
     return compat["preproc_info"], compat["opts"], compat["workflow_info"]
 
 
-# BioImage Model Zoo models that pass the checks of check_bmz_model_compatibility() for a workflow they are not meant
-# for (e.g. tagged just "segmentation"), so they are not offered nor used for it. Keyed by the model's nickname, each
+# BioImage Model Zoo models that pass the checks of check_bmz_model_compatibility() but can't be used for a workflow
+# (e.g. tagged just "segmentation", or their package is broken), so they are not offered nor used for it. Keyed by the model's nickname, each
 # with the workflows (PROBLEM.TYPE, or "all") it is excluded from and why.
 BMZ_MODEL_BLACKLIST: Dict[str, Dict[str, str]] = {
     "wild-whale": {
         "SEMANTIC_SEG": "it predicts the affinities of the cells' boundaries, to be used to create instances "
         "(instance segmentation), but it is only tagged as 'segmentation'",
+    },
+    "romantic-shark": {
+        "all": "its package in the BioImage Model Zoo is incomplete (its documentation.md is missing), so it can't "
+        "be downloaded",
     },
 }
 

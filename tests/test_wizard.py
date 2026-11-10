@@ -1214,6 +1214,7 @@ def test_bmz_blacklist():
         assert bmz_model_blacklist_reason(model, "INSTANCE_SEG") is None
         r = check_bmz_model_compatibility(model, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
         assert r["error"] and "excluded" in r["reason_message"]
+    assert "incomplete" in bmz_model_blacklist_reason({"nickname": "romantic-shark"}, "INSTANCE_SEG")
     manifest["config"]["bioimageio"]["nickname"] = "other-model"
     r = check_bmz_model_compatibility(manifest, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
     assert not r["error"], r["reason_message"]
