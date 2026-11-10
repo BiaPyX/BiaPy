@@ -23,8 +23,8 @@ import sys
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -379,6 +379,63 @@ def _create_config_cli(argv):
     sys.exit(0 if report["ok"] else 1)
 
 
+def _search_bmz_models_cli(argv):
+    """
+    Search from the command line the BioImage Model Zoo for pretrained models BiaPy can use (see
+    :func:`biapy.search_bmz_models`).
+
+    Usage::
+
+        biapy search-bmz-models [--workflow INSTANCE_SEG] [--ndim 2D] [--nchannels 1] [--nclasses 2]
+                                [--query nuclei] [--json]
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``search-bmz-models``.
+
+    Exit codes
+    ----------
+    0
+        The search was done (even if no model was found).
+    1
+        The search failed (wrong workflow/ndim, no internet...).
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    parser = argparse.ArgumentParser(
+        prog="biapy search-bmz-models",
+        description="Search the BioImage Model Zoo for pretrained models BiaPy can use (it needs internet).",
+    )
+    parser.add_argument("--workflow", default="all", help="PROBLEM.TYPE, e.g. INSTANCE_SEG (default: all)")
+    parser.add_argument("--ndim", default="all", help="2D or 3D (default: all)")
+    parser.add_argument("--nchannels", default="all", help="Channels of the images, e.g. 1 (default: all)")
+    parser.add_argument("--nclasses", default="all", help="Classes of the data (default: all)")
+    parser.add_argument("--query", help="Words to find in the model's name, description or tags, e.g. 'nuclei'")
+    parser.add_argument("--json", action="store_true", help="Print the models as JSON")
+    args = parser.parse_args(argv)
+
+    from ._biapy import search_bmz_models
+    from biapy.wizard.config_builder import to_jsonable
+
+    print("Searching the BioImage Model Zoo (it may take a minute)...", file=sys.stderr)
+    try:
+        models = search_bmz_models(args.workflow, args.ndim, args.nclasses, args.nchannels, args.query)
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(to_jsonable(models), indent=2))
+    elif not models:
+        print("No compatible models found")
+    else:
+        for m in models:
+            channels = m["opts"].get("DATA.PATCH_SIZE", ("?",))[-1]
+            print(f"{m['id']:24s} {m['workflow_type']} {m['ndim']}, {channels} channel(s)   {m['name'][:50]}   {m['url']}")
+    sys.exit(0)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -443,7 +500,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -476,7 +533,8 @@ def main():
         "  list-workflows        list the workflows\n"
         "  inspect-image         describe an image: 2D or 3D, channels\n"
         "  get-config-template   print or save the basic configuration template of a workflow\n"
-        "  create-config         create a configuration adapted to the data, as the wizard does\n",
+        "  create-config         create a configuration adapted to the data, as the wizard does\n"
+        "  search-bmz-models     search the BioImage Model Zoo for pretrained models\n",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")

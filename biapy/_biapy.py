@@ -2748,3 +2748,64 @@ def get_config_template(workflow: str, ndim: str, store_yaml: Optional[str] = No
             f.write(text)  # as it is, with the template's comments
     return yaml.safe_load(text)
 
+
+def search_bmz_models(
+    workflow: str = "all",
+    ndim: str = "all",
+    nclasses="all",
+    nchannels="all",
+    query: Optional[str] = None,
+) -> List[dict]:
+    """
+    Search the BioImage Model Zoo for pretrained models BiaPy can use, filtered by what the data needs.
+
+    It uses :func:`biapy.models.bmz_search.list_compatible_bmz_models` (shared with BiaPy's notebooks and
+    BiaPy-Fiji), which checks each model's compatibility with BiaPy. It needs internet and may take a minute.
+
+    Parameters
+    ----------
+    workflow : str, optional
+        ``PROBLEM.TYPE``, e.g. "INSTANCE_SEG", or "all".
+    ndim : str, optional
+        "2D", "3D" or "all".
+    nclasses : int or str, optional
+        Classes of the data (``DATA.N_CLASSES``), or "all".
+    nchannels : int or str, optional
+        Channels of the images (e.g. 1 for grayscale, 3 for RGB), or "all".
+    query : str, optional
+        Words that must all appear in the model's name, description or tags, e.g. "nuclei".
+
+    Returns
+    -------
+    list of dict
+        The compatible models (see :func:`biapy.models.bmz_search.bmz_model_info`): ``id`` (what
+        ``MODEL.BMZ.SOURCE_MODEL_ID`` takes), ``name``, ``description``, ``tags``, ``url``, ``workflow_type``,
+        ``ndim`` and ``opts`` (the configuration the model imposes, e.g. ``DATA.PATCH_SIZE``), among others.
+
+    Raises
+    ------
+    ValueError
+        If ``workflow`` or ``ndim`` are not valid.
+    """
+    from biapy.models.bmz_search import list_compatible_bmz_models
+
+    workflow, ndim = str(workflow).upper(), str(ndim).upper()
+    if workflow != "ALL" and workflow not in VALID_WORKFLOWS:
+        raise ValueError("'workflow' must be 'all' or one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
+    if ndim not in ["ALL", "2D", "3D"]:
+        raise ValueError("'ndim' must be 'all', '2D' or '3D'. Provided: {}".format(ndim))
+
+    models = list_compatible_bmz_models(
+        workflow="all" if workflow == "ALL" else workflow,
+        ndim="all" if ndim == "ALL" else ndim,
+        nclasses=nclasses,
+        nchannels=nchannels,
+    )
+    if query:
+        # Every word of the query in the model's name, description or tags (e.g. "nuclei fluorescence")
+        words = query.lower().split()
+        models = [
+            m for m in models
+            if all(w in " ".join([m["name"], m["description"]] + m["tags"]).lower() for w in words)
+        ]
+    return models
