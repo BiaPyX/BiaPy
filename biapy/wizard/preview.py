@@ -16,6 +16,8 @@ from biapy.wizard.fingerprint import sample_indices
 ROWS = 3  # pairs shown
 CHECKED = 6  # pairs inspected for the warnings
 THUMB = 220  # max. side of the thumbnails, in pixels
+POINTS_CROP = 128  # side of the full-resolution crops where the Wizard draws the points with the radius chosen
+POINTS_CROP_DZ = 10  # points kept up to this many slices away from the slice of a crop (for the Z radius)
 # More labels than this, each a single connected object, look like instance masks
 INSTANCE_LIKE_LABELS = 10
 # A label split in more objects than this, with few labels, looks like a semantic/binary mask
@@ -114,6 +116,35 @@ def _points_rgb(raw_plane, points, z_mid):
         rr, cc = disk((y, x), r, shape=rgb.shape[:2])
         rgb[rr, cc] = (255, 40, 40)
     return rgb
+
+
+def points_crop(raw, pts, is_3d):
+    """
+    A POINTS_CROP square of ``raw`` (as read by preview_image()) at full resolution, around the point with the most
+    points near it (3D: in its slice), and the points in it as [dz, y, x] crop pixels (truncated, as BiaPy paints
+    them), for the Wizard to draw the training targets of a point radius. None without points.
+    """
+    p = pts.astype(int)
+    if not is_3d:
+        p = np.concatenate([np.zeros((len(p), 1), int), p], axis=1)
+        raw = raw[None]
+    p = p[((p >= 0) & (p < raw.shape[:3])).all(1)]
+    if len(p) == 0:
+        return None
+    half = POINTS_CROP // 2
+    rng = np.random.default_rng(0)
+    cand = p[rng.choice(len(p), min(len(p), 200), replace=False)]
+    ref = p[rng.choice(len(p), min(len(p), 5000), replace=False)]  # bounds the memory of the counts
+    near = (np.abs(ref[None, :, 1:] - cand[:, None, 1:]) < half).all(-1)
+    near &= np.abs(ref[None, :, 0] - cand[:, None, 0]) <= POINTS_CROP_DZ
+    z, cy, cx = cand[near.sum(1).argmax()]
+    h, w = raw.shape[1:3]
+    y0, x0 = int(np.clip(cy - half, 0, max(0, h - POINTS_CROP))), int(np.clip(cx - half, 0, max(0, w - POINTS_CROP)))
+    crop = raw[z, y0 : y0 + POINTS_CROP, x0 : x0 + POINTS_CROP]
+    rel = p - [z, y0, x0]
+    keep = (np.abs(rel[:, 0]) <= POINTS_CROP_DZ) & (rel[:, 1:] >= 0).all(1)
+    keep &= (rel[:, 1] < crop.shape[0]) & (rel[:, 2] < crop.shape[1])
+    return {"points_crop_png": _png(_intensity_rgb(crop)), "points_crop": rel[keep].tolist()}
 
 
 def _read_points(path, is_3d):
@@ -254,8 +285,8 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None, target_data_pat
     Returns
     -------
     result : dict
-        ``samples`` (list of ``raw_name``, ``raw_png``, ``target_name``, ``target_png``), ``warnings``, ``notes``
-        and ``columns`` (titles).
+        ``samples`` (list of ``raw_name``, ``raw_png``, ``target_name``, ``target_png`` and, in detection,
+        ``points_crop_png`` and ``points_crop``: see points_crop()), ``warnings``, ``notes`` and ``columns`` (titles).
     """
     is_3d = ndim == "3D"
     if workflow == "CLASSIFICATION" and raw_folder:
@@ -316,6 +347,8 @@ def preview(workflow, ndim, raw_folder=None, target_folder=None, target_data_pat
                         s["target_png"] = _png(
                             _resize(_points_rgb(_plane(raw), pts, raw.shape[0] // 2 if is_3d else None), 1)
                         )
+                        if i in shown:
+                            s.update(points_crop(raw, pts, is_3d) or {})
                 else:
                     s["target_text"] = "{} points".format(len(pts))
                 if len(pts) == 0:

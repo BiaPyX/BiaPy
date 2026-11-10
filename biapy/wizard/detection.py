@@ -1,7 +1,7 @@
 """
 Strategy for the detection workflow. Distances come from ``min_sep``, the 5th percentile of each point's distance to
 its nearest one (XY pixels, Z scaled by the voxel spacing): points dilated with radius min_sep / 4 (clipped to
-[1, 5]) and min_sep / 2 as duplicate removal radius, minimum distance between peaks and matching tolerance. Training
+[1, 5]; unless chosen in the Wizard) and min_sep / 2 as duplicate removal radius, minimum distance between peaks and matching tolerance. Training
 is planned as in semantic segmentation.
 """
 import math
@@ -26,6 +26,20 @@ def point_distances(points_fp, spacing):
     return np.sqrt(((v * rel[: v.shape[1]]) ** 2).sum(axis=1))
 
 
+def point_dilation(points_fp, spacing, auto_radius):
+    """
+    CENTRAL_POINT_DILATION: the radii chosen in the Wizard (``point_radius`` of ``points_fp``) and, for the others,
+    ``auto_radius`` in XY and the XY radius scaled by the voxel anisotropy in Z.
+    """
+    chosen = points_fp.get("point_radius") or {}
+    xy = auto_radius if chosen.get("xy", "auto") == "auto" else int(chosen["xy"])
+    if len(spacing) == 2:
+        return [xy, xy]
+    z = chosen.get("z", "auto")
+    z = max(1 if xy else 0, int(round(xy / (spacing[0] / spacing[-1])))) if z == "auto" else int(z)
+    return [z, xy, xy]
+
+
 def detection_distances(points_fp, spacing):
     """Point dilation, removal radius, peak min. distance and tolerance (see the module docstring), or None."""
     d = point_distances(points_fp, spacing)
@@ -33,12 +47,7 @@ def detection_distances(points_fp, spacing):
         return None
     min_sep = float(np.percentile(d, NEIGHBOUR_PERCENTILE))
     radius = max(1, int(min_sep / 2))
-    dilation = int(np.clip(math.floor(min_sep / 4), 1, MAX_POINT_DILATION))
-    if len(spacing) == 3:
-        ratio = spacing[0] / spacing[-1]
-        dilation = [max(1, int(round(dilation / ratio))), dilation, dilation]
-    else:
-        dilation = [dilation, dilation]
+    dilation = point_dilation(points_fp, spacing, int(np.clip(math.floor(min_sep / 4), 1, MAX_POINT_DILATION)))
     return {
         "min_sep": min_sep,
         "median_nn": float(np.median(d)),
@@ -78,8 +87,9 @@ def plan_detection(cfg, sample_info, vram_bytes, vram_source, training_length="f
         )
         cfg["PROBLEM"].setdefault("DETECTION", {})["CENTRAL_POINT_DILATION"] = dist["dilation"]
         r = dist["dilation"]
-        lines.append("Training targets: disks of radius {} px around each point".format(
-            r[-1] if len(set(r)) == 1 else common.fmt(r) + " (z, y, x)"))
+        lines.append("Training targets: disks of radius {} px around each point{}".format(
+            r[-1] if len(set(r)) == 1 else common.fmt(r) + " (z, y, x)",
+            " (chosen in the Wizard)" if points_fp.get("point_radius") else ""))
         if cfg["TEST"].get("ENABLE"):
             pp = cfg["TEST"].setdefault("POST_PROCESSING", {})
             pp["REMOVE_CLOSE_POINTS"] = True
@@ -90,6 +100,8 @@ def plan_detection(cfg, sample_info, vram_bytes, vram_source, training_length="f
             lines.append(
                 "Detections closer than {} px are merged; matching tolerance {} px".format(dist["radius"], dist["radius"])
             )
+    elif points_fp.get("point_radius"):
+        cfg["PROBLEM"].setdefault("DETECTION", {})["CENTRAL_POINT_DILATION"] = point_dilation(points_fp, spacing, 2)
 
     if train_reason:
         return {"applied": dist is not None, "reason": train_reason, "lines": lines}

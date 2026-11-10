@@ -770,6 +770,27 @@ def test_detection_distances_anisotropic_3d(tmp_path):
     assert dist["dilation"] == [1, 5, 5]
 
 
+def test_detection_point_radius_chosen(tmp_path):
+    fp = _fp(_points(tmp_path, True), "DATA.TRAIN.GT_PATH", "DETECTION", "3D")
+    fp["point_radius"] = {"xy": 3}
+    assert detection.detection_distances(fp, [4.0, 1.0, 1.0])["dilation"] == [1, 3, 3]  # Z scaled from the chosen XY
+    fp["point_radius"] = {"xy": "auto", "z": 0}
+    assert detection.detection_distances(fp, [4.0, 1.0, 1.0])["dilation"] == [0, 5, 5]
+
+
+def test_answers_into_fingerprints():
+    from biapy.wizard.common import answers_into_fingerprints, choose_spacing
+
+    si = {"DATA.TRAIN.PATH": {"fingerprint": {"kind": "images", "n_files": 2, "n_calibrated": 0, "spacing": None}},
+          "DATA.TRAIN.GT_PATH": {"fingerprint": {"kind": "detection_points"}}}
+    answers = {"voxel_size DATA.TRAIN.PATH": [2, 0.5, 0.5], "voxel_size DATA.TEST.PATH": -1,
+               "detection_point_radius": 4, "detection_point_radius_z": "auto"}
+    out = answers_into_fingerprints(si, answers)
+    assert "spacing_given" not in si["DATA.TRAIN.PATH"]["fingerprint"]  # a copy
+    assert choose_spacing(out["DATA.TRAIN.PATH"]["fingerprint"], None, 3)[0] == [2.0, 0.5, 0.5]
+    assert out["DATA.TRAIN.GT_PATH"]["fingerprint"]["point_radius"] == {"xy": 4}
+
+
 ###########
 # Preview #
 ###########
@@ -836,6 +857,23 @@ def test_preview_detection_points_outside(tmp_path):
     r = preview("DETECTION", "2D", raw, str(csv))
     assert any("outside its image" in w for w in r["warnings"])
     assert "target_png" in r["samples"][0]
+    assert r["samples"][0]["points_crop"] == [[0, 10, 10]]  # the point outside is not drawn
+
+
+def test_points_crop():
+    from biapy.wizard.preview import POINTS_CROP, points_crop
+
+    # 2D: the crop goes where the points are densest, in full-resolution crop pixels
+    pts = np.array([[5, 5], [300.7, 400.2], [310, 420], [290, 380]], float)
+    c = points_crop(np.zeros((500, 600, 1), np.uint8), pts, False)
+    got = np.array(sorted(c["points_crop"]))
+    assert len(got) == 3 and (got[:, 0] == 0).all()
+    assert (got[:, 1:] - got[0, 1:]).tolist() == [[0, 0], [10, 20], [20, 40]]  # the dense group, truncated
+    # 3D: the slice of that point; points of other slices with their Z distance
+    pts = np.array([[4, 20, 20], [6, 22, 25], [30, 20, 20]], float)
+    c = points_crop(np.zeros((40, 50, 50, 1), np.uint8), pts, True)
+    assert sorted(c["points_crop"]) in ([[0, 20, 20], [2, 22, 25]], [[-2, 20, 20], [0, 22, 25]])
+    assert POINTS_CROP > 50 and points_crop(np.zeros((8, 8, 1)), np.zeros((0, 2)), False) is None
 
 
 ###################################

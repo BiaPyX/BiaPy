@@ -25,6 +25,38 @@ MIN_ESTIMATED_ANISOTROPY = 2.0  # below 2 nnU-Net would downsample all axes toge
 MAX_ESTIMATED_ANISOTROPY = 10.0
 
 
+# Wizard answers about the data, added to its fingerprints by answers_into_fingerprints()
+VOXEL_SIZE_ANSWER = "voxel_size "  # + folder key, e.g. "voxel_size DATA.TRAIN.PATH": (z, y, x)
+POINT_RADIUS_ANSWERS = {"detection_point_radius": "xy", "detection_point_radius_z": "z"}  # "auto" or pixels
+
+
+def is_data_answer(key):
+    return key.startswith(VOXEL_SIZE_ANSWER) or key in POINT_RADIUS_ANSWERS
+
+
+def answers_into_fingerprints(sample_info, answers):
+    """
+    Copy of ``sample_info`` with the Wizard answers about the data in the fingerprints the planners read: the voxel
+    size of images without one in their metadata (``spacing_given``) and the radius of the detection training targets
+    (``point_radius`` of the training points, {"xy", "z"}). Unanswered (-1) and automatic ones are left out.
+    """
+    import copy
+
+    info = copy.deepcopy(sample_info)
+
+    def fp(key):
+        return (info.get(key) or {}).get("fingerprint")
+
+    for key, value in answers.items():
+        if value in (-1, None, "auto"):
+            continue
+        if key.startswith(VOXEL_SIZE_ANSWER) and fp(key[len(VOXEL_SIZE_ANSWER):]):
+            fp(key[len(VOXEL_SIZE_ANSWER):])["spacing_given"] = [float(v) for v in value]
+        elif key in POINT_RADIUS_ANSWERS and fp("DATA.TRAIN.GT_PATH"):
+            fp("DATA.TRAIN.GT_PATH").setdefault("point_radius", {})[POINT_RADIUS_ANSWERS[key]] = value
+    return info
+
+
 def fingerprint(sample_info, key, kind):
     """Fingerprint of the folder checked for ``key`` (e.g. "DATA.TRAIN.PATH") if it is of that kind."""
     fp = (sample_info.get(key) or {}).get("fingerprint")
@@ -86,6 +118,8 @@ def estimate_anisotropy_from_objects(objects):
 
 def choose_spacing(raw_fp, objects, ndim):
     """Spacing used for planning and where it comes from."""
+    if raw_fp.get("spacing_given"):
+        return [float(v) for v in raw_fp["spacing_given"]], "given in the Wizard (no calibration found)"
     if raw_fp.get("spacing") and raw_fp["n_calibrated"] > 0:
         sp = raw_fp["spacing"]
         source = "image metadata ({} of {} images calibrated)".format(raw_fp["n_calibrated"], raw_fp["n_files"])
@@ -98,7 +132,7 @@ def choose_spacing(raw_fp, objects, ndim):
 
 
 def describe_data(raw_fp, spacing, spacing_source, lines):
-    unit = " µm" if raw_fp.get("spacing") else ""
+    unit = " µm" if raw_fp.get("spacing") or raw_fp.get("spacing_given") else ""
     lines.append("Voxel spacing: {}{} ({})".format(fmt(spacing), unit, spacing_source))
     if not raw_fp.get("spacing_consistent", True):
         lines.append("WARNING: the images do not have the same voxel spacing; the median one was used")
