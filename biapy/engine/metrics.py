@@ -2691,7 +2691,8 @@ class SkootsLoss(nn.Module):
     SKOOTS loss (`SKOOTS <https://github.com/indzhykulianlab/skoots>`__) for the 'F', 'P' and 'H'/'V'(/'Z') channels.
 
     Sum of three Tversky terms: 'F' vs. GT 'F', 'P' vs. GT 'P', and, for 'H'/'V'/'Z', a Gaussian score of how close
-    each voxel moved by its predicted offsets lands to its GT skeleton point vs. GT 'F'.
+    each voxel moved by its predicted offsets lands to its GT skeleton point vs. GT 'F'. The last one is optional,
+    and 'C' vs. GT 'C' is added if 'C' is given.
 
     Parameters
     ----------
@@ -2714,7 +2715,7 @@ class SkootsLoss(nn.Module):
         ``[multiplier, epoch]`` pairs: sigma is multiplied by ``multiplier`` from ``epoch`` on.
 
     tversky : dict, optional
-        ``(alpha, beta)`` of the ``"foreground"``, ``"skeleton"`` and ``"embed"`` terms.
+        ``(alpha, beta)`` of the ``"foreground"``, ``"skeleton"``, ``"embed"`` and ``"contour"`` terms.
 
     start_epochs : list of int, optional
         Epoch from which the 'F', 'P' and 'H'/'V'/'Z' terms are used.
@@ -2732,6 +2733,7 @@ class SkootsLoss(nn.Module):
             "foreground": (0.5, 0.5),
             "skeleton": (0.5, 1.5),
             "embed": (0.25, 0.75),
+            "contour": (0.5, 0.5),
         },
         start_epochs: List[int] = [0, 0, 0],
     ):
@@ -2739,10 +2741,12 @@ class SkootsLoss(nn.Module):
         self.ndim = ndim
         self.f_idx = channels.index("F")
         self.p_idx = channels.index("P")
-        self.off_idx = [channels.index(c) for c in skoots_offset_axes(ndim)]
+        self.off_idx = [channels.index(c) for c in skoots_offset_axes(ndim)] if "H" in channels else []
         self.w_fg = float(channel_weights[self.f_idx])
         self.w_skel = float(channel_weights[self.p_idx])
-        self.w_embed = float(channel_weights[channels.index("H")])
+        self.w_embed = float(channel_weights[channels.index("H")]) if self.off_idx else 0.0
+        self.c_idx = channels.index("C") if "C" in channels else None
+        self.w_contour = float(channel_weights[self.c_idx]) if self.c_idx is not None else 0.0
         self.register_buffer("scale", torch.tensor(list(scale)[-ndim:], dtype=torch.float32))
         self.register_buffer("initial_sigma", torch.tensor(list(initial_sigma)[-ndim:], dtype=torch.float32))
         self.sigma_decay = [(float(m), int(e)) for m, e in sigma_decay]
@@ -2796,6 +2800,11 @@ class SkootsLoss(nn.Module):
             total = total + self.w_fg * skoots_tversky(
                 pred[:, self.f_idx : self.f_idx + 1], fg, *self.tversky["foreground"]
             )
+        if self.c_idx is not None and self.epoch >= self.start_fg:
+            total = total + self.w_contour * skoots_tversky(
+                pred[:, self.c_idx : self.c_idx + 1], (target[:, self.c_idx : self.c_idx + 1] > 0).float(),
+                *self.tversky["contour"],
+            )
         if self.epoch >= self.start_skel and self.w_skel > 0:
             skel = (target[:, self.p_idx : self.p_idx + 1] > 0).float()
             total = total + self.w_skel * skoots_tversky(
@@ -2815,7 +2824,8 @@ class SkootsLoss(nn.Module):
 
 class SkootsMetrics:
     """
-    SKOOTS metrics: IoU of 'F' and 'P', and mean absolute offset error in voxels on the foreground.
+    SKOOTS metrics: IoU of 'F' and 'P' (and 'C' if given), and mean absolute offset error in voxels on the foreground
+    (if 'H' is given).
 
     Parameters
     ----------
@@ -2829,15 +2839,17 @@ class SkootsMetrics:
         Same as in :class:`SkootsLoss`.
     """
 
-    names = ["IoU (F channel)", "IoU (P channel)", "L1 (H/V/Z channels, voxels)"]
-    best = ["max", "max", "min"]
-
     def __init__(self, channels: List[str], ndim: int = 3, scale: List[float] = [12, 60, 60]):
         self.ndim = ndim
         self.f_idx = channels.index("F")
         self.p_idx = channels.index("P")
-        self.off_idx = [channels.index(c) for c in skoots_offset_axes(ndim)]
+        self.off_idx = [channels.index(c) for c in skoots_offset_axes(ndim)] if "H" in channels else []
         self.scale = torch.tensor(list(scale)[-ndim:], dtype=torch.float32)
+        self.c_idx = channels.index("C") if "C" in channels else None
+        self.names = ["IoU (F channel)", "IoU (P channel)"] + ["IoU (C channel)"] * (self.c_idx is not None)
+        self.best = ["max"] * len(self.names)
+        if self.off_idx:
+            self.names, self.best = self.names + ["L1 (H/V/Z channels, voxels)"], self.best + ["min"]
 
     @staticmethod
     def _iou(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
@@ -2848,15 +2860,18 @@ class SkootsMetrics:
         if isinstance(y_pred, dict):
             y_pred = y_pred["pred"]
         y_pred, y_true = y_pred.float(), y_true.float()
-        fg = y_true[:, self.f_idx] > 0
-        view = (1, self.ndim) + (1,) * self.ndim
-        err = (y_pred[:, self.off_idx] * self.scale.to(y_pred.device).view(view) - y_true[:, self.off_idx]).abs()
-        err = err.mean(1)[fg]
-        return {
-            self.names[0]: self._iou(y_pred[:, self.f_idx], y_true[:, self.f_idx]),
-            self.names[1]: self._iou(y_pred[:, self.p_idx], y_true[:, self.p_idx]),
-            self.names[2]: err.mean() if err.numel() > 0 else y_pred.new_zeros(()),
+        out = {
+            name: self._iou(y_pred[:, i], y_true[:, i])
+            for name, i in zip(self.names, [self.f_idx, self.p_idx, self.c_idx])
+            if i is not None
         }
+        if self.off_idx:
+            fg = y_true[:, self.f_idx] > 0
+            view = (1, self.ndim) + (1,) * self.ndim
+            err = (y_pred[:, self.off_idx] * self.scale.to(y_pred.device).view(view) - y_true[:, self.off_idx]).abs()
+            err = err.mean(1)[fg]
+            out[self.names[-1]] = err.mean() if err.numel() > 0 else y_pred.new_zeros(())
+        return out
 
 
 def pcc_loss(pred, target, eps=1e-8):

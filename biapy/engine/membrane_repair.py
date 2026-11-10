@@ -204,7 +204,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         offset pair in 3D), so this is always derived, never a user-provided value.
         """
         mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-        if Membrane_Repair_Workflow._is_skoots(cfg):
+        if "P" in Membrane_Repair_Workflow._target_channels(cfg):
             cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = len(Membrane_Repair_Workflow._target_channels(cfg))
             return
         a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
@@ -286,14 +286,14 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         Force ``ce_sigmoid`` activation on every output channel, regardless of
         ``PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT``: skipped at training time (loss gets raw
         logits, for ``BCEWithLogitsLoss``'s numerically-stable convention) and applied as a real
-        sigmoid at inference. The SKOOTS target uses ``sigmoid`` ('F'/'P') and ``tanh`` (offsets)
-        instead, also in training.
+        sigmoid at inference. The SKOOTS and 'F'/'P'(/'C') targets use ``sigmoid`` ('F'/'P'/'C') and ``tanh``
+        (offsets) instead, also in training.
         """
         super().define_activations_and_channels()
-        if self._is_skoots(self.cfg):
+        if "P" in self._target_channels(self.cfg):
             # Applied in training too: the SKOOTS loss needs probabilities and tanh offsets
             self.head_activations = [
-                "sigmoid" if ch in ("F", "P") else "tanh" for ch in self._target_channels(self.cfg)
+                "sigmoid" if ch in ("F", "P", "C") else "tanh" for ch in self._target_channels(self.cfg)
             ]
             return
         self.head_activations = ["ce_sigmoid"] * len(self.head_activations)
@@ -316,7 +316,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         if not self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
             super().define_metrics()
             return
-        if self._is_skoots(self.cfg):
+        if "P" in self._target_channels(self.cfg):
             self._define_skoots_metrics()
             return
 
@@ -405,6 +405,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 "foreground": tuple(sk.FOREGROUND_TVERSKY),
                 "skeleton": tuple(sk.SKELETON_TVERSKY),
                 "embed": tuple(sk.EMBED_TVERSKY),
+                "contour": tuple(sk.CONTOUR_TVERSKY),
             },
             start_epochs=[int(f * epochs) for f in sk.START_FRACTIONS],
         ).to(self.device)
@@ -412,11 +413,11 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
             WeightedCompositeLoss([(float(cfg.LOSS.WEIGHTS[0]), skoots_loss)]).to(self.device)
         )
 
-        self.train_metric_names = list(SkootsMetrics.names)
-        self.train_metric_best = list(SkootsMetrics.best)
         self.train_metrics = [SkootsMetrics(channels, ndim=self.dims, scale=scale)]
-        self.test_metric_names = list(SkootsMetrics.names)
+        self.train_metric_names = list(self.train_metrics[0].names)
+        self.train_metric_best = list(self.train_metrics[0].best)
         self.test_metrics = [SkootsMetrics(channels, ndim=self.dims, scale=scale)]
+        self.test_metric_names = list(self.test_metrics[0].names)
 
     def _malis_resolution(self) -> Tuple[float, ...]:
         """
@@ -720,7 +721,7 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
 
         Method selected by ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD``:
         ``"watershed"`` (single min-affinity watershed, see ``watershed_by_channels``'s ``"A"``-only
-        branch) or ``"agglomeration"`` (default, see
+        branch, or 'P' seeds grown over 'F' for the 'F'/'P'(/'C') target) or ``"agglomeration"`` (default, see
         ``biapy/data/post_processing/affinity_agglomeration.py``).
 
         If ``TEST.EVAL_BORDER_CROP`` is set, the saved/agglomerated instance labels are left
@@ -769,6 +770,20 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 min_edge_voxels=pp.MIN_EDGE_VOXELS,
                 resolution=self.resolution,
                 watershed_by_2d_slices=False,
+                verbose=cfg.TEST.VERBOSE,
+            ).astype(np.uint32)
+        elif "P" in (channels := self._target_channels(cfg)):
+            pred_labels = watershed_by_channels(
+                data=pred,
+                channels=channels,
+                seed_channels=["P"],
+                seed_channel_ths=[pp.WATERSHED_SEED_TH],
+                topo_surface_channel="C" if "C" in channels else "P",
+                growth_mask_channels=["F"],
+                growth_mask_channel_ths=[pp.WATERSHED_GROWTH_TH],
+                resolution=self.resolution,
+                watershed_by_2d_slices=False,
+                save_dir=None,
                 verbose=cfg.TEST.VERBOSE,
             ).astype(np.uint32)
         else:

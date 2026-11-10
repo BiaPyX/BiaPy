@@ -765,6 +765,8 @@ class Config:
         # actual training target.
         # Supported targets ('I' aside): ['A'] (affinities) or 'F', 'P', 'H', 'V', 'Z' in any order (SKOOTS, 'Z' only
         # in 3D, 'P' and 'H'/'V'/'Z' of type 'skeleton', LOSS.TYPE ['SKOOTS'], POSTPROCESS.METHOD 'skoots').
+        # 'F', 'P' (optionally 'C') is SKOOTS without the offsets ('P' of type 'skeleton', LOSS.TYPE ['SKOOTS'],
+        # POSTPROCESS.METHOD 'watershed').
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS = ["A", "I"]
         # Same as PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS. E.g. [{'A': {'z_affinities': [1], 'y_affinities': [1],
         # 'x_affinities': [1]}}] or [{'P': {'type': 'skeleton'}, 'H': {'type': 'skeleton'}}]
@@ -789,9 +791,10 @@ class Config:
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_SKELETON_TH = 0.8
         # 'skoots' only: times each voxel is moved by the predicted offsets.
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_N_STEPS = 2
-        # 'watershed' only: seed threshold for watershed_by_channels's 'A'-only branch.
+        # 'watershed' only: seed threshold for watershed_by_channels's 'A'-only branch ('P' with the 'F', 'P'(, 'C') target,
+        # grown over 'C' if given, else over 'P').
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_SEED_TH = 0.5
-        # 'watershed' only: growth-mask threshold. Equal to WATERSHED_SEED_TH gives plain
+        # 'watershed' only: growth-mask threshold ('F' with the 'F', 'P'(, 'C') target). Equal to WATERSHED_SEED_TH gives plain
         # threshold + 3D connected components (no seeded growth).
         _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_GROWTH_TH = 0.5
         # 'agglomeration' only: seed threshold for the initial oversegmented fragments (high, so
@@ -2290,6 +2293,8 @@ class Config:
         _C.LOSS.SKOOTS.FOREGROUND_TVERSKY = (0.5, 0.5)
         _C.LOSS.SKOOTS.SKELETON_TVERSKY = (0.5, 1.5)
         _C.LOSS.SKOOTS.EMBED_TVERSKY = (0.25, 0.75)
+        # (alpha, beta) of the Tversky loss of the 'C' term ('F', 'P', 'C' target only). Starts with the 'F' term.
+        _C.LOSS.SKOOTS.CONTOUR_TVERSKY = (0.5, 0.5)
         # Fraction of TRAIN.EPOCHS after which the 'F', 'P' and 'H'/'V'/'Z' terms start being used.
         _C.LOSS.SKOOTS.START_FRACTIONS = (0.0, 0.001, 0.0)
 

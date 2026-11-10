@@ -1407,42 +1407,45 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS' needs one value >= 0 per "
             f"'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS' entry ('I' aside): {_mr_targets}"
         )
-        if is_skoots_channel_set(_mr.DATA_CHANNELS, 3 if cfg.PROBLEM.NDIM == "3D" else 2):
+        _skoots = is_skoots_channel_set(_mr.DATA_CHANNELS, 3 if cfg.PROBLEM.NDIM == "3D" else 2)
+        if _skoots or sorted(_mr_targets) in (['F', 'P'], ['C', 'F', 'P']):
             _ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
             assert loss == ["SKOOTS"], (
-                "LOSS.TYPE must be ['SKOOTS'] with the SKOOTS PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS "
-                f"({_mr_targets}), got {loss}"
+                "LOSS.TYPE must be ['SKOOTS'] with the SKOOTS or 'F'/'P'(/'C') PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR."
+                f"DATA_CHANNELS ({_mr_targets}), got {loss}"
             )
-            assert _mr.POSTPROCESS.METHOD == "skoots", (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be 'skoots' with the SKOOTS "
-                f"DATA_CHANNELS ({_mr_targets})"
-            )
-            _hvz_w = [_mr_weights[_mr_targets.index(ch)] for ch in _mr_targets if ch in ("Z", "V", "H")]
-            assert all(w == _hvz_w[0] for w in _hvz_w), (
-                "'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS' must be the same for 'H', 'V' and 'Z'"
+            _method = "skoots" if _skoots else "watershed"
+            assert _mr.POSTPROCESS.METHOD == _method, (
+                f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be '{_method}' with the "
+                f"DATA_CHANNELS {_mr_targets}"
             )
             _mr_opts = dict(_mr.DATA_CHANNELS_EXTRA_OPTS[0])
             _p_opts = _mr_opts.get("P", {})
             assert [k for k in _p_opts if k not in ["type", "dilation", "erosion"]] == [] and _p_opts.get("type") == "skeleton", (
                 "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS['P'] must have 'type': 'skeleton' "
-                "(other allowed keys: 'dilation', 'erosion') with the SKOOTS DATA_CHANNELS"
+                "(other allowed keys: 'dilation', 'erosion') with the SKOOTS or 'F'/'P'(/'C') DATA_CHANNELS"
             )
-            _hvz = [_mr_opts[ch] for ch in ("Z", "V", "H") if ch in _mr_opts]
-            assert (
-                _hvz
-                and all(o == _hvz[0] for o in _hvz)
-                and _hvz[0].get("type") == "skeleton"
-                and [k for k in _hvz[0] if k not in ["type", "scale"]] == []
-            ), (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS for 'H'/'V'/'Z' must have 'type': "
-                "'skeleton' (other allowed key: 'scale'; one entry is enough) with the SKOOTS DATA_CHANNELS"
-            )
-            if "scale" in _hvz[0]:
-                _scale = list(_hvz[0]["scale"])
-                assert len(_scale) == _ndim and all(float(v) > 0 for v in _scale), (
-                    f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS 'H'/'V'/'Z' 'scale' must be "
-                    f"{_ndim} positive values"
+            if _skoots:
+                _hvz_w = [_mr_weights[_mr_targets.index(ch)] for ch in _mr_targets if ch in ("Z", "V", "H")]
+                assert all(w == _hvz_w[0] for w in _hvz_w), (
+                    "'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS' must be the same for 'H', 'V' and 'Z'"
                 )
+                _hvz = [_mr_opts[ch] for ch in ("Z", "V", "H") if ch in _mr_opts]
+                assert (
+                    _hvz
+                    and all(o == _hvz[0] for o in _hvz)
+                    and _hvz[0].get("type") == "skeleton"
+                    and [k for k in _hvz[0] if k not in ["type", "scale"]] == []
+                ), (
+                    "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS for 'H'/'V'/'Z' must have 'type': "
+                    "'skeleton' (other allowed key: 'scale'; one entry is enough) with the SKOOTS DATA_CHANNELS"
+                )
+                if "scale" in _hvz[0]:
+                    _scale = list(_hvz[0]["scale"])
+                    assert len(_scale) == _ndim and all(float(v) > 0 for v in _scale), (
+                        f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS 'H'/'V'/'Z' 'scale' must be "
+                        f"{_ndim} positive values"
+                    )
             _sk = cfg.LOSS.SKOOTS
             assert len(_sk.INITIAL_SIGMA) == 3 and all(float(v) > 0 for v in _sk.INITIAL_SIGMA), (
                 "LOSS.SKOOTS.INITIAL_SIGMA must be 3 positive values (z, y, x)"
@@ -1450,7 +1453,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert all(len(d) == 2 and float(d[0]) > 0 and 0 <= float(d[1]) <= 1 for d in _sk.SIGMA_DECAY), (
                 "LOSS.SKOOTS.SIGMA_DECAY must be a list of [multiplier > 0, fraction in [0, 1]] pairs"
             )
-            for _key in ("FOREGROUND_TVERSKY", "SKELETON_TVERSKY", "EMBED_TVERSKY"):
+            for _key in ("FOREGROUND_TVERSKY", "SKELETON_TVERSKY", "EMBED_TVERSKY", "CONTOUR_TVERSKY"):
                 _val = list(getattr(_sk, _key))
                 assert len(_val) == 2 and all(float(v) >= 0 for v in _val), (
                     f"LOSS.SKOOTS.{_key} must be (alpha, beta), both >= 0"
@@ -1466,7 +1469,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
         else:
             assert _mr_targets == ["A"], (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS must be ['A'] or the SKOOTS channels "
+                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS must be ['A'], 'F', 'P'(, 'C') or the SKOOTS channels "
                 f"'F', 'P', 'H', 'V'{', Z' if cfg.PROBLEM.NDIM == '3D' else ''} (any order), got {_mr_targets}"
             )
             assert loss and set(loss) <= {"BCE", "MALIS", "CLDICE", "SVOX"}, (
