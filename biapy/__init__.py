@@ -23,8 +23,8 @@ import sys
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -304,6 +304,81 @@ def _get_config_template_cli(argv):
     sys.exit(0)
 
 
+def _create_config_cli(argv):
+    """
+    Create from the command line a configuration adapted to the data, as the wizard does (see
+    :func:`biapy.create_config`).
+
+    Usage::
+
+        biapy create-config --workflow SEMANTIC_SEG --ndim 2D --train-raw <folder> [--train-gt <folder>]
+                            [--test-raw <folder>] [--test-gt <folder>] [--quick] [--store <yaml>] [--json]
+
+    Without ``--store`` nor ``--json``, the configuration is printed as YAML.
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``create-config``.
+
+    Exit codes
+    ----------
+    0
+        The configuration was created.
+    1
+        The data can't be used (the errors are printed to stderr, or in the JSON).
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    import contextlib
+
+    parser = argparse.ArgumentParser(
+        prog="biapy create-config",
+        description="Create a configuration adapted to the data, as the wizard does, to train a model from scratch.",
+    )
+    parser.add_argument("--workflow", required=True, help="PROBLEM.TYPE, e.g. SEMANTIC_SEG")
+    parser.add_argument("--ndim", required=True, help="2D or 3D")
+    parser.add_argument("--train-raw", required=True, help="Folder with the training raw images")
+    parser.add_argument("--train-gt", default="", help="Folder with the training targets")
+    parser.add_argument("--test-raw", default="", help="Folder with the test raw images")
+    parser.add_argument("--test-gt", default="", help="Folder with the test targets")
+    parser.add_argument("--quick", action="store_true", help="A quick training, to check that everything works")
+    parser.add_argument("--store", help="YAML file to write the configuration to")
+    parser.add_argument("--json", action="store_true", help="Print the full report as JSON")
+    args = parser.parse_args(argv)
+
+    from ._biapy import create_config
+    from biapy.wizard.config_builder import to_jsonable, tuples_to_lists
+
+    try:
+        # The checks print their progress: keep stdout for the result only
+        with contextlib.redirect_stdout(sys.stderr):
+            report = create_config(
+                args.workflow, args.ndim, args.train_raw, args.train_gt, args.test_raw, args.test_gt,
+                training_length="quick" if args.quick else "full", store_yaml=args.store,
+            )
+    except ValueError as e:
+        report = {"ok": False, "errors": [str(e)], "warnings": [], "folders": {}, "config": None, "summary": []}
+
+    if args.json:
+        print(json.dumps(to_jsonable(report), indent=2))
+    else:
+        for warn in report["warnings"]:
+            print(f"WARNING: {warn}", file=sys.stderr)
+        for err in report["errors"]:
+            print(f"ERROR: {err}", file=sys.stderr)
+        if report["ok"]:
+            for line in report["summary"]:
+                print(f"# {line}")
+            if args.store:
+                print(f"OK: configuration written to {args.store}")
+            else:
+                import yaml
+
+                print(yaml.safe_dump(tuples_to_lists(report["config"]), default_flow_style=False), end="")
+    sys.exit(0 if report["ok"] else 1)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -368,7 +443,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -401,6 +476,7 @@ def main():
         "  list-workflows        list the workflows\n"
         "  inspect-image         describe an image: 2D or 3D, channels\n"
         "  get-config-template   print or save the basic configuration template of a workflow\n"
+        "  create-config         create a configuration adapted to the data, as the wizard does\n",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")

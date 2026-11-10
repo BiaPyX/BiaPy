@@ -2376,13 +2376,16 @@ def _check_folders(
     ndim: str, 
     percentage: float, 
     tracking: bool = False, 
-    upscaling: tuple = None
+    upscaling: tuple = None,
+    answers: dict = None,
 ) -> tuple:
     """
     Check each ``(key, folder, data_path)`` as the wizard does: each folder with ``check_folder`` (the other raw
     images with the channels of the training ones, which come first), then each raw
     image against its target with ``_check_targets`` (same number of files and matching shapes; in
-    super-resolution, the targets ``upscaling`` times the raw images, or the first pair's factor if None).
+    super-resolution, the targets ``upscaling`` times the raw images, or the first pair's factor if None). 
+    ``answers``, if given, gets what the wizard needs to build a configuration from the data: each folder under its
+    variable, and ``data_constraints`` and ``sample_info`` of all the folders.
     Returns the report of :func:`check_data` (``ok`` still to be set) and the upscaling (or None).
     """
     from biapy.wizard.config_builder import WizardError, _check_targets
@@ -2407,6 +2410,11 @@ def _check_folders(
             report["errors"].append(f"{key}: {res['error_message']}")
         else:
             constraints.update(found)
+            if answers is not None:  # what the wizard needs to build a configuration from the data
+                answers[key] = folder
+                answers["sample_info"][key] = res["sample_info"]
+    if answers is not None:
+        answers["data_constraints"] = constraints
 
     # Each raw image against its target, in the phases whose folders could be read
     for phase in dict.fromkeys(key.split(".")[1] for key, _, _ in to_check):
@@ -2557,6 +2565,100 @@ def check_data_for_workflow(workflow: str, ndim: str, raw: str, gt: str = "", pe
 
     report, upscaling = _check_folders(to_check, workflow, ndim, percentage)
     report["upscaling"] = upscaling
+    report["ok"] = not report["errors"]
+    return report
+
+
+def create_config(
+    workflow: str,
+    ndim: str,
+    train_raw: str,
+    train_gt: str = "",
+    test_raw: str = "",
+    test_gt: str = "",
+    training_length: str = "full",
+    store_yaml: Optional[str] = None,
+) -> dict:
+    """
+    Create a configuration adapted to the data, as the wizard does, to train a model from scratch.
+
+    The data is checked first, as :func:`check_data_for_workflow` does. If it can be used, the configuration is built
+    by the wizard (:func:`biapy.wizard.config_builder.build_config`), which plans it from the data, as nnU-Net does:
+    channels, classes, patch size, network, batch size for the GPU available, training length...
+
+    Parameters
+    ----------
+    workflow : str
+        ``PROBLEM.TYPE``, e.g. "SEMANTIC_SEG". One of :data:`VALID_WORKFLOWS`.
+    ndim : str
+        "2D" or "3D".
+    train_raw : str
+        Folder with the training raw images (for classification, one subfolder per class).
+    train_gt : str, optional
+        Folder with the training targets, if the workflow uses them.
+    test_raw, test_gt : str, optional
+        Folders with the test raw images and their targets, to also test the model trained.
+    training_length : str, optional
+        "full" (as long as nnU-Net trains) or "quick" (to check that everything works).
+    store_yaml : str, optional
+        Path of a YAML file to write the configuration to, with the summary of what was decided on top.
+
+    Returns
+    -------
+    dict
+        * ``ok``, ``errors`` and ``warnings``, as :func:`check_data`. With errors in the data, no configuration.
+        * ``folders``: what was found in each folder, as :func:`check_data`.
+        * ``config``: the configuration (None if ``ok`` is False).
+        * ``summary``: list of str, what the wizard decided and why.
+
+    Raises
+    ------
+    ValueError
+        If ``workflow`` or ``ndim`` are not valid.
+    """
+    from biapy.wizard.config_builder import WizardError, build_config, write_config
+
+    # Same checks as build_config
+    workflow = str(workflow).upper()
+    if workflow not in VALID_WORKFLOWS:
+        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
+    ndim = str(ndim).upper()
+    if ndim not in ["2D", "3D"]:
+        raise ValueError("'ndim' must be either '2D' or '3D'. Provided: {}".format(ndim))
+
+    # The wizard's answers: what it asks, plus what the data checks gather
+    answers = {
+        "PROBLEM.TYPE": workflow,
+        "PROBLEM.NDIM": ndim,
+        "TRAIN.ENABLE": True,
+        "TEST.ENABLE": bool(test_raw),
+        "DATA.TEST.LOAD_GT": bool(test_raw and test_gt),
+        "MODEL.SOURCE": "biapy",  # a model trained from scratch
+        "MODEL.LOAD_CHECKPOINT": False,
+        "training_length": training_length,
+        "data_constraints": {},
+        "sample_info": {},
+    }
+    to_check = []
+    for phase, raw, gt in (("TRAIN", train_raw, train_gt), ("TEST", test_raw, test_gt)):
+        if raw:
+            to_check.append((f"DATA.{phase}.PATH", raw, ""))
+            if gt:
+                to_check.append((f"DATA.{phase}.GT_PATH", gt, ""))
+    report, _ = _check_folders(to_check, workflow, ndim, 100, answers=answers)
+    report.update({"config": None, "summary": []})
+
+    if not report["errors"]:  # no configuration for data BiaPy can't use
+        try:
+            cfg, plan = build_config(answers)
+        except WizardError as e:
+            report["errors"].append(str(e))
+        else:
+            report["config"], report["summary"] = cfg, plan.get("lines", [])
+            if not plan.get("applied"):
+                report["warnings"].append(f"The configuration is not adapted to the data: {plan.get('reason')}")
+            if store_yaml:
+                write_config(cfg, plan, store_yaml)
     report["ok"] = not report["errors"]
     return report
 
