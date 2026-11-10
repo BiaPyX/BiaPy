@@ -117,6 +117,8 @@
   "preview(detection points)/columns",
   "preview(detection points)/notes",
   "preview(detection points)/samples",
+  "preview(detection points)/samples/[]/points_crop",
+  "preview(detection points)/samples/[]/points_crop_png",
   "preview(detection points)/samples/[]/raw_name",
   "preview(detection points)/samples/[]/raw_png",
   "preview(detection points)/samples/[]/target_name",
@@ -228,6 +230,11 @@
     ],
     [
      "tracking",
+     "POSITIONAL_OR_KEYWORD",
+     true
+    ],
+    [
+     "train_channels",
      "POSITIONAL_OR_KEYWORD",
      true
     ]
