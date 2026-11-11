@@ -334,6 +334,11 @@ def _value(cfg: Any, key: str) -> Any:
             v = v[part]
         else:
             return _MISSING
+    if key == "LOSS.TYPE":
+        # A loss term with weight 0 is not used
+        w = _value(cfg, "LOSS.WEIGHTS")
+        if isinstance(v, (list, tuple)) and isinstance(w, (list, tuple)) and len(w) == len(v):
+            v = [t for t, x in zip(v, w) if float(x) != 0]
     return v
 
 

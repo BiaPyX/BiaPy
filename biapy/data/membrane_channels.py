@@ -1,5 +1,5 @@
 """
-Derived input channels for the membrane-repair problem (PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR).
+Derived input channels for the membrane-repair problem (PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR).
 
 SOURCE_CHANNELS (binary membrane/GMM-class maps, plus optionally "raw") are never fed to the
 model directly -- only these derived channels are:

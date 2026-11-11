@@ -1,271 +1,77 @@
 """
-Membrane-repair sub-problem of the IMAGE_TO_IMAGE workflow (PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR).
+Membrane repair (PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR): instance segmentation from an upstream membrane prediction.
 
-Trains a dataset-agnostic network that repairs membrane-segmentation errors coming out of an
-upstream foundation-model + GMM pipeline. This module holds:
-
-- ``Membrane_Repair_Workflow``: the workflow subclass wiring the membrane-repair loss options,
-  validating the affinity/MALIS configuration, presenting the derived-only input width to the model
-  builder, and fixing up ``process_test_sample`` for affinity output.
-
-  Neither X nor Y is prepared offline: X's derived channels (skeleton-DT/Hessian/Meijering) are
-  recomputed after every corruption augmentor runs (see ``biapy.data.membrane_channels``), and Y's
-  affinity (+ raw-label regeneration source) channel stack is built on the fly, per patch, by the
-  data generator from the raw GT instance-label files (see
-  ``PairBaseDataGenerator.load_sample``/``apply_transform``) -- neither is ever cached to disk.
-  ``DATA.PATCH_SIZE`` stays ``len(SOURCE_CHANNELS)``; the model's actual input width
-  (``len(DERIVED_CHANNELS)`` -- ``SOURCE_CHANNELS`` are never fed to the model) is presented to the
-  model builder only for the duration of ``prepare_model``.
+``Membrane_Repair_Workflow`` is an ``Instance_Segmentation_Workflow`` (same targets, decoding, matching and
+post-processing) whose model input is ``DERIVED_CHANNELS``, computed from the on-disk ``SOURCE_CHANNELS`` after the
+membrane corruption augmentors (``Membrane2D/3DRepairDataGenerator``) or, at test time, in ``process_test_sample``.
+``DATA.PATCH_SIZE`` keeps ``len(SOURCE_CHANNELS)``; the derived width is only shown to the model builder and the
+test-time patching. On top of INSTANCE_SEG it adds the affinity losses (``LOSS.TYPE`` 'BCE'/'MALIS'/'CLDICE'/'SVOX')
+and the SKOOTS target (``LOSS.TYPE`` ['SKOOTS'], ``INSTANCE_CREATION_PROCESS`` 'skoots').
 """
-import os
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
-import torch
-import torch.nn as nn
 from numpy.typing import NDArray
-from skimage.transform import resize
 
-from biapy.data.data_manipulation import check_binary_masks, read_img_as_ndarray, save_tif
+from biapy.data.data_manipulation import check_binary_masks
 from biapy.data.membrane_channels import derive_membrane_input_channels
-from biapy.data.post_processing.affinity_agglomeration import watershed_and_agglomerate_affinities
-from biapy.data.post_processing.post_processing import apply_label_refinement, watershed_by_channels
 from biapy.data.post_processing.skoots import skoots_instances
-from biapy.data.pre_processing import (
-    affinity_offsets_from_opts,
-    hvz_skeleton_scale,
-    is_skoots_channel_set,
-    load_resolution_stats,
-)
+from biapy.data.pre_processing import affinity_offsets_from_opts, hvz_skeleton_scale, load_resolution_stats
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.engine.image_to_image import Image_to_Image_Workflow as _Image_to_Image_Workflow
+from biapy.engine.instance_seg import Instance_Segmentation_Workflow as _Instance_Segmentation_Workflow
 from biapy.engine.malis_loss import MalisLoss
 from biapy.engine.metrics import (
     CLDiceComponentPenaltyLoss,
     SkootsLoss,
     SkootsMetrics,
     WeightedBCEAffinityLoss,
-    multiple_metrics,
     WeightedCompositeLoss,
     loss_encapsulation,
+    multiple_metrics,
     skoots_offset_axes,
 )
 from biapy.engine.supervoxel_loss import SupervoxelLoss
-from biapy.utils.matching import build_tp_fp_fn_report, matching, wrapper_matching_dataset_lazy
-from biapy.utils.misc import (
-    blackout_border_numpy,
-    crop_border_tensor,
-    os_walk_clean,
-    to_pytorch_format,
-)
 
 
-class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
-    """
-    Membrane-repair sub-problem of the IMAGE_TO_IMAGE workflow.
-
-    A thin subclass rather than plain ``IMAGE_TO_IMAGE`` config because:
-
-    - ``process_test_sample`` must not rescale predictions back into X's raw intensity domain (they
-      are ``[0,1]`` affinity probabilities), and must expand raw X to the model's input width
-      before cropping/prediction.
-    - GT: Y is a GT instance-label volume expanded into affinity (+ raw-label regeneration source)
-      channels on the fly, per patch, by the data generator (never cached to disk) -- see
-      ``_prepare_membrane_repair_gt`` and ``PairBaseDataGenerator.load_sample``.
-    - Model input width: ``DERIVED_CHANNELS`` only, while ``DATA.PATCH_SIZE`` reflects
-      ``SOURCE_CHANNELS`` -- see ``prepare_model``.
-    """
+class Membrane_Repair_Workflow(_Instance_Segmentation_Workflow):
+    """Instance segmentation with derived membrane input channels and the affinity/SKOOTS losses."""
 
     def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
-        """
-        Initialize the Membrane_Repair_Workflow.
+        """Initialize the workflow and check that the "membrane" source channel is binary."""
+        super().__init__(cfg, job_identifier, device, system_dict, args, **kwargs)
 
-        ``Base_Workflow.__init__`` sizes the model's output head from
-        ``cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS``, so that (and ``DATA.PATCH_SIZE``) must be
-        validated/derived *before* it runs, not after. GT preparation only needs ``self.cfg`` to
-        exist, so it runs after.
-        """
-        Membrane_Repair_Workflow._validate_membrane_repair_channel_counts(cfg)
-        Membrane_Repair_Workflow._derive_membrane_repair_output_channels(cfg)
-
-        Base_Workflow.__init__(self, cfg, job_identifier, device, system_dict, args, **kwargs)
-
-        # Set before _prepare_membrane_repair_gt (which may populate them) so print_stats/
-        # _postprocess_and_evaluate_membrane_repair always find well-defined attributes, even when
-        # no GT is available.
-        self.original_test_mask_path = None
-        self.test_gt_filenames = []
-        self.all_matching_stats_merge_patches = []
-        self.all_matching_stats_merge_patches_post = []
-        self.stats["inst_stats_merge_patches"] = None
-        self.stats["inst_stats_merge_patches_post"] = None
-
-        self._prepare_membrane_repair_gt()
-
-        # "membrane", if present in SOURCE_CHANNELS, must be a binary mask; no "membrane" entry
-        # (raw-only baseline) means there's nothing to check.
-        source_channels = list(cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS)
+        # "membrane", if present in SOURCE_CHANNELS, must be a binary mask
+        source_channels = list(cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SOURCE_CHANNELS)
         membrane_idx = source_channels.index("membrane") if "membrane" in source_channels else None
         if membrane_idx is not None:
             ignore = [cfg.LOSS.IGNORE_INDEX] if cfg.LOSS.IGNORE_INDEX != -1 else []
+            is_3d = cfg.PROBLEM.NDIM == "3D"
             if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
-                check_binary_masks(
-                    cfg.DATA.TRAIN.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx, extra_allowed_values=ignore
-                )
+                check_binary_masks(cfg.DATA.TRAIN.PATH, is_3d=is_3d, channel=membrane_idx, extra_allowed_values=ignore)
                 if not cfg.DATA.VAL.FROM_TRAIN:
-                    check_binary_masks(
-                        cfg.DATA.VAL.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx, extra_allowed_values=ignore
-                    )
+                    check_binary_masks(cfg.DATA.VAL.PATH, is_3d=is_3d, channel=membrane_idx, extra_allowed_values=ignore)
             if cfg.TEST.ENABLE and cfg.DATA.TEST.CHECK_DATA:
-                check_binary_masks(cfg.DATA.TEST.PATH, is_3d=(cfg.PROBLEM.NDIM == "3D"), channel=membrane_idx)
-
-        self.cfg.freeze()
-        self.mask_path = self.cfg.DATA.TRAIN.GT_PATH
-        self.is_y_mask = True
-        self.norm_module["target_type"] = "mask"
-        self.test_norm_module["target_type"] = "mask"
+                check_binary_masks(cfg.DATA.TEST.PATH, is_3d=is_3d, channel=membrane_idx)
         # Keep ignored membrane voxels out of the train/val normalization
         if cfg.LOSS.IGNORE_INDEX != -1 and membrane_idx is not None:
             self.norm_module["ignore_value"] = cfg.LOSS.IGNORE_INDEX
             self.norm_module["ignore_channels"] = [membrane_idx]
 
-    @staticmethod
-    def _validate_membrane_repair_channel_counts(cfg):
-        """
-        Validate ``DATA.PATCH_SIZE`` against ``len(SOURCE_CHANNELS)``, and fail fast if
-        ``DERIVED_CHANNELS`` is empty or requests a channel whose required SOURCE_CHANNELS entry
-        ("raw" for "meijering", "membrane" for "skeleton_dt"/"hessian_blob") is missing.
-        ``staticmethod`` since it must run before ``Base_Workflow.__init__``.
-        """
-        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-        if not mr.DERIVED_CHANNELS:
-            raise ValueError("PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS is empty.")
-        expected = len(mr.SOURCE_CHANNELS)
-        if cfg.DATA.PATCH_SIZE[-1] != expected:
-            raise ValueError(
-                f"DATA.PATCH_SIZE's channel count ({cfg.DATA.PATCH_SIZE[-1]}) must equal "
-                f"len(SOURCE_CHANNELS) = {expected} (SOURCE_CHANNELS={list(mr.SOURCE_CHANNELS)})."
-            )
-        if "meijering" in mr.DERIVED_CHANNELS and "raw" not in mr.SOURCE_CHANNELS:
-            raise ValueError(
-                "DERIVED_CHANNELS includes 'meijering' but SOURCE_CHANNELS "
-                f"({list(mr.SOURCE_CHANNELS)}) has no 'raw' entry."
-            )
-        if (
-            any(ch in mr.DERIVED_CHANNELS for ch in ("skeleton_dt", "hessian_blob"))
-            and "membrane" not in mr.SOURCE_CHANNELS
-        ):
-            raise ValueError(
-                "DERIVED_CHANNELS includes 'skeleton_dt'/'hessian_blob' but SOURCE_CHANNELS "
-                f"({list(mr.SOURCE_CHANNELS)}) has no 'membrane' entry."
-            )
-        if "class_union" in mr.DERIVED_CHANNELS and all(ch in ("membrane", "raw") for ch in mr.SOURCE_CHANNELS):
-            raise ValueError(
-                "DERIVED_CHANNELS includes 'class_union' but SOURCE_CHANNELS "
-                f"({list(mr.SOURCE_CHANNELS)}) has no entry other than 'membrane'/'raw'."
-            )
-        if mr.CLASS_SET_CHANNELS:
-            missing = [ch for ch in mr.CLASS_SET_CHANNELS if ch not in mr.DERIVED_CHANNELS]
-            if missing:
-                raise ValueError(
-                    f"MEMBRANE_REPAIR.CLASS_SET_CHANNELS {list(mr.CLASS_SET_CHANNELS)} must all be present "
-                    f"in DERIVED_CHANNELS ({list(mr.DERIVED_CHANNELS)}); missing: {missing}."
-                )
-            if mr.CLASS_SET_ENCODER.OUT_CHANNELS <= 0:
-                raise ValueError(
-                    "MEMBRANE_REPAIR.CLASS_SET_CHANNELS is non-empty but "
-                    "MEMBRANE_REPAIR.CLASS_SET_ENCODER.OUT_CHANNELS is not > 0."
-                )
-            if cfg.MODEL.ARCHITECTURE.lower() != "stunet" or str(cfg.MODEL.STUNET.VARIANT).lower() != "custom":
-                raise ValueError(
-                    "MEMBRANE_REPAIR.CLASS_SET_CHANNELS requires MODEL.ARCHITECTURE == 'stunet' and "
-                    "MODEL.STUNET.VARIANT == 'custom' (the only combination that supports it -- see "
-                    "MODEL.STUNET.CLASS_SET_CHANNEL_IDXS's docstring)."
-                )
-
-    @staticmethod
-    def _target_channels(cfg) -> List[str]:
-        """``MEMBRANE_REPAIR.DATA_CHANNELS`` without the virtual 'I' channel, i.e. the model output order."""
-        return [ch for ch in cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS if ch != "I"]
-
-    @staticmethod
-    def _is_skoots(cfg) -> bool:
-        """Whether the target is SKOOTS's 'F'/'P'/'H'/'V'(/'Z')."""
-        return is_skoots_channel_set(
-            cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS, 3 if cfg.PROBLEM.NDIM == "3D" else 2
-        )
-
-    @staticmethod
-    def _derive_membrane_repair_output_channels(cfg):
-        """
-        Compute ``PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS`` from ``DATA_CHANNELS_EXTRA_OPTS["A"]``.
-
-        The affinity width is implied by the configured offset lists (3 channels -- z, y, x -- per
-        offset pair in 3D), so this is always derived, never a user-provided value.
-        """
-        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-        if "P" in Membrane_Repair_Workflow._target_channels(cfg):
-            cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = len(Membrane_Repair_Workflow._target_channels(cfg))
-            return
-        a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
-        channels_per_offset = 3 if cfg.PROBLEM.NDIM == "3D" else 2
-        n_offsets = len(a_opts.get("z_affinities" if cfg.PROBLEM.NDIM == "3D" else "y_affinities", [1]))
-        cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS = n_offsets * channels_per_offset
-
-    def _prepare_membrane_repair_gt(self):
-        """
-        Validate the MALIS/affinity configuration and record the raw GT instance-label path/filenames
-        used later for instance-matching evaluation.
-
-        Y is never cached to disk: the data generator builds the affinity (+ raw-label regeneration
-        source) channel stack on the fly, per patch, from the raw instance-label files (see
-        ``PairBaseDataGenerator.load_sample``), so ``DATA.<TRAIN|VAL|TEST>.GT_PATH`` stays pointed at
-        the user's original label folder for the whole run.
-        """
-        cfg = self.cfg
-        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-
-        loss_by_name = dict(zip((str(n).upper() for n in cfg.LOSS.TYPE), cfg.LOSS.WEIGHTS))
-        malis_enabled = loss_by_name.get("MALIS", 0.0) > 0
-        y_extra_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0])
-        if malis_enabled:
-            a_opts = y_extra_opts.get("A", {})
-            if a_opts.get("widen_borders", 1) != 0:
-                raise ValueError(
-                    "MALIS ('MALIS' in LOSS.TYPE with a positive weight) requires PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR."
-                    "DATA_CHANNELS_EXTRA_OPTS[0]['A']['widen_borders'] == 0 to reconstruct GT "
-                    "instance labels correctly from the target affinities -- see "
-                    "biapy/engine/malis_loss.py's module docstring."
-                )
-
-        if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT:
-            self.original_test_mask_path = cfg.DATA.TEST.GT_PATH
-            self.test_gt_filenames = next(os_walk_clean(cfg.DATA.TEST.GT_PATH))[2]
-
     def prepare_model(self):
         """
-        Present the model builder with the derived-only input width (``len(DERIVED_CHANNELS)``),
-        then restore ``DATA.PATCH_SIZE`` to the raw ``SOURCE_CHANNELS`` count.
-
-        When ``CLASS_SET_CHANNELS`` is set, also translates it from ``DERIVED_CHANNELS`` names to
-        positions and forwards it (plus ``CLASS_SET_ENCODER``) to ``MODEL.STUNET.CLASS_SET_*`` for
-        the duration of the build, so STUNet routes that group through a permutation-invariant
-        encoder instead of its regular first layer -- see ``STUNet``'s docstring. Both overrides are
-        scoped to this call: neither the expanded patch size nor the STUNet class-set config leaks
-        into the rest of the run.
+        Build the model with the derived input width (``len(DERIVED_CHANNELS)``) and, if ``CLASS_SET_CHANNELS`` is
+        set, STUNet's permutation-invariant class-set encoder; both overrides are undone after the build.
         """
         cfg = self.cfg
-        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+        mr = cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR
         raw_patch = tuple(cfg.DATA.PATCH_SIZE)
-        expanded_patch = raw_patch[:-1] + (len(mr.DERIVED_CHANNELS),)
-
         raw_class_set_idxs = list(cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS)
         raw_class_set_out = cfg.MODEL.STUNET.CLASS_SET_OUT_CHANNELS
         raw_class_set_pooling = cfg.MODEL.STUNET.CLASS_SET_POOLING
 
         was_frozen = cfg.is_frozen()
         cfg.defrost()
-        cfg.DATA.PATCH_SIZE = expanded_patch
+        cfg.DATA.PATCH_SIZE = raw_patch[:-1] + (len(mr.DERIVED_CHANNELS),)
         if mr.CLASS_SET_CHANNELS:
             derived = list(mr.DERIVED_CHANNELS)
             cfg.MODEL.STUNET.CLASS_SET_CHANNEL_IDXS = [derived.index(ch) for ch in mr.CLASS_SET_CHANNELS]
@@ -282,62 +88,38 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
                 cfg.freeze()
 
     def define_activations_and_channels(self):
-        """
-        Force ``ce_sigmoid`` activation on every output channel, regardless of
-        ``PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT``: skipped at training time (loss gets raw
-        logits, for ``BCEWithLogitsLoss``'s numerically-stable convention) and applied as a real
-        sigmoid at inference. The SKOOTS and 'F'/'P'(/'C') targets use ``sigmoid`` ('F'/'P'/'C') and ``tanh``
-        (offsets) instead, also in training.
-        """
+        """INSTANCE_SEG's; the SKOOTS loss needs 'sigmoid' ('F'/'P'/'C') and 'tanh' (offsets) applied in training too."""
         super().define_activations_and_channels()
-        if "P" in self._target_channels(self.cfg):
-            # Applied in training too: the SKOOTS loss needs probabilities and tanh offsets
+        if [str(n).upper() for n in self.cfg.LOSS.TYPE] == ["SKOOTS"]:
             self.head_activations = [
-                "sigmoid" if ch in ("F", "P", "C") else "tanh" for ch in self._target_channels(self.cfg)
+                "sigmoid" if ch in ("F", "P", "C") else "tanh"
+                for ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+                if ch != "I"
             ]
-            return
-        self.head_activations = ["ce_sigmoid"] * len(self.head_activations)
-
-    def _train_pred_preview_spec(self, n_input: int, n_gt: Optional[int], n_pred: int) -> Dict[str, List[Dict]]:
-        """Per-channel split (Base_Workflow), not I2I's composite."""
-        return Base_Workflow._train_pred_preview_spec(self, n_input, n_gt, n_pred)
 
     def define_metrics(self):
         """
-        Define the membrane-repair affinity loss when ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE``
-        is True; delegate anything else to ``Image_to_Image_Workflow``.
-
-        Combines up to 4 independently-toggleable sub-losses named ``BCE``/``MALIS``/``CLDICE``/
-        ``SVOX`` in ``LOSS.TYPE``, weighted by the matching ``LOSS.WEIGHTS`` entry: a weight of 0 (or
-        a name simply absent from LOSS.TYPE) skips *constructing* that term, not just multiplying
-        its result by 0, since MALIS's and the supervoxel loss's CPU cost must be avoidable when
-        ablated off.
+        INSTANCE_SEG's per-channel losses when ``LOSS.TYPE`` is empty, the SKOOTS loss for ['SKOOTS'], else the
+        affinity composite of 'BCE'/'MALIS'/'CLDICE'/'SVOX' weighted by ``LOSS.WEIGHTS`` (a term with weight 0 is
+        not built, so MALIS's and the supervoxel loss's CPU cost is avoided when ablated off).
         """
-        if not self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
-            super().define_metrics()
-            return
-        if "P" in self._target_channels(self.cfg):
-            self._define_skoots_metrics()
-            return
-
         names = [str(n).upper() for n in self.cfg.LOSS.TYPE]
-        weights = list(self.cfg.LOSS.WEIGHTS)
-        assert len(names) == len(weights), (
-            f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(names)} vs {len(weights)}"
-        )
-        by_name = dict(zip(names, weights))
+        if not names:
+            return super().define_metrics()
+        if names == ["SKOOTS"]:
+            return self._define_skoots_metrics()
 
+        inst = self.cfg.PROBLEM.INSTANCE_SEG
+        by_name = dict(zip(names, list(self.cfg.LOSS.WEIGHTS)))
         ignore_index = self.cfg.LOSS.IGNORE_INDEX if self.cfg.LOSS.IGNORE_INDEX != -1 else None
         weighted_sub_losses = []
         if by_name.get("BCE", 0.0) > 0:
-            mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
             bce_loss = WeightedBCEAffinityLoss(
-                class_rebalance_within_channels=mr.CLASS_REBALANCE_WITHIN_CHANNELS, ignore_index=ignore_index
+                class_rebalance_within_channels=inst.CLASS_REBALANCE_WITHIN_CHANNELS, ignore_index=ignore_index
             ).to(self.device)
             weighted_sub_losses.append((by_name["BCE"], bce_loss))
         if by_name.get("MALIS", 0.0) > 0:
-            mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-            a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
+            a_opts = dict(inst.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
             resolution = self._malis_resolution() if a_opts.get("units", "voxel") == "physical_nm" else None
             offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims, resolution=resolution)
             weighted_sub_losses.append((by_name["MALIS"], MalisLoss(offsets=offsets, ignore_index=ignore_index)))
@@ -347,58 +129,40 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
             )
         if by_name.get("SVOX", 0.0) > 0:
             weighted_sub_losses.append((by_name["SVOX"], SupervoxelLoss(ignore_index=ignore_index).to(self.device)))
-
-        if not weighted_sub_losses:
-            raise ValueError(
-                "'LOSS.TYPE'/'LOSS.WEIGHTS' must include at least one of 'BCE'/'MALIS'/'CLDICE'/"
-                "'SVOX' with a positive weight when PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE "
-                "is True"
-            )
-
         self.loss = loss_encapsulation(WeightedCompositeLoss(weighted_sub_losses).to(self.device))
 
-        # Single aggregate IoU across all predicted affinity channels. Requires metric_calculation
-        # to be overridden below -- Image_to_Image_Workflow's version would silently drop this
-        # unrecognized metric name.
+        # Single IoU over all the affinity channels
         self.train_metric_names = ["IoU (A channels)"]
         self.train_metric_best = ["max"]
-        self.train_metrics = [
-            multiple_metrics(
-                num_classes=self.cfg.DATA.N_CLASSES,
-                metric_names=self.train_metric_names,
-                device=self.device,
-                out_channels=["A"],
-                model_source=self.cfg.MODEL.SOURCE,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                ndim=self.dims,
-            )
-        ]
         self.test_metric_names = ["IoU (A channels)"]
-        self.test_metrics = [
-            multiple_metrics(
-                num_classes=self.cfg.DATA.N_CLASSES,
-                metric_names=self.test_metric_names,
-                device=self.test_device,
-                out_channels=["A"],
-                model_source=self.cfg.MODEL.SOURCE,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                ndim=self.dims,
-            )
+        self.train_metrics, self.test_metrics = [
+            [
+                multiple_metrics(
+                    num_classes=self.cfg.DATA.N_CLASSES,
+                    metric_names=["IoU (A channels)"],
+                    device=device,
+                    out_channels=["A"],
+                    model_source=self.cfg.MODEL.SOURCE,
+                    ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                    ndim=self.dims,
+                )
+            ]
+            for device in (self.device, self.test_device)
         ]
 
     def _define_skoots_metrics(self):
         """SKOOTS loss and metrics."""
         cfg = self.cfg
-        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
+        inst = cfg.PROBLEM.INSTANCE_SEG
         sk = cfg.LOSS.SKOOTS
-        channels = self._target_channels(cfg)
-        scale = hvz_skeleton_scale(dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]), self.dims)
+        channels = [ch for ch in inst.DATA_CHANNELS if ch != "I"]
+        scale = hvz_skeleton_scale(dict(inst.DATA_CHANNELS_EXTRA_OPTS[0]), self.dims)
         epochs = cfg.TRAIN.EPOCHS
         skoots_loss = SkootsLoss(
             channels=channels,
             ndim=self.dims,
             scale=scale,
-            channel_weights=list(mr.DATA_CHANNEL_WEIGHTS),
+            channel_weights=list(inst.DATA_CHANNEL_WEIGHTS),
             initial_sigma=list(sk.INITIAL_SIGMA),
             sigma_decay=[[m, int(f * epochs)] for m, f in sk.SIGMA_DECAY],
             tversky={
@@ -412,12 +176,17 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
         self.loss = loss_encapsulation(
             WeightedCompositeLoss([(float(cfg.LOSS.WEIGHTS[0]), skoots_loss)]).to(self.device)
         )
-
         self.train_metrics = [SkootsMetrics(channels, ndim=self.dims, scale=scale)]
         self.train_metric_names = list(self.train_metrics[0].names)
         self.train_metric_best = list(self.train_metrics[0].best)
         self.test_metrics = [SkootsMetrics(channels, ndim=self.dims, scale=scale)]
         self.test_metric_names = list(self.test_metrics[0].names)
+
+    def loss_description(self) -> str:
+        """``LOSS.TYPE``'s terms when set, else INSTANCE_SEG's per-channel losses."""
+        if self.cfg.LOSS.TYPE:
+            return Base_Workflow.loss_description(self)
+        return super().loss_description()
 
     def _malis_resolution(self) -> Tuple[float, ...]:
         """
@@ -439,499 +208,66 @@ class Membrane_Repair_Workflow(_Image_to_Image_Workflow):
             )
         return found.pop()
 
-    def metric_calculation(
-        self,
-        output,
-        targets,
-        train: bool = True,
-        metric_logger=None,
-    ) -> Dict:
-        """
-        Compute the metrics defined in ``define_metrics``: calls each ``multiple_metrics``-style
-        callable and merges its returned ``{name: value}`` dict.
-        ``Image_to_Image_Workflow.metric_calculation`` is not reused here: it branches on a fixed
-        set of image-quality metric names and would silently skip an unrecognized metric like ours.
-
-        Parameters
-        ----------
-        output : NDArray or torch.Tensor
-            Model prediction (raw logits during training; torchmetrics' binary ``JaccardIndex``
-            auto-applies sigmoid to out-of-``[0,1]`` values, so no explicit activation is needed
-            here -- see the ``ce_sigmoid`` convention in ``define_activations_and_channels``).
-
-        targets : NDArray or torch.Tensor
-            Ground truth affinities.
-
-        train : bool, optional
-            Whether to use ``self.train_metrics`` or ``self.test_metrics``.
-
-        metric_logger : MetricLogger, optional
-            Updated in place with each metric's value, if given.
-
-        Returns
-        -------
-        out_metrics : dict
-            Value of each computed metric.
-        """
-        device = self.device if train else self.test_device
-        if isinstance(output, np.ndarray):
-            _output = to_pytorch_format(output.copy(), self.axes_order, device, dtype=self.loss_dtype)
-        else:
-            _output = output if train else output.clone()
-
-        if isinstance(targets, np.ndarray):
-            _targets = to_pytorch_format(targets.copy(), self.axes_order, device, dtype=self.loss_dtype)
-        else:
-            _targets = targets if train else targets.clone()
-
-        # Exclude the border region from the metric computation (see 'TEST.EVAL_BORDER_CROP').
-        # Train-time patches are small already and never carry this crop.
-        if not train and self.cfg.TEST.EVAL_BORDER_CROP:
-            border = list(self.cfg.TEST.EVAL_BORDER_CROP)
-            _output = crop_border_tensor(_output, border)
-            _targets = crop_border_tensor(_targets, border)
-
-        out_metrics = {}
-        list_to_use = self.train_metrics if train else self.test_metrics
-        with torch.no_grad():
-            for metric in list_to_use:
-                val = metric(_output, _targets)
-                for m_name, m_val in val.items():
-                    if isinstance(m_val, torch.Tensor):
-                        v = m_val.item() if not torch.isnan(m_val) else 0
-                    else:
-                        v = m_val
-                    out_metrics[m_name] = v
-                    if metric_logger:
-                        metric_logger.meters[m_name].update(v)
-        return out_metrics
+    def _derive_input(self, x: NDArray) -> NDArray:
+        """``SOURCE_CHANNELS`` -> ``DERIVED_CHANNELS`` of one channel-last sample."""
+        mr = self.cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR
+        return derive_membrane_input_channels(
+            x,
+            list(mr.SOURCE_CHANNELS),
+            list(mr.DERIVED_CHANNELS),
+            dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
+            ndim=self.dims,
+            resolution=self.resolution,
+        )
 
     def prepare_bmz_data(self, img: NDArray):
         """
-        Replace ``img``'s raw ``SOURCE_CHANNELS`` width with the model's derived-only input width
-        before ``Base_Workflow.prepare_bmz_data`` calls the model directly.
+        Replace ``img``'s ``SOURCE_CHANNELS`` with ``DERIVED_CHANNELS`` before ``Base_Workflow.prepare_bmz_data``
+        calls the model.
 
         Parameters
         ----------
         img : 4D/5D Numpy array
-            Image in torch-format axes already, i.e. ``(b, c, y, x)`` for 2D or
-            ``(b, c, z, y, x)`` for 3D, at the raw ``SOURCE_CHANNELS`` width.
+            Image in torch axes order, ``(b, c, y, x)`` or ``(b, c, z, y, x)``, with ``SOURCE_CHANNELS`` channels.
         """
-        mr = self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-        channel_last = np.moveaxis(img, 1, -1)  # (b, c, ...) -> (b, ..., c)
-        expanded = np.stack(
-            [
-                derive_membrane_input_channels(
-                    sample,
-                    list(mr.SOURCE_CHANNELS),
-                    list(mr.DERIVED_CHANNELS),
-                    dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
-                    ndim=self.dims,
-                    resolution=self.resolution,
-                )
-                for sample in channel_last
-            ]
-        )
-        expanded = np.moveaxis(expanded, -1, 1)  # (b, ..., c) -> (b, c, ...)
-        super().prepare_bmz_data(expanded)
+        expanded = np.stack([self._derive_input(sample) for sample in np.moveaxis(img, 1, -1)])
+        super().prepare_bmz_data(np.moveaxis(expanded, -1, 1))
 
     def process_test_sample(self):
         """
-        Replace X's raw ``SOURCE_CHANNELS`` width with the model's derived-only input width, then
-        delegate crop/predict/merge to ``Image_to_Image_Workflow.process_test_sample`` with
-        ``DATA.PATCH_SIZE`` and the undo-normalization step both temporarily adjusted (same
-        scoped-swap as ``prepare_model``).
-
-        The undo-normalization step is neutralized with a temporary identity norm dict
-        (``max_val_to_div=1, min_val_to_div=0, orig_dtype="float32"``), reducing
-        ``undo_norm_range01`` to a no-op clip on our already-``[0,1]`` sigmoid output.
-
-        If ``TEST.REUSE_PREDICTIONS`` is set, the model call is skipped entirely and the merged
-        raw prediction is instead read back from ``PATHS.RESULT_DIR.PER_IMAGE`` (where a prior run
-        saved it, since ``Image_to_Image_Workflow.process_test_sample`` always writes it there --
-        ``TEST.SAVE_MODEL_RAW_OUTPUT`` defaults to ``True``), under the same filename convention
-        ``save_tif`` uses. ``Image_to_Image_Workflow.process_test_sample`` never checks this flag
-        itself (unlike ``Base_Workflow.process_test_sample``), so it is handled locally here.
-
-        Finally converts the merged prediction into instances and evaluates them against GT (see
-        ``_postprocess_and_evaluate_membrane_repair``). Since
-        ``Image_to_Image_Workflow.process_test_sample`` never calls the generic
-        ``after_merge_patches`` hook, the merged prediction is retrieved via a temporarily-forced
-        ``self.return_prediction=True``, restored immediately after.
+        Replace X's ``SOURCE_CHANNELS`` with ``DERIVED_CHANNELS`` and run INSTANCE_SEG's test step with
+        ``DATA.PATCH_SIZE`` set to the derived width. Saved predictions (``TEST.REUSE_PREDICTIONS``) need no input.
         """
-        assert self.model
-        if "discard" in self.current_sample and self.current_sample["discard"]:
+        if self.current_sample.get("discard", False) or self.cfg.TEST.REUSE_PREDICTIONS:
             return super().process_test_sample()
-
         cfg = self.cfg
-        original_return_prediction = self.return_prediction
+        self.current_sample["X"] = np.expand_dims(self._derive_input(self.current_sample["X"][0]), 0)
+        raw_patch = tuple(cfg.DATA.PATCH_SIZE)
+        was_frozen = cfg.is_frozen()
+        cfg.defrost()
+        cfg.DATA.PATCH_SIZE = raw_patch[:-1] + (len(cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS),)
+        try:
+            return super().process_test_sample()
+        finally:
+            cfg.DATA.PATCH_SIZE = raw_patch
+            if was_frozen:
+                cfg.freeze()
 
-        if cfg.TEST.REUSE_PREDICTIONS:
-            result = None
-            test_file = os.path.join(
-                cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                os.path.splitext(self.current_sample["X_filename"])[0] + ".tif",
-            )
-            pred = read_img_as_ndarray(test_file, is_3d=(cfg.PROBLEM.NDIM == "3D"))
-            pred = np.expand_dims(pred, 0)
-            if pred.dtype == np.dtype("uint16"):
-                pred = pred.astype(np.float32)
-            self._predictions.append({"role": "raw", "data": np.array(pred)})
-
-            if self.current_sample["Y"] is not None:
-                if self.current_sample["Y"].dtype == np.dtype("uint16"):
-                    self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
-                metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
-                for metric in metric_values:
-                    key = str(metric).lower()
-                    if key not in self.stats["merge_patches"]:
-                        self.stats["merge_patches"][key] = 0
-                    self.stats["merge_patches"][key] += metric_values[metric]
-                    self.current_sample_metrics[key] = metric_values[metric]
-        else:
-            mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-            x = self.current_sample["X"]
-            expanded = derive_membrane_input_channels(
-                x[0],
-                list(mr.SOURCE_CHANNELS),
-                list(mr.DERIVED_CHANNELS),
-                dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
-                ndim=self.dims,
-                resolution=self.resolution,
-            )
-            self.current_sample["X"] = np.expand_dims(expanded, 0)
-
-            raw_patch = tuple(cfg.DATA.PATCH_SIZE)
-            expanded_patch = raw_patch[:-1] + (len(mr.DERIVED_CHANNELS),)
-            was_frozen = cfg.is_frozen()
-            cfg.defrost()
-            cfg.DATA.PATCH_SIZE = expanded_patch
-
-            original_x_norm = self.current_sample["X_norm"]
-            n_out = cfg.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNELS
-            if self._is_skoots(cfg):
-                # Identity without the [0, 1] clip, keeps the negative offsets
-                self.current_sample["X_norm"] = {
-                    "type": "zero_mean_unit_variance",
-                    "orig_dtype": "float32",
-                    "per_channel_info": {str(c): {"mean": 0, "std": 1} for c in range(n_out)},
-                }
-            else:
-                self.current_sample["X_norm"] = {
-                    "type": "div",
-                    "orig_dtype": "float32",
-                    "per_channel_info": {str(c): {"max_val_to_div": 1, "min_val_to_div": 0} for c in range(n_out)},
-                }
-            self.return_prediction = True
-            try:
-                result = super().process_test_sample()
-            finally:
-                self.current_sample["X_norm"] = original_x_norm
-                cfg.DATA.PATCH_SIZE = raw_patch
-                if was_frozen:
-                    cfg.freeze()
-                self.return_prediction = original_return_prediction
-
-        if self._predictions:
-            pred = self._predictions[-1]["data"]
-            if not original_return_prediction:
-                self._predictions.pop()
-            self._postprocess_and_evaluate_membrane_repair(pred)
-        return result
-
-    def _matching_stats_and_report(self, _Y: NDArray, pred_labels: NDArray, suffix: str = "") -> Tuple[Dict, ...]:
-        """
-        Compute per-threshold matching stats between `_Y` and `pred_labels`, save the GT-association/FP
-        CSVs and (for the configured thresholds) the TP/FP/FN color map, then return the stats.
-
-        Shared between the raw-prediction evaluation and the post-processing (instance refinement)
-        evaluation in ``_postprocess_and_evaluate_membrane_repair`` -- `suffix` (``""`` or
-        ``"_post-proc"``) is what tells their output files apart.
-
-        Parameters
-        ----------
-        _Y : NDArray
-            Ground truth instance label image.
-        pred_labels : NDArray
-            Predicted instance label image, same shape as `_Y`.
-        suffix : str, optional
-            Inserted right before ``_th_{thr}`` in every saved filename, e.g. ``"_post-proc"``.
-
-        Returns
-        -------
-        tuple of dict
-            One ``matching()`` stats dict per threshold in ``cfg.TEST.MATCHING_STATS_THS``.
-        """
-        cfg = self.cfg
-        log_tag = " (post-processing)" if suffix else ""
-        print(f"Calculating matching stats{log_tag} . . .")
-        results = matching(_Y, pred_labels, thresh=cfg.TEST.MATCHING_STATS_THS, report_matches=True)
-
-        diff_ths_colored_img = abs(len(cfg.TEST.MATCHING_STATS_THS_COLORED_IMG) - len(cfg.TEST.MATCHING_STATS_THS))
-        colored_img_ths = cfg.TEST.MATCHING_STATS_THS_COLORED_IMG + [-1] * diff_ths_colored_img
-
-        for i, r_stats in enumerate(results):
-            thr = r_stats["thresh"]
-            want_colored_img = colored_img_ths[i] != -1 and colored_img_ths[i] == thr
-            if want_colored_img:
-                print("Creating the image with a summary of TPs (green), FPs (blue) and FNs (red) . . .")
-            colored_result, df_gt_assoc, df_fp = build_tp_fp_fn_report(
-                gt_labels=_Y,
-                pred_labels=pred_labels,
-                r_stats=r_stats,
-                build_color_map=want_colored_img,
-            )
-
-            if self.save_to_disk:
-                os.makedirs(cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS, exist_ok=True)
-                df_gt_assoc.to_csv(
-                    os.path.join(
-                        cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        os.path.splitext(self.current_sample["X_filename"])[0]
-                        + f"{suffix}_th_{thr}_gt_assoc.csv",
-                    ),
-                    index=False,
-                )
-                df_fp.to_csv(
-                    os.path.join(
-                        cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        os.path.splitext(self.current_sample["X_filename"])[0] + f"{suffix}_th_{thr}_fp.csv",
-                    ),
-                    index=False,
-                )
-                if want_colored_img:
-                    save_tif(
-                        np.expand_dims(colored_result, 0),
-                        cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
-                        [os.path.splitext(self.current_sample["X_filename"])[0] + f"{suffix}_th_{thr}.tif"],
-                        verbose=cfg.TEST.VERBOSE,
-                    )
-            del colored_result, df_gt_assoc, df_fp
-
-            for key in ["matched_scores", "matched_tps", "matched_pairs", "pred_ids", "gt_ids"]:
-                r_stats.pop(key, None)
-            print(f"DatasetMatching{log_tag}: {r_stats}")
-
-        return results
-
-    def _postprocess_and_evaluate_membrane_repair(self, pred: NDArray):
-        """
-        Convert predicted affinities into instance labels, save them, and (if GT is available)
-        evaluate them against the raw GT instance labels.
-
-        Method selected by ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD``:
-        ``"watershed"`` (single min-affinity watershed, see ``watershed_by_channels``'s ``"A"``-only
-        branch, or 'P' seeds grown over 'F' for the 'F'/'P'(/'C') target) or ``"agglomeration"`` (default, see
-        ``biapy/data/post_processing/affinity_agglomeration.py``).
-
-        If ``TEST.EVAL_BORDER_CROP`` is set, the saved/agglomerated instance labels are left
-        untouched, but a border-blacked-out copy of both the predicted labels and the GT (same
-        canvas shape, border region zeroed) is used for matching, so only the center of the image
-        is evaluated (see ``TEST.EVAL_BORDER_CROP``'s docstring in config.py).
-
-        Parameters
-        ----------
-        pred : NDArray
-            Merged, sigmoid-activated affinity prediction, ``(1, ..., C)`` or ``(..., C)``.
-        """
-        cfg = self.cfg
-        mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-        pp = mr.POSTPROCESS
-        if pred.shape[0] == 1:
-            pred = pred[0]
-
-        # 'pred_labels'/'_Y' are always (z, y, x) below (a leading z=1 axis is inserted for 2D),
-        # while 'TEST.EVAL_BORDER_CROP' follows PROBLEM.NDIM's convention ([y, x] for 2D) -- pad
-        # it with a leading 0 so indices line up.
-        border_crop = list(cfg.TEST.EVAL_BORDER_CROP)
-        eval_border_crop = (([0] + border_crop) if cfg.PROBLEM.NDIM == "2D" else border_crop) if border_crop else []
-
-        if pp.METHOD == "skoots":
-            channels = self._target_channels(cfg)
-            pred_labels = skoots_instances(
-                foreground=pred[..., channels.index("F")],
-                skeleton=pred[..., channels.index("P")],
-                offsets=pred[..., [channels.index(c) for c in skoots_offset_axes(self.dims)]],
-                scale=hvz_skeleton_scale(dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]), self.dims),
-                fg_th=pp.SKOOTS_FG_TH,
-                skeleton_th=pp.SKOOTS_SKELETON_TH,
-                n_steps=pp.SKOOTS_N_STEPS,
-            ).astype(np.uint32)
-        elif pp.METHOD == "agglomeration":
-            a_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0]).get("A", {})
-            offsets = affinity_offsets_from_opts(a_opts, ndim=self.dims, resolution=self.resolution)
-            pred_labels = watershed_and_agglomerate_affinities(
-                data=pred,
-                offsets=offsets,
-                fragment_seed_th=pp.FRAGMENT_SEED_TH,
-                fragment_growth_th=pp.FRAGMENT_GROWTH_TH,
-                merge_threshold=pp.MERGE_TH,
-                merge_quantile=pp.MERGE_QUANTILE,
-                min_edge_voxels=pp.MIN_EDGE_VOXELS,
-                resolution=self.resolution,
-                watershed_by_2d_slices=False,
-                verbose=cfg.TEST.VERBOSE,
-            ).astype(np.uint32)
-        elif "P" in (channels := self._target_channels(cfg)):
-            pred_labels = watershed_by_channels(
-                data=pred,
-                channels=channels,
-                seed_channels=["P"],
-                seed_channel_ths=[pp.WATERSHED_SEED_TH],
-                topo_surface_channel="C" if "C" in channels else "P",
-                growth_mask_channels=["F"],
-                growth_mask_channel_ths=[pp.WATERSHED_GROWTH_TH],
-                resolution=self.resolution,
-                watershed_by_2d_slices=False,
-                save_dir=None,
-                verbose=cfg.TEST.VERBOSE,
-            ).astype(np.uint32)
-        else:
-            pred_labels = watershed_by_channels(
-                data=pred,
-                channels=["A"],
-                seed_channels=["A"],
-                seed_channel_ths=[pp.WATERSHED_SEED_TH],
-                topo_surface_channel="",
-                growth_mask_channels=["A"],
-                growth_mask_channel_ths=[pp.WATERSHED_GROWTH_TH],
-                resolution=self.resolution,
-                watershed_by_2d_slices=False,
-                save_dir=None,
-                verbose=cfg.TEST.VERBOSE,
-            ).astype(np.uint32)
-        if pred_labels.ndim == 2:
-            pred_labels = np.expand_dims(pred_labels, 0)
-
-        if self.save_to_disk:
-            save_tif(
-                np.expand_dims(np.expand_dims(pred_labels, -1), 0),
-                cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                [self.current_sample["X_filename"]],
-                verbose=cfg.TEST.VERBOSE,
-            )
-
-        matching_enabled = (
-            cfg.TEST.MATCHING_STATS
-            and (cfg.DATA.TEST.LOAD_GT or cfg.DATA.TEST.USE_VAL_AS_TEST)
-            and self.original_test_mask_path is not None
-        )
-
-        _Y = None
-        if matching_enabled:
-            test_file = os.path.join(self.original_test_mask_path, self.current_sample["X_filename"])
-            if not os.path.exists(test_file):
-                print(
-                    "WARNING: The image seems to have a different name than its GT mask file. Using "
-                    "the mask file that's in the same position (within the mask files list) as the "
-                    "image is in its own list. Check if it is correct!"
-                )
-                test_file = os.path.join(self.original_test_mask_path, self.test_gt_filenames[self.f_numbers[0]])
-
-            _Y = read_img_as_ndarray(test_file, is_3d=(cfg.PROBLEM.NDIM == "3D")).squeeze()
-            if _Y.ndim == 2:
-                _Y = np.expand_dims(_Y, 0)
-            if _Y.dtype == np.float32:
-                _Y = _Y.astype(np.uint32)
-            elif _Y.dtype == np.float64:
-                _Y = _Y.astype(np.uint64)
-
-            if pred_labels.shape != _Y.shape:
-                pred_labels = resize(pred_labels, _Y.shape, order=0)
-
-            eval_Y, eval_pred_labels = _Y, pred_labels
-            if eval_border_crop:
-                eval_Y = blackout_border_numpy(_Y, eval_border_crop, has_channel_axis=False)
-                eval_pred_labels = blackout_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
-
-            results = self._matching_stats_and_report(eval_Y, eval_pred_labels, suffix="")
-            self.all_matching_stats_merge_patches.append(results)
-            for i, r_per_th in enumerate(results):
-                prefix = str(r_per_th["thresh"]) + " TH " if "thresh" in r_per_th else f"TH{i} "
-                for mkey in [
-                    "fp", "tp", "fn", "precision", "recall", "accuracy", "f1", "n_true", "n_pred",
-                    "mean_true_score", "mean_matched_score", "panoptic_quality",
-                ]:
-                    if mkey in r_per_th:
-                        self.current_sample_metrics[prefix + mkey] = r_per_th[mkey]
-
-        ###################
-        # Post-processing #
-        ###################
-        if cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
-            pred_labels = apply_label_refinement(
-                pred_labels,
-                is_3d=cfg.PROBLEM.NDIM == "3D",
-                operations=cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS,
-                values=cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES,
-            )
-
-            if self.save_to_disk:
-                save_tif(
-                    np.expand_dims(np.expand_dims(pred_labels, -1), 0),
-                    cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                    [self.current_sample["X_filename"]],
-                    verbose=cfg.TEST.VERBOSE,
-                )
-
-            if matching_enabled:
-                eval_pred_labels_post = pred_labels
-                if eval_border_crop:
-                    eval_pred_labels_post = blackout_border_numpy(pred_labels, eval_border_crop, has_channel_axis=False)
-                results_post_proc = self._matching_stats_and_report(eval_Y, eval_pred_labels_post, suffix="_post-proc")
-                self.all_matching_stats_merge_patches_post.append(results_post_proc)
-                for i, r_per_th in enumerate(results_post_proc):
-                    prefix = str(r_per_th["thresh"]) + " TH (post)" if "thresh" in r_per_th else f"TH{i} (post) "
-                    for mkey in [
-                        "fp", "tp", "fn", "precision", "recall", "accuracy", "f1", "n_true", "n_pred",
-                        "mean_true_score", "mean_matched_score", "panoptic_quality",
-                    ]:
-                        if mkey in r_per_th:
-                            self.current_sample_metrics[prefix + mkey] = r_per_th[mkey]
-
-    def normalize_stats(self, image_counter):
-        """
-        Aggregate the accumulated per-image matching results into final dataset-level stats.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images (unused directly here; ``wrapper_matching_dataset_lazy`` recomputes
-            the aggregate from the raw per-image ``matching()`` results, not an average of
-            per-image scalars).
-        """
-        super().normalize_stats(image_counter)
-        if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and self.cfg.TEST.MATCHING_STATS:
-            if len(self.all_matching_stats_merge_patches) > 0:
-                self.stats["inst_stats_merge_patches"] = wrapper_matching_dataset_lazy(
-                    self.all_matching_stats_merge_patches,
-                    self.cfg.TEST.MATCHING_STATS_THS,
-                    by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
-                )
-            if len(self.all_matching_stats_merge_patches_post) > 0:
-                self.stats["inst_stats_merge_patches_post"] = wrapper_matching_dataset_lazy(
-                    self.all_matching_stats_merge_patches_post,
-                    self.cfg.TEST.MATCHING_STATS_THS,
-                    by_image=self.cfg.TEST.MATCHING_STATS_BY_IMAGE,
-                )
-
-    def print_stats(self, image_counter):
-        """
-        Print the aggregated instance-matching stats.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to call ``normalize_stats`` with.
-        """
-        super().print_stats(image_counter)
-        if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
-            print("Membrane-repair instance metrics (affinities -> watershed -> matching):")
-            for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
-                print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                if self.stats["inst_stats_merge_patches"]:
-                    print(f"      {self.stats['inst_stats_merge_patches'][i]}")
-                if self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
-                    print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                    if self.stats["inst_stats_merge_patches_post"]:
-                        print(f"      {self.stats['inst_stats_merge_patches_post'][i]}")
+    def _create_instance_labels(self, pred: NDArray, save_dir: Optional[str] = None, verbose: bool = False):
+        """INSTANCE_SEG's, plus the 'skoots' ``INSTANCE_CREATION_PROCESS`` (``pred`` is ``(Z, Y, X, C)``)."""
+        inst = self.cfg.PROBLEM.INSTANCE_SEG
+        if inst.INSTANCE_CREATION_PROCESS != "skoots":
+            return super()._create_instance_labels(pred, save_dir=save_dir, verbose=verbose)
+        channels = [ch for ch in inst.DATA_CHANNELS if ch != "I"]
+        p = pred if self.dims == 3 else pred[0]
+        sk = inst.MEMBRANE_REPAIR.SKOOTS
+        labels = skoots_instances(
+            foreground=p[..., channels.index("F")],
+            skeleton=p[..., channels.index("P")],
+            offsets=p[..., [channels.index(c) for c in skoots_offset_axes(self.dims)]],
+            scale=hvz_skeleton_scale(dict(inst.DATA_CHANNELS_EXTRA_OPTS[0]), self.dims),
+            fg_th=sk.FG_TH,
+            skeleton_th=sk.SKELETON_TH,
+            n_steps=sk.N_STEPS,
+        ).astype(np.uint32)
+        return labels if labels.ndim == 3 else labels[None]

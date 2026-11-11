@@ -133,6 +133,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 elif "A" in instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "agglomeration"])
                     inst_creation_process = "agglomeration"
+                elif cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE and is_skoots_channel_set(
+                    instance_channels, 3 if cfg.PROBLEM.NDIM == "3D" else 2
+                ):
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "skoots"])
+                    inst_creation_process = "skoots"
                 else:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
                     inst_creation_process = "watershed"
@@ -330,6 +335,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
+            elif set(instance_channels) == {"B", "P"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["P", "B"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "B"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["B"]
+                    growth_mask_channel_ths = ["auto"]
             elif set(instance_channels) == {"A"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["A"]
@@ -485,7 +499,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                             f"'H'/'V'/'Z' group {hvz_with_opts}. These channels always share the same settings — "
                             f"configure only one of them and the values will be propagated to the rest."
                         )
-                if hvz_with_opts:
+                _hvz_skel = hvz_with_opts and dst[hvz_with_opts[0]].get("type", "centroid") == "skeleton"
+                if _hvz_skel and cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE:
+                    # SKOOTS offsets, validated with the membrane repair loss below
+                    resolved_hvz = dict(dst[hvz_with_opts[0]])
+                elif hvz_with_opts:
                     source_ch = hvz_with_opts[0]
                     assert [k for k in dst[source_ch] if k not in ["norm", "act", "type"]] == [], (
                         f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}' can only have 'norm', 'act' "
@@ -494,19 +512,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     if dst[source_ch].get("type", "centroid") != "centroid":
                         raise ValueError(
                             f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{source_ch}': 'type' can only be "
-                            "'centroid' in INSTANCE_SEG ('skeleton' is only supported by "
-                            "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR for now)"
+                            "'centroid' in INSTANCE_SEG ('skeleton' is only supported with "
+                            "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR)"
                         )
-                    norm = dst[source_ch].get("norm", True)
-                    act = dst[source_ch].get("act", "")
-                else:
-                    norm = True
-                    act = ""
-                # H/V/Z hold signed displacements (centroid = 0), so the activation must keep negative
-                # values: 'linear' by default, 'tanh' when the [-1, 1] range should be enforced.
-                if act == "":
-                    act = "linear"
-                resolved_hvz = {"norm": norm, "act": act}
+                if not (_hvz_skel and cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE):
+                    norm = dst[hvz_with_opts[0]].get("norm", True) if hvz_with_opts else True
+                    act = dst[hvz_with_opts[0]].get("act", "") if hvz_with_opts else ""
+                    # H/V/Z hold signed displacements (centroid = 0), so the activation must keep negative
+                    # values: 'linear' by default, 'tanh' when the [-1, 1] range should be enforced.
+                    resolved_hvz = {"norm": norm, "act": act or "linear"}
                 for ch in hvz_chs_present:
                     dst[ch] = resolved_hvz.copy()
 
@@ -1387,48 +1401,38 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
 
-    elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
+    elif cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE:
+        # Empty LOSS.TYPE: INSTANCE_SEG per-channel losses (DATA_CHANNELS_LOSSES)
         loss = [str(n).upper() for n in cfg.LOSS.TYPE]
         weights = list(cfg.LOSS.WEIGHTS)
         assert len(loss) == len(weights), (
             f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
         )
-        assert any(w > 0 for w in weights), (
-            "'LOSS.WEIGHTS' must have at least one positive entry when "
-            "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True"
+        _inst = cfg.PROBLEM.INSTANCE_SEG
+        _mr_targets = [ch for ch in _inst.DATA_CHANNELS if ch != "I"]
+        _mr_weights = list(_inst.DATA_CHANNEL_WEIGHTS)
+        _ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+        _skoots = is_skoots_channel_set(_inst.DATA_CHANNELS, _ndim)
+        assert _inst.TYPE == "regular" and not cfg.TEST.BY_CHUNKS.ENABLE, (
+            "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR needs PROBLEM.INSTANCE_SEG.TYPE 'regular' and TEST.BY_CHUNKS.ENABLE False"
         )
-        _mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-        _mr_targets = [ch for ch in _mr.DATA_CHANNELS if ch != "I"]
-        _mr_weights = list(_mr.DATA_CHANNEL_WEIGHTS)
-        if len(_mr_weights) != len(_mr_targets) and tuple(_mr_weights) in [(1, 1), (1,)]:
-            _mr_weights = [1] * len(_mr_targets)
-            opts.extend(["PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS", tuple(_mr_weights)])
-        assert len(_mr_weights) == len(_mr_targets) and all(float(w) >= 0 for w in _mr_weights), (
-            "'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS' needs one value >= 0 per "
-            f"'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS' entry ('I' aside): {_mr_targets}"
+        assert (_inst.INSTANCE_CREATION_PROCESS == "skoots") == _skoots, (
+            "PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS must be 'skoots' if and only if DATA_CHANNELS is the SKOOTS "
+            f"set 'F', 'P', 'H', 'V'{', Z' if _ndim == 3 else ''}, got {_inst.INSTANCE_CREATION_PROCESS} with {_mr_targets}"
         )
-        _skoots = is_skoots_channel_set(_mr.DATA_CHANNELS, 3 if cfg.PROBLEM.NDIM == "3D" else 2)
-        if _skoots or sorted(_mr_targets) in (['F', 'P'], ['C', 'F', 'P']):
-            _ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
-            assert loss == ["SKOOTS"], (
-                "LOSS.TYPE must be ['SKOOTS'] with the SKOOTS or 'F'/'P'(/'C') PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR."
-                f"DATA_CHANNELS ({_mr_targets}), got {loss}"
+        if loss == ["SKOOTS"]:
+            assert _skoots or sorted(_mr_targets) in (["F", "P"], ["C", "F", "P"]), (
+                "LOSS.TYPE ['SKOOTS'] needs PROBLEM.INSTANCE_SEG.DATA_CHANNELS to be the SKOOTS set or 'F', 'P'(, 'C'), "
+                f"got {_mr_targets}"
             )
-            _method = "skoots" if _skoots else "watershed"
-            assert _mr.POSTPROCESS.METHOD == _method, (
-                f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be '{_method}' with the "
-                f"DATA_CHANNELS {_mr_targets}"
-            )
-            _mr_opts = dict(_mr.DATA_CHANNELS_EXTRA_OPTS[0])
-            _p_opts = _mr_opts.get("P", {})
-            assert [k for k in _p_opts if k not in ["type", "dilation", "erosion"]] == [] and _p_opts.get("type") == "skeleton", (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS['P'] must have 'type': 'skeleton' "
-                "(other allowed keys: 'dilation', 'erosion') with the SKOOTS or 'F'/'P'(/'C') DATA_CHANNELS"
+            _mr_opts = dict(_inst.DATA_CHANNELS_EXTRA_OPTS[0])
+            assert _mr_opts.get("P", {}).get("type") == "skeleton", (
+                "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS['P'] must have 'type': 'skeleton' with LOSS.TYPE ['SKOOTS']"
             )
             if _skoots:
                 _hvz_w = [_mr_weights[_mr_targets.index(ch)] for ch in _mr_targets if ch in ("Z", "V", "H")]
                 assert all(w == _hvz_w[0] for w in _hvz_w), (
-                    "'PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS' must be the same for 'H', 'V' and 'Z'"
+                    "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' must be the same for 'H', 'V' and 'Z'"
                 )
                 _hvz = [_mr_opts[ch] for ch in ("Z", "V", "H") if ch in _mr_opts]
                 assert (
@@ -1437,14 +1441,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     and _hvz[0].get("type") == "skeleton"
                     and [k for k in _hvz[0] if k not in ["type", "scale"]] == []
                 ), (
-                    "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS for 'H'/'V'/'Z' must have 'type': "
-                    "'skeleton' (other allowed key: 'scale'; one entry is enough) with the SKOOTS DATA_CHANNELS"
+                    "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for 'H'/'V'/'Z' must have 'type': 'skeleton' (other "
+                    "allowed key: 'scale'; one entry is enough) with the SKOOTS DATA_CHANNELS"
                 )
                 if "scale" in _hvz[0]:
                     _scale = list(_hvz[0]["scale"])
                     assert len(_scale) == _ndim and all(float(v) > 0 for v in _scale), (
-                        f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS 'H'/'V'/'Z' 'scale' must be "
-                        f"{_ndim} positive values"
+                        f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS 'H'/'V'/'Z' 'scale' must be {_ndim} positive values"
                     )
             _sk = cfg.LOSS.SKOOTS
             assert len(_sk.INITIAL_SIGMA) == 3 and all(float(v) > 0 for v in _sk.INITIAL_SIGMA), (
@@ -1461,34 +1464,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert len(_sk.START_FRACTIONS) == 3 and all(0 <= float(f) <= 1 for f in _sk.START_FRACTIONS), (
                 "LOSS.SKOOTS.START_FRACTIONS must be 3 values in [0, 1] ('F', 'P' and 'H'/'V'/'Z' terms)"
             )
-            assert 0 <= _mr.POSTPROCESS.SKOOTS_FG_TH <= 1 and 0 <= _mr.POSTPROCESS.SKOOTS_SKELETON_TH <= 1, (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_FG_TH/SKOOTS_SKELETON_TH must be in [0, 1]"
+            _mrsk = _inst.MEMBRANE_REPAIR.SKOOTS
+            assert 0 <= _mrsk.FG_TH <= 1 and 0 <= _mrsk.SKELETON_TH <= 1, (
+                "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKOOTS.FG_TH/SKELETON_TH must be in [0, 1]"
             )
-            assert _mr.POSTPROCESS.SKOOTS_N_STEPS >= 1, (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_N_STEPS must be >= 1"
+            assert _mrsk.N_STEPS >= 1, "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKOOTS.N_STEPS must be >= 1"
+        elif loss:
+            assert _mr_targets == ["A"] and set(loss) <= {"BCE", "MALIS", "CLDICE", "SVOX"}, (
+                "With PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR, LOSS.TYPE must be empty (per-channel losses), ['SKOOTS'], or "
+                f"only 'BCE'/'MALIS'/'CLDICE'/'SVOX' with DATA_CHANNELS ['A'], got {loss} with {_mr_targets}"
             )
+            assert any(w > 0 for w in weights), "'LOSS.WEIGHTS' must have at least one positive entry"
         else:
-            assert _mr_targets == ["A"], (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS must be ['A'], 'F', 'P'(, 'C') or the SKOOTS channels "
-                f"'F', 'P', 'H', 'V'{', Z' if cfg.PROBLEM.NDIM == '3D' else ''} (any order), got {_mr_targets}"
-            )
-            assert loss and set(loss) <= {"BCE", "MALIS", "CLDICE", "SVOX"}, (
-                "LOSS.TYPE must only contain 'BCE'/'MALIS'/'CLDICE'/'SVOX' when "
-                f"PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE is True, got {loss}"
-            )
-            assert _mr.POSTPROCESS.METHOD in ["watershed", "agglomeration"], (
-                "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD must be 'watershed' or "
-                "'agglomeration'"
-            )
-
-        # Carry the raw instance labels as an 'I' channel whenever a geometry-derived target (e.g. 'A',
-        # the affinities) must be recomputed from the augmented labels instead of warped -- same mechanism
-        # and same reasoning as INSTANCE_SEG's own 'I' auto-add above.
-        mr_channels = list(cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS)
-        _mr_extra_opts = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS[0]
-        if any(instance_channel_needs_regen(ch, _mr_extra_opts) for ch in mr_channels) and "I" not in mr_channels:
-            mr_channels.append("I")
-            opts.extend(["PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS", mr_channels])
+            assert not _skoots, "The SKOOTS DATA_CHANNELS need LOSS.TYPE ['SKOOTS']"
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
@@ -1538,14 +1526,44 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
         if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
             raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
-    membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
-    if cfg.LOSS.IGNORE_INDEX != -1 and loss != ["CE"] and cfg.PROBLEM.TYPE != "INSTANCE_SEG" and not membrane_repair:
+    membrane_repair = cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE
+    if cfg.LOSS.IGNORE_INDEX != -1 and loss != ["CE"] and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         warnings.warn("'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is ['CE']")
     if cfg.LOSS.IGNORE_INDEX != -1 and membrane_repair:
-        if "membrane" not in cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS:
+        if "membrane" not in cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SOURCE_CHANNELS:
             raise ValueError("'LOSS.IGNORE_INDEX' in membrane repair requires 'membrane' in SOURCE_CHANNELS")
-        if "A" not in cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS:
+        if "A" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             raise ValueError("'LOSS.IGNORE_INDEX' in membrane repair requires 'A' in DATA_CHANNELS")
+    if membrane_repair:
+        _mr = cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR
+        _src, _der = list(_mr.SOURCE_CHANNELS), list(_mr.DERIVED_CHANNELS)
+        assert _der, "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS can not be empty"
+        assert cfg.DATA.PATCH_SIZE[-1] == len(_src), (
+            f"DATA.PATCH_SIZE's channel count ({cfg.DATA.PATCH_SIZE[-1]}) must be "
+            f"len(PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SOURCE_CHANNELS) = {len(_src)}"
+        )
+        assert "meijering" not in _der or "raw" in _src, (
+            "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS 'meijering' needs 'raw' in SOURCE_CHANNELS"
+        )
+        assert not any(ch in _der for ch in ("skeleton_dt", "hessian_blob")) or "membrane" in _src, (
+            "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS 'skeleton_dt'/'hessian_blob' need 'membrane' in "
+            "SOURCE_CHANNELS"
+        )
+        assert "class_union" not in _der or any(ch not in ("membrane", "raw") for ch in _src), (
+            "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS 'class_union' needs a SOURCE_CHANNELS entry other "
+            "than 'membrane'/'raw'"
+        )
+        if _mr.CLASS_SET_CHANNELS:
+            assert all(ch in _der for ch in _mr.CLASS_SET_CHANNELS), (
+                "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_CHANNELS must all be in DERIVED_CHANNELS"
+            )
+            assert _mr.CLASS_SET_ENCODER.OUT_CHANNELS > 0, (
+                "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_ENCODER.OUT_CHANNELS must be > 0"
+            )
+            assert cfg.MODEL.ARCHITECTURE.lower() == "stunet" and str(cfg.MODEL.STUNET.VARIANT).lower() == "custom", (
+                "PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_CHANNELS requires MODEL.ARCHITECTURE 'stunet' and "
+                "MODEL.STUNET.VARIANT 'custom'"
+            )
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     
@@ -1690,7 +1708,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'deeplabv3_mobilenet_v3_large' model expects 3 channel data (RGB). "
                     f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}"
                 )
-    #### Instance refinement (used by INSTANCE_SEG and IMAGE_TO_IMAGE.MEMBRANE_REPAIR) ####
+    #### Instance refinement (INSTANCE_SEG) ####
     if cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
         if len(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS) != len(
             cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES
@@ -1728,7 +1746,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings", "gradient-flow"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings', 'gradient-flow']"
+            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings", "gradient-flow"] + ["skoots"] * cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE, "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings', 'gradient-flow'] ('skoots' only with PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR)"
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 assert x in [
                     "F",
@@ -1824,6 +1842,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                             val = float(x)
                         except:
                             raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH' values can only be 'auto' or a float")
+            elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "skoots":
+                pass  # checked with the membrane repair loss
             else: # agglomeration
                 _agg_chs = set(instance_channels) - {"I"}
                 assert _agg_chs == {"A"}, (
@@ -1875,6 +1895,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
                 elif key == "C":  # contours
                     _assert_str_in(val, "mode", {"thick", "inner", "outer", "subpixel", "dense"}, ctx)
+                elif key in ("Z", "V", "H") and val.get("type") == "skeleton":
+                    pass  # SKOOTS offsets, checked with the membrane repair loss
                 elif key in ("Z", "V", "H"):  # distance channels group
                     _assert_bool(val, "norm", ctx)
                     assert isinstance(val["norm"], bool)
@@ -4774,12 +4796,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "UPR_Y_FILE" in old_cfg["PATHS"]:
             del old_cfg["PATHS"]["UPR_Y_FILE"]
 
-    _convert_old_loss_type_to_list(old_cfg, workflow)
+    _convert_old_loss_type_to_list(old_cfg)
 
     return old_cfg
 
 
-def _convert_old_loss_type_to_list(old_cfg: dict, workflow: str) -> None:
+def _convert_old_loss_type_to_list(old_cfg: dict) -> None:
     """
     Convert a pre-list-format ``LOSS.TYPE`` (a single combo string, e.g. ``"W_MAE_SSIM"`` or
     ``"CYCLEGAN"``) into the current list format (``LOSS.TYPE`` a list of individually-weighted
@@ -4790,8 +4812,6 @@ def _convert_old_loss_type_to_list(old_cfg: dict, workflow: str) -> None:
     ----------
     old_cfg : dict
         Raw (pre-merge) configuration dict.
-    workflow : str
-        ``PROBLEM.TYPE``, already resolved by the caller.
     """
     loss_cfg = old_cfg.get("LOSS")
     if not isinstance(loss_cfg, dict):
@@ -4802,9 +4822,6 @@ def _convert_old_loss_type_to_list(old_cfg: dict, workflow: str) -> None:
 
     old_weights = list(loss_cfg.get("WEIGHTS", []))
     cyclegan_cfg = loss_cfg.get("CYCLEGAN", {})
-    membrane_repair_enabled = bool(
-        old_cfg.get("PROBLEM", {}).get("IMAGE_TO_IMAGE", {}).get("MEMBRANE_REPAIR", {}).get("ENABLE", False)
-    )
 
     def cyclegan_to_list():
         # Converts old LOSS.CYCLEGAN.LAMBDA_*/DELTA_MSE/ALPHA_PERCEPTUAL/GAMMA_SSIM/GAN_TYPE into
@@ -4837,9 +4854,6 @@ def _convert_old_loss_type_to_list(old_cfg: dict, workflow: str) -> None:
     new_names, new_weights = None, None
     if old_type == "CYCLEGAN":
         new_names, new_weights = cyclegan_to_list()
-    elif old_type == "MEMBRANE_REPAIR_AFFINITY" or (workflow == "IMAGE_TO_IMAGE" and membrane_repair_enabled):
-        w = (old_weights + [0.0, 0.0, 0.0, 0.0])[:4]
-        new_names, new_weights = ["BCE", "MALIS", "CLDICE", "SVOX"], w
     elif old_type == "W_CE_DICE":
         w = (old_weights + [1.0, 1.0])[:2]
         new_names, new_weights = ["DICE", "CE"], w

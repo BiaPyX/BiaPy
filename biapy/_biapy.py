@@ -437,8 +437,8 @@ class BiaPy:
         :meth:`update_config` calls it again to refresh that state. Expects a defrosted ``cfg``.
         """
         workflowname = str(self.cfg.PROBLEM.TYPE).lower()
-        # Membrane repair lives in its own module (Membrane_Repair_Workflow), not image_to_image.py.
-        if self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE:
+        # Membrane repair lives in its own module (Membrane_Repair_Workflow, an Instance_Segmentation_Workflow).
+        if self.cfg.PROBLEM.TYPE == "INSTANCE_SEG" and self.cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE:
             workflowname = "membrane_repair"
         if self.cfg.PROBLEM.TYPE == "INSTANCE_SEG" and self.cfg.PROBLEM.TRACKING.ENABLE:
             workflowname = "tracking"

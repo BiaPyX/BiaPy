@@ -45,7 +45,7 @@ class test_pair_data_generator(Dataset):
 
     data_channels : list, optional
         Instance-seg/membrane-repair channel names (``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` or
-        ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS``). When non-empty, the raw
+        ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``). When non-empty, the raw
         single-channel instance-label GT is expanded into this channel stack in memory (never cached
         to disk), exactly as the train/val generator does. Empty (default) for non-instance workflows
         and for the 'synapses' instance type, which stays on the offline-cache path.

@@ -19,6 +19,8 @@ from scipy.ndimage import (
     generic_filter,
     generate_binary_structure,
     grey_closing,
+    grey_dilation,
+    grey_erosion,
     center_of_mass,
     map_coordinates,
     uniform_filter,
@@ -1458,7 +1460,12 @@ def labels_into_channels(
             erode = True
         if (isinstance(dil_k, int) and dil_k > 0) or (isinstance(dil_k, list) and any([x for x in dil_k if x > 0])):
             dilate = True
-        if erode or dilate:
+        if dilate and not erode:
+            # Instances eroded: a voxel stays foreground only if its whole footprint has its label
+            fp = generate_ellipse_footprint([dil_k,]*vol.ndim if isinstance(dil_k, int) else dil_k)
+            same = grey_dilation(vol, footprint=fp, mode="nearest") == grey_erosion(vol, footprint=fp, mode="nearest")
+            mask = 1 - (same & (vol > 0)).astype(np.uint8)
+        elif erode or dilate:
             mask = np.zeros_like(fg_mask, dtype=np.uint8)
             dil_k = [dil_k,]*mask.ndim if isinstance(dil_k, int) else dil_k
             dil_k = generate_ellipse_footprint(dil_k)
@@ -1475,6 +1482,7 @@ def labels_into_channels(
                 if erode:
                     m = dilation(m.astype(np.uint8), footprint=er_k, mode="min").astype(np.uint8)
                 mask[m > 0] = 1
+            mask = 1 - mask
         new_mask[..., mode.index("B")] = mask
 
     # ---------- P (central part) ----------

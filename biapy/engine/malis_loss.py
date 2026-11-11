@@ -1,5 +1,5 @@
 """
-Malis-weighted affinity loss, for PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR's
+Malis-weighted affinity loss, for PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR's
 ``LOSS.TYPE == "MEMBRANE_REPAIR_AFFINITY"``.
 
 Ref: Turaga et al., "Maximin Affinity Learning of Image Segmentation"
@@ -140,7 +140,7 @@ def _reconstruct_gt_labels(target_np: NDArray, offsets: List[Tuple[int, ...]], s
     if not rows:
         raise ValueError(
             "MalisLoss requires at least one unit-offset ('short-range') affinity channel in "
-            "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS['A'] to reconstruct "
+            "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS['A'] to reconstruct "
             "GT instance labels."
         )
     rows = np.concatenate(rows)
@@ -288,7 +288,7 @@ class MalisLoss(nn.Module):
         offsets : list of tuple of int
             One offset per affinity channel (``(dz, dy, dx)`` in 3D, ``(dy, dx)`` in 2D), in the
             same order as the model's affinity output channels -- matches
-            ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS[0]["A"]``'s
+            ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]["A"]``'s
             interleaved ``(z_affinities, y_affinities, x_affinities)`` channel order.
 
         eps : float, optional

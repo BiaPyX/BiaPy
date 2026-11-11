@@ -1,5 +1,5 @@
 """
-Dedicated data generator for the membrane-repair problem (PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR).
+Dedicated data generator for the membrane-repair problem (PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR).
 
 Reuses ``PairBaseDataGenerator.apply_transform`` (geometric warps, content augmentors, and online
 regeneration of the GT affinity ('A') channel from the warped instance-label ('I') channel) via
@@ -155,10 +155,6 @@ class MembraneRepairGeneratorMixin:
         self.ignore_value = ignore_value
         self.ignore_mask_col = None
         if self.ignore_value is not None:
-            if self.membrane_idx is None:
-                raise ValueError("An ignore value (LOSS.IGNORE_INDEX) requires 'membrane' in SOURCE_CHANNELS.")
-            if "A" not in self.data_channels:
-                raise ValueError("An ignore value (LOSS.IGNORE_INDEX) requires 'A' in DATA_CHANNELS.")
             # Ignore mask travels as an extra binary mask channel through the augmentations
             self.ignore_mask_col = self.Y_channels
             self.mask_norm = copy.deepcopy(self.mask_norm)

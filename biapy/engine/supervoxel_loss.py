@@ -1,5 +1,5 @@
 """
-Supervoxel-based structure-aware affinity loss, for PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR's
+Supervoxel-based structure-aware affinity loss, for PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR's
 ``LOSS.TYPE == "MEMBRANE_REPAIR_AFFINITY"``.
 
 Ref: Grim, A., Chandrashekar, J., Sumbul, U., "Efficient Connectivity-Preserving Instance

@@ -64,7 +64,7 @@ def worker_init_fn(worker_id: int):
 def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
     """
     Build the kwargs specific to ``Membrane2D/3DRepairDataGenerator`` from
-    ``PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR``. Shared by the train and val dict construction below.
+    ``PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR``. Shared by the train and val dict construction below.
 
     Parameters
     ----------
@@ -76,9 +76,7 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
     kwargs : dict
         Keyword arguments to merge into the generator constructor dict.
     """
-    mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-    data_channels = list(mr.DATA_CHANNELS)
-    extra_opts = dict(mr.DATA_CHANNELS_EXTRA_OPTS[0])
+    mr = cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR
 
     def _aug_cfg(block, *range_keys, scalar_keys=()):
         d = {"enable": block.ENABLE, "prob": block.PROB}
@@ -89,12 +87,6 @@ def _membrane_repair_generator_kwargs(cfg: CN) -> Dict[str, Any]:
         return d
 
     return {
-        "instance_problem": True,
-        "data_channels": data_channels,
-        "channel_extra_opts": extra_opts,
-        "instance_channel": (
-            channel_physical_offsets(data_channels, extra_opts)["I"] if "I" in data_channels else None
-        ),
         "source_channels": list(mr.SOURCE_CHANNELS),
         "derived_channels": list(mr.DERIVED_CHANNELS),
         "derived_channels_extra_opts": dict(mr.DERIVED_CHANNELS_EXTRA_OPTS[0]),
@@ -265,7 +257,7 @@ def create_train_val_augmentors(
                 fo.MAX_LOCATIONS_PER_CLASS, cfg.SYSTEM.SEED,
             )
 
-    membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
+    membrane_repair = cfg.PROBLEM.TYPE == "INSTANCE_SEG" and cfg.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE
     if cfg.PROBLEM.NDIM == "2D":
         if membrane_repair:
             f_name = Membrane2DRepairDataGenerator
@@ -490,8 +482,6 @@ def create_train_val_augmentors(
                 # on DatasetFile.diameter; the generator computes the per-sample rescale factor
                 # DIAM_MEAN / diameter itself.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
-        elif membrane_repair:
-            dic.update(_membrane_repair_generator_kwargs(cfg))
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -501,6 +491,8 @@ def create_train_val_augmentors(
                 np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
             )
             dic["n2v_load_gt"] = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
+        if membrane_repair:
+            dic.update(_membrane_repair_generator_kwargs(cfg))
         if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ENABLE:
             dic["balance_group_regex"] = cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.REGEX
             dic["balance_alpha"] = cfg.PROBLEM.IMAGE_TO_IMAGE.BALANCE_GROUPS.ALPHA
@@ -560,8 +552,6 @@ def create_train_val_augmentors(
                 # does on train and test, so val is scored at the scale the net trains at. Augmentation
                 # stays off (da=False); only this rescale is applied.
                 dic["cellpose_diam_mean"] = float(cfg.PROBLEM.INSTANCE_SEG.CELLPOSE.DIAM_MEAN)
-        elif membrane_repair:
-            dic.update(_membrane_repair_generator_kwargs(cfg))
         elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -572,6 +562,8 @@ def create_train_val_augmentors(
                 np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
             )
             dic["n2v_load_gt"] = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
+        if membrane_repair:
+            dic.update(_membrane_repair_generator_kwargs(cfg))
 
         val_generator = f_name(**dic)  # type: ignore
 
@@ -796,8 +788,7 @@ def create_test_generator(
         dic["mask_axes"] = cfg.DATA.TEST.INPUT_MASK_AXES_ORDER
         dic["use_ome_metadata"] = not cfg.DATA.OME_ZARR.IGNORE_METADATA
         dic["resolution"] = cfg.DATA.TEST.RESOLUTION
-        _membrane_repair = cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE
-        dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG" or _membrane_repair
+        dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG"
         # 'I' is in the test GT too and must be dropped before the GT is used for the metrics.
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             _test_channels = list(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -811,15 +802,6 @@ def create_test_generator(
             if cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses":
                 dic["data_channels"] = _test_channels
                 dic["channel_extra_opts"] = _extra_opts
-        elif _membrane_repair:
-            _mr = cfg.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR
-            _test_channels = list(_mr.DATA_CHANNELS)
-            _extra_opts = dict(_mr.DATA_CHANNELS_EXTRA_OPTS[0])
-            dic["instance_channel"] = (
-                channel_physical_offsets(_test_channels, _extra_opts)["I"] if "I" in _test_channels else None
-            )
-            dic["data_channels"] = _test_channels
-            dic["channel_extra_opts"] = _extra_opts
         dic["ignore_index"] = cfg.LOSS.IGNORE_INDEX
         dic["n_classes"] = cfg.DATA.N_CLASSES
         # Y is a continuous regression target in these workflows, not a categorical mask -- resizing

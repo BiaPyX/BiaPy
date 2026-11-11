@@ -1095,18 +1095,15 @@ rules:
     cite: [structn2v]
     when: {PROBLEM.TYPE: DENOISING, MODEL.ARCHITECTURE: {not_in: [nafnet]}, PROBLEM.DENOISING.N2V_STRUCTMASK: true}
 
-  # Membrane repair (image to image)
-  - reason: "Membrane repair: affinity agglomeration as waterz does"
-    cite: [mala]
-    when: {PROBLEM.TYPE: IMAGE_TO_IMAGE, PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: true, PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD: agglomeration}
+  # Membrane repair (instance segmentation; its agglomeration is cited with INSTANCE_SEG's)
   - reason: "Membrane repair: SKOOTS target and post-processing"
     cite: [skoots]
     when:
-      PROBLEM.TYPE: IMAGE_TO_IMAGE
-      PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: true
+      PROBLEM.TYPE: INSTANCE_SEG
+      PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE: true
       any:
         - {LOSS.TYPE: {contains: SKOOTS}}
-        - {PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD: skoots}
+        - {PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS: skoots}
 
   # Losses
   - reason: "Loss: MALIS"
@@ -1129,7 +1126,6 @@ rules:
     when:
       TRAIN.ENABLE: true
       PROBLEM.TYPE: [IMAGE_TO_IMAGE, DENOISING]
-      PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: false
       LOSS.TYPE: {contains_any: [BCE, HINGE]}
   - reason: "Loss: pixel contrast"
     cite: [pixel_contrast]

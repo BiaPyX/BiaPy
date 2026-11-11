@@ -1,5 +1,5 @@
 """
-Corruption augmentors for the membrane-repair problem (PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR).
+Corruption augmentors for the membrane-repair problem (PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR).
 
 Synthetic gaps (under-segmentation), spurious bridges (over-segmentation), a skeleton-geometry
 perturbation, a slice-dropout augmentor, a heavy acquisition-artifact augmentor, fake internal

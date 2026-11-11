@@ -12,10 +12,8 @@ Example (membrane repair, agglomeration):
         --result_dir /cephfs/dfranco/exp_results --name vast_repair27_tune --gpu 0 \
         --grid '{"FRAGMENT_SEED_TH": [0.8, 0.9, 0.95], "FRAGMENT_GROWTH_TH": [0.05, 0.1, 0.2], "MERGE_TH": [0.3, 0.5, 0.7]}'
 
-INSTANCE_SEG uses --method agglomeration|watershed (PROBLEM.INSTANCE_SEG.AGGLOMERATION /
-.WATERSHED). Membrane repair also supports both --method values: "agglomeration" grid keys are
-FRAGMENT_SEED_TH/FRAGMENT_GROWTH_TH/MERGE_TH/MERGE_QUANTILE; "watershed" grid keys are
-WATERSHED_SEED_TH/WATERSHED_GROWTH_TH.
+INSTANCE_SEG (membrane repair included) uses --method agglomeration|watershed: the grid keys are those of
+PROBLEM.INSTANCE_SEG.AGGLOMERATION / .WATERSHED (e.g. SEED_CHANNELS_THRESH).
 """
 import argparse
 import copy
@@ -32,8 +30,6 @@ import yaml
 BIAPY_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 POSTPROCESS_BLOCK = {
-    ("IMAGE_TO_IMAGE", "agglomeration"): "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS",
-    ("IMAGE_TO_IMAGE", "watershed"): "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS",
     ("INSTANCE_SEG", "agglomeration"): "PROBLEM.INSTANCE_SEG.AGGLOMERATION",
     ("INSTANCE_SEG", "watershed"): "PROBLEM.INSTANCE_SEG.WATERSHED",
 }
@@ -79,8 +75,7 @@ def build_run_config(base_cfg, block, combo, checkpoint, reuse_predictions, meth
     set_by_path(cfg, "DATA.TEST.USE_VAL_AS_TEST", True)
     set_by_path(cfg, "TEST.REUSE_PREDICTIONS", reuse_predictions)
     set_by_path(cfg, "TEST.SAVE_MODEL_RAW_OUTPUT", True)
-    if get_by_path(cfg, "PROBLEM.TYPE") == "IMAGE_TO_IMAGE":
-        set_by_path(cfg, "PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD", method)
+    set_by_path(cfg, "PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", method)
     for key, value in combo.items():
         set_by_path(cfg, f"{block}.{key}", value)
     return cfg

@@ -181,7 +181,7 @@ class Config:
         #   - 'H', 'V' and 'Z' channels. Possible options:
         #       - 'type': str, reference point of the displacements: 'centroid' or 'skeleton' (displacement in voxels to
         #         the nearest skeleton voxel of the instance, as SKOOTS). 'skeleton' ignores 'norm' and 'act' and is only
-        #         supported by PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR. Default: 'centroid'
+        #         supported with PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR. Default: 'centroid'
         #       - 'scale': list of floats, only with 'skeleton'. Voxels per axis ((z,) y, x) matching a tanh output of 1.
         #         Default: [12, 60, 60] in 3D, [60, 60] in 2D
         #       - 'norm': bool, specifies whether signed displacements are normalized to [-1, 1] (centroid = 0). Default: True
@@ -312,6 +312,7 @@ class Config:
         #   - "agglomeration" to oversegment predicted affinities and greedily merge fragments by
         #     affinity (requires 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' == ['A']). See
         #     'PROBLEM.INSTANCE_SEG.AGGLOMERATION' for its options.
+        #   - "skoots" for the SKOOTS target, only with PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE (see its SKOOTS options)
         _C.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS = ""
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -570,6 +571,200 @@ class Config:
         _C.PROBLEM.TRACKING.GT_PATH = ""
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.2.7 Membrane repair (INSTANCE_SEG)
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Instance segmentation from an upstream membrane prediction: the model input is DERIVED_CHANNELS, computed from
+        # SOURCE_CHANNELS, and the targets/decoding are the regular PROBLEM.INSTANCE_SEG ones (DATA_CHANNELS, WATERSHED,
+        # AGGLOMERATION...). Uses Membrane2D/3DRepairDataGenerator, which adds the corruption augmentors below.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR = CN()
+        # Enables Membrane_Repair_Workflow (PROBLEM.TYPE must be 'INSTANCE_SEG').
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE = False
+        # Ordered list of the raw, on-disk input channels. Never fed to the model directly -- only
+        # used to compute DERIVED_CHANNELS (see below). Channels are resolved by name, not
+        # position, so any order/subset works, e.g. ["membrane"], ["raw"], ["membrane", "raw"] or
+        # ["raw", "membrane"] ("raw" required whenever 'meijering' is in DERIVED_CHANNELS;
+        # "membrane" required whenever 'skeleton_dt'/'hessian_blob' are). Any entry that is neither
+        # "membrane" nor "raw" (e.g. unsupervised per-slice GMM class maps, whose cluster-to-channel
+        # assignment is not stable across slices) is treated as a "class" channel, folded into the
+        # single 'class_union' derived channel below -- their names/count/order don't matter beyond
+        # that, since 'class_union' only takes their per-pixel union.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane", "raw"]
+        # Ordered list of channels derived on the fly from SOURCE_CHANNELS -- the model's actual
+        # input; must be non-empty. Options:
+        #   - 'skeleton_dt': clamped Euclidean distance transform of the per-slice membrane skeleton.
+        #     Derived from 'membrane' (required in SOURCE_CHANNELS).
+        #   - 'hessian_blob': Hessian-eigenvalue-based "dense blob" response (mito/synapse/vesicle cue).
+        #     Derived from 'membrane' (required in SOURCE_CHANNELS).
+        #   - 'meijering': standardised multi-scale Meijering ridge filter. Derived from 'raw'
+        #     (required in SOURCE_CHANNELS).
+        #   - 'class_union': per-pixel union (max) of every SOURCE_CHANNELS entry that is not
+        #     'membrane'/'raw' (at least one such entry required in SOURCE_CHANNELS). Order-
+        #     invariant by construction -- use this instead of feeding per-class channels directly
+        #     whenever the class identity behind each channel isn't stable slice to slice.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS = ["skeleton_dt", "hessian_blob", "meijering"]
+        # Per-channel options for DERIVED_CHANNELS. Must be a list with a unique element: a dict of
+        # dicts, keyed by channel name. Possible options:
+        #   - 'skeleton_dt' channel. Possible options:
+        #       - 'clamp_px': int, clamp distance (in canonical pixels) applied to the DT. Default: 10
+        #       - 'per_slice': bool, whether to skeletonize/derive the DT per z-slice (2D skeleton in a
+        #         3D stack) rather than on the full 3D volume. Default: True
+        #   - 'hessian_blob' channel. Possible options:
+        #       - 'sigma_range': list of 2 floats, [min, max] Gaussian scales probed for the Hessian.
+        #         Default: [1.0, 3.0]
+        #   - 'meijering' channel. Possible options:
+        #       - 'sigma_range': list of 2 floats, [min, max] Gaussian scales probed for the ridge
+        #         filter. Default: [1.0, 4.0]
+        #       - 'standardize': bool, whether to z-score/percentile-normalize the response for
+        #         cross-dataset comparability. Default: True
+        #   - 'class_union' channel. Possible options:
+        #       - 'threshold': float, threshold applied to each class map before taking the union.
+        #         Default: 0.5
+        #   - identity-passthrough channels (any name matching a SOURCE_CHANNELS entry): no options.
+        # For example:
+        #  DERIVED_CHANNELS = ['skeleton_dt', 'hessian_blob']
+        #  DERIVED_CHANNELS_EXTRA_OPTS = [{'skeleton_dt': {'clamp_px': 8}, 'hessian_blob': {'sigma_range': [1.0, 2.5]}}]
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.DERIVED_CHANNELS_EXTRA_OPTS = [{}]
+        # Subset of DERIVED_CHANNELS naming an "exchangeable" group of identity-passthrough class
+        # channels whose channel-to-semantic mapping isn't stable slice to slice (e.g. per-slice
+        # GMM cluster ids). When non-empty, this is forwarded to MODEL.STUNET.CLASS_SET_CHANNEL_IDXS
+        # (translated from names to DERIVED_CHANNELS positions) so the model routes this group
+        # through a permutation-invariant encoder instead of its regular first layer -- see
+        # MODEL.STUNET.CLASS_SET_CHANNEL_IDXS's docstring. Only meaningful with MODEL.ARCHITECTURE
+        # == 'stunet' and MODEL.STUNET.VARIANT == 'custom'. Left empty (default), this is a no-op.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_CHANNELS = []
+        # Output width and pooling of the CLASS_SET_CHANNELS group's pooled encoding -- forwarded to
+        # MODEL.STUNET.CLASS_SET_OUT_CHANNELS / CLASS_SET_POOLING. Only used when CLASS_SET_CHANNELS
+        # is non-empty.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_ENCODER = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_ENCODER.OUT_CHANNELS = 8
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.CLASS_SET_ENCODER.POOLING = 'max'
+        # 'skoots' INSTANCE_CREATION_PROCESS only (SKOOTS target 'F', 'P', 'H', 'V'(, 'Z'), LOSS.TYPE ['SKOOTS'])
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKOOTS = CN()
+        # Foreground ('F') threshold
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKOOTS.FG_TH = 0.5
+        # Skeleton ('P') threshold; its connected components are the instances
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKOOTS.SKELETON_TH = 0.8
+        # Times each voxel is moved by the predicted offsets
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKOOTS.N_STEPS = 2
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # 2.2.8 Membrane repair corruption augmentors
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # These synthesize the upstream pipeline's failure modes directly on the membrane source
+        # channel, so the network learns the repair operation from corrupted -> clean pairs.
+        # Applied after the geometric warps, before the derived channels are computed.
+        # PROB is a per-z-slice probability, independently rolled for every slice (2D: probability of
+        # augmenting the whole image), not a single roll for the whole sample.
+        #
+        # Blacks out random bands across the membrane channel (merge error). LENGTH_RANGE: fraction
+        # (0-1) of border-to-border extent (1.0 = full). THICKNESS_RANGE: pixels. N_LINES: bands
+        # per slice.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.PROB = 0.5
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (0.3, 1.0)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.THICKNESS_RANGE = (4, 9)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.N_LINES = (1, 3)
+        # Probability, per painted slice, of also fading the raw membrane or covering it with a dark blob under the gap
+        # (so the raw ridge response agrees with the missing membrane), and its strength (0-1). Needs 'raw'.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.RAW_PROB = 0.0
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.GAP_AUG.RAW_STRENGTH_RANGE = (0.5, 1.0)
+        # Inverse of GAP_AUG: paints bands instead of erasing (split error). Same options.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.PROB = 0.3
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.LENGTH_RANGE = (0.3, 1.0)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.THICKNESS_RANGE = (4, 9)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.N_LINES = (1, 3)
+        # Probability, per painted slice, of also darkening the raw image under the bridge, and its strength (0-1)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.RAW_PROB = 0.0
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.BRIDGE_AUG.RAW_STRENGTH_RANGE = (0.2, 0.5)
+        # Heavy acquisition artifact. With probability BAND_PROB: a border-to-border band
+        # (BAND_THICKNESS_RANGE px) -- membrane channel set to 1 inside it, every other channel
+        # blacked out; rest of the image untouched. Otherwise: BLOB_N_RANGE ink-blot blobs
+        # (BLOB_SIZE_RANGE radius, fraction of min(h, w)) blacked out in every channel.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG.PROB = 0.1
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG.BAND_PROB = 0.5
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG.BAND_THICKNESS_RANGE = (50, 70)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG.BLOB_SIZE_RANGE = (0.1, 0.3)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ARTIFACT_AUG.BLOB_N_RANGE = (1, 3)
+        # Applies a small random dilation/erosion/spur injection to the membrane channel before the
+        # derived channels are computed, so the model doesn't over-trust exact skeleton geometry.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.PROB = 0.3
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.RADIUS_RANGE = (1, 1)
+        # Zeroes z-slices of each raw source channel (SOURCE_CHANNELS, e.g. membrane or raw)
+        # independently with probability PROB (see 'slice_dropout' in
+        # biapy/data/generators/membrane_augmentors.py).
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.PROB = 0.3
+        # Fake mitochondria membranes inside instances (predicted as neuron membranes by the upstream model) that trace
+        # the real ridge rings of 'raw'; targets are unchanged. Mito-like objects (areas enclosed by the ridge response
+        # inside one instance, detected at THRESHOLDS with ring gaps up to GAP px bridged, equivalent radius in
+        # RADIUS_RANGE and darker than the rest of the instance by DARKER, raw in [0, 1]) are linked across slices; with probability PROB per sample, N_RANGE of them get the ridge
+        # pixels around their outline painted over Z_RANGE consecutive slices. Needs 'raw' in SOURCE_CHANNELS.
+        # See 'internal_membranes' in biapy/data/generators/membrane_augmentors.py.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.PROB = 0.5
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.N_RANGE = (20, 40)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.THRESHOLDS = (0.5, 0.55, 0.6, 0.65, 0.7)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.GAP = 10
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.RADIUS_RANGE = (4, 50)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.DARKER = 0.05
+        # Painted slices per object, outline thickness (px) and fraction of the outline kept (an angular sector is left
+        # out, the same in all slices)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.Z_RANGE = (3, 8)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.THICKNESS_RANGE = (2, 4)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.KEEP_RANGE = (0.5, 1.0)
+        # Fake membranes inside instances where the raw image looks like a membrane (e.g. organelles); targets are
+        # unchanged. With probability PROB per sample, N_RANGE random 3D boxes: the Meijering response of 'raw' is
+        # smoothed along z (Z_SIGMA slices, also used by INTERNAL_MEMBRANE_AUG), thresholded (THRESHOLD_RANGE) inside
+        # instances, and its 3D components of at least MIN_AREA pixels per slice (on average) spanning Z_RANGE slices
+        # are painted as lines of THICKNESS_RANGE pixels. Needs 'raw' in SOURCE_CHANNELS.
+        # See 'ridge_membranes' in biapy/data/generators/membrane_augmentors.py.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.PROB = 0.3
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.N_RANGE = (6, 12)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.BOX_Z_RANGE = (8, 24)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.BOX_XY_RANGE = (48, 160)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.THRESHOLD_RANGE = (0.45, 0.6)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.Z_RANGE = (3, 8)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.THICKNESS_RANGE = (1, 3)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.Z_SIGMA = 1.0
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.MIN_AREA = 20
+        # Membrane "dust" around the membranes (porous clouds bleeding off them, specks and small rings), as the upstream
+        # model predicts in ambiguous areas; targets are unchanged. On each z-slice with probability PROB, N_REGIONS
+        # regions (Gaussian envelopes of RADIUS_RANGE px) are centred on membrane pixels, and a pixel at distance d
+        # from the membrane is painted with probability density * exp(-d / decay) (DENSITY_RANGE, DECAY_RANGE px),
+        # thresholding smoothed noise (CLOUD_SIGMA_RANGE px). Specks (SPECK_SIGMA_RANGE px) and rings reach twice
+        # as far, with SPECK_DENSITY/RING_DENSITY times that probability (0 disables them).
+        # See 'membrane_dust' in biapy/data/generators/membrane_augmentors.py.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG = CN()
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.ENABLE = False
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.PROB = 0.5
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.N_REGIONS = (2, 6)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RADIUS_RANGE = (15, 50)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.DENSITY_RANGE = (0.3, 0.8)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.DECAY_RANGE = (2, 8)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.CLOUD_SIGMA_RANGE = (1.5, 3.0)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.SPECK_SIGMA_RANGE = (0.7, 1.2)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.SPECK_DENSITY = 0.3
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RING_DENSITY = 0.3
+        # Z-coherent dust (3D only): z-extent (Gaussian sigma, slices) of each region and z-smoothing of the noise.
+        # With Z_RADIUS_RANGE above 0, PROB and N_REGIONS apply per volume instead of per slice. (0, 0): per-slice dust.
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.Z_RADIUS_RANGE = (0, 0)
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.NOISE_Z_SIGMA_RANGE = (1.0, 3.0)
+        # Probability, per augmented slice (z-coherent mode: volume), of also darkening the raw image under the dust
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RAW_PROB = 0.0
+        _C.PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RAW_STRENGTH_RANGE = (0.2, 0.5)
+
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 2.3 Detection problem specification
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
         _C.PROBLEM.DETECTION = CN()
@@ -681,254 +876,6 @@ class Config:
         # Activation function to be applied to the output channels of the model. It can be a string or a list of strings if
         # different activation functions are desired for different channels. Leave empty to use linear activation.
         _C.PROBLEM.IMAGE_TO_IMAGE.OUTPUT_CHANNEL_ACT = []
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 2.6.1 Membrane repair sub-problem (IMAGE_TO_IMAGE)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # Trains a dataset-agnostic network that repairs membrane-segmentation errors (gaps and
-        # spurious fragments) coming out of an upstream foundation-model + GMM pipeline. Model input
-        # is EXCLUSIVELY DERIVED_CHANNELS, computed from SOURCE_CHANNELS (never fed to the model
-        # directly). Output is affinities learned from GT instance labels. Uses a dedicated data
-        # generator (Membrane2DRepairDataGenerator/Membrane3DRepairDataGenerator) instead of the
-        # shared instance-seg/Cellpose/N2V generator.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR = CN()
-        # Master switch. When True, PROBLEM.TYPE == "IMAGE_TO_IMAGE" is routed through the dedicated
-        # membrane-repair data generator and Membrane_Repair_Workflow instead of the regular
-        # IMAGE_TO_IMAGE_Workflow path.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE = False
-        # Ordered list of the raw, on-disk input channels. Never fed to the model directly -- only
-        # used to compute DERIVED_CHANNELS (see below). Channels are resolved by name, not
-        # position, so any order/subset works, e.g. ["membrane"], ["raw"], ["membrane", "raw"] or
-        # ["raw", "membrane"] ("raw" required whenever 'meijering' is in DERIVED_CHANNELS;
-        # "membrane" required whenever 'skeleton_dt'/'hessian_blob' are). Any entry that is neither
-        # "membrane" nor "raw" (e.g. unsupervised per-slice GMM class maps, whose cluster-to-channel
-        # assignment is not stable across slices) is treated as a "class" channel, folded into the
-        # single 'class_union' derived channel below -- their names/count/order don't matter beyond
-        # that, since 'class_union' only takes their per-pixel union.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SOURCE_CHANNELS = ["membrane", "raw"]
-        # Ordered list of channels derived on the fly from SOURCE_CHANNELS -- the model's actual
-        # input; must be non-empty. Options:
-        #   - 'skeleton_dt': clamped Euclidean distance transform of the per-slice membrane skeleton.
-        #     Derived from 'membrane' (required in SOURCE_CHANNELS).
-        #   - 'hessian_blob': Hessian-eigenvalue-based "dense blob" response (mito/synapse/vesicle cue).
-        #     Derived from 'membrane' (required in SOURCE_CHANNELS).
-        #   - 'meijering': standardised multi-scale Meijering ridge filter. Derived from 'raw'
-        #     (required in SOURCE_CHANNELS).
-        #   - 'class_union': per-pixel union (max) of every SOURCE_CHANNELS entry that is not
-        #     'membrane'/'raw' (at least one such entry required in SOURCE_CHANNELS). Order-
-        #     invariant by construction -- use this instead of feeding per-class channels directly
-        #     whenever the class identity behind each channel isn't stable slice to slice.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS = ["skeleton_dt", "hessian_blob", "meijering"]
-        # Per-channel options for DERIVED_CHANNELS. Must be a list with a unique element: a dict of
-        # dicts, keyed by channel name. Possible options:
-        #   - 'skeleton_dt' channel. Possible options:
-        #       - 'clamp_px': int, clamp distance (in canonical pixels) applied to the DT. Default: 10
-        #       - 'per_slice': bool, whether to skeletonize/derive the DT per z-slice (2D skeleton in a
-        #         3D stack) rather than on the full 3D volume. Default: True
-        #   - 'hessian_blob' channel. Possible options:
-        #       - 'sigma_range': list of 2 floats, [min, max] Gaussian scales probed for the Hessian.
-        #         Default: [1.0, 3.0]
-        #   - 'meijering' channel. Possible options:
-        #       - 'sigma_range': list of 2 floats, [min, max] Gaussian scales probed for the ridge
-        #         filter. Default: [1.0, 4.0]
-        #       - 'standardize': bool, whether to z-score/percentile-normalize the response for
-        #         cross-dataset comparability. Default: True
-        #   - 'class_union' channel. Possible options:
-        #       - 'threshold': float, threshold applied to each class map before taking the union.
-        #         Default: 0.5
-        #   - identity-passthrough channels (any name matching a SOURCE_CHANNELS entry): no options.
-        # For example:
-        #  DERIVED_CHANNELS = ['skeleton_dt', 'hessian_blob']
-        #  DERIVED_CHANNELS_EXTRA_OPTS = [{'skeleton_dt': {'clamp_px': 8}, 'hessian_blob': {'sigma_range': [1.0, 2.5]}}]
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DERIVED_CHANNELS_EXTRA_OPTS = [{}]
-        # Subset of DERIVED_CHANNELS naming an "exchangeable" group of identity-passthrough class
-        # channels whose channel-to-semantic mapping isn't stable slice to slice (e.g. per-slice
-        # GMM cluster ids). When non-empty, this is forwarded to MODEL.STUNET.CLASS_SET_CHANNEL_IDXS
-        # (translated from names to DERIVED_CHANNELS positions) so the model routes this group
-        # through a permutation-invariant encoder instead of its regular first layer -- see
-        # MODEL.STUNET.CLASS_SET_CHANNEL_IDXS's docstring. Only meaningful with MODEL.ARCHITECTURE
-        # == 'stunet' and MODEL.STUNET.VARIANT == 'custom'. Left empty (default), this is a no-op.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_CHANNELS = []
-        # Output width and pooling of the CLASS_SET_CHANNELS group's pooled encoding -- forwarded to
-        # MODEL.STUNET.CLASS_SET_OUT_CHANNELS / CLASS_SET_POOLING. Only used when CLASS_SET_CHANNELS
-        # is non-empty.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_ENCODER = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_ENCODER.OUT_CHANNELS = 8
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_SET_ENCODER.POOLING = 'max'
-
-        # Y-side: GT target channels, generated offline from the raw GT instance-label folder via the
-        # same 'labels_into_channels' machinery INSTANCE_SEG uses (see PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        # for the full list of channel letters), then regenerated online after each augmentation warp so
-        # directional channels never get corrupted by interpolation. Must include 'I' (the virtual raw
-        # instance-label channel), the regeneration source that is dropped before the batch reaches the
-        # model -- exactly as INSTANCE_SEG does for its own directional channels. 'A' (affinities) is the
-        # actual training target.
-        # Supported targets ('I' aside): ['A'] (affinities) or 'F', 'P', 'H', 'V', 'Z' in any order (SKOOTS, 'Z' only
-        # in 3D, 'P' and 'H'/'V'/'Z' of type 'skeleton', LOSS.TYPE ['SKOOTS'], POSTPROCESS.METHOD 'skoots').
-        # 'F', 'P' (optionally 'C') is SKOOTS without the offsets ('P' of type 'skeleton', LOSS.TYPE ['SKOOTS'],
-        # POSTPROCESS.METHOD 'watershed').
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS = ["A", "I"]
-        # Same as PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS. E.g. [{'A': {'z_affinities': [1], 'y_affinities': [1],
-        # 'x_affinities': [1]}}] or [{'P': {'type': 'skeleton'}, 'H': {'type': 'skeleton'}}]
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNELS_EXTRA_OPTS = [{}]
-        # Weight of each DATA_CHANNELS entry ('I' aside) in the loss. Only used by the SKOOTS target, where 'H', 'V' and
-        # 'Z' form one term and must share the same weight.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.DATA_CHANNEL_WEIGHTS = (1, 1)
-        # Like PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS, but per affinity offset channel
-        # instead of pooled across the whole 'A' stack. False = old pooled behavior (reproducibility).
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.CLASS_REBALANCE_WITHIN_CHANNELS = True
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 2.6.2 Membrane repair test-time post-processing (affinities -> instances)
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS = CN()
-        # How to turn predicted affinities into instance labels at test time: 'watershed' or
-        # 'agglomeration' (see biapy/data/post_processing/affinity_agglomeration.py). 'skoots' for the SKOOTS target.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.METHOD = "agglomeration"
-        # 'skoots' only: foreground ('F') threshold.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_FG_TH = 0.5
-        # 'skoots' only: skeleton ('P') threshold; its connected components are the instances.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_SKELETON_TH = 0.8
-        # 'skoots' only: times each voxel is moved by the predicted offsets.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.SKOOTS_N_STEPS = 2
-        # 'watershed' only: seed threshold for watershed_by_channels's 'A'-only branch ('P' with the 'F', 'P'(, 'C') target,
-        # grown over 'C' if given, else over 'P').
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_SEED_TH = 0.5
-        # 'watershed' only: growth-mask threshold ('F' with the 'F', 'P'(, 'C') target). Equal to WATERSHED_SEED_TH gives plain
-        # threshold + 3D connected components (no seeded growth).
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.WATERSHED_GROWTH_TH = 0.5
-        # 'agglomeration' only: seed threshold for the initial oversegmented fragments (high, so
-        # fragments never straddle a real instance boundary).
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.FRAGMENT_SEED_TH = 0.9
-        # 'agglomeration' only: growth-mask threshold for those fragments (low, so they cover all
-        # foreground with no gaps).
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.FRAGMENT_GROWTH_TH = 0.1
-        # 'agglomeration' only: two fragments merge while their MERGE_QUANTILE-th percentile
-        # affinity (short-range triple only, see METHOD above) is >= this value.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.MERGE_TH = 0.5
-        # 'agglomeration' only: percentile (0-100) of each fragment pair's affinity histogram used
-        # as its merge score. 50 = median.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.MERGE_QUANTILE = 50.0
-        # 'agglomeration' only: minimum supporting voxel-pairs an edge needs before it can trigger a
-        # merge. 1 effectively disables this.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.POSTPROCESS.MIN_EDGE_VOXELS = 5
-
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # 2.6.3 Membrane repair corruption augmentors
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # These synthesize the upstream pipeline's failure modes directly on the membrane source
-        # channel, so the network learns the repair operation from corrupted -> clean pairs.
-        # Applied after the geometric warps, before the derived channels are computed.
-        # PROB is a per-z-slice probability, independently rolled for every slice (2D: probability of
-        # augmenting the whole image), not a single roll for the whole sample.
-        #
-        # Blacks out random bands across the membrane channel (merge error). LENGTH_RANGE: fraction
-        # (0-1) of border-to-border extent (1.0 = full). THICKNESS_RANGE: pixels. N_LINES: bands
-        # per slice.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.PROB = 0.5
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.LENGTH_RANGE = (0.3, 1.0)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.THICKNESS_RANGE = (4, 9)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.N_LINES = (1, 3)
-        # Probability, per painted slice, of also fading the raw membrane or covering it with a dark blob under the gap
-        # (so the raw ridge response agrees with the missing membrane), and its strength (0-1). Needs 'raw'.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.RAW_PROB = 0.0
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.GAP_AUG.RAW_STRENGTH_RANGE = (0.5, 1.0)
-        # Inverse of GAP_AUG: paints bands instead of erasing (split error). Same options.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.LENGTH_RANGE = (0.3, 1.0)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.THICKNESS_RANGE = (4, 9)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.N_LINES = (1, 3)
-        # Probability, per painted slice, of also darkening the raw image under the bridge, and its strength (0-1)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.RAW_PROB = 0.0
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.BRIDGE_AUG.RAW_STRENGTH_RANGE = (0.2, 0.5)
-        # Heavy acquisition artifact. With probability BAND_PROB: a border-to-border band
-        # (BAND_THICKNESS_RANGE px) -- membrane channel set to 1 inside it, every other channel
-        # blacked out; rest of the image untouched. Otherwise: BLOB_N_RANGE ink-blot blobs
-        # (BLOB_SIZE_RANGE radius, fraction of min(h, w)) blacked out in every channel.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.PROB = 0.1
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BAND_PROB = 0.5
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BAND_THICKNESS_RANGE = (50, 70)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BLOB_SIZE_RANGE = (0.1, 0.3)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ARTIFACT_AUG.BLOB_N_RANGE = (1, 3)
-        # Applies a small random dilation/erosion/spur injection to the membrane channel before the
-        # derived channels are computed, so the model doesn't over-trust exact skeleton geometry.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SKELETON_PERTURB_AUG.RADIUS_RANGE = (1, 1)
-        # Zeroes z-slices of each raw source channel (SOURCE_CHANNELS, e.g. membrane or raw)
-        # independently with probability PROB (see 'slice_dropout' in
-        # biapy/data/generators/membrane_augmentors.py).
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.SLICE_DROPOUT_AUG.PROB = 0.3
-        # Fake mitochondria membranes inside instances (predicted as neuron membranes by the upstream model) that trace
-        # the real ridge rings of 'raw'; targets are unchanged. Mito-like objects (areas enclosed by the ridge response
-        # inside one instance, detected at THRESHOLDS with ring gaps up to GAP px bridged, equivalent radius in
-        # RADIUS_RANGE and darker than the rest of the instance by DARKER, raw in [0, 1]) are linked across slices; with probability PROB per sample, N_RANGE of them get the ridge
-        # pixels around their outline painted over Z_RANGE consecutive slices. Needs 'raw' in SOURCE_CHANNELS.
-        # See 'internal_membranes' in biapy/data/generators/membrane_augmentors.py.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.PROB = 0.5
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.N_RANGE = (20, 40)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.THRESHOLDS = (0.5, 0.55, 0.6, 0.65, 0.7)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.GAP = 10
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.RADIUS_RANGE = (4, 50)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.DARKER = 0.05
-        # Painted slices per object, outline thickness (px) and fraction of the outline kept (an angular sector is left
-        # out, the same in all slices)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.Z_RANGE = (3, 8)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.THICKNESS_RANGE = (2, 4)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.INTERNAL_MEMBRANE_AUG.KEEP_RANGE = (0.5, 1.0)
-        # Fake membranes inside instances where the raw image looks like a membrane (e.g. organelles); targets are
-        # unchanged. With probability PROB per sample, N_RANGE random 3D boxes: the Meijering response of 'raw' is
-        # smoothed along z (Z_SIGMA slices, also used by INTERNAL_MEMBRANE_AUG), thresholded (THRESHOLD_RANGE) inside
-        # instances, and its 3D components of at least MIN_AREA pixels per slice (on average) spanning Z_RANGE slices
-        # are painted as lines of THICKNESS_RANGE pixels. Needs 'raw' in SOURCE_CHANNELS.
-        # See 'ridge_membranes' in biapy/data/generators/membrane_augmentors.py.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.PROB = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.N_RANGE = (6, 12)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.BOX_Z_RANGE = (8, 24)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.BOX_XY_RANGE = (48, 160)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.THRESHOLD_RANGE = (0.45, 0.6)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.Z_RANGE = (3, 8)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.THICKNESS_RANGE = (1, 3)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.Z_SIGMA = 1.0
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.RIDGE_MEMBRANE_AUG.MIN_AREA = 20
-        # Membrane "dust" around the membranes (porous clouds bleeding off them, specks and small rings), as the upstream
-        # model predicts in ambiguous areas; targets are unchanged. On each z-slice with probability PROB, N_REGIONS
-        # regions (Gaussian envelopes of RADIUS_RANGE px) are centred on membrane pixels, and a pixel at distance d
-        # from the membrane is painted with probability density * exp(-d / decay) (DENSITY_RANGE, DECAY_RANGE px),
-        # thresholding smoothed noise (CLOUD_SIGMA_RANGE px). Specks (SPECK_SIGMA_RANGE px) and rings reach twice
-        # as far, with SPECK_DENSITY/RING_DENSITY times that probability (0 disables them).
-        # See 'membrane_dust' in biapy/data/generators/membrane_augmentors.py.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG = CN()
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.ENABLE = False
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.PROB = 0.5
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.N_REGIONS = (2, 6)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RADIUS_RANGE = (15, 50)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.DENSITY_RANGE = (0.3, 0.8)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.DECAY_RANGE = (2, 8)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.CLOUD_SIGMA_RANGE = (1.5, 3.0)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.SPECK_SIGMA_RANGE = (0.7, 1.2)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.SPECK_DENSITY = 0.3
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RING_DENSITY = 0.3
-        # Z-coherent dust (3D only): z-extent (Gaussian sigma, slices) of each region and z-smoothing of the noise.
-        # With Z_RADIUS_RANGE above 0, PROB and N_REGIONS apply per volume instead of per slice. (0, 0): per-slice dust.
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.Z_RADIUS_RANGE = (0, 0)
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.NOISE_Z_SIGMA_RANGE = (1.0, 3.0)
-        # Probability, per augmented slice (z-coherent mode: volume), of also darkening the raw image under the dust
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RAW_PROB = 0.0
-        _C.PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.MEMBRANE_DUST_AUG.RAW_STRENGTH_RANGE = (0.2, 0.5)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # 3. Dataset
@@ -2245,8 +2192,9 @@ class Config:
         #     supports a single ["MSE"] or ["BCE"]/["HINGE"], never a multi-term mix.
         #   * IMAGE_TO_IMAGE/DENOISING also accept "BCE" or "HINGE" (adversarial term, mutually
         #     exclusive, needs a discriminator; knobs under LOSS.GAN below).
-        #   * IMAGE_TO_IMAGE with PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE: "BCE", "MALIS",
-        #     "CLDICE", "SVOX" (at least one positive weight), or ["SKOOTS"] for the SKOOTS target (LOSS.SKOOTS).
+        #   * INSTANCE_SEG with PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE: empty (per-channel losses), "BCE", "MALIS",
+        #     "CLDICE", "SVOX" for DATA_CHANNELS ['A'] (at least one positive weight), or ["SKOOTS"] for the SKOOTS and
+        #     'F', 'P'(, 'C') targets (LOSS.SKOOTS).
         _C.LOSS.TYPE = []
         # Same length as LOSS.TYPE. Unlike the old "W_*" strings, weights don't need to sum to 1.
         _C.LOSS.WEIGHTS = []

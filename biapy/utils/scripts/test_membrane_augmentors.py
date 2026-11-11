@@ -86,7 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-examples", type=int, default=2, help="Number of independent draws per augmentor.")
     parser.add_argument("--seed", type=int, default=42)
 
-    # Augmentor parameters (mirrors PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR defaults, see biapy/config/config.py).
+    # Augmentor parameters (mirrors PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR defaults, see biapy/config/config.py).
     parser.add_argument("--gap-length-range", type=float, nargs=2, default=(0.3, 1.0), metavar=("MIN", "MAX"))
     parser.add_argument("--gap-thickness-range", type=float, nargs=2, default=(4, 9), metavar=("MIN", "MAX"))
     parser.add_argument("--gap-n-lines", type=int, nargs=2, default=(1, 3), metavar=("MIN", "MAX"))

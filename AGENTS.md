@@ -36,7 +36,7 @@ Check a config without running it: `biapy validate-config my_config.yaml [--no-d
 
 | Path | What it contains |
 |------|------------------|
-| `biapy/engine/` | The workflows: one file per `PROBLEM.TYPE`, named after it in lowercase (`SEMANTIC_SEG` → `semantic_seg.py`; it is imported dynamically by `BiaPy._build_workflow`, so the name must match). Exception: `membrane_repair.py`, used by `IMAGE_TO_IMAGE` when `PROBLEM.IMAGE_TO_IMAGE.MEMBRANE_REPAIR.ENABLE` is set. Also the shared `base_workflow.py`, the train loop, losses, metrics and `check_configuration.py` (config validation) |
+| `biapy/engine/` | The workflows: one file per `PROBLEM.TYPE`, named after it in lowercase (`SEMANTIC_SEG` → `semantic_seg.py`; it is imported dynamically by `BiaPy._build_workflow`, so the name must match). Exception: `membrane_repair.py`, used by `INSTANCE_SEG` when `PROBLEM.INSTANCE_SEG.MEMBRANE_REPAIR.ENABLE` is set. Also the shared `base_workflow.py`, the train loop, losses, metrics and `check_configuration.py` (config validation) |
 | `biapy/config/` | `config.py`: every config option with its default value |
 | `biapy/data/` | Data loading, normalization, pre/post-processing and data generators |
 | `biapy/models/` | One file per architecture; `__init__.py` has `build_model()` and BioImage Model Zoo loading |
