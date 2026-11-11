@@ -17,6 +17,7 @@ import torch.distributed as dist
 from shutil import copyfile
 import numpy as np
 import importlib
+from importlib.resources import files
 from yacs.config import CfgNode as CN
 from typing import (
     Any,
@@ -85,7 +86,11 @@ from biapy.engine.check_configuration import (
     diff_between_configs,
 )
 from biapy.utils.util import create_file_sha256sum
-from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
+from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape, imread, to_biapy_shape
+from biapy.models.bmz_search import list_compatible_bmz_models
+from biapy.wizard.config_builder import WizardError, _check_targets, write_config
+from biapy.wizard.config_builder import build_config as build_wizard_config  # not BiaPy's build_config below
+from biapy.wizard.data_check import check_folder
 
 
 class _Tee:
@@ -2175,6 +2180,21 @@ VALID_WORKFLOWS = [
 ]
 
 
+def _check_workflow_and_ndim(workflow: str, ndim: str, ndim_name: str = "ndim", allow_all: bool = False) -> tuple:
+    """
+    ``workflow`` and ``ndim`` upper-cased, checked against :data:`VALID_WORKFLOWS` and 2D/3D ("all" too, for both,
+    if ``allow_all``). ``ndim_name`` is the name of the argument in the error message.
+    """
+    workflow, ndim = str(workflow).upper(), str(ndim).upper()
+    workflows = VALID_WORKFLOWS + (["ALL"] if allow_all else [])
+    ndims = ["2D", "3D"] + (["ALL"] if allow_all else [])
+    if workflow not in workflows:
+        raise ValueError("'workflow' must be one of {}. Provided: {}".format(workflows, workflow))
+    if ndim not in ndims:
+        raise ValueError("'{}' must be one of {}. Provided: {}".format(ndim_name, ndims, ndim))
+    return workflow, ndim
+
+
 # Folder (and file name suffix) of each workflow's basic templates in biapy/config/templates,
 # e.g. semantic_segmentation/2d_semantic_segmentation.yaml
 TEMPLATE_NAMES = {
@@ -2283,13 +2303,7 @@ def build_config(
     dict
         Configuration overrides ready to be passed to :class:`BiaPy`.
     """
-    workflow = str(workflow).upper()
-    if workflow not in VALID_WORKFLOWS:
-        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
-
-    dims = str(dims).upper()
-    if dims not in ["2D", "3D"]:
-        raise ValueError("'dims' must be either '2D' or '3D'. Provided: {}".format(dims))
+    workflow, dims = _check_workflow_and_ndim(workflow, dims, ndim_name="dims")
 
     phase = str(phase).lower()
     if phase not in ["train", "test", "both"]:
@@ -2388,9 +2402,6 @@ def _check_folders(
     variable, and ``data_constraints`` and ``sample_info`` of all the folders.
     Returns the report of :func:`check_data` (``ok`` still to be set) and the upscaling (or None).
     """
-    from biapy.wizard.config_builder import WizardError, _check_targets
-    from biapy.wizard.data_check import check_folder
-
     report = {"ok": True, "errors": [], "warnings": [], "folders": {}}
     constraints = {}  # all the folders' constraints together, as the wizard keeps them in its answers
     train_channels = None  # the other raw images (validation, test) must have the training images' channels
@@ -2550,14 +2561,7 @@ def check_data_for_workflow(workflow: str, ndim: str, raw: str, gt: str = "", pe
     ValueError
         If ``workflow`` or ``ndim`` are not valid.
     """
-    # Same checks as build_config
-    workflow = str(workflow).upper()
-    if workflow not in VALID_WORKFLOWS:
-        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
-
-    ndim = str(ndim).upper()
-    if ndim not in ["2D", "3D"]:
-        raise ValueError("'ndim' must be either '2D' or '3D'. Provided: {}".format(ndim))
+    workflow, ndim = _check_workflow_and_ndim(workflow, ndim)
 
     to_check = [("DATA.TRAIN.PATH", raw, "")]
     if gt:
@@ -2616,15 +2620,7 @@ def create_config(
     ValueError
         If ``workflow`` or ``ndim`` are not valid.
     """
-    from biapy.wizard.config_builder import WizardError, build_config, write_config
-
-    # Same checks as build_config
-    workflow = str(workflow).upper()
-    if workflow not in VALID_WORKFLOWS:
-        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
-    ndim = str(ndim).upper()
-    if ndim not in ["2D", "3D"]:
-        raise ValueError("'ndim' must be either '2D' or '3D'. Provided: {}".format(ndim))
+    workflow, ndim = _check_workflow_and_ndim(workflow, ndim)
 
     # The wizard's answers: what it asks, plus what the data checks gather
     answers = {
@@ -2650,7 +2646,7 @@ def create_config(
 
     if not report["errors"]:  # no configuration for data BiaPy can't use
         try:
-            cfg, plan = build_config(answers)
+            cfg, plan = build_wizard_config(answers)
         except WizardError as e:
             report["errors"].append(str(e))
         else:
@@ -2684,8 +2680,6 @@ def inspect_image(path: str) -> dict:
         * ``suggested_ndim``: "3D" if the stored axes have Z, "2D" if they don't. Without real stored axes, the
           only reading that is possible, or None if both are.
     """
-    from biapy.data.data_manipulation import imread, to_biapy_shape
-
     img, axes = imread(path)
     report = {"stored": {"shape": tuple(img.shape), "axes": axes, "dtype": str(img.dtype)}}
     for ndim in ("2D", "3D"):
@@ -2730,15 +2724,7 @@ def get_config_template(workflow: str, ndim: str, store_yaml: Optional[str] = No
     ValueError
         If ``workflow`` or ``ndim`` are not valid.
     """
-    from importlib.resources import files
-
-    # Same checks as build_config
-    workflow = str(workflow).upper()
-    if workflow not in VALID_WORKFLOWS:
-        raise ValueError("'workflow' must be one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
-    ndim = str(ndim).upper()
-    if ndim not in ["2D", "3D"]:
-        raise ValueError("'ndim' must be either '2D' or '3D'. Provided: {}".format(ndim))
+    workflow, ndim = _check_workflow_and_ndim(workflow, ndim)
 
     name = TEMPLATE_NAMES[workflow]
     text = (files("biapy.config") / "templates" / name / f"{ndim.lower()}_{name}.yaml").read_text(encoding="utf-8")
@@ -2787,13 +2773,7 @@ def search_bmz_models(
     ValueError
         If ``workflow`` or ``ndim`` are not valid.
     """
-    from biapy.models.bmz_search import list_compatible_bmz_models
-
-    workflow, ndim = str(workflow).upper(), str(ndim).upper()
-    if workflow != "ALL" and workflow not in VALID_WORKFLOWS:
-        raise ValueError("'workflow' must be 'all' or one of {}. Provided: {}".format(VALID_WORKFLOWS, workflow))
-    if ndim not in ["ALL", "2D", "3D"]:
-        raise ValueError("'ndim' must be 'all', '2D' or '3D'. Provided: {}".format(ndim))
+    workflow, ndim = _check_workflow_and_ndim(workflow, ndim, allow_all=True)
 
     models = list_compatible_bmz_models(
         workflow="all" if workflow == "ALL" else workflow,
