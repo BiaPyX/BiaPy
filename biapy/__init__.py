@@ -17,9 +17,12 @@ Version: 3.7.3
 __version__ = "3.7.3"
 
 import argparse
+import contextlib
 import json
 import os
 import sys
+
+import yaml
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
@@ -41,22 +44,52 @@ def __dir__():
     return sorted(list(globals()) + list(_LAZY))
 
 
+def _command_parser(command, description):
+    """Parser of a subcommand (``biapy <command>``), with the ``--json`` option all of them have."""
+    parser = argparse.ArgumentParser(prog=f"biapy {command}", description=description)
+    parser.add_argument("--json", action="store_true", help="Print the result as JSON, for agents and scripts")
+    return parser
+
+
+def _report(ok=True, errors=None, warnings=None, **data):
+    """Result of a subcommand: ``ok``, ``errors`` and ``warnings``, plus the subcommand's own data."""
+    return {"ok": ok, "errors": list(errors or []), "warnings": list(warnings or []), **data}
+
+
+def _finish(report, as_json, print_text):
+    """
+    Print the result of a subcommand and exit.
+
+    With ``as_json``, the whole ``report`` is printed as JSON. Otherwise its warnings and errors go to stderr and, if
+    it went well, ``print_text(report)`` prints the rest for people. The exit code is 0 if ``report["ok"]``, 1 if not.
+    """
+    if as_json:
+        # The wizard imports numpy: imported here so that 'import biapy' stays light
+        from biapy.wizard.config_builder import to_jsonable
+
+        print(json.dumps(to_jsonable(report), indent=2))
+    else:
+        for warning in report["warnings"]:
+            print(f"WARNING: {warning}", file=sys.stderr)
+        for error in report["errors"]:
+            print(f"ERROR: {error}", file=sys.stderr)
+        if report["ok"]:
+            print_text(report)
+    sys.exit(0 if report["ok"] else 1)
+
+
 def _validate_config_cli(argv):
     """
-    Validate a configuration file from the command line.
+    Validate a configuration file from the command line (see :func:`biapy.validate_config`).
 
-    This function is intended to be used as a command-line utility to validate
-    a BiaPy configuration file without running anything: no data is loaded, no
-    model is built and nothing is written to disk. It prints ``OK`` if the
-    configuration is valid, or the first error found (naming the wrong key) otherwise.
+    Nothing is run: no data is loaded, no model is built and nothing is written to disk.
 
     Usage::
 
-        biapy validate-config <path_to_config_file>
-        biapy validate-config <path_to_config_file> --no-data-check
+        biapy validate-config <path_to_config_file> [--no-data-check] [--json]
 
-    ``--no-data-check`` skips the check that the data paths exist, so a configuration
-    can be validated before the data is available.
+    ``--no-data-check`` skips the check that the data paths exist, so a configuration can be validated before the
+    data is available.
 
     Parameters
     ----------
@@ -68,31 +101,29 @@ def _validate_config_cli(argv):
     0
         The configuration is valid.
     1
-        The configuration is not valid (the error is printed to stderr).
+        The configuration is not valid (the error names the wrong key).
     2
         Wrong command-line arguments (raised by ``argparse``).
     """
-    from ._biapy import validate_config
-    parser = argparse.ArgumentParser(
-        prog="biapy validate-config",
-        description="Check a BiaPy YAML configuration without running anything.",
-    )
+    parser = _command_parser("validate-config", "Check a BiaPy YAML configuration without running anything.")
     parser.add_argument("config", help="Path to the YAML configuration file")
-    parser.add_argument(
-        "--no-data-check",
-        action="store_true",
-        help="Skip the check that the data paths exist",
-    )
+    parser.add_argument("--no-data-check", action="store_true", help="Skip the check that the data paths exist")
     args = parser.parse_args(argv)
 
-    try:
-        cfg = validate_config(args.config, check_data_paths=not args.no_data_check)
-    except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
+    from ._biapy import validate_config
 
-    print(f"OK: {args.config} is a valid {cfg.PROBLEM.TYPE} {cfg.PROBLEM.NDIM} configuration")
-    sys.exit(0)
+    try:
+        # BiaPy prints notes while checking: keep stdout for the result only
+        with contextlib.redirect_stdout(sys.stderr):
+            cfg = validate_config(args.config, check_data_paths=not args.no_data_check)
+        report = _report(workflow=cfg.PROBLEM.TYPE, ndim=cfg.PROBLEM.NDIM)
+    except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
+        report = _report(ok=False, errors=[str(e)], workflow=None, ndim=None)
+
+    def print_text(r):
+        print(f"OK: {args.config} is a valid {r['workflow']} {r['ndim']} configuration")
+
+    _finish(report, args.json, print_text)
 
 
 def _check_data_cli(argv):
@@ -106,8 +137,7 @@ def _check_data_cli(argv):
 
     With a configuration, the data folders it points to are checked and compared with it
     (see :func:`biapy.check_data`). Without one, the folders given are checked for the workflow, as the
-    wizard does (see :func:`biapy.check_data_for_workflow`). ``--json`` prints the full report as JSON on
-    stdout, for agents and scripts.
+    wizard does (see :func:`biapy.check_data_for_workflow`).
 
     Parameters
     ----------
@@ -119,15 +149,12 @@ def _check_data_cli(argv):
     0
         The data can be used.
     1
-        The data or the configuration is not valid (the errors are printed to stderr, or in the JSON).
+        The data or the configuration is not valid.
     2
         Wrong command-line arguments (raised by ``argparse``).
     """
-    import contextlib
-
-    parser = argparse.ArgumentParser(
-        prog="biapy check-data",
-        description="Check that some data can be used by BiaPy: the data of a configuration, or folders for a workflow.",
+    parser = _command_parser(
+        "check-data", "Check that some data can be used by BiaPy: the data of a configuration, or folders for a workflow."
     )
     parser.add_argument("config", nargs="?", help="Path to the YAML configuration file")
     parser.add_argument("--workflow", help="Without a configuration: PROBLEM.TYPE, e.g. SEMANTIC_SEG")
@@ -137,7 +164,6 @@ def _check_data_cli(argv):
     parser.add_argument(
         "--percentage", type=float, default=100, help="Percentage of each Zarr/H5 image to check (default: 100)"
     )
-    parser.add_argument("--json", action="store_true", help="Print the full report as JSON")
     args = parser.parse_args(argv)
 
     by_workflow = args.workflow or args.ndim or args.raw or args.gt
@@ -156,51 +182,37 @@ def _check_data_cli(argv):
             else:
                 report = check_data_for_workflow(args.workflow, args.ndim, args.raw, args.gt, args.percentage)
     except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
-        report = {"ok": False, "errors": [str(e)], "warnings": [], "folders": {}, "upscaling": None}
+        report = _report(ok=False, errors=[str(e)], folders={}, upscaling=None)
 
-    if args.json:
-        from biapy.wizard.config_builder import to_jsonable
+    def print_text(r):
+        for key, found in r["folders"].items():
+            print(f"OK: {key}: {found['n_files']} files, channels={found['channels']}, classes={found['classes']}")
+        if r["upscaling"]:
+            print(f"OK: upscaling {tuple(r['upscaling'])}")
 
-        print(json.dumps(to_jsonable(report), indent=2))
-    else:
-        for warn in report["warnings"]:
-            print(f"WARNING: {warn}", file=sys.stderr)
-        for err in report["errors"]:
-            print(f"ERROR: {err}", file=sys.stderr)
-        if report["ok"]:
-            for key, found in report["folders"].items():
-                print(f"OK: {key}: {found['n_files']} files, channels={found['channels']}, classes={found['classes']}")
-            if report["upscaling"]:
-                print(f"OK: upscaling {tuple(report['upscaling'])}")
-    sys.exit(0 if report["ok"] else 1)
+    _finish(report, args.json, print_text)
 
 
 def _list_workflows_cli(argv):
     """
-    List from the command line the workflows available in BiaPy.
+    List from the command line the workflows available in BiaPy (see :func:`biapy.list_workflows`).
 
     Usage::
 
-        biapy list-workflows
-        biapy list-workflows --json
+        biapy list-workflows [--json]
 
     Parameters
     ----------
     argv : list of str
         Command-line arguments after ``list-workflows``.
     """
-    from ._biapy import list_workflows
-
-    parser = argparse.ArgumentParser(
-        prog="biapy list-workflows",
-        description="List the workflows available in BiaPy (the values of PROBLEM.TYPE).",
-    )
-    parser.add_argument("--json", action="store_true", help="Print the list as JSON")
+    parser = _command_parser("list-workflows", "List the workflows available in BiaPy (the values of PROBLEM.TYPE).")
     args = parser.parse_args(argv)
 
-    workflows = list_workflows()
-    print(json.dumps(workflows) if args.json else "\n".join(workflows))
-    sys.exit(0)
+    from ._biapy import list_workflows
+
+    report = _report(workflows=list_workflows())
+    _finish(report, args.json, lambda r: print("\n".join(r["workflows"])))
 
 
 def _inspect_image_cli(argv):
@@ -209,56 +221,59 @@ def _inspect_image_cli(argv):
 
     Usage::
 
-        biapy inspect-image <path_to_image>
-        biapy inspect-image <path_to_image> --json
+        biapy inspect-image <path_to_image> [--json]
 
     Parameters
     ----------
     argv : list of str
         Command-line arguments after ``inspect-image``.
+
+    Exit codes
+    ----------
+    0
+        The image was described.
+    1
+        The image does not exist or can't be read.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
     """
-    parser = argparse.ArgumentParser(
-        prog="biapy inspect-image",
-        description="Describe an image as BiaPy reads it, to know whether it is 2D or 3D.",
-    )
+    parser = _command_parser("inspect-image", "Describe an image as BiaPy reads it, to know whether it is 2D or 3D.")
     parser.add_argument("path", help="Path to the image")
-    parser.add_argument("--json", action="store_true", help="Print the report as JSON")
     args = parser.parse_args(argv)
 
     from ._biapy import inspect_image
 
     try:
-        report = inspect_image(args.path)
+        report = _report(**inspect_image(args.path))
     except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
+        empty = {"stored": None, "2D": None, "3D": None, "axes_known": None, "suggested_ndim": None}
+        report = _report(ok=False, errors=[str(e)], **empty)
 
-    if args.json:
-        print(json.dumps(report, indent=2))
-    else:
-        s = report["stored"]
+    def print_text(r):
+        s = r["stored"]
         print(f"Stored:    shape {s['shape']}, axes {s['axes'] or 'unknown'}, {s['dtype']}")
         for ndim in ("2D", "3D"):
-            r = report[ndim]
-            if "error" in r:
-                print(f"As {ndim}:     not possible ({r['error']})")
+            reading = r[ndim]
+            if "error" in reading:
+                print(f"As {ndim}:     not possible ({reading['error']})")
                 continue
-            shape = r["shape"]
+            shape = reading["shape"]
             # BiaPy's order is (y, x, c) in 2D and (z, y, x, c) in 3D
             meaning = f"{shape[-1]} channel" + ("s" if shape[-1] != 1 else "")
             if ndim == "3D":
                 meaning = f"{shape[0]} slices, " + meaning
             print(f"As {ndim}:     {str(shape):<20}  -> {meaning}")
-        ndim = report["suggested_ndim"]
+        ndim = r["suggested_ndim"]
         if ndim:
-            if report["axes_known"]:
+            if r["axes_known"]:
                 why = "the file has a Z axis" if ndim == "3D" else "the file has no Z axis"
             else:
                 why = "it can only be read this way"
             print(f"Suggested: PROBLEM.NDIM: {ndim} ({why})")
         else:
             print("Suggested: unknown (the file doesn't store its axes): choose PROBLEM.NDIM from the readings above")
-    sys.exit(0)
+
+    _finish(report, args.json, print_text)
 
 
 def _get_config_template_cli(argv):
@@ -274,34 +289,36 @@ def _get_config_template_cli(argv):
     ----------
     argv : list of str
         Command-line arguments after ``get-config-template``.
+
+    Exit codes
+    ----------
+    0
+        The template was printed or saved.
+    1
+        Wrong workflow or dimensions.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
     """
-    parser = argparse.ArgumentParser(
-        prog="biapy get-config-template",
-        description="Print or save the basic configuration template of a workflow.",
-    )
+    parser = _command_parser("get-config-template", "Print or save the basic configuration template of a workflow.")
     parser.add_argument("--workflow", required=True, help="PROBLEM.TYPE, e.g. SEMANTIC_SEG")
     parser.add_argument("--ndim", required=True, help="2D or 3D")
     parser.add_argument("--store", help="YAML file to write the template to")
-    parser.add_argument("--json", action="store_true", help="Print the template as JSON")
     args = parser.parse_args(argv)
 
     from ._biapy import get_config_template
 
     try:
-        config = get_config_template(args.workflow, args.ndim, store_yaml=args.store)
+        report = _report(config=get_config_template(args.workflow, args.ndim, store_yaml=args.store), stored_in=args.store)
     except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
+        report = _report(ok=False, errors=[str(e)], config=None, stored_in=None)
 
-    if args.json:
-        print(json.dumps(config, indent=2))
-    elif args.store:
-        print(f"OK: template written to {args.store}")
-    else:
-        import yaml
+    def print_text(r):
+        if r["stored_in"]:
+            print(f"OK: template written to {r['stored_in']}")
+        else:
+            print(yaml.safe_dump(r["config"], default_flow_style=False, sort_keys=False), end="")
 
-        print(yaml.safe_dump(config, default_flow_style=False, sort_keys=False), end="")
-    sys.exit(0)
+    _finish(report, args.json, print_text)
 
 
 def _create_config_cli(argv):
@@ -326,15 +343,12 @@ def _create_config_cli(argv):
     0
         The configuration was created.
     1
-        The data can't be used (the errors are printed to stderr, or in the JSON).
+        The data can't be used.
     2
         Wrong command-line arguments (raised by ``argparse``).
     """
-    import contextlib
-
-    parser = argparse.ArgumentParser(
-        prog="biapy create-config",
-        description="Create a configuration adapted to the data, as the wizard does, to train a model from scratch.",
+    parser = _command_parser(
+        "create-config", "Create a configuration adapted to the data, as the wizard does, to train a model from scratch."
     )
     parser.add_argument("--workflow", required=True, help="PROBLEM.TYPE, e.g. SEMANTIC_SEG")
     parser.add_argument("--ndim", required=True, help="2D or 3D")
@@ -344,11 +358,9 @@ def _create_config_cli(argv):
     parser.add_argument("--test-gt", default="", help="Folder with the test targets")
     parser.add_argument("--quick", action="store_true", help="A quick training, to check that everything works")
     parser.add_argument("--store", help="YAML file to write the configuration to")
-    parser.add_argument("--json", action="store_true", help="Print the full report as JSON")
     args = parser.parse_args(argv)
 
     from ._biapy import create_config
-    from biapy.wizard.config_builder import to_jsonable, tuples_to_lists
 
     try:
         # The checks print their progress: keep stdout for the result only
@@ -358,25 +370,20 @@ def _create_config_cli(argv):
                 training_length="quick" if args.quick else "full", store_yaml=args.store,
             )
     except ValueError as e:
-        report = {"ok": False, "errors": [str(e)], "warnings": [], "folders": {}, "config": None, "summary": []}
+        report = _report(ok=False, errors=[str(e)], folders={}, config=None, summary=[])
 
-    if args.json:
-        print(json.dumps(to_jsonable(report), indent=2))
-    else:
-        for warn in report["warnings"]:
-            print(f"WARNING: {warn}", file=sys.stderr)
-        for err in report["errors"]:
-            print(f"ERROR: {err}", file=sys.stderr)
-        if report["ok"]:
-            for line in report["summary"]:
-                print(f"# {line}")
-            if args.store:
-                print(f"OK: configuration written to {args.store}")
-            else:
-                import yaml
+    def print_text(r):
+        for line in r["summary"]:
+            print(f"# {line}")
+        if args.store:
+            print(f"OK: configuration written to {args.store}")
+        else:
+            # The wizard imports numpy: imported here so that 'import biapy' stays light
+            from biapy.wizard.config_builder import tuples_to_lists
 
-                print(yaml.safe_dump(tuples_to_lists(report["config"]), default_flow_style=False), end="")
-    sys.exit(0 if report["ok"] else 1)
+            print(yaml.safe_dump(tuples_to_lists(r["config"]), default_flow_style=False), end="")
+
+    _finish(report, args.json, print_text)
 
 
 def _search_bmz_models_cli(argv):
@@ -403,37 +410,32 @@ def _search_bmz_models_cli(argv):
     2
         Wrong command-line arguments (raised by ``argparse``).
     """
-    parser = argparse.ArgumentParser(
-        prog="biapy search-bmz-models",
-        description="Search the BioImage Model Zoo for pretrained models BiaPy can use (it needs internet).",
+    parser = _command_parser(
+        "search-bmz-models", "Search the BioImage Model Zoo for pretrained models BiaPy can use (it needs internet)."
     )
     parser.add_argument("--workflow", default="all", help="PROBLEM.TYPE, e.g. INSTANCE_SEG (default: all)")
     parser.add_argument("--ndim", default="all", help="2D or 3D (default: all)")
     parser.add_argument("--nchannels", default="all", help="Channels of the images, e.g. 1 (default: all)")
     parser.add_argument("--nclasses", default="all", help="Classes of the data (default: all)")
     parser.add_argument("--query", help="Words to find in the model's name, description or tags, e.g. 'nuclei'")
-    parser.add_argument("--json", action="store_true", help="Print the models as JSON")
     args = parser.parse_args(argv)
 
     from ._biapy import search_bmz_models
-    from biapy.wizard.config_builder import to_jsonable
 
     print("Searching the BioImage Model Zoo (it may take a minute)...", file=sys.stderr)
     try:
-        models = search_bmz_models(args.workflow, args.ndim, args.nclasses, args.nchannels, args.query)
+        report = _report(models=search_bmz_models(args.workflow, args.ndim, args.nclasses, args.nchannels, args.query))
     except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
+        report = _report(ok=False, errors=[str(e)], models=[])
 
-    if args.json:
-        print(json.dumps(to_jsonable(models), indent=2))
-    elif not models:
-        print("No compatible models found")
-    else:
-        for m in models:
+    def print_text(r):
+        if not r["models"]:
+            print("No compatible models found")
+        for m in r["models"]:
             channels = m["opts"].get("DATA.PATCH_SIZE", ("?",))[-1]
             print(f"{m['id']:24s} {m['workflow_type']} {m['ndim']}, {channels} channel(s)   {m['name'][:50]}   {m['url']}")
-    sys.exit(0)
+
+    _finish(report, args.json, print_text)
 
 
 def main():
