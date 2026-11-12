@@ -51,9 +51,31 @@ def _command_parser(command, description):
     return parser
 
 
+# Version of the JSON the subcommands print with --json: increase it when a field is removed, renamed or changes meaning
+JSON_SCHEMA_VERSION = "1.0"
+
+
 def _report(ok=True, errors=None, warnings=None, **data):
-    """Result of a subcommand: ``ok``, ``errors`` and ``warnings``, plus the subcommand's own data."""
-    return {"ok": ok, "errors": list(errors or []), "warnings": list(warnings or []), **data}
+    """
+    Result of a subcommand: ``schema_version``, ``ok``, ``errors`` and ``warnings``, and the subcommand's own data in
+    ``data``.
+    """
+    return {
+        "schema_version": JSON_SCHEMA_VERSION,
+        "ok": ok,
+        "errors": list(errors or []),
+        "warnings": list(warnings or []),
+        "data": data,
+    }
+
+
+def _from_report(report):
+    """
+    The report of a Python function (``ok``, ``errors``, ``warnings`` and its data, all at the same level, as
+    :func:`biapy.check_data` returns) as the result of a subcommand.
+    """
+    data = {k: v for k, v in report.items() if k not in ("ok", "errors", "warnings")}
+    return _report(report["ok"], report["errors"], report["warnings"], **data)
 
 
 def _finish(report, as_json, print_text):
@@ -61,7 +83,8 @@ def _finish(report, as_json, print_text):
     Print the result of a subcommand and exit.
 
     With ``as_json``, the whole ``report`` is printed as JSON. Otherwise its warnings and errors go to stderr and, if
-    it went well, ``print_text(report)`` prints the rest for people. The exit code is 0 if ``report["ok"]``, 1 if not.
+    it went well, ``print_text(report["data"])`` prints the rest for people. The exit code is 0 if ``report["ok"]``,
+    1 if not.
     """
     if as_json:
         # The wizard imports numpy: imported here so that 'import biapy' stays light
@@ -74,7 +97,7 @@ def _finish(report, as_json, print_text):
         for error in report["errors"]:
             print(f"ERROR: {error}", file=sys.stderr)
         if report["ok"]:
-            print_text(report)
+            print_text(report["data"])
     sys.exit(0 if report["ok"] else 1)
 
 
@@ -181,6 +204,7 @@ def _check_data_cli(argv):
                 report = check_data(args.config, percentage=args.percentage)
             else:
                 report = check_data_for_workflow(args.workflow, args.ndim, args.raw, args.gt, args.percentage)
+        report = _from_report(report)
     except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
         report = _report(ok=False, errors=[str(e)], folders={}, upscaling=None)
 
@@ -369,6 +393,7 @@ def _create_config_cli(argv):
                 args.workflow, args.ndim, args.train_raw, args.train_gt, args.test_raw, args.test_gt,
                 training_length="quick" if args.quick else "full", store_yaml=args.store,
             )
+        report = _from_report(report)
     except ValueError as e:
         report = _report(ok=False, errors=[str(e)], folders={}, config=None, summary=[])
 
