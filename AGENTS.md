@@ -48,7 +48,8 @@ Check a config without running it: `biapy validate-config my_config.yaml [--no-d
 
 The Python API (`BiaPy` class with `train()`, `test()`, `predict()`, `load_workflow_from_model()`,
 `export_model_to_bmz()`; `build_config()`, `validate_config()`) is in `biapy/_biapy.py`, and the CLI
-(`biapy` command, `biapy validate-config`) in `biapy/__init__.py`. `biapy/__init__.py` imports the engine
+(`biapy` command and its subcommands: `validate-config`, `check-data`, `list-workflows`, `inspect-image`,
+`get-config-template`, `create-config`, `search-bmz-models`) in `biapy/__init__.py`. `biapy/__init__.py` imports the engine
 lazily: `import biapy` must not load PyTorch, so don't add top-level imports of torch or `biapy._biapy` there.
 
 ## Install
@@ -104,6 +105,7 @@ CPU-only unit tests, synthetic data, no GPU or network (`pip install pytest` fir
 pytest -q                                  # all of them (tests/test_*.py, ~40 s); CI runs exactly this
 pytest tests/test_wizard.py -q             # wizard: data checks, planning, configs built (~15 s)
 pytest tests/test_wizard_api.py -q         # wizard interface with the front-ends (see Rules)
+pytest tests/test_cli.py -q                # biapy subcommands: --json output, text output and exit codes (~7 s)
 pytest tests/test_vit_backbones.py -q      # every ViT backbone/architecture combination, built on 'meta' device
 pytest tests/test_patch_sampling.py -q     # foreground oversampling (biapy/data/patch_sampling.py)
 pytest tests/test_tta_equivariance.py -q   # instance representations/channels and TTA (data/post_processing/tta.py)
