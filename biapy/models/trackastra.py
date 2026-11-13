@@ -319,7 +319,7 @@ def load_trackastra(name: str, device: torch.device) -> TrackingTransformer:
     if not os.path.isdir(folder):
         with zipfile.ZipFile(zip_path) as z:
             z.extractall(os.path.dirname(zip_path))
-    with open(os.path.join(folder, "config.yaml")) as f:
+    with open(os.path.join(folder, "config.yaml"), encoding="utf-8") as f:
         config: Dict = yaml.safe_load(f)
     model = TrackingTransformer(**config)
     model.load_state_dict(torch.load(os.path.join(folder, "model.pt"), map_location="cpu", weights_only=True))

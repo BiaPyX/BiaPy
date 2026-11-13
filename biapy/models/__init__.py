@@ -31,6 +31,7 @@ from yacs.config import CfgNode as CN
 import ast
 from collections import deque, defaultdict
 import requests
+import pooch
 import sys
 import importlib
 import yaml
@@ -840,7 +841,7 @@ def extract_model(
         visited_files.add(filepath)
         scanned_files.append(filepath)
 
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             source_lines = f.readlines()
         source_text = "".join(source_lines)
         tree = ast.parse(source_text, filename=filepath)
@@ -1199,6 +1200,148 @@ def _locked_load_description(source: str, **kwargs):
         return load_description(source, **kwargs)
 
 
+def bmz_model_files(model_id: str, timeout: int = 30) -> List[Dict]:
+    """
+    Files of a BioImage Model Zoo model, as the zoo lists them.
+
+    Parameters
+    ----------
+    model_id : str
+        Model id (nickname), e.g. ``"playful-scorpion"``.
+
+    timeout : int
+        Timeout of the HTTP request in seconds.
+
+    Returns
+    -------
+    files : list of dict
+        Each file's ``name``, ``size`` (bytes) and ``last_modified``.
+
+    Raises
+    ------
+    requests.RequestException
+        If they could not be listed (e.g. no connection).
+    """
+    r = requests.get(BMZ_HYPHA_FILES_URL.format(model_id), timeout=timeout)
+    r.raise_for_status()
+    return [
+        {"name": str(f["name"]), "size": int(f.get("size") or 0), "last_modified": f.get("last_modified")}
+        for f in r.json()
+        if isinstance(f, dict) and f.get("type", "file") == "file"
+    ]
+
+
+# Folder where download_bmz_model keeps the zoo models, one folder per model id (the system's cache folder)
+BMZ_MODELS_CACHE = os.path.join(str(pooch.os_cache("biapy")), "bmz_models")
+# Written in a model's folder once all its files are there: the files of the zoo it has and its description
+BMZ_DOWNLOADED_FILE = "biapy_download.json"
+
+
+def downloaded_bmz_model(model_id: str, folder: Optional[str] = None) -> Optional[str]:
+    """
+    Description of a zoo model downloaded with :func:`download_bmz_model`, or ``None`` if it was not (completely).
+
+    Parameters
+    ----------
+    model_id : str
+        Model id (nickname).
+
+    folder : str, optional
+        Folder of the model. By default ``BMZ_MODELS_CACHE/<model_id>``.
+
+    Returns
+    -------
+    path : str or None
+        Path of its description (to use as ``MODEL.BMZ.SOURCE_MODEL_ID``).
+    """
+    folder = folder or os.path.join(BMZ_MODELS_CACHE, model_id)
+    try:
+        with open(os.path.join(folder, BMZ_DOWNLOADED_FILE), "r", encoding="utf8") as f:
+            path = os.path.join(folder, yaml.safe_load(f)["description"])
+    except Exception:
+        return None
+    return path if os.path.isfile(path) else None
+
+
+def download_bmz_model(
+    model_id: str,
+    folder: Optional[str] = None,
+    callback: Optional[Callable[[int, int], Any]] = None,
+    timeout: int = 30,
+) -> str:
+    """
+    Downloads the files of a BioImage Model Zoo model, to load it later without the network (and much faster): its
+    description, as ``MODEL.BMZ.SOURCE_MODEL_ID``. The files already downloaded and unchanged in the zoo are kept; with
+    no connection, the model downloaded before is used.
+
+    Parameters
+    ----------
+    model_id : str
+        Model id (nickname), e.g. ``"playful-scorpion"``.
+
+    folder : str, optional
+        Where to put its files. By default ``BMZ_MODELS_CACHE/<model_id>``, in the system's cache folder.
+
+    callback : callable, optional
+        Called as ``callback(bytes_done, bytes_total)`` while downloading.
+
+    timeout : int
+        Timeout of each HTTP request in seconds.
+
+    Returns
+    -------
+    path : str
+        Path of the model's description.
+    """
+    folder = folder or os.path.join(BMZ_MODELS_CACHE, model_id)
+    marker = os.path.join(folder, BMZ_DOWNLOADED_FILE)
+    try:
+        files = bmz_model_files(model_id, timeout=timeout)
+    except requests.RequestException:
+        path = downloaded_bmz_model(model_id, folder)
+        if path is None:
+            raise
+        return path
+    try:
+        with open(marker, "r", encoding="utf8") as f:
+            had = {(x["name"], x["size"], x["last_modified"]) for x in yaml.safe_load(f)["files"]}
+    except Exception:
+        had = set()
+    todo = [
+        f
+        for f in files
+        if (f["name"], f["size"], f["last_modified"]) not in had or not os.path.isfile(os.path.join(folder, f["name"]))
+    ]
+    os.makedirs(folder, exist_ok=True)
+    # The files that are there, and the description once they all are (downloaded_bmz_model)
+    kept = [f for f in files if f not in todo]
+
+    def save(description=None):
+        with open(marker, "w", encoding="utf8") as out:
+            yaml.safe_dump({"description": description, "files": kept}, out)
+
+    total, done = sum(f["size"] for f in todo), 0
+    base = BMZ_HYPHA_FILES_URL.format(model_id)
+    for f in todo:
+        part = os.path.join(folder, f["name"] + ".part")
+        with requests.get(base + f["name"], stream=True, timeout=timeout) as r:
+            r.raise_for_status()
+            with open(part, "wb") as out:
+                for chunk in r.iter_content(chunk_size=1 << 20):
+                    out.write(chunk)
+                    done += len(chunk)
+                    if callback is not None:
+                        callback(done, total)
+        os.replace(part, os.path.join(folder, f["name"]))
+        kept.append(f)
+        save()
+    url = find_bmz_description_url(model_id, timeout=timeout)
+    if url is None:
+        raise ValueError("The BioImage Model Zoo model '{}' has no description among its files".format(model_id))
+    save(url.rsplit("/", 1)[-1])
+    return os.path.join(folder, url.rsplit("/", 1)[-1])
+
+
 def find_bmz_description_url(model_id: str, timeout: int = 30) -> Optional[str]:
     """
     URL of the description (RDF) of a BioImage Model Zoo model among its files, whatever its name.
@@ -1220,9 +1363,7 @@ def find_bmz_description_url(model_id: str, timeout: int = 30) -> Optional[str]:
         return _bmz_description_urls[model_id]
     base = BMZ_HYPHA_FILES_URL.format(model_id)
     try:
-        r = requests.get(base, timeout=timeout)
-        r.raise_for_status()
-        files = [f for f in r.json() if isinstance(f, dict) and f.get("type", "file") == "file"]
+        files = bmz_model_files(model_id, timeout=timeout)
     except Exception:
         return None
     names = [str(f.get("name", "")) for f in files]
@@ -1522,7 +1663,7 @@ def read_local_bmz_model(path: str) -> Dict:
         rdf_file = next((os.path.join(path, n) for n in rdf_names if os.path.isfile(os.path.join(path, n))), None)
         if rdf_file is None:
             raise ValueError(f"No BMZ model description ({' or '.join(rdf_names)}) found in folder: {path}")
-        with open(rdf_file, "r") as f:
+        with open(rdf_file, "r", encoding="utf-8") as f:
             rdf = yaml.safe_load(f)
     elif path.lower().endswith(".zip"):
         import zipfile
@@ -1533,7 +1674,7 @@ def read_local_bmz_model(path: str) -> Dict:
                 raise ValueError(f"No BMZ model description ({' or '.join(rdf_names)}) found in package: {path}")
             rdf = yaml.safe_load(z.read(rdf_file))
     else:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             rdf = yaml.safe_load(f)
     if not isinstance(rdf, dict) or rdf.get("type") != "model":
         raise ValueError(f"'{path}' does not describe a BMZ model")

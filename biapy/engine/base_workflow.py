@@ -1903,6 +1903,8 @@ class Base_Workflow(metaclass=ABCMeta):
         instead of the images under ``DATA.TEST.PATH`` (see :meth:`load_test_data`).
         """
         self.load_test_data(image=image, gt=gt)
+        # A previous test() (e.g. an earlier predict()) left these filled, or turned them into arrays
+        self.all_pred, self.all_gt, self.metrics_per_test_file = [], [], []
         if not self.model_prepared:
             self.prepare_model()
         self.prepare_test_generators()

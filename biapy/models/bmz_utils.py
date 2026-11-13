@@ -749,7 +749,7 @@ def create_model_doc(
     preproc_info += "- Normalization and percentile clipping values calculated from the complete image.\n"
  
     try:
-        with open(cfg_file, "r") as file:
+        with open(cfg_file, "r", encoding="utf-8") as file:
             cfg_data = yaml.safe_load(file)
     except:
         cfg_data = {}

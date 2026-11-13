@@ -271,6 +271,10 @@ def predict_with_workflow(wf):
         if pred is None:
             return
         print(f"[{wf}] prediction shape: {np.asarray(pred).shape}")
+        # The same instance predicts again (e.g. the Fiji plugin keeps the model loaded between images)
+        again = b.predict(image)
+        checks.append((again is not None and np.asarray(again).shape == np.asarray(pred).shape,
+                       "a second predict() on the same instance did not give the same shape"))
 
         # GT comparison only for instance/semantic segmentation
         if wf == "SEMANTIC_SEG":

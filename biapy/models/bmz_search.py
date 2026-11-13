@@ -10,10 +10,12 @@ cover, representation...) and a fix or addition here reaches all of them:
 import contextlib
 import html
 import io
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Dict, List, Optional
 
-from biapy.models import BMZ_HYPHA_FILES_URL, check_bmz_model_compatibility, find_bmz_models
+from biapy.models import BMZ_HYPHA_FILES_URL, BMZ_MODEL_BLACKLIST, check_bmz_model_compatibility, find_bmz_models
 
 # Page of a model in the BioImage Model Zoo website
 BMZ_MODEL_PAGE_URL = "https://bioimage.io/#/artifacts/{}"
@@ -160,6 +162,84 @@ def _sort_key(info: Dict):
     return (not label, not info.get("representation"), label.lower(), info["nickname"])
 
 
+# Version of the cache file of CompatibilityCache: change it when what is stored changes
+CACHE_FORMAT = 1
+
+
+def _to_json(value):
+    """``value`` with its tuples as ``{"__tuple__": [...]}`` (the configuration needs them back as tuples)."""
+    if isinstance(value, tuple):
+        return {"__tuple__": [_to_json(v) for v in value]}
+    if isinstance(value, list):
+        return [_to_json(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _to_json(v) for k, v in value.items()}
+    return value
+
+
+def _from_json(d: Dict):
+    return tuple(d["__tuple__"]) if len(d) == 1 and "__tuple__" in d else d
+
+
+class CompatibilityCache:
+    """
+    The results of :func:`biapy.models.check_bmz_model_compatibility` kept in a JSON file, so that a search only checks
+    the models that are new or changed since the previous one. A result depends only on the model's description (its
+    last change in the zoo), the search (workflow, dimensions and classes), BiaPy's version and its blacklist, so
+    the file is not used when the version or the blacklist change.
+
+    Parameters
+    ----------
+    path : str
+        The JSON file (created if it does not exist).
+    """
+
+    def __init__(self, path: str):
+        import biapy
+
+        self.path = path
+        self.stamp = [CACHE_FORMAT, biapy.__version__, sorted(BMZ_MODEL_BLACKLIST)]
+        self.results: Dict = {}
+        try:
+            with open(path, "r", encoding="utf8") as f:
+                data = json.load(f, object_hook=_from_json)
+            if data.get("stamp") == self.stamp:
+                self.results = data["results"]
+        except (OSError, ValueError, KeyError, AttributeError):
+            pass  # no cache yet, or not readable: every model is checked
+
+    @staticmethod
+    def _model(model: Dict) -> Optional[str]:
+        nickname = model.get("nickname") or model.get("alias")
+        changed = (model.get("raw") or {}).get("last_modified")
+        return None if not nickname or changed is None else "{}|{}".format(nickname, changed)
+
+    def check(self, model: Dict, workflow_specs: Dict) -> Dict:
+        """:func:`biapy.models.check_bmz_model_compatibility`, from the cache if the model was checked already."""
+        name = self._model(model)
+        key = None if name is None else "{}|{}|{}|{}".format(
+            name, workflow_specs["workflow_type"], workflow_specs["ndim"], workflow_specs["nclasses"])
+        if key in self.results:
+            return self.results[key]
+        compat = check_bmz_model_compatibility(model, workflow_specs=workflow_specs)
+        if key is not None:
+            self.results[key] = compat
+        return compat
+
+    def save(self, models: List[Dict]):
+        """Writes the results of the models still in the zoo (``models``), as they are now."""
+        live = {self._model(m) for m in models}
+        results = {k: v for k, v in self.results.items() if k.rsplit("|", 3)[0] in live}
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf8") as f:
+                json.dump({"stamp": self.stamp, "results": _to_json(results)}, f, default=str)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass  # the next search checks the models again
+
+
 def list_compatible_bmz_models(
     workflow: str = "all",
     ndim: str = "all",
@@ -169,6 +249,7 @@ def list_compatible_bmz_models(
     quiet: bool = True,
     max_workers: int = 8,
     callback: Optional[Callable[[int, int, Optional[Dict], str, str], None]] = None,
+    cache: Optional[str] = None,
 ) -> List[Dict]:
     """
     The models of the BioImage Model Zoo that BiaPy can use for a workflow.
@@ -203,6 +284,10 @@ def list_compatible_bmz_models(
         Called after each model is checked as ``callback(done, total, info, nickname, reason)``: ``info`` is what
         :func:`bmz_model_info` returns if the model is compatible, otherwise ``None`` and ``reason`` says why.
 
+    cache : str, optional
+        JSON file where the checks are kept (see :class:`CompatibilityCache`): the next search only checks the models
+        that are new or changed. ``None`` checks every model.
+
     Returns
     -------
     models : list of dict
@@ -212,11 +297,15 @@ def list_compatible_bmz_models(
     workflow_specs = {"workflow_type": workflow, "ndim": ndim, "nclasses": nclasses}
     models = find_bmz_models()
     total = len(models)
+    checks = CompatibilityCache(cache) if cache else None
 
     def check(model):
         nickname = model.get("nickname") or model.get("alias") or "?"
         try:
-            compat = check_bmz_model_compatibility(model, workflow_specs=workflow_specs)
+            if checks is not None:
+                compat = checks.check(model, workflow_specs)
+            else:
+                compat = check_bmz_model_compatibility(model, workflow_specs=workflow_specs)
         except Exception as e:
             return nickname, None, str(e)
         if compat["error"]:
@@ -248,6 +337,8 @@ def list_compatible_bmz_models(
                     callback(done, total, info, nickname, reason)
     if bar is not None:
         bar.close()
+    if checks is not None:
+        checks.save(models)
     return sorted(out, key=_sort_key)
 
 
