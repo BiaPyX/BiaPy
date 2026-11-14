@@ -7,6 +7,7 @@ It supports both 2D and 3D data, and includes implementations of various pixel m
 used in self-supervised denoising approaches such as Noise2Void (N2V).
 """
 import math
+from functools import partial
 import torch
 import numpy as np
 import numpy.ma as ma
@@ -758,6 +759,14 @@ def mask_center(local_sub_patch_radius, ndims=2):
     return ma.make_mask(patch_wo_center)
 
 
+def _normal_withoutCP(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    vals = []
+    for coord in zip(*coords):
+        rand_coords = random_neighbor(patch.shape, coord)
+        vals.append(patch[tuple(rand_coords)])
+    return vals
+
+
 def pm_normal_withoutCP(local_sub_patch_radius):
     """
     Return a function that samples a random neighbor from a normal distribution (without center pixel).
@@ -772,14 +781,18 @@ def pm_normal_withoutCP(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns values from random neighbors.
     """
-    def normal_withoutCP(patch, coords, dims, structN2Vmask=None):
-        vals = []
-        for coord in zip(*coords):
-            rand_coords = random_neighbor(patch.shape, coord)
-            vals.append(patch[tuple(rand_coords)])
-        return vals
+    return partial(_normal_withoutCP, local_sub_patch_radius)
 
-    return normal_withoutCP
+
+def _patch_mean(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
+    vals = []
+    for coord in zip(*coords):
+        sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
+        slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]  # type: ignore
+        sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
+        vals.append(np.mean(sub_patch[sub_patch_mask]))
+    return vals
 
 
 def pm_mean(local_sub_patch_radius):
@@ -796,17 +809,18 @@ def pm_mean(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns mean values.
     """
-    def patch_mean(patch, coords, dims, structN2Vmask=None):
-        patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
-        vals = []
-        for coord in zip(*coords):
-            sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
-            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]  # type: ignore
-            sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
-            vals.append(np.mean(sub_patch[sub_patch_mask]))
-        return vals
+    return partial(_patch_mean, local_sub_patch_radius)
 
-    return patch_mean
+
+def _patch_median(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
+    vals = []
+    for coord in zip(*coords):
+        sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
+        slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]  # type: ignore
+        sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
+        vals.append(np.median(sub_patch[sub_patch_mask]))
+    return vals
 
 
 def pm_median(local_sub_patch_radius):
@@ -823,17 +837,16 @@ def pm_median(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns median values.
     """
-    def patch_median(patch, coords, dims, structN2Vmask=None):
-        patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
-        vals = []
-        for coord in zip(*coords):
-            sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
-            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]  # type: ignore
-            sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
-            vals.append(np.median(sub_patch[sub_patch_mask]))
-        return vals
+    return partial(_patch_median, local_sub_patch_radius)
 
-    return patch_median
+
+def _random_neighbor_withCP_uniform(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    vals = []
+    for coord in zip(*coords):
+        sub_patch, _, _ = get_subpatch(patch, coord, local_sub_patch_radius)
+        rand_coords = [np.random.randint(0, s) for s in sub_patch.shape[0:dims]]
+        vals.append(sub_patch[tuple(rand_coords)])
+    return vals
 
 
 def pm_uniform_withCP(local_sub_patch_radius):
@@ -850,15 +863,18 @@ def pm_uniform_withCP(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns random values.
     """
-    def random_neighbor_withCP_uniform(patch, coords, dims, structN2Vmask=None):
-        vals = []
-        for coord in zip(*coords):
-            sub_patch, _, _ = get_subpatch(patch, coord, local_sub_patch_radius)
-            rand_coords = [np.random.randint(0, s) for s in sub_patch.shape[0:dims]]
-            vals.append(sub_patch[tuple(rand_coords)])
-        return vals
+    return partial(_random_neighbor_withCP_uniform, local_sub_patch_radius)
 
-    return random_neighbor_withCP_uniform
+
+def _random_neighbor_withoutCP_uniform(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
+    vals = []
+    for coord in zip(*coords):
+        sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
+        slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]  # type: ignore
+        sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
+        vals.append(np.random.permutation(sub_patch[sub_patch_mask])[0])
+    return vals
 
 
 def pm_uniform_withoutCP(local_sub_patch_radius):
@@ -875,17 +891,14 @@ def pm_uniform_withoutCP(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns random values.
     """
-    def random_neighbor_withoutCP_uniform(patch, coords, dims, structN2Vmask=None):
-        patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
-        vals = []
-        for coord in zip(*coords):
-            sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
-            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]  # type: ignore
-            sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
-            vals.append(np.random.permutation(sub_patch[sub_patch_mask])[0])
-        return vals
+    return partial(_random_neighbor_withoutCP_uniform, local_sub_patch_radius)
 
-    return random_neighbor_withoutCP_uniform
+
+def _pixel_gauss(pixel_gauss_sigma, patch, coords, dims, structN2Vmask=None):
+    vals = []
+    for coord in zip(*coords):
+        vals.append(np.random.normal(patch[tuple(coord)], pixel_gauss_sigma))
+    return vals
 
 
 def pm_normal_additive(pixel_gauss_sigma):
@@ -902,13 +915,16 @@ def pm_normal_additive(pixel_gauss_sigma):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns noisy values.
     """
-    def pixel_gauss(patch, coords, dims, structN2Vmask=None):
-        vals = []
-        for coord in zip(*coords):
-            vals.append(np.random.normal(patch[tuple(coord)], pixel_gauss_sigma))
-        return vals
+    return partial(_pixel_gauss, pixel_gauss_sigma)
 
-    return pixel_gauss
+
+def _local_gaussian(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    vals = []
+    for coord in zip(*coords):
+        sub_patch, _, _ = get_subpatch(patch, coord, local_sub_patch_radius)
+        axis = tuple(range(dims))
+        vals.append(np.random.normal(np.mean(sub_patch, axis=axis), np.std(sub_patch, axis=axis)))
+    return vals
 
 
 def pm_normal_fitted(local_sub_patch_radius):
@@ -925,15 +941,14 @@ def pm_normal_fitted(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns sampled values.
     """
-    def local_gaussian(patch, coords, dims, structN2Vmask=None):
-        vals = []
-        for coord in zip(*coords):
-            sub_patch, _, _ = get_subpatch(patch, coord, local_sub_patch_radius)
-            axis = tuple(range(dims))
-            vals.append(np.random.normal(np.mean(sub_patch, axis=axis), np.std(sub_patch, axis=axis)))
-        return vals
+    return partial(_local_gaussian, local_sub_patch_radius)
 
-    return local_gaussian
+
+def _identity(local_sub_patch_radius, patch, coords, dims, structN2Vmask=None):
+    vals = []
+    for coord in zip(*coords):
+        vals.append(patch[coord])
+    return vals
 
 
 def pm_identity(local_sub_patch_radius):
@@ -950,13 +965,7 @@ def pm_identity(local_sub_patch_radius):
     Callable
         Function that takes (patch, coords, dims, structN2Vmask) and returns the center pixel value.
     """
-    def identity(patch, coords, dims, structN2Vmask=None):
-        vals = []
-        for coord in zip(*coords):
-            vals.append(patch[coord])
-        return vals
-
-    return identity
+    return partial(_identity, local_sub_patch_radius)
 
 
 def get_stratified_coords2D(box_size, shape):
