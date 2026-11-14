@@ -502,9 +502,10 @@ class Classification_Workflow(Base_Workflow):
         t_filename = [x.path for x in self.test_filenames]
         df = pd.DataFrame(t_filename, columns=["filename"])
         df["class"] = self.all_pred
-        f = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, "predictions.csv")
-        os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
-        df.to_csv(f, index=False, header=True)
+        if self.save_to_disk:
+            f = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, "predictions.csv")
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
+            df.to_csv(f, index=False, header=True)
 
         # Calculate the metrics
         if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
