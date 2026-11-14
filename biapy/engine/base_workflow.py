@@ -217,7 +217,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.in_val_epoch = False
 
         # In-memory prediction controls (see BiaPy.predict): gate disk writes and collect
-        # the produced arrays in self._predictions (tagged with a "raw"/"post" role).
+        # the produced outputs in self._predictions (tagged with a "raw"/"final"/"post" role).
         self.save_to_disk = True
         self.return_prediction = False
         self._predictions = []

@@ -276,6 +276,14 @@ def predict_with_workflow(wf):
         checks.append((again is not None and np.asarray(again).shape == np.asarray(pred).shape,
                        "a second predict() on the same instance did not give the same shape"))
 
+        # The outputs by name: those the workflow gives, and the default is the last one
+        outs = b.predict(image, output=["raw", "final", "post"])
+        expected = {"raw", "final"} if wf in COMPARE_GT else {"raw"}
+        checks.append((set(outs) == expected, f"predict(output=...) gave {sorted(outs)}, expected {sorted(expected)}"))
+        last = outs.get("final", outs.get("raw"))
+        checks.append((last is not None and np.array_equal(np.asarray(last), np.asarray(again)),
+                       "predict() did not return the last output (final, else raw)"))
+
         # GT comparison only for instance/semantic segmentation
         if wf == "SEMANTIC_SEG":
             prob = np.asarray(pred).squeeze()

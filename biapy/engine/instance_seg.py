@@ -1002,9 +1002,6 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             )
             pred_labels = self._create_instance_labels(pred, save_dir=check_wa, verbose=self.cfg.TEST.VERBOSE)
 
-            if self.return_prediction:
-                self._predictions.append({"role": "raw", "data": np.array(pred_labels)})
-
             # Multi-head: instances + classification
             if self.separated_class_channel:
                 print("Adapting class channel . . .")
@@ -1028,24 +1025,31 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                 class_channel = new_class_channel
                 class_channel = class_channel.squeeze()
                 del new_class_channel
+                final = np.expand_dims(
+                    np.concatenate(
+                        [
+                            np.expand_dims(pred_labels.squeeze(), -1),
+                            np.expand_dims(class_channel, -1),
+                        ],
+                        axis=-1,
+                    ),
+                    0,
+                )
+                if self.return_prediction:
+                    self._predictions.append({"role": "final", "data": np.array(final)})
                 if self.save_to_disk:
                     save_tif(
-                        np.expand_dims(
-                            np.concatenate(
-                                [
-                                    np.expand_dims(pred_labels.squeeze(), -1),
-                                    np.expand_dims(class_channel, -1),
-                                ],
-                                axis=-1,
-                            ),
-                            0,
-                        ),
+                        final,
                         out_dir,
                         filenames,
                         verbose=self.cfg.TEST.VERBOSE,
                         meta=self.current_sample.get("img_meta"),
                     )
             else:
+                # (1, y, x) in 2D: its first axis stands for the image's
+                labels = np.expand_dims(pred_labels, -1)
+                if self.return_prediction:
+                    self._predictions.append({"role": "final", "data": np.array(labels if self.cfg.PROBLEM.NDIM == "2D" else np.expand_dims(labels, 0))})
                 if self.save_to_disk:
                     save_tif(
                         np.expand_dims(np.expand_dims(pred_labels, -1), 0),
@@ -1328,24 +1332,29 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
             # Multi-head: instances + classification
             if self.separated_class_channel:
                 class_channel = np.where(pred_labels > 0, class_channel, 0)  # Adapt changes to post-processed pred_labels
+                post = np.expand_dims(
+                    np.concatenate(
+                        [
+                            np.expand_dims(pred_labels, -1),
+                            np.expand_dims(class_channel, -1),
+                        ],
+                        axis=-1,
+                    ),
+                    0,
+                )
+                if self.return_prediction:
+                    self._predictions.append({"role": "post", "data": np.array(post)})
                 if self.save_to_disk:
                     save_tif(
-                        np.expand_dims(
-                            np.concatenate(
-                                [
-                                    np.expand_dims(pred_labels, -1),
-                                    np.expand_dims(class_channel, -1),
-                                ],
-                                axis=-1,
-                            ),
-                            0,
-                        ),
+                        post,
                         out_dir_post_proc,
                         filenames,
                         verbose=self.cfg.TEST.VERBOSE,
                         meta=self.current_sample.get("img_meta"),
                     )
             else:
+                if self.return_prediction:
+                    self._predictions.append({"role": "post", "data": np.array(np.expand_dims(np.expand_dims(pred_labels, -1), 0))})
                 if self.save_to_disk:
                     save_tif(
                         np.expand_dims(np.expand_dims(pred_labels, -1), 0),

@@ -456,6 +456,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         else:
             _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
             pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+        if self.return_prediction:
+            self._predictions.append({"role": "final", "data": np.array(pred)})
 
         if self.save_to_disk:
             save_tif(
@@ -482,6 +484,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         else:
             _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
             pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+        if self.return_prediction:
+            self._predictions.append({"role": "final", "data": np.array(pred)})
 
         # Save simple binarization of predictions
         if self.save_to_disk:

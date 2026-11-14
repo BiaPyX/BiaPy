@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import re
 import sys
+import threading
 import argparse
 import datetime
 import ntpath
@@ -94,28 +95,41 @@ from biapy.wizard.data_check import check_folder
 
 
 class _Tee:
-    """Write to multiple streams simultaneously (used to mirror stdout/stderr to a log file)."""
+    """
+    Replaces stdout/stderr to write to several streams at once (e.g. mirror them to a log file), but only for the
+    thread that installed it: the other threads (e.g. the program BiaPy is embedded in, which may talk to its host
+    through stdout) keep writing to the stream it replaced.
+    """
 
-    def __init__(self, *streams):
+    def __init__(self, replaced, *streams):
+        self._replaced = replaced._replaced if isinstance(replaced, _Tee) else replaced
         self._streams = streams
+        self._owner = threading.get_ident()
+
+    def redirects_current_thread(self):
+        """Whether what the current thread writes goes to BiaPy's streams (see ``_biapy_print``)."""
+        return threading.get_ident() == self._owner
+
+    def _targets(self):
+        return self._streams if self.redirects_current_thread() else (self._replaced,)
 
     def write(self, data):
-        for s in self._streams:
+        for s in self._targets():
             s.write(data)
             s.flush()
 
     def flush(self):
-        for s in self._streams:
+        for s in self._targets():
             s.flush()
 
     def fileno(self):
         try:
-            return self._streams[0].fileno()
+            return self._targets()[0].fileno()
         except (AttributeError, OSError) as e:
             raise io.UnsupportedOperation("redirected stream has no fileno") from e
 
     def isatty(self):
-        return False
+        return not self.redirects_current_thread() and self._replaced.isatty()
 
 
 GpuArg = Union[str, int, List[Union[str, int]], Tuple[Union[str, int], ...], None]
@@ -303,11 +317,11 @@ class BiaPy:
         # the console, so building the workflow is silent.
         _early_buf = io.StringIO()
         if self.verbose:
-            sys.stdout = _Tee(self._console_stdout, _early_buf)
-            sys.stderr = _Tee(self._console_stderr, _early_buf)
+            sys.stdout = _Tee(sys.stdout, self._console_stdout, _early_buf)
+            sys.stderr = _Tee(sys.stderr, self._console_stderr, _early_buf)
         else:
-            sys.stdout = _Tee(_early_buf)
-            sys.stderr = _Tee(_early_buf)
+            sys.stdout = _Tee(sys.stdout, _early_buf)
+            sys.stderr = _Tee(sys.stderr, _early_buf)
 
         print("Date     : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
         print("Arguments: {}".format(self.args))
@@ -479,12 +493,12 @@ class BiaPy:
         log = self._stdout_log_file
         if mirror_console:
             extra = [log] if log is not None else []
-            sys.stdout = _Tee(self._console_stdout, *extra)
-            sys.stderr = _Tee(self._console_stderr, *extra)
+            sys.stdout = _Tee(sys.stdout, self._console_stdout, *extra)
+            sys.stderr = _Tee(sys.stderr, self._console_stderr, *extra)
         else:
             target = log if log is not None else self._null_sink()
-            sys.stdout = _Tee(target)
-            sys.stderr = _Tee(target)
+            sys.stdout = _Tee(sys.stdout, target)
+            sys.stderr = _Tee(sys.stderr, target)
 
     def _restore_std_streams(self):
         """Give stdout/stderr back to the real console."""
@@ -992,7 +1006,7 @@ class BiaPy:
         #     print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
         #     self.wait_and_stop_ddp()
 
-    def predict(self, image, gt=None, return_prediction=True, verbose=False):
+    def predict(self, image, gt=None, return_prediction=True, verbose=False, output=None):
         """
         Run inference over an in-memory image (NumPy array) without writing it to disk.
 
@@ -1017,12 +1031,29 @@ class BiaPy:
             When ``True``, show BiaPy's inference output on the console. Defaults to ``False``
             so repeated predictions stay quiet (output still goes to the log file if enabled).
 
+        output : str or list of str, optional
+            Which output to return, by name:
+
+            - ``"raw"``: the model's output (e.g. class probabilities, the instance channels,
+              the denoised image).
+            - ``"final"``: the workflow's result: classes (semantic segmentation), instances
+              (instance segmentation), the points as a ``pandas.DataFrame`` (detection) or the
+              class (classification).
+            - ``"post"``: the post-processed prediction (only if post-processing is enabled).
+
+            A list returns a dict ``{name: output}`` with the outputs of the list the workflow
+            produced. ``None`` (default) returns the last output produced, the most processed one.
+
         Returns
         -------
-        NDArray or None
-            The predicted output array (batch axis dropped for the single image) when
-            ``return_prediction`` is ``True``, otherwise ``None``.
+        NDArray, pandas.DataFrame, int, dict or None
+            The output(s) asked for (images as BiaPy writes them to disk, ``(Y, X, C)`` in 2D and
+            ``(Z, Y, X, C)`` in 3D) when ``return_prediction`` is ``True``, otherwise ``None``.
         """
+        names = [output] if isinstance(output, str) else list(output or [])
+        unknown = [n for n in names if n not in ("raw", "final", "post")]
+        if unknown:
+            raise ValueError(f"Unknown output {unknown}: choose among 'raw', 'final' and 'post'.")
         # Output-dir requirements: writing results to disk (return_prediction=False) or a
         # workflow that must write intermediate files (synapse detection / by-chunks).
         if not return_prediction:
@@ -1059,18 +1090,17 @@ class BiaPy:
             print("WARNING: 'predict' did not capture any prediction to return.")
             return None
 
-        chosen = None
-        for role in ("post", "raw"):
-            match = [e["data"] for e in preds if e.get("role") == role]
-            if match:
-                chosen = match[-1]
-                break
-        if chosen is None:
-            chosen = preds[-1]["data"]
+        def single(data):  # without the batch axis: one image was predicted
+            return data[0] if isinstance(data, np.ndarray) and data.ndim >= 1 and data.shape[0] == 1 else data
 
-        if isinstance(chosen, np.ndarray) and chosen.ndim >= 1 and chosen.shape[0] == 1:
-            chosen = chosen[0]
-        return chosen
+        if output is None:
+            return single(preds[-1]["data"])
+        produced = {e["role"]: single(e["data"]) for e in preds}  # the last of each
+        if isinstance(output, str):
+            if output not in produced:
+                raise ValueError(f"This workflow gave no '{output}' output (it gave: {', '.join(produced)}).")
+            return produced[output]
+        return {n: produced[n] for n in names if n in produced}
 
     def _bmz_output_channel_names(self, n: int) -> List[str]:
         """Output channel names of the BMZ export: BiaPy's channel codes in instance segmentation, else 'channel<i>'."""

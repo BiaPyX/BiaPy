@@ -535,6 +535,8 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
+                if self.return_prediction:
+                    self._predictions.append({"role": "post", "data": np.array(np.expand_dims(np.expand_dims(points_pred_mask, 0), -1))})
                 if self.save_to_disk:
                     save_tif(
                         np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
@@ -667,6 +669,9 @@ class Detection_Workflow(Base_Workflow):
                     ),
                     index=False,
                 )
+        if not self.cfg.TEST.BY_CHUNKS.ENABLE:
+            if self.return_prediction:
+                self._predictions.append({"role": "final", "data": df if df is not None else pd.DataFrame()})
 
         # Calculate detection metrics
         if self.use_gt and not self.cfg.TEST.BY_CHUNKS.ENABLE:

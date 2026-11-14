@@ -61,7 +61,8 @@ def _biapy_print(*args, **kwargs):
     """
     Timestamped ``print`` that only emits on the master process (or when ``force=True``).
 
-    Installed as ``builtins.print`` by :func:`setup_for_distributed`.
+    Installed as ``builtins.print`` by :func:`setup_for_distributed`. Only BiaPy's output gets this behaviour (see
+    :func:`_is_biapy_output`): the prints of the program BiaPy is embedded in stay as they were.
 
     This must stay a module-level function named exactly as it is bound here, and must NOT be a
     closure defined inside ``setup_for_distributed``: libraries that introspect ``builtins.print``
@@ -72,11 +73,26 @@ def _biapy_print(*args, **kwargs):
     imported after this override has run.
     """
     force = kwargs.pop("force", False)
+    # The program BiaPy is embedded in keeps its own print
+    if not _is_biapy_output(kwargs.get("file")):
+        return original_print(*args, **kwargs)
     force = force or (get_world_size() > 8)
     if _print_is_master or force:
         now = datetime.datetime.now().time()
-        original_print("[{}] ".format(now), end="")  # print with time stamp
+        original_print("[{}] ".format(now), end="", file=kwargs.get("file"))  # print with time stamp
         original_print(*args, **kwargs)
+
+
+def _is_biapy_output(file) -> bool:
+    """
+    Whether a ``print`` (to ``file``, None for stdout) is BiaPy's output: called from BiaPy's code, or by any code
+    (e.g. a library BiaPy uses) in the thread BiaPy is running in, while it redirects that thread's output.
+    """
+    caller = sys._getframe(2).f_globals.get("__name__", "")
+    if caller == "biapy" or caller.startswith("biapy."):
+        return True
+    redirects = getattr(sys.stdout if file is None else file, "redirects_current_thread", None)
+    return redirects is not None and redirects()
 
 
 def restore_std_streams_on_error(func):

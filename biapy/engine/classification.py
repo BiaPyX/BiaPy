@@ -455,6 +455,9 @@ class Classification_Workflow(Base_Workflow):
             p = p.cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
+            for c in p:
+                if self.return_prediction:
+                    self._predictions.append({"role": "final", "data": int(c)})
 
         if self.current_sample["Y"] is not None and self.all_gt is not None:
             self.all_gt.append(self.current_sample["Y"])

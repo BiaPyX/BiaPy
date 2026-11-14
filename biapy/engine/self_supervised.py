@@ -676,9 +676,11 @@ class Self_supervised_Workflow(Base_Workflow):
         # Undo normalization
         pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
+        if self.return_prediction:
+            self._predictions.append({"role": "raw", "data": np.array(pred)})
 
         # Save image
-        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
+        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT and self.save_to_disk:
             fname, fext = os.path.splitext(self.current_sample["X_filename"])
             save_tif(
                 pred,
