@@ -26,8 +26,8 @@ import yaml
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy", "inspect_results": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -463,6 +463,73 @@ def _search_bmz_models_cli(argv):
     _finish(report, args.json, print_text)
 
 
+def _inspect_results_cli(argv):
+    """
+    Describe from the command line what a BiaPy job left in its folder (see :func:`biapy.inspect_results`).
+
+    Usage::
+
+        biapy inspect-results <job_folder> [--run-id 1] [--json]
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``inspect-results``.
+
+    Exit codes
+    ----------
+    0
+        The job was described (even if it didn't finish: see ``finished``).
+    1
+        The folder doesn't exist or holds no run.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    parser = _command_parser(
+        "inspect-results", "Describe what a BiaPy job left in its folder: training, test metrics, checkpoints, outputs."
+    )
+    parser.add_argument("job_dir", help="Folder of the job: <result_dir>/<name>")
+    parser.add_argument("--run-id", type=int, help="Run to describe (default: the one run last)")
+    args = parser.parse_args(argv)
+
+    from ._biapy import inspect_results
+
+    try:
+        report = _report(**inspect_results(args.job_dir, args.run_id))
+    except FileNotFoundError as e:
+        keys = [
+            "job", "run_id", "finished", "log", "config", "training", "test", "checkpoints", "predictions", "charts"
+        ]
+        report = _report(ok=False, errors=[str(e)], **dict.fromkeys(keys))
+
+    def numbers(values):
+        """The numbers in ``values`` (a dict), as 'name=value, ...'."""
+        return ", ".join(f"{k}={v:.4g}" for k, v in values.items() if k != "epoch" and isinstance(v, (int, float)))
+
+    def print_text(r):
+        config = r["config"] or {}
+        print(f"Job:         {r['job']} ({config.get('workflow', '?')} {config.get('ndim', '?')})")
+        finished = "yes" if r["finished"] else f"no (it stopped, or it is still running), see {r['log']}"
+        print(f"Finished:    {finished}")
+        training = r["training"]
+        if training:
+            stopped = " (stopped early)" if training["stopped_early"] else ""
+            print(f"Training:    {training['epochs']} of {training['planned_epochs']} epochs{stopped}")
+            for which in ("last", "best"):
+                if training[which]:
+                    # BiaPy shows the epochs counting from 1 ("Epoch 76/100"), its training log from 0
+                    print(f"  {which + ':':<10} epoch {training[which]['epoch'] + 1}: {numbers(training[which])}")
+        if r["test"]:
+            print(f"Test:        {numbers(r['test']['metrics'])}")
+        checkpoints = r["checkpoints"]
+        if checkpoints["all"]:
+            print(f"Checkpoints: {checkpoints['best'] or checkpoints['all'][-1]} ({len(checkpoints['all'])} in total)")
+        for name, folder in r["predictions"].items():
+            print(f"Output:      {name}: {folder['n_files']} files in {folder['path']}")
+
+    _finish(report, args.json, print_text)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -527,7 +594,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli, "inspect-results": _inspect_results_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -561,7 +628,8 @@ def main():
         "  inspect-image         describe an image: 2D or 3D, channels\n"
         "  get-config-template   print or save the basic configuration template of a workflow\n"
         "  create-config         create a configuration adapted to the data, as the wizard does\n"
-        "  search-bmz-models     search the BioImage Model Zoo for pretrained models\n",
+        "  search-bmz-models     search the BioImage Model Zoo for pretrained models\n"
+        "  inspect-results       describe what a job left in its folder: training, test metrics, outputs\n",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")
