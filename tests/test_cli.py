@@ -1,7 +1,8 @@
 """
 Tests of the subcommands of the ``biapy`` command (``validate-config``, ``check-data``, ``list-workflows``,
-``inspect-image``, ``get-config-template``, ``create-config`` and ``search-bmz-models``): their ``--json`` output
-(``schema_version``, ``ok``, ``errors``, ``warnings`` and ``data``), their text output and their exit codes.
+``inspect-image``, ``get-config-template``, ``create-config``, ``search-bmz-models`` and ``inspect-results``): their
+``--json`` output (``schema_version``, ``ok``, ``errors``, ``warnings`` and ``data``), their text output and their
+exit codes.
 
 How to run
 ----------
@@ -72,6 +73,7 @@ def _semantic_2d(tmp_path, n=6, missing_masks=0):
         ["inspect-image"],
         ["get-config-template"],
         ["create-config"],
+        ["inspect-results"],
     ],
 )
 def test_wrong_arguments(monkeypatch, capsys, args):
@@ -251,3 +253,156 @@ def test_search_bmz_models_wrong_ndim(monkeypatch, capsys):
     code, report = _run_json(monkeypatch, capsys, "search-bmz-models", "--ndim", "4D")
     assert code == 1
     assert report["data"]["models"] == []
+
+
+###################
+# inspect-results #
+###################
+def _job(tmp_path, run_id=1, date="2026_01_01_10_00_00", finished=True, train=True, test=True, first_epoch=0):
+    """
+    A job's folder as BiaPy leaves it: one run of ``my_job`` with its log, configuration and outputs. It trains 3 of
+    its 5 epochs, the best one is the second, and it stops by early stopping, unless it resumes the training from
+    ``first_epoch``.
+    """
+    job, name = tmp_path / "my_job", f"my_job_{run_id}"
+    logs, results = job / "logs", job / "results" / name
+    for folder in (logs, job / "config_files", job / "checkpoints", results / "per_image"):
+        folder.mkdir(parents=True, exist_ok=True)
+    log = "[10:00:00.000000] ~~~ Epoch 1/5 ~~~\n"
+    if train and not first_epoch:
+        log += "[10:00:01.000000] Early stopping\n"
+    if test:
+        log += "[10:00:02.000000] #  RESULTS  #\n[10:00:02.000000] Test Foreground IoU (merge patches): 0.6\n"
+    if finished:
+        log += f"[10:00:02.000000] FINISHED JOB {name} !!\n"
+    (logs / f"{name}_log_{run_id}_{date}.txt").write_text(log)
+    config = "PROBLEM:\n  TYPE: SEMANTIC_SEG\n  NDIM: 2D\nTRAIN:\n  EPOCHS: 5\n"
+    (job / "config_files" / f"my_config_{run_id}_{date}.yaml").write_text(config)
+    if train:
+        losses = [0.6, 0.4, 0.5]
+        epochs = [{"train_loss": 0.5, "test_loss": loss, "epoch": first_epoch + e} for e, loss in enumerate(losses)]
+        (logs / f"{name}_log_{date}_training_log.json").write_text("\n".join(json.dumps(e) for e in epochs) + "\n")
+        (job / "checkpoints" / f"{name}-checkpoint-best.pth").write_bytes(b"")
+    if test:
+        (results / "test_results_metrics.csv").write_text("file,iou\na.tif,0.5\nb.tif,0.7\n")
+        for f in ("a.tif", "b.tif"):
+            (results / "per_image" / f).write_bytes(b"")
+    return str(job)
+
+
+def test_inspect_results(monkeypatch, capsys, tmp_path):
+    job = _job(tmp_path)
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", job)
+    assert code == 0
+    data = report["data"]
+    assert data["job"] == "my_job_1"
+    assert data["finished"]
+    assert data["config"]["workflow"] == "SEMANTIC_SEG"
+    assert data["training"]["epochs"] == 3
+    assert data["training"]["planned_epochs"] == 5
+    assert data["training"]["stopped_early"]
+    assert data["training"]["last"]["epoch"] == 2  # counted from 0, as in BiaPy's training log
+    assert data["training"]["best"]["epoch"] == 1  # the lowest validation loss
+    assert data["test"]["metrics"] == {"Foreground IoU (merge patches)": 0.6}
+    assert data["test"]["metrics_file"].endswith("test_results_metrics.csv")
+    assert data["checkpoints"]["best"].endswith("my_job_1-checkpoint-best.pth")
+    assert data["predictions"]["per_image"]["n_files"] == 2
+
+    code, out, _ = _run(monkeypatch, capsys, "inspect-results", job)
+    assert code == 0
+    assert "best:      epoch 2:" in out  # counted from 1, as BiaPy shows them
+    assert "Foreground IoU (merge patches)=0.6" in out
+
+
+def test_inspect_results_resumed(monkeypatch, capsys, tmp_path):
+    """Training resumed from the checkpoint of epoch 2: its log has epochs 2-4, and it didn't stop early."""
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", _job(tmp_path, first_epoch=2))
+    training = report["data"]["training"]
+    assert training["epochs"] == 5
+    assert training["stopped_early"] is False
+
+
+def test_inspect_results_test_metrics(monkeypatch, capsys, tmp_path):
+    """The test metrics BiaPy printed after "RESULTS" in the last execution, named as it prints them."""
+    job = tmp_path / "my_job"
+    _job(tmp_path)
+    (job / "logs" / "my_job_1_log_1_2026_01_01_10_00_00.txt").write_text(
+        "[10:00:00.000000] Test IoU (merge patches): 0.1\n"  # before RESULTS: not a result
+        "[10:00:01.000000] #  RESULTS  #\n"
+        "[10:00:01.000000] Train loss: 0.2\n"
+        "[10:00:01.000000] Test Foreground IoU (per patch): 0.5\n"
+        "[10:00:01.000000] Test Foreground IoU (merge patches): 0.6\n"
+        "[10:00:01.000000] Test Foreground IoU (merge patches - post-processing): 0.65\n"
+        "[10:00:01.000000] Test accuracy: 0.9\n"  # classification: without how it was computed
+        "[10:00:01.000000] Test Confusion matrix: [[1 0]\n"  # not a number
+        "[10:00:01.000000] Test Dice (merge patches): nan\n"
+        "[10:00:02.000000] FINISHED JOB my_job_1 !!\n"
+    )
+    code, out, _ = _run(monkeypatch, capsys, "inspect-results", str(job), "--json")
+    assert "NaN" not in out
+    assert json.loads(out)["data"]["test"]["metrics"] == {
+        "Foreground IoU (per patch)": 0.5,
+        "Foreground IoU (merge patches)": 0.6,
+        "Foreground IoU (merge patches - post-processing)": 0.65,
+        "accuracy": 0.9,
+        "Dice (merge patches)": None,
+    }
+
+
+def test_inspect_results_classification_predictions(monkeypatch, capsys, tmp_path):
+    """Classification writes its predictions to predictions.csv, not to a folder."""
+    job = tmp_path / "my_job"
+    _job(tmp_path, train=False, test=False)
+    (job / "results" / "my_job_1" / "predictions.csv").write_text("filename,class\na.tif,0\nb.tif,1\nc.tif,1\n")
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
+    assert report["data"]["predictions"]["predictions.csv"]["n_files"] == 3
+
+
+def test_inspect_results_nan(monkeypatch, capsys, tmp_path):
+    """A training that diverged (NaN loss): valid JSON, without NaN."""
+    job = tmp_path / "my_job"
+    _job(tmp_path)
+    nan = float("nan")
+    epochs = [{"train_loss": 0.5, "test_loss": 0.4, "epoch": 0}, {"train_loss": nan, "test_loss": nan, "epoch": 1}]
+    (job / "logs" / "my_job_1_log_2026_01_01_10_00_00_training_log.json").write_text(
+        "\n".join(json.dumps(e) for e in epochs) + "\n"  # json.dumps writes NaN, as BiaPy does
+    )
+
+    code, out, _ = _run(monkeypatch, capsys, "inspect-results", str(job), "--json")
+    assert code == 0
+    assert "NaN" not in out
+    data = json.loads(out)["data"]
+    assert data["training"]["last"]["test_loss"] is None
+    assert data["training"]["best"]["epoch"] == 0  # BiaPy never saves the best checkpoint with a NaN loss
+
+
+def test_inspect_results_not_finished(monkeypatch, capsys, tmp_path):
+    """A run that stopped (or is still running), before testing: described, but not finished."""
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", _job(tmp_path, finished=False, test=False))
+    assert code == 0
+    assert not report["data"]["finished"]
+    assert report["data"]["training"]["stopped_early"] is None  # it may still be training
+    assert report["data"]["test"] is None
+
+
+def test_inspect_results_runs(monkeypatch, capsys, tmp_path):
+    """By default, the run done last; another one with --run-id."""
+    _job(tmp_path, run_id=1, date="2026_01_01_10_00_00")
+    job = _job(tmp_path, run_id=2, date="2026_01_02_10_00_00", train=False)
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", job)
+    assert report["data"]["job"] == "my_job_2"
+    assert report["data"]["training"] is None
+
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", job, "--run-id", "1")
+    assert report["data"]["job"] == "my_job_1"
+    assert report["data"]["training"]["epochs"] == 3
+
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", job, "--run-id", "3")
+    assert code == 1
+
+
+def test_inspect_results_no_job(monkeypatch, capsys, tmp_path):
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", str(tmp_path / "missing"))
+    assert code == 1
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", str(tmp_path))  # a folder, but not a job's
+    assert code == 1

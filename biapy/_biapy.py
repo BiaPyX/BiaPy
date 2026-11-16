@@ -1,5 +1,7 @@
 import copy
+import csv
 import io
+import json
 import os
 import tempfile
 from contextlib import contextmanager
@@ -2819,3 +2821,194 @@ def search_bmz_models(
             if all(w in " ".join([m["name"], m["description"]] + m["tags"]).lower() for w in words)
         ]
     return models
+
+
+# Date and time in the names of the files BiaPy writes for each run, e.g. "..._2026_09_25_10_21_35.txt"
+_TIMESTAMP = r"\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}"
+
+
+def _latest(paths: List[str]) -> Optional[str]:
+    """The file written last of ``paths``, by the date and time in its name, or None if there are none."""
+    return max(paths, key=lambda p: re.findall(_TIMESTAMP, os.path.basename(p))[-1], default=None)
+
+
+def _files_in(folder: str, pattern: str) -> List[str]:
+    """The files in ``folder`` whose name fully matches the regular expression ``pattern``, sorted."""
+    if not os.path.isdir(folder):
+        return []
+    return sorted(os.path.join(folder, f) for f in os.listdir(folder) if re.fullmatch(pattern, f))
+
+
+def _tail(path: str, size: int = 65536) -> str:
+    """The last ``size`` bytes of a text file (logs can be large: progress bars are written to them)."""
+    with open(path, "rb") as f:
+        f.seek(max(0, os.path.getsize(path) - size))
+        return f.read().decode("utf-8", errors="replace")
+
+
+def _no_nan(values: dict) -> dict:
+    """``values`` with NaN as None: JSON has no NaN (e.g. the loss of a training that diverged)."""
+    return {k: None if isinstance(v, float) and np.isnan(v) else v for k, v in values.items()}
+
+
+def _test_results(log: str) -> Dict[str, Optional[float]]:
+    """
+    The test metrics BiaPy printed at the end of the test, in the "RESULTS" part of ``log`` (it doesn't save them to a
+    file), named as BiaPy prints them, e.g. ``{"PSNR (merge patches)": 18.19, "accuracy": 0.9}``.
+
+    The lines are ``Test <metric> (<how it was computed>): <value>``, or ``Test <metric>: <value>`` in classification.
+    The matching metrics of instance segmentation (F1, PQ... by threshold) are printed as a dictionary and are left
+    out: they are in ``test_results_metrics.csv``, by image.
+    """
+    with open(log, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    results = {}
+    if "#  RESULTS  #" in text:
+        for line in text.split("#  RESULTS  #")[-1].splitlines():
+            found = re.search(r"(?:^|\] )Test (.+): (\S+)$", line.rstrip())
+            if found:
+                try:
+                    results[found.group(1)] = float(found.group(2))
+                except ValueError:  # not a number
+                    continue
+    return _no_nan(results)
+
+
+def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
+    """
+    Describe what a BiaPy job left in its folder: whether it finished, its training, test metrics, checkpoints and
+    predictions.
+
+    A job's folder is ``<result_dir>/<name>`` (the ``--result_dir`` and ``--name`` it was run with). It can hold
+    several runs (``--run_id``); when it was run more than once with the same run id (e.g. to train, then to test),
+    the latest log and configuration of that run are used.
+
+    Parameters
+    ----------
+    job_dir : str
+        Folder of the job, ``<result_dir>/<name>``.
+    run_id : int, optional
+        Run to describe. By default, the one run last.
+
+    Returns
+    -------
+    dict
+        * ``job``: identifier of the run, ``<name>_<run_id>``, and ``run_id``.
+        * ``finished``: whether its last execution ended (``biapy --config ...`` writes ``FINISHED JOB`` at the end
+          of the log). False if it stopped with an error, and also while it is still running. Jobs run with the Python
+          API (``train()``, ``test()``) don't write it, so they are not finished.
+        * ``log``: the log of its last execution.
+        * ``config``: ``path``, ``workflow`` and ``ndim`` of the configuration of its last execution, or None.
+        * ``training``: ``log``, the ``epochs`` reached of the ``planned_epochs`` (``TRAIN.EPOCHS``), whether it
+          ``stopped_early`` by early stopping (None while it may still be training), and the values of the ``last``
+          epoch and of the ``best`` one, as in BiaPy's training log (``train_*``, ``test_*`` for the validation, and
+          ``epoch``, counted from 0). The best is the one with the lowest validation loss, saved in the best
+          checkpoint, or None without validation. None if it didn't train.
+        * ``test``: the test ``metrics`` BiaPy printed at the end of its last execution, named as it prints them
+          (e.g. ``{"PSNR (merge patches)": 18.19}``; see :func:`_test_results`), and the ``metrics_file`` with the
+          metrics of each image, or None if it didn't test with targets.
+        * ``checkpoints``: ``best`` (or None) and ``all`` the checkpoints of the run.
+        * ``predictions``: for each output folder that exists (e.g. ``per_image``), its ``path`` and ``n_files``;
+          in classification, ``predictions.csv`` with the number of images in ``n_files``.
+        * ``charts``: the plots of the loss and metrics during training.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``job_dir`` is not a folder or holds no run (or not ``run_id``).
+    """
+    job_dir = os.path.abspath(job_dir)
+    if not os.path.isdir(job_dir):
+        raise FileNotFoundError(f"Job folder not found: {job_dir}")
+    name = os.path.basename(job_dir)
+    logs_dir = os.path.join(job_dir, "logs")
+
+    # Each execution writes the log '<name>_<run_id>_log_<run_id>_<date>.txt'
+    logs = _files_in(logs_dir, rf"{re.escape(name)}_(\d+)_log_\d+_{_TIMESTAMP}\.txt")
+    if run_id is None:
+        if not logs:
+            raise FileNotFoundError(f"No BiaPy run found in {job_dir} (no logs in {logs_dir})")
+        run_id = int(re.fullmatch(rf"{re.escape(name)}_(\d+)_.*", os.path.basename(_latest(logs))).group(1))
+    job = f"{name}_{run_id}"
+    log = _latest([p for p in logs if os.path.basename(p).startswith(f"{job}_log_")])
+    if log is None:
+        raise FileNotFoundError(f"Run {run_id} not found in {job_dir} (no {job}_log_* in {logs_dir})")
+
+    # The folders of the job, as BiaPy builds them
+    paths = Config(job_dir, job).get_cfg_defaults()
+
+    # The error of a run that stopped is not in its log: Python prints it after BiaPy gives the console back
+    finished = f"FINISHED JOB {job}" in _tail(log)
+
+    # Each execution also saves its configuration, '<config name>_<run_id>_<date>.yaml', with the date of its log
+    config_files = _files_in(os.path.join(job_dir, "config_files"), rf".+_{run_id}_{_TIMESTAMP}\.ya?ml")
+
+    def read_config(path):
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    config = None
+    config_file = _latest(config_files)
+    if config_file:
+        problem = read_config(config_file).get("PROBLEM", {})
+        config = {"path": config_file, "workflow": problem.get("TYPE"), "ndim": problem.get("NDIM")}
+
+    training = None
+    training_log = _latest(_files_in(paths.LOG.LOG_DIR, rf"{re.escape(job)}_log_{_TIMESTAMP}_training_log\.json"))
+    if training_log:
+        with open(training_log, encoding="utf-8") as f:
+            epochs = [_no_nan(json.loads(line)) for line in f if line.strip()]
+        # The configuration and the log of the execution that trained have the date of its training log
+        date = re.findall(_TIMESTAMP, os.path.basename(training_log))[-1]
+        train_config = next((read_config(p) for p in config_files if date in os.path.basename(p)), {})
+        text_log = next((p for p in logs if date in os.path.basename(p) and f"{job}_log_" in p), None)
+        # The training ended if the job finished, or if it was done by an earlier execution than the last one.
+        # Then, BiaPy printed 'Early stopping' if it stopped before TRAIN.EPOCHS
+        stopped_early = None
+        if text_log and (finished or text_log != log):
+            with open(text_log, encoding="utf-8", errors="replace") as f:
+                stopped_early = any(line.rstrip().endswith("Early stopping") for line in f)
+        validated = [e for e in epochs if e.get("test_loss") is not None]
+        training = {
+            "log": training_log,
+            # Resumed from a checkpoint, the training log starts at the epoch of the checkpoint
+            "epochs": epochs[-1]["epoch"] + 1 if epochs else 0,
+            "planned_epochs": train_config.get("TRAIN", {}).get("EPOCHS", paths.TRAIN.EPOCHS),
+            "stopped_early": stopped_early,
+            "last": epochs[-1] if epochs else None,
+            # BiaPy saves the best checkpoint when the validation loss is lower than in all the epochs before
+            # (never when it is NaN)
+            "best": min(validated, key=lambda e: e["test_loss"], default=None),
+        }
+
+    test = None
+    metrics = _test_results(log)
+    metrics_file = os.path.join(paths.PATHS.RESULT_DIR.PATH, "test_results_metrics.csv")
+    if metrics:
+        test = {"metrics": metrics, "metrics_file": metrics_file if os.path.isfile(metrics_file) else None}
+
+    checkpoints = _files_in(paths.PATHS.CHECKPOINT, rf"{re.escape(job)}-checkpoint-.+")
+    best = [p for p in checkpoints if re.search(r"-checkpoint-best\.\w+$", p)]
+
+    predictions = {}
+    for key, folder in paths.PATHS.RESULT_DIR.items():
+        if key != "PATH" and os.path.isdir(folder):
+            predictions[os.path.basename(folder)] = {"path": folder, "n_files": len(os.listdir(folder))}
+    # Classification writes its predictions to a file instead, one row per image
+    classes_file = os.path.join(paths.PATHS.RESULT_DIR.PATH, "predictions.csv")
+    if os.path.isfile(classes_file):
+        with open(classes_file, newline="", encoding="utf-8") as f:
+            predictions["predictions.csv"] = {"path": classes_file, "n_files": len(list(csv.DictReader(f)))}
+
+    return {
+        "job": job,
+        "run_id": run_id,
+        "finished": finished,
+        "log": log,
+        "config": config,
+        "training": training,
+        "test": test,
+        "checkpoints": {"best": best[0] if best else None, "all": checkpoints},
+        "predictions": predictions,
+        "charts": _files_in(paths.PATHS.CHARTS, r".+\.png"),
+    }
