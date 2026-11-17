@@ -26,8 +26,8 @@ import yaml
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy", "inspect_results": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy", "inspect_results": "._biapy", "plan_job": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "plan_job", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -530,6 +530,96 @@ def _inspect_results_cli(argv):
     _finish(report, args.json, print_text)
 
 
+def _plan_cli(argv):
+    """
+    Describe from the command line what running a configuration would do, without running anything (see
+    :func:`biapy.plan_job`).
+
+    Usage::
+
+        biapy plan <path_to_config_file> [--result_dir <folder> [--name my_job] [--run_id 1]] [--percentage 10] [--json]
+
+    ``--result_dir``, ``--name`` and ``--run_id`` are the ones the job would be run with (``biapy --config ...``): with
+    them, the plan also says where the job would write and whether that run already exists.
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``plan``.
+
+    Exit codes
+    ----------
+    0
+        The job can be run (its configuration is valid and its data can be used).
+    1
+        The configuration is not valid or its data can't be used.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    parser = _command_parser(
+        "plan", "Describe what running a configuration would do (data, model, outputs, resources), without running it."
+    )
+    parser.add_argument("config", help="Path to the YAML configuration file")
+    parser.add_argument(
+        "--result_dir", help="Folder where the job would write, to check it (whether the run already exists)"
+    )
+    parser.add_argument("--name", default="unknown_job", help="Name of the job (default: unknown_job)")
+    parser.add_argument("--run_id", type=int, default=1, help="Run of the job (default: 1)")
+    parser.add_argument(
+        "--percentage", type=float, default=100, help="Percentage of each Zarr/H5 image to check (default: 100)"
+    )
+    args = parser.parse_args(argv)
+
+    from ._biapy import plan_job
+
+    try:
+        # The checks print their progress: keep stdout for the result only
+        with contextlib.redirect_stdout(sys.stderr):
+            report = plan_job(args.config, args.result_dir, args.name, args.run_id, args.percentage)
+        report = _from_report(report)
+    except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
+        keys = ["workflow", "ndim", "phases", "job", "data", "upscaling", "model", "training", "hardware", "estimates"]
+        report = _report(ok=False, errors=[str(e)], **dict.fromkeys(keys))
+
+    def gb(value):
+        return f"{value / 1024**3:.1f} GB" if value is not None else "not estimated"
+
+    def listed(value):
+        """A value that may be a list (e.g. TRAIN.OPTIMIZER, one per optimizer), without brackets."""
+        return ", ".join(str(v) for v in value) if isinstance(value, (list, tuple)) else str(value)
+
+    def print_text(r):
+        phases = " and ".join(p for p in ("train", "test") if r["phases"][p]) or "nothing"
+        job = r["job"]
+        print(f"Job:         {job['job'] + ' ' if job else ''}({r['workflow']} {r['ndim']}): {phases}")
+        if job:
+            exists = " (the run exists: it would be written over)" if job["exists"] else ""
+            print(f"Writes to:   {job['job_dir']}{exists}")
+        else:
+            print("Writes to:   not checked (give --result_dir and --name to check it)")
+        for key, found in r["data"].items():
+            shape = f", {found['max_shape']}" if found["max_shape"] else ""
+            classes = f", {found['classes']} classes" if found["classes"] else ""
+            channels = f", {found['channels']} channel(s)" if found["channels"] else ""
+            print(f"Data:        {key}: {found['n_files']} files{channels}{classes}{shape}")
+        model = r["model"]
+        checkpoint = f", loading {model['checkpoint']}" if model["checkpoint"] else ""
+        print(f"Model:       {model['architecture']} ({model['source']}{checkpoint})")
+        t = r["training"]
+        if t:
+            print(f"Training:    {t['epochs']} epochs, batch size {t['batch_size']}, {listed(t['optimizer'])} "
+                  f"(lr {listed(t['lr'])}), patch size {t['patch_size']}")
+        # The same GPUs together, e.g. "7 x NVIDIA L4 (23034 MB)"
+        gpus = [f"{g['name']} ({g['memory_mb']} MB)" for g in r["hardware"]["gpus"]]
+        gpus = ", ".join(f"{gpus.count(g)} x {g}" for g in dict.fromkeys(gpus)) or "no NVIDIA GPU"
+        print(f"Hardware:    {gpus}; RAM {gb(r['hardware']['ram_bytes'])}")
+        e = r["estimates"] or {}
+        print(f"Estimates:   RAM {gb(e.get('ram_train'))} to train, {gb(e.get('ram_test'))} to test; "
+              f"disk {gb(e.get('disk_total'))}; GPU memory not estimated")
+
+    _finish(report, args.json, print_text)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -594,7 +684,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli, "inspect-results": _inspect_results_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli, "inspect-results": _inspect_results_cli, "plan": _plan_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -629,7 +719,8 @@ def main():
         "  get-config-template   print or save the basic configuration template of a workflow\n"
         "  create-config         create a configuration adapted to the data, as the wizard does\n"
         "  search-bmz-models     search the BioImage Model Zoo for pretrained models\n"
-        "  inspect-results       describe what a job left in its folder: training, test metrics, outputs\n",
+        "  inspect-results       describe what a job left in its folder: training, test metrics, outputs\n"
+        "  plan                  describe what running a configuration would do, without running it\n",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")

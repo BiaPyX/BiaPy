@@ -1,7 +1,7 @@
 """
 Tests of the subcommands of the ``biapy`` command (``validate-config``, ``check-data``, ``list-workflows``,
-``inspect-image``, ``get-config-template``, ``create-config``, ``search-bmz-models`` and ``inspect-results``): their
-``--json`` output (``schema_version``, ``ok``, ``errors``, ``warnings`` and ``data``), their text output and their
+``inspect-image``, ``get-config-template``, ``create-config``, ``search-bmz-models``, ``inspect-results`` and ``plan``):
+their ``--json`` output (``schema_version``, ``ok``, ``errors``, ``warnings`` and ``data``), their text output and their
 exit codes.
 
 How to run
@@ -74,6 +74,7 @@ def _semantic_2d(tmp_path, n=6, missing_masks=0):
         ["get-config-template"],
         ["create-config"],
         ["inspect-results"],
+        ["plan"],
     ],
 )
 def test_wrong_arguments(monkeypatch, capsys, args):
@@ -406,3 +407,79 @@ def test_inspect_results_no_job(monkeypatch, capsys, tmp_path):
     assert code == 1
     code, report = _run_json(monkeypatch, capsys, "inspect-results", str(tmp_path))  # a folder, but not a job's
     assert code == 1
+
+
+########
+# plan #
+########
+def _plan_config(monkeypatch, capsys, tmp_path, missing_masks=0):
+    """The configuration create-config makes for ``_semantic_2d`` data, with a test set."""
+    x, y = _semantic_2d(tmp_path, missing_masks=missing_masks)
+    path = str(tmp_path / "config.yaml")
+    _run(
+        monkeypatch, capsys, "create-config", "--workflow", "SEMANTIC_SEG", "--ndim", "2D", "--train-raw", x,
+        "--train-gt", y, "--test-raw", x, "--test-gt", y, "--quick", "--store", path,
+    )
+    return path
+
+
+def test_plan(monkeypatch, capsys, tmp_path):
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    result_dir = tmp_path / "output"
+    code, report = _run_json(monkeypatch, capsys, "plan", config, "--result_dir", str(result_dir), "--name", "my_job")
+    assert code == 0
+    data = report["data"]
+    assert data["workflow"] == "SEMANTIC_SEG"
+    assert data["phases"] == {"train": True, "test": True}
+    assert data["job"]["job"] == "my_job_1"
+    assert not data["job"]["exists"]
+    assert data["data"]["DATA.TRAIN.PATH"]["n_files"] == 6
+    assert data["data"]["DATA.TRAIN.PATH"]["max_shape"] == [128, 128]
+    assert data["data"]["DATA.TRAIN.GT_PATH"]["classes"] == 3
+    assert data["model"]["source"] == "biapy"
+    assert data["training"]["epochs"] > 0
+    assert data["hardware"]["ram_bytes"] > 0
+    assert data["estimates"]["ram_train"] > 0
+    assert not result_dir.exists()  # nothing written
+
+    code, out, _ = _run(monkeypatch, capsys, "plan", config, "--result_dir", str(result_dir), "--name", "my_job")
+    assert code == 0
+    assert "Job:         my_job_1 (SEMANTIC_SEG 2D): train and test" in out
+
+
+def test_plan_without_result_dir(monkeypatch, capsys, tmp_path):
+    """Only the configuration: everything but the folders the job would write."""
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    code, report = _run_json(monkeypatch, capsys, "plan", config)
+    assert code == 0
+    assert report["data"]["job"] is None
+    assert report["data"]["data"]["DATA.TRAIN.PATH"]["n_files"] == 6
+
+
+def test_plan_existing_run(monkeypatch, capsys, tmp_path):
+    """The run already exists: it can be run, but it would be written over."""
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    (tmp_path / "output" / "my_job" / "results" / "my_job_1").mkdir(parents=True)
+    code, report = _run_json(
+        monkeypatch, capsys, "plan", config, "--result_dir", str(tmp_path / "output"), "--name", "my_job"
+    )
+    assert code == 0
+    assert report["data"]["job"]["exists"]
+    assert any("would write over" in w for w in report["warnings"])
+
+
+def test_plan_data_error(monkeypatch, capsys, tmp_path):
+    """The data can't be used: the plan says why, and the job can't be run."""
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    (tmp_path / "y" / "5.tif").unlink()  # a mask missing
+    code, report = _run_json(monkeypatch, capsys, "plan", config, "--result_dir", str(tmp_path / "output"))
+    assert code == 1
+    assert report["data"]["workflow"] == "SEMANTIC_SEG"  # the rest of the plan is still given
+
+
+def test_plan_missing_config(monkeypatch, capsys, tmp_path):
+    code, report = _run_json(
+        monkeypatch, capsys, "plan", str(tmp_path / "missing.yaml"), "--result_dir", str(tmp_path / "output")
+    )
+    assert code == 1
+    assert report["data"]["job"] is None
