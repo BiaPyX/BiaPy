@@ -2506,7 +2506,14 @@ def check_data(config: Union[str, dict, CN], percentage: float = 100) -> dict:
     ValueError, AssertionError, FileNotFoundError, KeyError
         If the configuration itself is not valid (see :func:`validate_config`).
     """
-    cfg = validate_config(config, check_data_paths=True)
+    return _check_config_data(validate_config(config, check_data_paths=True), percentage)
+
+
+def _check_config_data(cfg: CN, percentage: float = 100, answers: Optional[dict] = None) -> dict:
+    """
+    :func:`check_data` of a configuration already validated. ``answers``, if given, gets what the wizard needs to plan
+    from the data (see :func:`_check_folders`): e.g. ``answers["sample_info"]``, the fingerprint of each folder.
+    """
     warnings_found = []
 
     # Phases whose data the job reads
@@ -2540,7 +2547,7 @@ def check_data(config: Union[str, dict, CN], percentage: float = 100) -> dict:
 
     sr_upscaling = tuple(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" else None
     report, upscaling = _check_folders(
-        to_check, cfg.PROBLEM.TYPE, cfg.PROBLEM.NDIM, percentage, cfg.PROBLEM.TRACKING.ENABLE, sr_upscaling
+        to_check, cfg.PROBLEM.TYPE, cfg.PROBLEM.NDIM, percentage, cfg.PROBLEM.TRACKING.ENABLE, sr_upscaling, answers
     )
     report["warnings"] = warnings_found + report["warnings"]
     report["upscaling"] = upscaling
@@ -3011,4 +3018,138 @@ def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
         "checkpoints": {"best": best[0] if best else None, "all": checkpoints},
         "predictions": predictions,
         "charts": _files_in(paths.PATHS.CHARTS, r".+\.png"),
+    }
+
+
+def plan_job(
+    config: Union[str, dict, CN],
+    result_dir: Optional[str] = None,
+    name: str = "unknown_job",
+    run_id: int = 1,
+    percentage: float = 100,
+) -> dict:
+    """
+    Describe what running a configuration would do, without running anything: no data is loaded for training, no
+    model is built and nothing is written.
+
+    It is what ``biapy --config <config> --result_dir <result_dir> --name <name> --run_id <run_id>`` would do: the
+    configuration is validated (:func:`validate_config`), its data checked (:func:`check_data`), and this computer's
+    GPUs and RAM and the resources the job would need (as :func:`create_config` estimates them) are given. With
+    ``result_dir``, also the folders the job would write and whether that run already exists.
+
+    Parameters
+    ----------
+    config : str or dict or CfgNode
+        Path to a YAML config file, or a dict/CfgNode with the configuration.
+    result_dir : str, optional
+        Folder where the job would write (``--result_dir``). Without it, the folders are not given.
+    name : str, optional
+        Name of the job (``--name``).
+    run_id : int, optional
+        Run of the job (``--run_id``).
+    percentage : float, optional
+        Percentage of each Zarr/H5 image to check (see :func:`check_data`).
+
+    Returns
+    -------
+    dict
+        * ``ok``, ``errors`` and ``warnings``: whether the data can be used with the configuration, as
+          :func:`check_data` says, and the warnings (e.g. that the run already exists and would be written over).
+        * ``workflow``, ``ndim`` and ``phases``: ``train`` and ``test``, whether the job would do them.
+        * ``job``: ``job_dir`` (``<result_dir>/<name>``), ``job`` (``<name>_<run_id>``), ``run_id``, whether it
+          ``exists`` already (its outputs would be written over), and the ``outputs`` folders it would write; None
+          without ``result_dir``.
+        * ``data``: for each data folder, what :func:`check_data` found (``folder``, ``n_files``, ``channels``,
+          ``classes``) and the ``min_shape`` and ``max_shape`` of its images; ``upscaling`` in super-resolution.
+        * ``model``: ``architecture``, ``source`` (biapy, bmz, torchvision) and the ``checkpoint`` it would load.
+        * ``training``: ``epochs``, ``batch_size``, ``optimizer``, ``lr``, ``patience`` and ``patch_size``, or None
+          if it doesn't train.
+        * ``hardware``: the NVIDIA ``gpus`` found (``index``, ``name``, ``memory_mb``) and the ``ram_bytes`` of this
+          computer, measured now.
+        * ``estimates``: estimates, not guarantees, of the RAM to train (``ram_train``) and test (``ram_test``) and
+          of the disk the job would write (``disk_total``, by item in ``disk``), in bytes; None if not estimated. The
+          GPU memory is not estimated.
+
+    Raises
+    ------
+    ValueError, AssertionError, FileNotFoundError, KeyError
+        If the configuration itself is not valid (see :func:`validate_config`).
+    """
+    from biapy.wizard.inference import host_ram_bytes, plan_inference
+    from biapy.wizard.planning import query_gpus
+    from biapy.wizard.resources import estimate_resources
+
+    cfg = validate_config(config, check_data_paths=False)
+    answers = {"sample_info": {}}
+    report = _check_config_data(cfg, percentage, answers)
+    warnings_found = list(report["warnings"])
+
+    job_info = None
+    if result_dir:
+        job_dir = os.path.abspath(os.path.join(result_dir, name))
+        job = f"{name}_{run_id}"
+        paths = Config(job_dir, job).get_cfg_defaults()
+        exists = os.path.isdir(paths.PATHS.RESULT_DIR.PATH) or bool(
+            _files_in(paths.LOG.LOG_DIR, rf"{re.escape(job)}_log_.+")
+        )
+        if exists:
+            warnings_found.append(f"The run {job} already exists in {job_dir}: running it would write over its outputs")
+        job_info = {
+            "job_dir": job_dir,
+            "job": job,
+            "run_id": run_id,
+            "exists": exists,
+            "outputs": {
+                "logs": paths.LOG.LOG_DIR,
+                "checkpoints": paths.PATHS.CHECKPOINT,
+                "results": paths.PATHS.RESULT_DIR.PATH,
+            },
+        }
+
+    data = {}
+    for key, found in report["folders"].items():
+        fp = (answers["sample_info"].get(key) or {}).get("fingerprint") or {}
+        data[key] = {**found, "min_shape": fp.get("min_shape"), "max_shape": fp.get("max_shape")}
+
+    training = None
+    if cfg.TRAIN.ENABLE:
+        training = {
+            "epochs": cfg.TRAIN.EPOCHS,
+            "batch_size": cfg.TRAIN.BATCH_SIZE,
+            "optimizer": cfg.TRAIN.OPTIMIZER,
+            "lr": cfg.TRAIN.LR,
+            "patience": cfg.TRAIN.PATIENCE,
+            "patch_size": tuple(cfg.DATA.PATCH_SIZE),
+        }
+
+    ram = host_ram_bytes()
+    estimates = None
+    try:  # only informative, as in create_config
+        # The wizard's estimators read (and plan_inference changes) a plain configuration dictionary
+        cfg_dict = yaml.safe_load(cfg.dump())
+        resources = estimate_resources(
+            cfg_dict, answers["sample_info"], {}, plan_inference(cfg_dict, answers["sample_info"], [], ram), ram
+        )
+        estimates = {k: resources[k] for k in ("ram_train", "ram_test", "disk_total", "disk")}
+    except Exception as e:
+        warnings_found.append(f"The resources the job needs could not be estimated ({e})")
+
+    return {
+        "ok": report["ok"],
+        "errors": report["errors"],
+        "warnings": warnings_found,
+        "workflow": cfg.PROBLEM.TYPE,
+        "ndim": cfg.PROBLEM.NDIM,
+        "phases": {"train": bool(cfg.TRAIN.ENABLE), "test": bool(cfg.TEST.ENABLE)},
+        "job": job_info,
+        "data": data,
+        "upscaling": report["upscaling"],
+        "model": {
+            "architecture": cfg.MODEL.ARCHITECTURE,
+            "source": cfg.MODEL.SOURCE,
+            "checkpoint": (cfg.PATHS.CHECKPOINT_FILE or "the job's own") if cfg.MODEL.LOAD_CHECKPOINT else None,
+        },
+        "training": training,
+        "hardware": {"gpus": query_gpus(), "ram_bytes": ram},
+        "estimates": estimates,
     }
