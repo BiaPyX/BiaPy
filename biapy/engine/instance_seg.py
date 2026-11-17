@@ -1279,6 +1279,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     d_result["sphericities"],
                     d_result["diameters"],
                     d_result["perimeters"],
+                    d_result["elongations"],
                     d_result["comment"],
                     d_result["conditions"],
                 ]
@@ -1292,6 +1293,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     "sphericity",
                     "diameter",
                     "perimeter (surface area)",
+                    "elongation",
                     "comment",
                     "conditions",
                 ]
@@ -1311,7 +1313,7 @@ class Instance_Segmentation_Workflow(CellposeTestPhaseMixin, Base_Workflow):
                     index=False,
                 )
             # Save only remain instances stats
-            df = df[df["comment"].str.contains("Strange") == False]
+            df = df[df["comment"] != "Removed"]
             os.makedirs(out_dir_post_proc, exist_ok=True)
             if self.save_to_disk:
                 df.to_csv(

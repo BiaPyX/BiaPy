@@ -2617,18 +2617,20 @@ class Config:
         # 'perimeter', 'sphericity' (3D)
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN()
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE = False
-        # List of properties to measure on each instance. The following properties will be always calculated: label, npixels, areas, centers, elongation (2D), 
-        # sphericities (2D)/circularities (3D), diameters, perimeter (2D)/surface_area (3D). Apart from them, you can select more properties to be calculated
+        # List of properties to measure on each instance. The following properties will be always calculated: label, npixels, areas, centers, elongation,
+        # circularities (2D)/sphericities (3D), diameters, perimeter (2D)/surface_area (3D). Apart from them, you can select more properties to be calculated
         # based on scikit-image regionprops function. Check the following link for a detailed list of the extra available properties you can request:
         # https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops
+        # All properties except 'npixels' are measured taking into account DATA.TEST.RESOLUTION (in physical units), so they are correct for
+        # anisotropic data. Because of that, a few regionprops properties (e.g. 'moments_hu', 'perimeter_crofton') are only available for isotropic data.
         # Default property description is as follows:
         #   * 'circularity' is defined as the ratio of area over the square of the perimeter, normalized such that the value for a disk equals
         #     one: (4 * PI * area) / (perimeter^2). Only measurable for 2D images (use sphericity for 3D images). While values of circularity
         #     range theoretically within the interval [0;1], the measurements errors of the perimeter may produce circularity values above 1
         #     (Lehmann et al., 201211 ; https://doi.org/10.1093/bioinformatics/btw413).
         #
-        #   * 'elongation' is the inverse of the circularity. The values of elongation range from 1 for round particles and increase for
-        #     elongated particles. Calculated as: (perimeter^2)/(4 * PI * area) . It is only measurable for 2D images.
+        #   * 'elongation' is the ratio between the major and minor axis lengths of the ellipse (2D) or ellipsoid (3D) with the same second
+        #     moments as the instance. It is 1 for disks/balls and increases for elongated instances (inf if the minor axis is zero, e.g. 1-pixel-wide lines).
         #
         #   * 'npixels' corresponds to the sum of pixels that compose an instance.
         #
@@ -2636,11 +2638,10 @@ class Config:
         #     image for simplicity, but that will be the volume in that case). In the resulting statistics 'volume' will appear in that
         #     case too.
         #
-        #   * 'diameter' calculated with the bounding box and by taking the maximum value of the box in x and y axes. In 3D, z axis
-        #     is also taken into account. Does not take into account the image resolution.
+        #   * 'diameter' is the maximum Feret diameter, i.e. the largest distance between two pixel centers of the instance.
         #
-        #   * 'perimeter', in 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity. In 3D,
-        #     it corresponds to the surface area.
+        #   * 'perimeter', in 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity (marching
+        #     squares contour if the resolution is anisotropic). In 3D, it corresponds to the surface area of the marching cubes mesh.
         #
         #   * 'sphericity', in 3D, it is the ratio of the squared volume over the cube of the surface area, normalized such that the value
         #     for a ball equals one: (36 * PI)*((volume^2)/(perimeter^3)). Only measurable for 3D images (use circularity for 2D images).

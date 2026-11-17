@@ -1156,11 +1156,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         )
                     if (
                         cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j]
-                        in ["circularity", "elongation"]
+                        == "circularity"
                         and cfg.PROBLEM.NDIM != "2D"
                     ):
                         raise ValueError(
-                            "'circularity' or 'elongation' properties can only be measured in 2D images. Delete them from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'. "
+                            "'circularity' property can only be measured in 2D images. Delete it from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'. "
                             "'circularity'-kind property in 3D is 'sphericity'"
                         )
                     if (
