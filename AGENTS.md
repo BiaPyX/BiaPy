@@ -49,7 +49,8 @@ Check a config without running it: `biapy validate-config my_config.yaml [--no-d
 The Python API (`BiaPy` class with `train()`, `test()`, `predict()`, `load_workflow_from_model()`,
 `export_model_to_bmz()`; `build_config()`, `validate_config()`) is in `biapy/_biapy.py`, and the CLI
 (`biapy` command and its subcommands: `validate-config`, `check-data`, `list-workflows`, `inspect-image`,
-`get-config-template`, `create-config`, `search-bmz-models`, `inspect-results`, `plan`) in `biapy/__init__.py`. `biapy/__init__.py` imports the engine
+`get-config-template`, `create-config`, `search-bmz-models`, `inspect-results`, `plan`, `run`, `job-status`,
+`stop-job`) in `biapy/__init__.py`. `biapy/__init__.py` imports the engine
 lazily: `import biapy` must not load PyTorch, so don't add top-level imports of torch or `biapy._biapy` there.
 
 ## Install

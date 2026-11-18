@@ -26,8 +26,8 @@ import yaml
 
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
-_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy", "inspect_results": "._biapy", "plan_job": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "plan_job", "main", "__version__"]
+_LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy", "inspect_results": "._biapy", "plan_job": "._biapy", "run_job": "._biapy", "job_status": "._biapy", "stop_job": "._biapy"}
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "plan_job", "run_job", "job_status", "stop_job", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -620,6 +620,168 @@ def _plan_cli(argv):
     _finish(report, args.json, print_text)
 
 
+def _run_cli(argv):
+    """
+    Run a job in the background from the command line, after checking it as ``biapy plan`` does (see
+    :func:`biapy.run_job`).
+
+    Usage::
+
+        biapy run <path_to_config_file> --result_dir <folder> [--name my_job] [--run_id 1] [--gpu 0] [--overwrite]
+            [--json]
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``run``.
+
+    Exit codes
+    ----------
+    0
+        The job was started.
+    1
+        It was not started: the configuration is not valid, its data can't be used, or the run is running or exists.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    parser = _command_parser(
+        "run",
+        "Run a job in the background and return at once, after checking it as 'biapy plan' does. Follow it with "
+        "'biapy job-status' and stop it with 'biapy stop-job'.",
+    )
+    parser.add_argument("config", help="Path to the YAML configuration file")
+    parser.add_argument("--result_dir", required=True, help="Folder where the job writes")
+    parser.add_argument("--name", default="unknown_job", help="Name of the job (default: unknown_job)")
+    parser.add_argument("--run_id", type=int, default=1, help="Run of the job (default: 1)")
+    parser.add_argument("--gpu", help="GPU(s) to use, e.g. 0, or 0,1 to use two (default: the CPU)")
+    parser.add_argument("--overwrite", action="store_true", help="Run it even if the run exists, writing over it")
+    args = parser.parse_args(argv)
+
+    from ._biapy import run_job
+
+    try:
+        # The checks print their progress: keep stdout for the result only
+        with contextlib.redirect_stdout(sys.stderr):
+            report = run_job(args.config, args.result_dir, args.name, args.run_id, args.gpu, args.overwrite)
+        report = _from_report(report)
+    except (ValueError, AssertionError, FileNotFoundError, KeyError) as e:
+        keys = ["job_dir", "job", "run_id", "pid", "command", "output"]
+        report = _report(ok=False, errors=[str(e)], **dict.fromkeys(keys))
+
+    def print_text(r):
+        print(f"Started:     {r['job']} (process {r['pid']})")
+        print(f"Output:      {r['output']}")
+        print(f"Follow it:   biapy job-status {r['job_dir']} --run-id {r['run_id']}")
+        print(f"Stop it:     biapy stop-job {r['job_dir']} --run-id {r['run_id']}")
+
+    _finish(report, args.json, print_text)
+
+
+def _job_status_cli(argv):
+    """
+    Say from the command line whether a job is running, where it is and, if it failed, why (see
+    :func:`biapy.job_status`).
+
+    Usage::
+
+        biapy job-status <job_folder> [--run-id 1] [--json]
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``job-status``.
+
+    Exit codes
+    ----------
+    0
+        The state was given (even if the job failed: see ``state``).
+    1
+        The folder doesn't exist or holds no run.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    parser = _command_parser("job-status", "Say whether a job is running, where it is and, if it failed, why.")
+    parser.add_argument("job_dir", help="Folder of the job: <result_dir>/<name>")
+    parser.add_argument("--run-id", type=int, help="Run to describe (default: the one started last)")
+    args = parser.parse_args(argv)
+
+    from ._biapy import job_status
+
+    try:
+        report = _report(**job_status(args.job_dir, args.run_id))
+    except FileNotFoundError as e:
+        keys = ["job", "run_id", "state", "pid", "progress", "resources", "error", "output"]
+        report = _report(ok=False, errors=[str(e)], **dict.fromkeys(keys))
+
+    def print_text(r):
+        running = f" (process {r['pid']})" if r["pid"] else ""
+        print(f"Job:         {r['job']}: {r['state']}{running}")
+        p = r["progress"]
+        if p["epoch"]:
+            times = f" ({p['elapsed']} of an estimated {p['estimated_total']})" if p["elapsed"] else ""
+            print(f"Training:    epoch {p['epoch']} of {p['epochs']}{times}")
+        if p["last"]:
+            values = ", ".join(f"{k}={v:.4g}" for k, v in p["last"].items() if k != "epoch" and isinstance(v, float))
+            print(f"Last epoch:  {values}")
+        if p["test_images"] is not None:
+            print(f"Test:        {p['test_images']} images processed")
+        res = r["resources"]
+        if res:
+            gpu = f", GPU memory {res['gpu_memory_mb']} MB" if res["gpu_memory_mb"] else ""
+            print(f"Resources:   CPU {res['cpu_percent']}%, RAM {res['ram_bytes'] / 1024**3:.1f} GB{gpu}")
+        if r["error"]:
+            print("Error:\n" + r["error"])
+        print(f"Output:      {r['output']}")
+
+    _finish(report, args.json, print_text)
+
+
+def _stop_job_cli(argv):
+    """
+    Stop from the command line a job started with ``biapy run`` (see :func:`biapy.stop_job`).
+
+    Usage::
+
+        biapy stop-job <job_folder> [--run-id 1] [--timeout 30] [--json]
+
+    Parameters
+    ----------
+    argv : list of str
+        Command-line arguments after ``stop-job``.
+
+    Exit codes
+    ----------
+    0
+        The job was stopped, or it was not running.
+    1
+        No job started with ``biapy run`` was found.
+    2
+        Wrong command-line arguments (raised by ``argparse``).
+    """
+    parser = _command_parser("stop-job", "Stop a job started with 'biapy run'.")
+    parser.add_argument("job_dir", help="Folder of the job: <result_dir>/<name>")
+    parser.add_argument("--run-id", type=int, help="Run to stop (default: the one started last)")
+    parser.add_argument(
+        "--timeout", type=float, default=30, help="Seconds to wait for it to end before killing it (default: 30)"
+    )
+    args = parser.parse_args(argv)
+
+    from ._biapy import stop_job
+
+    try:
+        result = stop_job(args.job_dir, args.run_id, args.timeout)
+        warnings = [] if result["was_running"] else [f"The run {result['job']} was not running"]
+        report = _report(warnings=warnings, **result)
+    except FileNotFoundError as e:
+        report = _report(ok=False, errors=[str(e)], **dict.fromkeys(["job", "run_id", "was_running", "killed"]))
+
+    def print_text(r):
+        if r["was_running"]:
+            print(f"Stopped:     {r['job']}" + (" (killed: it didn't end in time)" if r["killed"] else ""))
+
+    _finish(report, args.json, print_text)
+
+
 def main():
     r"""
     Run BiaPy.
@@ -684,7 +846,7 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli, "inspect-results": _inspect_results_cli, "plan": _plan_cli}
+    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli, "inspect-results": _inspect_results_cli, "plan": _plan_cli, "run": _run_cli, "job-status": _job_status_cli, "stop-job": _stop_job_cli}
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
         subcommands[sys.argv[1]](sys.argv[2:])
 
@@ -720,7 +882,10 @@ def main():
         "  create-config         create a configuration adapted to the data, as the wizard does\n"
         "  search-bmz-models     search the BioImage Model Zoo for pretrained models\n"
         "  inspect-results       describe what a job left in its folder: training, test metrics, outputs\n"
-        "  plan                  describe what running a configuration would do, without running it\n",
+        "  plan                  describe what running a configuration would do, without running it\n"
+        "  run                   run a job in the background, after checking it as 'plan' does\n"
+        "  job-status            say whether a job is running, where it is and, if it failed, why\n"
+        "  stop-job              stop a job started with 'run'\n",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")
