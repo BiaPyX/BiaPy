@@ -1,18 +1,21 @@
 """
 Tests of the subcommands of the ``biapy`` command (``validate-config``, ``check-data``, ``list-workflows``,
-``inspect-image``, ``get-config-template``, ``create-config``, ``search-bmz-models``, ``inspect-results`` and ``plan``):
+``inspect-image``, ``get-config-template``, ``create-config``, ``search-bmz-models``, ``inspect-results``, ``plan``,
+``run``, ``job-status`` and ``stop-job``):
 their ``--json`` output (``schema_version``, ``ok``, ``errors``, ``warnings`` and ``data``), their text output and their
 exit codes.
 
 How to run
 ----------
-No GPU, no internet and no real data are needed: the data is small and synthetic, written to a temporary folder.
+No GPU, no internet and no real data are needed: the data is small and synthetic, written to a temporary folder, and
+``run`` starts a small script that prints what BiaPy prints instead of BiaPy.
 The subcommands run in this process (``biapy.main`` with ``sys.argv``), so BiaPy is loaded once for all the tests::
 
     pytest tests/test_cli.py -q
 """
 import json
 import sys
+import time
 
 import numpy as np
 import pytest
@@ -75,6 +78,9 @@ def _semantic_2d(tmp_path, n=6, missing_masks=0):
         ["create-config"],
         ["inspect-results"],
         ["plan"],
+        ["run"],
+        ["job-status"],
+        ["stop-job"],
     ],
 )
 def test_wrong_arguments(monkeypatch, capsys, args):
@@ -483,3 +489,165 @@ def test_plan_missing_config(monkeypatch, capsys, tmp_path):
     )
     assert code == 1
     assert report["data"]["job"] is None
+
+
+################################
+# run, job-status and stop-job #
+################################
+# Started by 'run' instead of BiaPy: it prints the lines BiaPy prints (to its output and its log), and then it
+# finishes ("finish"), fails ("fail") or keeps training until it is stopped ("slow")
+FAKE_BIAPY = """
+import argparse, os, sys, time
+parser = argparse.ArgumentParser()
+for arg in ("--config", "--result_dir", "--name", "--run_id", "--gpu"):
+    parser.add_argument(arg)
+args = parser.parse_args(sys.argv[2:])
+job = f"{args.name}_{args.run_id}"
+logs = os.path.join(args.result_dir, args.name, "logs")
+os.makedirs(logs, exist_ok=True)
+log = open(os.path.join(logs, f"{job}_log_{args.run_id}_{time.strftime('%Y_%m_%d_%H_%M_%S')}.txt"), "w")
+
+def say(line):
+    print(line, flush=True)
+    log.write(line + "\\n")
+    log.flush()
+
+say("~~~ Epoch 1/2 ~~~")
+say("[Time] 1.0s 1.0s/2.0s")
+if sys.argv[1] == "fail":
+    raise RuntimeError("CUDA out of memory")
+if sys.argv[1] == "slow":
+    time.sleep(120)
+say("#   LOAD TEST DATA   #")
+say("Processing image: a.tif")
+say(f"FINISHED JOB {job} !!")
+"""
+
+
+def _fake_biapy(monkeypatch, tmp_path, mode="finish"):
+    """Makes 'run' start FAKE_BIAPY instead of BiaPy."""
+    script = tmp_path / "fake_biapy.py"
+    script.write_text(FAKE_BIAPY)
+    monkeypatch.setattr("biapy._biapy._BIAPY_COMMAND", [sys.executable, "-u", str(script), mode])
+
+
+def _wait(monkeypatch, capsys, job_dir, until=("completed", "failed", "stopped")):
+    """Runs 'job-status' until the job is in one of the states ``until``, and returns its report."""
+    for _ in range(100):
+        _, report = _run_json(monkeypatch, capsys, "job-status", job_dir)
+        if report["data"]["state"] in until:
+            return report
+        time.sleep(0.2)
+    raise AssertionError(f"The job didn't get to {until}: {report}")
+
+
+def test_run(monkeypatch, capsys, tmp_path):
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    _fake_biapy(monkeypatch, tmp_path)
+    output = tmp_path / "output"
+    code, report = _run_json(monkeypatch, capsys, "run", config, "--result_dir", str(output), "--name", "my_job")
+    assert code == 0
+    data = report["data"]
+    assert data["job"] == "my_job_1"
+    assert data["pid"] > 0
+    assert "--result_dir" in data["command"]
+
+    data = _wait(monkeypatch, capsys, data["job_dir"])["data"]
+    assert data["state"] == "completed"
+    assert data["pid"] is None
+    assert data["progress"]["phase"] == "test"
+    assert data["progress"]["epoch"] == 1 and data["progress"]["epochs"] == 2
+    assert data["progress"]["elapsed"] == "1.0s" and data["progress"]["estimated_total"] == "2.0s"
+    assert data["progress"]["test_images"] == 1
+    assert data["error"] is None
+
+    code, out, _ = _run(monkeypatch, capsys, "job-status", str(output / "my_job"))
+    assert code == 0
+    assert "my_job_1: completed" in out
+
+
+def test_run_failed(monkeypatch, capsys, tmp_path):
+    """The job fails: job-status says so, with the error (which BiaPy doesn't write to its log)."""
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    _fake_biapy(monkeypatch, tmp_path, "fail")
+    _, report = _run_json(monkeypatch, capsys, "run", config, "--result_dir", str(tmp_path / "output"))
+    data = _wait(monkeypatch, capsys, report["data"]["job_dir"])["data"]
+    assert data["state"] == "failed"
+    assert data["progress"]["phase"] == "train"
+    assert "CUDA out of memory" in data["error"]
+
+
+def test_stop_job(monkeypatch, capsys, tmp_path):
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    _fake_biapy(monkeypatch, tmp_path, "slow")
+    _, report = _run_json(monkeypatch, capsys, "run", config, "--result_dir", str(tmp_path / "output"))
+    job_dir = report["data"]["job_dir"]
+    data = _wait(monkeypatch, capsys, job_dir, until=("training",))["data"]
+    assert data["pid"] == report["data"]["pid"]
+    assert data["resources"]["ram_bytes"] > 0
+
+    code, report = _run_json(monkeypatch, capsys, "stop-job", job_dir)
+    assert code == 0
+    assert report["data"]["was_running"]
+    assert _wait(monkeypatch, capsys, job_dir)["data"]["state"] == "stopped"
+
+    # Not running any more: nothing to do
+    code, report = _run_json(monkeypatch, capsys, "stop-job", job_dir)
+    assert code == 0
+    assert not report["data"]["was_running"]
+    assert report["warnings"]
+
+
+def test_run_existing_run(monkeypatch, capsys, tmp_path):
+    """The run exists: it is not run again unless --overwrite is given."""
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    _fake_biapy(monkeypatch, tmp_path)
+    args = ["run", config, "--result_dir", str(tmp_path / "output"), "--name", "my_job"]
+    _, report = _run_json(monkeypatch, capsys, *args)
+    _wait(monkeypatch, capsys, report["data"]["job_dir"])
+
+    code, report = _run_json(monkeypatch, capsys, *args)
+    assert code == 1
+    assert "already exists" in report["errors"][-1]
+    assert report["data"]["pid"] is None
+
+    code, report = _run_json(monkeypatch, capsys, *args, "--overwrite")
+    assert code == 0
+    assert _wait(monkeypatch, capsys, report["data"]["job_dir"])["data"]["state"] == "completed"
+
+
+def test_run_data_error(monkeypatch, capsys, tmp_path):
+    """The data can't be used (as plan says): the job is not run."""
+    config = _plan_config(monkeypatch, capsys, tmp_path)
+    (tmp_path / "y" / "5.tif").unlink()  # a mask missing
+    _fake_biapy(monkeypatch, tmp_path)
+    code, report = _run_json(monkeypatch, capsys, "run", config, "--result_dir", str(tmp_path / "output"))
+    assert code == 1
+    assert report["data"]["pid"] is None
+    assert not (tmp_path / "output").exists()
+
+
+def test_job_status_not_run_with_run(monkeypatch, capsys, tmp_path):
+    """A job run otherwise (biapy --config, BiaPy-GUI): only its log is known."""
+    code, report = _run_json(monkeypatch, capsys, "job-status", _job(tmp_path))
+    assert code == 0
+    assert report["data"]["state"] == "completed"
+    assert report["data"]["progress"]["last"]["test_loss"] == 0.5
+
+    _, report = _run_json(
+        monkeypatch, capsys, "job-status", _job(tmp_path, run_id=2, finished=False), "--run-id", "2"
+    )
+    assert report["data"]["state"] == "unknown"  # it may be running, or have stopped
+
+
+def test_job_status_no_job(monkeypatch, capsys, tmp_path):
+    code, report = _run_json(monkeypatch, capsys, "job-status", str(tmp_path / "missing"))
+    assert code == 1
+    assert report["data"]["state"] is None
+
+
+def test_stop_job_not_run_with_run(monkeypatch, capsys, tmp_path):
+    """Only the jobs started with 'run' can be stopped."""
+    code, report = _run_json(monkeypatch, capsys, "stop-job", _job(tmp_path))
+    assert code == 1
+    assert report["data"]["was_running"] is None

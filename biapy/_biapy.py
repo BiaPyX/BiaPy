@@ -7,8 +7,11 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 import re
+import socket
+import subprocess
 import sys
 import threading
+import time
 import argparse
 import datetime
 import ntpath
@@ -3153,3 +3156,394 @@ def plan_job(
         "hardware": {"gpus": query_gpus(), "ram_bytes": ram},
         "estimates": estimates,
     }
+
+
+# How run_job starts BiaPy: with the Python running this, as the 'biapy' command does (tests change it)
+_BIAPY_COMMAND = [sys.executable, "-u", "-c", "from biapy import main; main()"]
+
+
+def _job_files(job_dir: str, job: str) -> Tuple[str, str]:
+    """The state of a run launched with :func:`run_job`, and the file with all it printed (errors too)."""
+    return os.path.join(job_dir, "jobs", f"{job}.json"), os.path.join(job_dir, "jobs", f"{job}.out")
+
+
+def _read_state(path: str) -> Optional[dict]:
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _write_state(path: str, state: dict):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+
+def _job_process(state: dict):
+    """The process of a run launched with :func:`run_job` (a ``psutil.Process``), or None if it is not running."""
+    import psutil
+
+    if state["create_time"] is None:  # it ended right after it started
+        return None
+    try:
+        process = psutil.Process(state["pid"])
+        # When a process ends, the system can give its PID to another one: it must have started when the run did
+        if abs(process.create_time() - state["create_time"]) < 1 and process.status() != psutil.STATUS_ZOMBIE:
+            return process
+    except psutil.Error:
+        pass
+    return None
+
+
+def _launched_run(job_dir: str) -> Optional[int]:
+    """The run id of the run of ``job_dir`` launched last with :func:`run_job`, or None."""
+    name = os.path.basename(job_dir)
+    states = _files_in(os.path.join(job_dir, "jobs"), rf"{re.escape(name)}_\d+\.json")
+    if not states:
+        return None
+    latest = os.path.basename(max(states, key=os.path.getmtime))
+    return int(re.fullmatch(rf"{re.escape(name)}_(\d+)\.json", latest).group(1))
+
+
+def run_job(
+    config: Union[str, dict, CN],
+    result_dir: str,
+    name: str = "unknown_job",
+    run_id: int = 1,
+    gpu: GpuArg = None,
+    overwrite: bool = False,
+) -> dict:
+    """
+    Run a BiaPy job in the background and return at once, as ``biapy --config <config> --result_dir <result_dir>
+    --name <name> --run_id <run_id> --gpu <gpu>`` would run it. Follow it with :func:`job_status` and stop it with
+    :func:`stop_job`, from this or any other process.
+
+    It is first checked as :func:`plan_job` does, and not run if its configuration or data can't be used, if the run
+    is already running, or if it already exists (unless ``overwrite``). The job keeps running if the terminal or the
+    program that launched it is closed. What it prints, errors included, goes to ``<job_dir>/jobs/<job>.out``.
+
+    Parameters
+    ----------
+    config : str or dict or CfgNode
+        Path to a YAML config file, or a dict/CfgNode with the configuration (saved then to
+        ``<job_dir>/jobs/<job>.yaml``).
+    result_dir : str
+        Folder where the job writes (``--result_dir``).
+    name : str, optional
+        Name of the job (``--name``).
+    run_id : int, optional
+        Run of the job (``--run_id``).
+    gpu : str or int or list, optional
+        GPU(s) to use (``--gpu``), e.g. ``0``, ``"0,1"`` (one process per GPU) or ``"mps"``. By default, the CPU.
+    overwrite : bool, optional
+        Run it even if the run already exists, writing over its outputs.
+
+    Returns
+    -------
+    dict
+        * ``ok``, ``errors`` and ``warnings``: whether it was run and, if not, why (with the errors of
+          :func:`plan_job`), and the warnings of :func:`plan_job`.
+        * ``job_dir`` (``<result_dir>/<name>``), ``job`` (``<name>_<run_id>``) and ``run_id``.
+        * ``pid``: the process of the job, ``command``: how it was run, and ``output``: the file with all it prints.
+          None if it was not run.
+
+    Raises
+    ------
+    ValueError, AssertionError, FileNotFoundError, KeyError
+        If the configuration itself is not valid (see :func:`validate_config`).
+    """
+    import psutil
+
+    plan = plan_job(config, result_dir, name, run_id)
+    job_dir, job = plan["job"]["job_dir"], plan["job"]["job"]
+    state_file, output = _job_files(job_dir, job)
+    result = {
+        "ok": False,
+        "errors": list(plan["errors"]),
+        "warnings": list(plan["warnings"]),
+        "job_dir": job_dir,
+        "job": job,
+        "run_id": run_id,
+        "pid": None,
+        "command": None,
+        "output": None,
+    }
+    state = _read_state(state_file)
+    if state and _job_process(state):
+        result["errors"].append(f"The run {job} is already running (process {state['pid']}): stop it first")
+    elif plan["job"]["exists"] and not overwrite:
+        result["errors"].append(f"The run {job} already exists in {job_dir}: give another run id, or overwrite it")
+    if result["errors"]:
+        return result
+
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
+    if isinstance(config, str):
+        config_file = os.path.abspath(config)
+    else:  # the job reads its configuration from a file
+        config_file = os.path.join(os.path.dirname(state_file), f"{job}.yaml")
+        with open(config_file, "w", encoding="utf-8") as f:
+            f.write((config if isinstance(config, CN) else CN(config)).dump())
+
+    gpu = _normalize_gpu_arg(gpu)
+    args = ["--config", config_file, "--result_dir", os.path.abspath(result_dir), "--name", name]
+    args += ["--run_id", str(run_id)]
+    if gpu:
+        args += ["--gpu", gpu]
+    n_gpus = len(gpu.split(",")) if gpu else 1
+    if n_gpus > 1:  # one process per GPU, with torch.distributed.run as BiaPy's documentation does
+        with socket.socket() as s:  # a free port for those processes to talk
+            s.bind(("", 0))
+            port = s.getsockname()[1]
+        command = [
+            sys.executable, "-m", "torch.distributed.run", f"--nproc_per_node={n_gpus}", f"--master_port={port}",
+            "--no-python", *_BIAPY_COMMAND, *args
+        ]
+    else:
+        command = [*_BIAPY_COMMAND, *args]
+
+    if os.name == "nt":  # Windows: Ctrl+C in this console doesn't stop it, and it opens no window
+        detached = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+    else:  # Linux and macOS: in its own session, so closing this terminal doesn't stop it
+        detached = {"start_new_session": True}
+    # In UTF-8, as it is read (on Windows, Python writes to files in the system's encoding, which may not print all)
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    with open(output, "wb") as out:  # the job keeps the file open, this process doesn't need it
+        process = subprocess.Popen(
+            command, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, **detached
+        )
+    try:
+        create_time = psutil.Process(process.pid).create_time()
+    except psutil.Error:  # it already ended
+        create_time = None
+    _write_state(
+        state_file,
+        {
+            "job": job,
+            "pid": process.pid,
+            "create_time": create_time,
+            "command": command,
+            "output": output,
+            "started": datetime.datetime.now().isoformat(timespec="seconds"),
+            "stopped_by_user": False,
+        },
+    )
+    result.update(ok=True, pid=process.pid, command=command, output=output)
+    return result
+
+
+def _progress(text: str) -> dict:
+    """
+    Where a job is, from what BiaPy printed (``text``): the same lines BiaPy-GUI follows.
+
+    * ``phase``: ``"test"`` once it started loading the test data, ``"train"`` once it started the first epoch, or
+      None before.
+    * ``epoch`` and ``epochs``: the epoch it is in, of ``TRAIN.EPOCHS`` (``~~~ Epoch 12/100 ~~~``, counted from 1).
+    * ``elapsed`` and ``estimated_total``: the training time so far and the estimated total, as BiaPy prints them
+      after each epoch (``[Time] <epoch> <elapsed>/<estimated total>``, e.g. ``"38.8m"`` and ``"21.7h"``).
+    * ``test_images``: the test images processed so far (not printed in classification).
+    """
+    epochs = re.findall(r"~~~ Epoch (\d+)/(\d+) ~~~", text)
+    times = re.findall(r"\[Time\] \S+ (\S+)/(\S+)", text)
+    test_start = text.rfind("#   LOAD TEST DATA   #")
+    test_images = text.count("Processing image", test_start) if test_start >= 0 else None
+    return {
+        "phase": "test" if test_start >= 0 else "train" if epochs else None,
+        "epoch": int(epochs[-1][0]) if epochs else None,
+        "epochs": int(epochs[-1][1]) if epochs else None,
+        "elapsed": times[-1][0] if times else None,
+        "estimated_total": times[-1][1] if times else None,
+        "test_images": test_images,
+    }
+
+
+def _resources(process) -> dict:
+    """The CPU, RAM and GPU memory used now by ``process`` (a ``psutil.Process``) and the processes it started."""
+    import psutil
+
+    processes = [process] + process.children(recursive=True)
+    for p in processes:  # the CPU used is measured from here
+        try:
+            p.cpu_percent()
+        except psutil.Error:  # it ended meanwhile
+            continue
+    time.sleep(0.1)
+    cpu, ram = 0.0, 0
+    for p in processes:
+        try:
+            cpu += p.cpu_percent()
+            ram += p.memory_info().rss
+        except psutil.Error:
+            continue
+    gpu_memory = None
+    try:
+        found = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout
+        pids = {p.pid for p in processes}
+        used = [line.split(",") for line in found.splitlines() if line.strip()]
+        gpu_memory = sum(int(mb) for pid, mb in used if int(pid) in pids)
+    except (OSError, ValueError, subprocess.SubprocessError):  # no NVIDIA GPU, or nvidia-smi not found
+        pass
+    return {"cpu_percent": round(cpu, 1), "ram_bytes": ram, "gpu_memory_mb": gpu_memory}
+
+
+def job_status(job_dir: str, run_id: Optional[int] = None) -> dict:
+    """
+    Say whether a BiaPy job is running, where it is (training epoch, test images) and, if it failed, why.
+
+    It works best with the jobs launched with :func:`run_job`. Of the jobs run otherwise (``biapy --config ...``,
+    BiaPy-GUI), it only knows what their log says: whether they finished and where they are.
+
+    Parameters
+    ----------
+    job_dir : str
+        Folder of the job, ``<result_dir>/<name>``.
+    run_id : int, optional
+        Run to describe. By default, the one launched last with :func:`run_job`, or else the one run last.
+
+    Returns
+    -------
+    dict
+        * ``job`` (``<name>_<run_id>``) and ``run_id``.
+        * ``state``: ``"starting"`` (loading data, building the model), ``"training"`` or ``"testing"`` while it
+          runs; ``"completed"`` (it printed ``FINISHED JOB``), ``"stopped"`` (by :func:`stop_job`) or ``"failed"``
+          after. ``"unknown"`` for a job not launched with :func:`run_job` that didn't finish: it may be running or
+          have stopped.
+        * ``pid``: its process, or None if it is not running.
+        * ``progress``: where it is, from what it printed (see :func:`_progress`), and the values of its ``last``
+          epoch, as in :func:`inspect_results`.
+        * ``resources``: ``cpu_percent``, ``ram_bytes`` and ``gpu_memory_mb`` it uses now, or None if it is not
+          running.
+        * ``error``: if it failed, the end of what it printed (the error), or None.
+        * ``output``: the file with all it printed (errors too), or its log if it was not launched with
+          :func:`run_job`.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``job_dir`` is not a folder, or it holds no run (or not ``run_id``).
+    """
+    job_dir = os.path.abspath(job_dir)
+    if not os.path.isdir(job_dir):
+        raise FileNotFoundError(f"Job folder not found: {job_dir}")
+    if run_id is None:
+        run_id = _launched_run(job_dir)
+    if run_id is None:
+        run_id = inspect_results(job_dir)["run_id"]
+    job = f"{os.path.basename(job_dir)}_{run_id}"
+    state_file, output = _job_files(job_dir, job)
+    state = _read_state(state_file)
+    process = _job_process(state) if state else None
+
+    try:
+        results = inspect_results(job_dir, run_id)
+    except FileNotFoundError:  # no log yet
+        if not state:
+            raise
+        results = None
+    # The log of an earlier execution of this run (written over by this one) doesn't tell about this one
+    if results and state and os.path.getmtime(results["log"]) < (state["create_time"] or 0):
+        results = None
+
+    text_file = output if state else results["log"]
+    text = ""
+    if os.path.isfile(text_file):
+        with open(text_file, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    progress = _progress(text)
+    if results and (results["config"] or {}).get("workflow") == "CLASSIFICATION":
+        progress["test_images"] = None  # it doesn't print the images it processes
+    training = results["training"] if results else None
+    progress["last"] = training["last"] if training else None
+
+    if results and results["finished"]:
+        status = "completed"
+    elif process:
+        status = {"test": "testing", "train": "training"}.get(progress["phase"], "starting")
+    elif state:
+        status = "stopped" if state["stopped_by_user"] else "failed"
+    else:
+        status = "unknown"
+
+    error = None
+    if status == "failed":
+        # Python prints the error last: from its last 'Traceback', or the last lines
+        start = text.rfind("Traceback (most recent call last)")
+        error = "\n".join(text[max(start, 0):].strip().splitlines()[-30:]) or None
+
+    return {
+        "job": job,
+        "run_id": run_id,
+        "state": status,
+        "pid": process.pid if process else None,
+        "progress": progress,
+        "resources": _resources(process) if process else None,
+        "error": error,
+        "output": text_file,
+    }
+
+
+def stop_job(job_dir: str, run_id: Optional[int] = None, timeout: float = 30) -> dict:
+    """
+    Stop a job launched with :func:`run_job`, and the processes it started (e.g. one per GPU).
+
+    It is asked to end and, if it is still running after ``timeout`` seconds, killed. BiaPy doesn't save anything when
+    asked to end: the checkpoints are the ones it saved before (a checkpoint being written at that moment may be left
+    incomplete). :func:`job_status` says ``"stopped"`` afterwards.
+
+    Parameters
+    ----------
+    job_dir : str
+        Folder of the job, ``<result_dir>/<name>``.
+    run_id : int, optional
+        Run to stop. By default, the one launched last with :func:`run_job`.
+    timeout : float, optional
+        Seconds to wait for it to end before killing it.
+
+    Returns
+    -------
+    dict
+        * ``job`` (``<name>_<run_id>``) and ``run_id``.
+        * ``was_running``: whether it was running (if not, nothing was done).
+        * ``killed``: whether it had to be killed, because it didn't end within ``timeout``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no run of ``job_dir`` (or not ``run_id``) was launched with :func:`run_job`.
+    """
+    import psutil
+
+    job_dir = os.path.abspath(job_dir)
+    if run_id is None:
+        run_id = _launched_run(job_dir)
+    job = f"{os.path.basename(job_dir)}_{run_id}"
+    state_file, _ = _job_files(job_dir, job)
+    state = _read_state(state_file) if run_id is not None else None
+    if state is None:
+        if run_id is None:
+            raise FileNotFoundError(f"No run of {job_dir} was launched with 'biapy run'")
+        raise FileNotFoundError(f"Run {run_id} of {job_dir} was not launched with 'biapy run'")
+
+    process = _job_process(state)
+    if process is None:
+        return {"job": job, "run_id": run_id, "was_running": False, "killed": False}
+
+    # Before stopping it, so that job_status never says it failed
+    state["stopped_by_user"] = True
+    _write_state(state_file, state)
+    processes = [process] + process.children(recursive=True)
+    for p in processes:  # SIGTERM on Linux and macOS, TerminateProcess on Windows
+        try:
+            p.terminate()
+        except psutil.Error:
+            continue
+    _, alive = psutil.wait_procs(processes, timeout=timeout)
+    for p in alive:
+        try:
+            p.kill()
+        except psutil.Error:
+            continue
+    psutil.wait_procs(alive, timeout=5)
+    return {"job": job, "run_id": run_id, "was_running": True, "killed": bool(alive)}
