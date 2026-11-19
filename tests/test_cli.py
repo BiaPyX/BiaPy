@@ -265,11 +265,14 @@ def test_search_bmz_models_wrong_ndim(monkeypatch, capsys):
 ###################
 # inspect-results #
 ###################
-def _job(tmp_path, run_id=1, date="2026_01_01_10_00_00", finished=True, train=True, test=True, first_epoch=0):
+def _job(
+    tmp_path, run_id=1, date="2026_01_01_10_00_00", finished=True, train=True, test=True, first_epoch=0,
+    workflow="SEMANTIC_SEG",
+):
     """
     A job's folder as BiaPy leaves it: one run of ``my_job`` with its log, configuration and outputs. It trains 3 of
     its 5 epochs, the best one is the second, and it stops by early stopping, unless it resumes the training from
-    ``first_epoch``.
+    ``first_epoch``. Its test predicts 2 images of 8x8, with a square of class 1 (of 16 pixels) in each one.
     """
     job, name = tmp_path / "my_job", f"my_job_{run_id}"
     logs, results = job / "logs", job / "results" / name
@@ -283,7 +286,7 @@ def _job(tmp_path, run_id=1, date="2026_01_01_10_00_00", finished=True, train=Tr
     if finished:
         log += f"[10:00:02.000000] FINISHED JOB {name} !!\n"
     (logs / f"{name}_log_{run_id}_{date}.txt").write_text(log)
-    config = "PROBLEM:\n  TYPE: SEMANTIC_SEG\n  NDIM: 2D\nTRAIN:\n  EPOCHS: 5\n"
+    config = f"PROBLEM:\n  TYPE: {workflow}\n  NDIM: 2D\nDATA:\n  N_CLASSES: 3\nTRAIN:\n  EPOCHS: 5\n"
     (job / "config_files" / f"my_config_{run_id}_{date}.yaml").write_text(config)
     if train:
         losses = [0.6, 0.4, 0.5]
@@ -292,8 +295,12 @@ def _job(tmp_path, run_id=1, date="2026_01_01_10_00_00", finished=True, train=Tr
         (job / "checkpoints" / f"{name}-checkpoint-best.pth").write_bytes(b"")
     if test:
         (results / "test_results_metrics.csv").write_text("file,iou\na.tif,0.5\nb.tif,0.7\n")
+        (results / "per_image_binarized").mkdir()
+        labels = np.zeros((8, 8), np.uint8)
+        labels[2:6, 2:6] = 1
         for f in ("a.tif", "b.tif"):
-            (results / "per_image" / f).write_bytes(b"")
+            tifffile.imwrite(results / "per_image" / f, labels.astype(np.float32) * 0.9)  # the probabilities
+            tifffile.imwrite(results / "per_image_binarized" / f, labels)
     return str(job)
 
 
@@ -312,13 +319,133 @@ def test_inspect_results(monkeypatch, capsys, tmp_path):
     assert data["training"]["best"]["epoch"] == 1  # the lowest validation loss
     assert data["test"]["metrics"] == {"Foreground IoU (merge patches)": 0.6}
     assert data["test"]["metrics_file"].endswith("test_results_metrics.csv")
+    assert data["test"]["per_image"] == {
+        "iou": {"mean": 0.6, "min": 0.5, "min_file": "a.tif", "max": 0.7, "max_file": "b.tif"}
+    }
+    assert data["training"]["history"] == {"epoch": [0, 1, 2], "train_loss": [0.5] * 3, "test_loss": [0.6, 0.4, 0.5]}
     assert data["checkpoints"]["best"].endswith("my_job_1-checkpoint-best.pth")
     assert data["predictions"]["per_image"]["n_files"] == 2
+    # The predicted masks, analyzed as check-data analyzes the targets
+    statistics = data["statistics"]
+    assert statistics["source"].endswith("per_image_binarized")
+    assert statistics["kind"] == "semantic_masks"
+    assert statistics["median_shape"] == [8, 8]
+    assert statistics["class_voxel_fraction"] == {"0": 0.75, "1": 0.25}
+    assert statistics["foreground_fraction"]["min"] == 0.25
+    assert report["warnings"] == []
 
     code, out, _ = _run(monkeypatch, capsys, "inspect-results", job)
     assert code == 0
     assert "best:      epoch 2:" in out  # counted from 1, as BiaPy shows them
     assert "Foreground IoU (merge patches)=0.6" in out
+    assert "Statistics:  foreground 0.25 of the image (min 0.25, max 0.25), shape 8x8" in out
+    assert "By image:    iou 0.5 to 0.7" in out
+
+
+def test_inspect_results_per_image_empty_values(monkeypatch, capsys, tmp_path):
+    """Images without a value of a metric (e.g. detection, an image without points) are left out of its summary."""
+    job = _job(tmp_path)
+    metrics = tmp_path / "my_job" / "results" / "my_job_1" / "test_results_metrics.csv"
+    metrics.write_text("file,iou,f1\na.tif,0.5,\nb.tif,0.7,0.9\nc.tif,nan,0.8\n")
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", job)
+    per_image = report["data"]["test"]["per_image"]
+    assert per_image["iou"]["min"] == 0.5 and per_image["iou"]["max"] == 0.7
+    assert per_image["f1"] == {
+        "mean": pytest.approx(0.85), "min": 0.8, "min_file": "c.tif", "max": 0.9, "max_file": "b.tif"
+    }
+
+
+def test_inspect_results_only_background(monkeypatch, capsys, tmp_path):
+    """A test image predicted as only background: said in the statistics and as a warning."""
+    job = _job(tmp_path)
+    binarized = tmp_path / "my_job" / "results" / "my_job_1" / "per_image_binarized"
+    tifffile.imwrite(binarized / "b.tif", np.zeros((8, 8), np.uint8))
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", job)
+    assert report["data"]["statistics"]["foreground_fraction"]["min"] == 0
+    assert report["warnings"] == ["Some of the 2 test images analyzed are predicted as only background"]
+
+
+def test_inspect_results_unreadable_image(monkeypatch, capsys, tmp_path):
+    """Predictions that can't be read (e.g. being written): no statistics, and a warning that says why."""
+    job = _job(tmp_path)
+    (tmp_path / "my_job" / "results" / "my_job_1" / "per_image_binarized" / "b.tif").write_bytes(b"")
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", job)
+    assert code == 0
+    assert report["data"]["statistics"] is None
+    assert "could not be analyzed" in report["warnings"][0]
+
+
+def test_inspect_results_instance(monkeypatch, capsys, tmp_path):
+    """Instance segmentation: the objects of each image and the matching metrics."""
+    job = tmp_path / "my_job"
+    _job(tmp_path, workflow="INSTANCE_SEG")
+    instances = job / "results" / "my_job_1" / "per_image_instances"
+    instances.mkdir()
+    labels = np.zeros((8, 8), np.uint16)
+    labels[0:2, 0:2], labels[4:8, 4:8] = 1, 2  # 2 objects, of 4 and 16 pixels
+    tifffile.imwrite(instances / "a.tif", labels)
+    tifffile.imwrite(instances / "b.tif", np.zeros((8, 8), np.uint16))  # no object
+    log = job / "logs" / "my_job_1_log_1_2026_01_01_10_00_00.txt"
+    log.write_text(
+        "[10:00:01.000000] #  RESULTS  #\n"
+        "[10:00:01.000000] Test IoU (F channel) (merge patches): 0.8\n"
+        "[10:00:01.000000] Instance segmentation specific metrics:\n"
+        "[10:00:01.000000] IoU TH=0.5\n"
+        "[10:00:01.000000]       Merge patches:\n"
+        "[10:00:01.000000]       DatasetMatching(criterion='iou', thresh=0.5, fp=np.int64(4), tp=np.int64(41), "
+        "fn=np.int64(1), precision=np.float64(0.91), f1=np.float64(0.94), n_true=42, "
+        "mean_true_score=np.float32(0.71), panoptic_quality=np.float64(0.69), by_image=True)\n"
+        "[10:00:02.000000] FINISHED JOB my_job_1 !!\n"
+    )
+    code, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
+    metrics = report["data"]["test"]["metrics"]
+    assert metrics["IoU (F channel) (merge patches)"] == 0.8
+    assert metrics["f1 (IoU 0.5, merge patches)"] == 0.94
+    assert metrics["tp (IoU 0.5, merge patches)"] == 41
+    assert metrics["n_true (IoU 0.5, merge patches)"] == 42
+    assert metrics["mean_true_score (IoU 0.5, merge patches)"] == 0.71
+    assert "thresh (IoU 0.5, merge patches)" not in metrics
+    statistics = report["data"]["statistics"]
+    assert statistics["kind"] == "instance_masks"
+    assert statistics["n_instances"] == 2
+    assert statistics["instances_per_image"] == {"median": 1.0, "max": 2}
+    assert report["warnings"] == ["Some of the 2 test images analyzed have no object"]
+
+    code, out, _ = _run(monkeypatch, capsys, "inspect-results", str(job))
+    assert "Matching:    IoU 0.5, merge patches: precision=0.91, f1=0.94, panoptic_quality=0.69" in out
+
+
+def test_inspect_results_detection(monkeypatch, capsys, tmp_path):
+    """Detection: the points found in each image."""
+    job = tmp_path / "my_job"
+    _job(tmp_path, workflow="DETECTION")
+    points = job / "results" / "my_job_1" / "per_image_local_max_check_post_processing"
+    points.mkdir()
+    (points / "a_points.csv").write_text("pred_id,axis-0,axis-1,probability\n1,0,5,[0.5]\n2,3,4,[0.9]\n")
+    (points / "b_points.csv").write_text("pred_id,axis-0,axis-1,probability\n")
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
+    statistics = report["data"]["statistics"]
+    assert statistics["points_per_image"] == {"median": 1.0, "max": 2, "total": 2}
+    assert report["warnings"] == ["1 of the 2 test images have no point detected"]
+
+
+def test_inspect_results_image_outputs(monkeypatch, capsys, tmp_path):
+    """Workflows that predict images (denoising, super-resolution...): their intensity, as of raw images."""
+    job = tmp_path / "my_job"
+    _job(tmp_path, workflow="DENOISING")
+    per_image = job / "results" / "my_job_1" / "per_image"
+    tifffile.imwrite(per_image / "a.tif", np.arange(4, dtype=np.float32).reshape(2, 2))  # 0 to 3
+    tifffile.imwrite(per_image / "b.tif", np.full((2, 2), 3, np.float32))
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
+    intensity = report["data"]["statistics"]["intensity"][0]  # of a random sample of the pixels, as for raw images
+    assert 0 <= intensity["min"] <= intensity["mean"] <= intensity["max"] <= 3
+    assert intensity["std"] > 0
+    assert report["warnings"] == []
+
+    # The same value everywhere
+    tifffile.imwrite(per_image / "a.tif", np.full((2, 2), 3, np.float32))
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
+    assert report["warnings"] == ["The predicted images have the same value everywhere"]
 
 
 def test_inspect_results_resumed(monkeypatch, capsys, tmp_path):
@@ -357,12 +484,26 @@ def test_inspect_results_test_metrics(monkeypatch, capsys, tmp_path):
 
 
 def test_inspect_results_classification_predictions(monkeypatch, capsys, tmp_path):
-    """Classification writes its predictions to predictions.csv, not to a folder."""
+    """
+    Classification writes its predictions to predictions.csv, not to a folder. With targets, the test images are in a
+    folder by class: the true classes are known too.
+    """
     job = tmp_path / "my_job"
-    _job(tmp_path, train=False, test=False)
-    (job / "results" / "my_job_1" / "predictions.csv").write_text("filename,class\na.tif,0\nb.tif,1\nc.tif,1\n")
+    _job(tmp_path, train=False, test=False, workflow="CLASSIFICATION")
+    (job / "results" / "my_job_1" / "predictions.csv").write_text(
+        "filename,class\n/test/0/a.png,0\n/test/1/b.png,1\n/test/2/c.png,1\n"
+    )
     code, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
     assert report["data"]["predictions"]["predictions.csv"]["n_files"] == 3
+    statistics = report["data"]["statistics"]
+    assert statistics["classes"] == {"0": 1, "1": 2}
+    assert statistics["true_classes"] == {"0": 1, "1": 1, "2": 1}
+    assert statistics["never_predicted"] == ["2"]  # of DATA.N_CLASSES 3
+    assert report["warnings"] == ["No test image was predicted as class 2"]
+
+    code, out, _ = _run(monkeypatch, capsys, "inspect-results", str(job))
+    assert "predictions.csv: 3 images" in out
+    assert "class 2: 0 (true: 1)" in out
 
 
 def test_inspect_results_nan(monkeypatch, capsys, tmp_path):
@@ -377,10 +518,11 @@ def test_inspect_results_nan(monkeypatch, capsys, tmp_path):
 
     code, out, _ = _run(monkeypatch, capsys, "inspect-results", str(job), "--json")
     assert code == 0
-    assert "NaN" not in out
-    data = json.loads(out)["data"]
+    report = json.loads(out, parse_constant=lambda value: pytest.fail(f"{value} in the JSON"))
+    data = report["data"]
     assert data["training"]["last"]["test_loss"] is None
     assert data["training"]["best"]["epoch"] == 0  # BiaPy never saves the best checkpoint with a NaN loss
+    assert report["warnings"] == ["The training loss is NaN from epoch 2", "The validation loss is NaN from epoch 2"]
 
 
 def test_inspect_results_not_finished(monkeypatch, capsys, tmp_path):

@@ -495,10 +495,14 @@ def _inspect_results_cli(argv):
     from ._biapy import inspect_results
 
     try:
-        report = _report(**inspect_results(args.job_dir, args.run_id))
+        # The analysis of the predictions prints its progress: keep stdout for the result only
+        with contextlib.redirect_stdout(sys.stderr):
+            result = inspect_results(args.job_dir, args.run_id)
+        report = _report(warnings=result.pop("warnings"), **result)
     except FileNotFoundError as e:
         keys = [
-            "job", "run_id", "finished", "log", "config", "training", "test", "checkpoints", "predictions", "charts"
+            "job", "run_id", "finished", "log", "config", "training", "test", "checkpoints", "predictions",
+            "statistics", "charts",
         ]
         report = _report(ok=False, errors=[str(e)], **dict.fromkeys(keys))
 
@@ -520,12 +524,51 @@ def _inspect_results_cli(argv):
                     # BiaPy shows the epochs counting from 1 ("Epoch 76/100"), its training log from 0
                     print(f"  {which + ':':<10} epoch {training[which]['epoch'] + 1}: {numbers(training[which])}")
         if r["test"]:
-            print(f"Test:        {numbers(r['test']['metrics'])}")
+            metrics = r["test"]["metrics"]
+            # The matching metrics of instance segmentation, e.g. "f1 (IoU 0.5, merge patches)", by threshold
+            matching = {k: v for k, v in metrics.items() if "(IoU " in k}
+            others = {k: v for k, v in metrics.items() if k not in matching}
+            if others:
+                print(f"Test:        {numbers(others)}")
+            # The range of each metric over the test images (which image has each value is in the JSON)
+            per_image = {k: v for k, v in (r["test"]["per_image"] or {}).items() if " TH " not in k}
+            if per_image:
+                ranges = ", ".join(f"{k} {v['min']:.4g} to {v['max']:.4g}" for k, v in per_image.items())
+                print(f"By image:    {ranges}")
+            for group in dict.fromkeys(k[k.index("(IoU "):] for k in matching):
+                names = ("precision", "recall", "f1", "panoptic_quality")
+                values = {k: matching.get(f"{k} {group}") for k in names}
+                print(f"Matching:    {group[1:-1]}: {numbers({k: v for k, v in values.items() if v is not None})}")
         checkpoints = r["checkpoints"]
         if checkpoints["all"]:
             print(f"Checkpoints: {checkpoints['best'] or checkpoints['all'][-1]} ({len(checkpoints['all'])} in total)")
         for name, folder in r["predictions"].items():
-            print(f"Output:      {name}: {folder['n_files']} files in {folder['path']}")
+            files = "images" if name == "predictions.csv" else "files"  # one row by image
+            print(f"Output:      {name}: {folder['n_files']} {files} in {folder['path']}")
+        s = r["statistics"]
+        if s:
+            if "points_per_image" in s:  # detection
+                p = s["points_per_image"]
+                text = f"{p['total']} points, by image median {p['median']:g} (max {p['max']})"
+            elif "true_classes" in s:  # classification
+                true = s["true_classes"] or {}
+                text = "predicted as " + ", ".join(
+                    f"class {c}: {s['classes'].get(c, 0)}" + (f" (true: {true.get(c, 0)})" if true else "")
+                    for c in sorted(set(s["classes"]) | set(true), key=lambda c: (len(c), c))
+                )
+            elif "intensity" in s:  # predicted images, by channel
+                channels = [c for c in s["intensity"] if c["mean"] is not None]
+                text = "intensity mean " + ", ".join(
+                    f"{c['mean']:.4g} (min {c['min']:.4g}, max {c['max']:.4g})" for c in channels
+                ) + (" by channel" if len(channels) > 1 else "")
+            else:  # semantic and instance segmentation
+                f = s["foreground_fraction"]
+                text = f"foreground {f['mean']:.3g} of the image (min {f['min']:.3g}, max {f['max']:.3g})"
+                if "n_instances" in s:
+                    i = s["instances_per_image"]
+                    text = f"{s['n_instances']} objects, by image median {i['median']:g} (max {i['max']}), " + text
+            shape = f", shape {'x'.join(str(n) for n in s['median_shape'])}" if s.get("median_shape") else ""
+            print(f"Statistics:  {text}{shape}")
 
     _finish(report, args.json, print_text)
 

@@ -2867,24 +2867,168 @@ def _test_results(log: str) -> Dict[str, Optional[float]]:
     file), named as BiaPy prints them, e.g. ``{"PSNR (merge patches)": 18.19, "accuracy": 0.9}``.
 
     The lines are ``Test <metric> (<how it was computed>): <value>``, or ``Test <metric>: <value>`` in classification.
-    The matching metrics of instance segmentation (F1, PQ... by threshold) are printed as a dictionary and are left
-    out: they are in ``test_results_metrics.csv``, by image.
+    The matching metrics of instance segmentation are printed by IoU threshold and way of computing them (``IoU
+    TH=0.5``, ``Merge patches:``, ``DatasetMatching(f1=..., ...)``), and are named as ``f1 (IoU 0.5, merge patches)``.
     """
     with open(log, encoding="utf-8", errors="replace") as f:
         text = f.read()
     results = {}
+    threshold = way = None
     if "#  RESULTS  #" in text:
         for line in text.split("#  RESULTS  #")[-1].splitlines():
-            found = re.search(r"(?:^|\] )Test (.+): (\S+)$", line.rstrip())
+            line = line.rstrip()
+            found = re.search(r"(?:^|\] )Test (.+): (\S+)$", line)
             if found:
                 try:
                     results[found.group(1)] = float(found.group(2))
                 except ValueError:  # not a number
-                    continue
+                    pass
+            elif re.search(r"IoU (?:\(post-processing\) )?TH=(\S+)$", line):
+                threshold = re.search(r"TH=(\S+)$", line).group(1)
+            elif re.search(r"\] {2,}([A-Za-z0-9 ()-]+):$", line):  # e.g. "      Merge patches:"
+                way = re.search(r"\] {2,}([A-Za-z0-9 ()-]+):$", line).group(1).lower()
+            elif "DatasetMatching(" in line and threshold and way:
+                values = re.findall(r"(\w+)=(?:np\.\w+\()?([-+\d.eE]+|nan|inf)\)?", line)
+                for key, value in values:
+                    if key != "thresh":
+                        results[f"{key} (IoU {threshold}, {way})"] = float(value)
     return _no_nan(results)
 
 
-def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
+def _per_image_metrics(path: str) -> Dict[str, dict]:
+    """
+    The metrics of each test image in ``path`` (``test_results_metrics.csv``, one row by image), summarized: for each
+    metric, its ``mean``, ``min`` and ``max``, and the images with the lowest and highest values (``min_file`` and
+    ``max_file``). Which one is the worst depends on the metric: the lowest for IoU or F1, the highest for MAE or FP.
+    """
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return {}
+    name = next(iter(rows[0]))  # the first column is the image
+    summary = {}
+    for metric in list(rows[0])[1:]:
+        values = []
+        for row in rows:
+            try:
+                value = float(row[metric])
+            except (TypeError, ValueError):  # empty (e.g. an image without points) or not a number
+                continue
+            if not np.isnan(value):
+                values.append((value, row[name]))
+        if values:
+            low, high = min(values), max(values)
+            summary[metric] = {
+                "mean": float(np.mean([v for v, _ in values])),
+                "min": low[0],
+                "min_file": low[1],
+                "max": high[0],
+                "max_file": high[1],
+            }
+    return summary
+
+
+def _first_folder(folders: List[str]) -> Optional[str]:
+    """The first of ``folders`` that exists and is not empty."""
+    return next((f for f in folders if os.path.isdir(f) and os.listdir(f)), None)
+
+
+def _without_nan(value):
+    """``value`` (a dict, list or number, nested) with NaN as None: JSON has no NaN."""
+    if isinstance(value, dict):
+        return {k: _without_nan(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_without_nan(v) for v in value]
+    return None if isinstance(value, float) and np.isnan(value) else value
+
+
+def _prediction_statistics(
+    workflow: str, ndim: str, paths: CN, n_classes: Optional[int]
+) -> Tuple[Optional[dict], List[str]]:
+    """
+    Statistics of the predictions of a job and warnings about what is plainly wrong in them (e.g. images predicted as
+    only background), or None if the job wrote no predictions.
+
+    The predicted masks and images are analyzed as :func:`check_data` analyzes the data (the wizard's fingerprints,
+    on up to 64 images), so their statistics have the same keys as those of the test data and can be compared: the
+    predictions of semantic and instance segmentation as targets (``DATA.TEST.GT_PATH``), the points of detection as
+    its targets, and the images of the other workflows as raw images. In classification, the images by predicted
+    class and by true class.
+    """
+    from biapy.wizard import fingerprint as fpr
+    from biapy.wizard.data_check import check_folder
+
+    r = paths.PATHS.RESULT_DIR
+    warnings_found = []
+
+    if workflow == "CLASSIFICATION":
+        classes_file = os.path.join(r.PATH, "predictions.csv")
+        if not os.path.isfile(classes_file):
+            return None, []
+        with open(classes_file, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+
+        def count(classes):
+            return {c: classes.count(c) for c in sorted(set(classes), key=lambda c: (len(c), c))}
+
+        predicted = count([row["class"] for row in rows])
+        # With targets, the test images are in a folder by class ('<test path>/<class>/<image>')
+        folders = [os.path.basename(os.path.dirname(row["filename"])) for row in rows]
+        true = count(folders) if folders and all(f.isdigit() for f in folders) else None
+        never = [str(c) for c in range(n_classes or 0) if str(c) not in predicted]
+        if never:
+            warnings_found.append(f"No test image was predicted as class {', '.join(never)}")
+        statistics = {"images": len(rows), "classes": predicted, "true_classes": true, "never_predicted": never}
+        return {"source": classes_file, **statistics}, warnings_found
+
+    if workflow == "DETECTION":
+        from biapy.data.data_manipulation import read_points_csv
+
+        folder = _first_folder([r.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, r.DET_LOCAL_MAX_COORDS_CHECK])
+        if folder is None:
+            return None, []
+        # The folder also has the images of the points: only their CSV files are read
+        files = sorted(f for f in os.listdir(folder) if f.endswith("_points.csv"))
+        points = fpr.PointsFingerprint(len(files))
+        axes = ["axis-0", "axis-1", "axis-2"] if ndim == "3D" else ["axis-0", "axis-1"]
+        for f in files:
+            points.add(read_points_csv(os.path.join(folder, f), is_3d=ndim == "3D")[axes].to_numpy(dtype=float))
+        if not files:
+            return None, []
+        fingerprint = points.result()
+        fingerprint.pop("nn_vectors", None)  # the distance from each point to the nearest one: too long
+        without = points.counts.count(0)
+        if without:
+            warnings_found.append(f"{without} of the {len(files)} test images have no point detected")
+    else:
+        if workflow == "SEMANTIC_SEG":
+            key, folders = "DATA.TEST.GT_PATH", [r.PER_IMAGE_BIN, r.FULL_IMAGE_BIN, r.AS_3D_STACK_BIN]
+        elif workflow == "INSTANCE_SEG":
+            key = "DATA.TEST.GT_PATH"
+            folders = [r.PER_IMAGE_POST_PROCESSING, r.PER_IMAGE_INSTANCES, r.FULL_IMAGE_POST_PROCESSING,
+                       r.FULL_IMAGE_INSTANCES]
+        else:  # denoising, super-resolution, self-supervised, image to image: the predicted images
+            key, folders = "predictions", [r.PER_IMAGE, r.FULL_IMAGE, r.AS_3D_STACK]
+        folder = _first_folder(folders)
+        if folder is None:
+            return None, []
+        result = check_folder(folder, key, workflow, ndim)
+        if result["error"]:
+            return None, [f"The predictions in {folder} could not be analyzed: {result['error_message']}"]
+        fingerprint = _without_nan(result["sample_info"].get("fingerprint") or {})
+        fingerprint.pop("representations", None)  # the wizard's proposal to train, not about the predictions
+        if (fingerprint.get("foreground_fraction") or {}).get("min") == 0:
+            nothing = "are predicted as only background" if workflow == "SEMANTIC_SEG" else "have no object"
+            warnings_found.append(f"Some of the {fingerprint['n_analyzed']} test images analyzed {nothing}")
+        for channel in fingerprint.get("intensity", []):
+            if channel["mean"] is None:
+                warnings_found.append("The predicted images have NaN values")
+            elif channel["std"] == 0:
+                warnings_found.append("The predicted images have the same value everywhere")
+    return {"source": folder, **fingerprint}, warnings_found
+
+
+def inspect_results(job_dir: str, run_id: Optional[int] = None, statistics: bool = True) -> dict:
     """
     Describe what a BiaPy job left in its folder: whether it finished, its training, test metrics, checkpoints and
     predictions.
@@ -2899,6 +3043,9 @@ def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
         Folder of the job, ``<result_dir>/<name>``.
     run_id : int, optional
         Run to describe. By default, the one run last.
+    statistics : bool, optional
+        Whether to compute the ``statistics`` of the predictions, which reads them all (it can take a while with
+        large images). Without them, ``statistics`` is None.
 
     Returns
     -------
@@ -2910,17 +3057,25 @@ def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
         * ``log``: the log of its last execution.
         * ``config``: ``path``, ``workflow`` and ``ndim`` of the configuration of its last execution, or None.
         * ``training``: ``log``, the ``epochs`` reached of the ``planned_epochs`` (``TRAIN.EPOCHS``), whether it
-          ``stopped_early`` by early stopping (None while it may still be training), and the values of the ``last``
+          ``stopped_early`` by early stopping (None while it may still be training), the values of the ``last``
           epoch and of the ``best`` one, as in BiaPy's training log (``train_*``, ``test_*`` for the validation, and
-          ``epoch``, counted from 0). The best is the one with the lowest validation loss, saved in the best
-          checkpoint, or None without validation. None if it didn't train.
+          ``epoch``, counted from 0), and the ``history`` of the losses: ``epoch``, ``train_loss`` and ``test_loss``
+          (None without validation), one value by epoch. The best is the one with the lowest validation loss, saved
+          in the best checkpoint, or None without validation. None if it didn't train.
         * ``test``: the test ``metrics`` BiaPy printed at the end of its last execution, named as it prints them
-          (e.g. ``{"PSNR (merge patches)": 18.19}``; see :func:`_test_results`), and the ``metrics_file`` with the
-          metrics of each image, or None if it didn't test with targets.
+          (e.g. ``{"PSNR (merge patches)": 18.19}``; see :func:`_test_results`), the ``metrics_file`` with the
+          metrics of each image, and those metrics summarized in ``per_image`` (see :func:`_per_image_metrics`), or
+          None if it didn't test with targets.
         * ``checkpoints``: ``best`` (or None) and ``all`` the checkpoints of the run.
         * ``predictions``: for each output folder that exists (e.g. ``per_image``), its ``path`` and ``n_files``;
           in classification, ``predictions.csv`` with the number of images in ``n_files``.
+        * ``statistics``: statistics of the predictions (see :func:`_prediction_statistics`), with the same keys
+          :func:`check_data` gives for the data, or None if it wrote none: e.g. the fraction of each class, the
+          objects or points by image, the shapes of the images and their intensity. Its ``source`` is the folder (or
+          file) they are computed from.
         * ``charts``: the plots of the loss and metrics during training.
+        * ``warnings``: what is plainly wrong in the results, e.g. a NaN loss, or images predicted as only
+          background or without objects.
 
     Raises
     ------
@@ -2989,13 +3144,24 @@ def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
             # BiaPy saves the best checkpoint when the validation loss is lower than in all the epochs before
             # (never when it is NaN)
             "best": min(validated, key=lambda e: e["test_loss"], default=None),
+            # The losses of every epoch, to see how the training went (still going down, stuck, unstable...)
+            "history": {
+                "epoch": [e["epoch"] for e in epochs],
+                "train_loss": [e.get("train_loss") for e in epochs],
+                "test_loss": [e.get("test_loss") for e in epochs],
+            },
         }
 
     test = None
     metrics = _test_results(log)
     metrics_file = os.path.join(paths.PATHS.RESULT_DIR.PATH, "test_results_metrics.csv")
     if metrics:
-        test = {"metrics": metrics, "metrics_file": metrics_file if os.path.isfile(metrics_file) else None}
+        has_file = os.path.isfile(metrics_file)
+        test = {
+            "metrics": metrics,
+            "metrics_file": metrics_file if has_file else None,
+            "per_image": _per_image_metrics(metrics_file) if has_file else None,
+        }
 
     checkpoints = _files_in(paths.PATHS.CHECKPOINT, rf"{re.escape(job)}-checkpoint-.+")
     best = [p for p in checkpoints if re.search(r"-checkpoint-best\.\w+$", p)]
@@ -3010,6 +3176,20 @@ def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
         with open(classes_file, newline="", encoding="utf-8") as f:
             predictions["predictions.csv"] = {"path": classes_file, "n_files": len(list(csv.DictReader(f)))}
 
+    warnings_found = []
+    if training:
+        for key in ("train_loss", "test_loss"):
+            nan = next((e["epoch"] for e in epochs if key in e and e[key] is None), None)
+            if nan is not None:
+                which = "training" if key == "train_loss" else "validation"
+                warnings_found.append(f"The {which} loss is NaN from epoch {nan + 1}")
+    prediction_statistics = None
+    if statistics and config and config["workflow"]:
+        n_classes = read_config(config_file).get("DATA", {}).get("N_CLASSES")
+        ndim = config["ndim"] or "2D"
+        prediction_statistics, found = _prediction_statistics(config["workflow"], ndim, paths, n_classes)
+        warnings_found += found
+
     return {
         "job": job,
         "run_id": run_id,
@@ -3020,7 +3200,9 @@ def inspect_results(job_dir: str, run_id: Optional[int] = None) -> dict:
         "test": test,
         "checkpoints": {"best": best[0] if best else None, "all": checkpoints},
         "predictions": predictions,
+        "statistics": prediction_statistics,
         "charts": _files_in(paths.PATHS.CHARTS, r".+\.png"),
+        "warnings": warnings_found,
     }
 
 
@@ -3430,14 +3612,14 @@ def job_status(job_dir: str, run_id: Optional[int] = None) -> dict:
     if run_id is None:
         run_id = _launched_run(job_dir)
     if run_id is None:
-        run_id = inspect_results(job_dir)["run_id"]
+        run_id = inspect_results(job_dir, statistics=False)["run_id"]
     job = f"{os.path.basename(job_dir)}_{run_id}"
     state_file, output = _job_files(job_dir, job)
     state = _read_state(state_file)
     process = _job_process(state) if state else None
 
     try:
-        results = inspect_results(job_dir, run_id)
+        results = inspect_results(job_dir, run_id, statistics=False)
     except FileNotFoundError:  # no log yet
         if not state:
             raise
