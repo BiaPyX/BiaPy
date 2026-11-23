@@ -375,6 +375,34 @@ def test_inspect_results_unreadable_image(monkeypatch, capsys, tmp_path):
     assert "could not be analyzed" in report["warnings"][0]
 
 
+def test_inspect_results_as_3d_stack(monkeypatch, capsys, tmp_path):
+    """2D images analyzed as a 3D stack (TEST.ANALIZE_2D_IMGS_AS_3D_STACK): the stack is read as a 3D image."""
+    job = tmp_path / "my_job"
+    _job(tmp_path, test=False)
+    stack = job / "results" / "my_job_1" / "as_3d_stack_binarized"
+    stack.mkdir(parents=True)
+    labels = np.zeros((4, 8, 8), np.uint8)
+    labels[:, 2:6, 2:6] = 1
+    tifffile.imwrite(stack / "stack.tif", labels, photometric="minisblack", metadata={"axes": "ZYX"})
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", str(job))
+    assert report["data"]["statistics"]["median_shape"] == [4, 8, 8]
+    assert report["data"]["statistics"]["class_voxel_fraction"]["1"] == 0.25
+
+
+def test_inspect_results_not_analyzed(monkeypatch, capsys, tmp_path):
+    """Predictions the wizard can't analyze in detail (more than 1000 labels): no statistics, and a warning."""
+    job = _job(tmp_path)
+    binarized = tmp_path / "my_job" / "results" / "my_job_1" / "per_image_binarized"
+    tifffile.imwrite(binarized / "a.tif", np.arange(40 * 40, dtype=np.uint16).reshape(40, 40))
+    _, report = _run_json(monkeypatch, capsys, "inspect-results", job)
+    assert report["data"]["statistics"] is None
+    assert "could not be analyzed in detail" in report["warnings"][0]
+
+    code, out, _ = _run(monkeypatch, capsys, "inspect-results", job)
+    assert code == 0
+    assert "Statistics:" not in out
+
+
 def test_inspect_results_instance(monkeypatch, capsys, tmp_path):
     """Instance segmentation: the objects of each image and the matching metrics."""
     job = tmp_path / "my_job"
@@ -385,6 +413,12 @@ def test_inspect_results_instance(monkeypatch, capsys, tmp_path):
     labels[0:2, 0:2], labels[4:8, 4:8] = 1, 2  # 2 objects, of 4 and 16 pixels
     tifffile.imwrite(instances / "a.tif", labels)
     tifffile.imwrite(instances / "b.tif", np.zeros((8, 8), np.uint16))  # no object
+    # With TEST.POST_PROCESSING.MEASURE_PROPERTIES, the measures of each object too: not an image
+    (instances / "a_full_stats.csv").write_text("label,axis-0,axis-1,npixels\n1,0,0,4\n2,5,5,16\n")
+    # With TEST.POST_PROCESSING.MEDIAN_FILTER, the post-processed probabilities, not instances: not used
+    post = job / "results" / "my_job_1" / "per_image_post_processing"
+    post.mkdir()
+    tifffile.imwrite(post / "a.tif", np.full((8, 8, 2), 0.5, np.float32))
     log = job / "logs" / "my_job_1_log_1_2026_01_01_10_00_00.txt"
     log.write_text(
         "[10:00:01.000000] #  RESULTS  #\n"
@@ -406,6 +440,7 @@ def test_inspect_results_instance(monkeypatch, capsys, tmp_path):
     assert metrics["mean_true_score (IoU 0.5, merge patches)"] == 0.71
     assert "thresh (IoU 0.5, merge patches)" not in metrics
     statistics = report["data"]["statistics"]
+    assert statistics["source"].endswith("per_image_instances")
     assert statistics["kind"] == "instance_masks"
     assert statistics["n_instances"] == 2
     assert statistics["instances_per_image"] == {"median": 1.0, "max": 2}

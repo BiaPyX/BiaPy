@@ -2942,6 +2942,37 @@ def _without_nan(value):
     return None if isinstance(value, float) and np.isnan(value) else value
 
 
+def _fingerprint(folder: str, kind: str, ndim: str) -> Optional[dict]:
+    """
+    The fingerprint of the images BiaPy predicted in ``folder``, as :func:`check_data` computes it for the data (the
+    wizard's, on up to 64 images): of masks (``kind`` "semantic" or "instance") or of images ("images"). Only the
+    predictions are read (TIFF, or Zarr/H5 for large images): the folder can have other files, e.g. the measures of
+    each object (``*_full_stats.csv``, with ``TEST.POST_PROCESSING.MEASURE_PROPERTIES``). None if it has none.
+    """
+    from biapy.wizard import fingerprint as fpr
+    from biapy.wizard.data_check import image_parts
+
+    is_3d = ndim == "3D"
+    names = sorted(f for f in os.listdir(folder) if f.lower().endswith((".tif", ".tiff", ".zarr", ".h5", ".hdf5")))
+    if not names:
+        return None
+    kinds = {
+        "semantic": fpr.SemanticMasksFingerprint,
+        "instance": fpr.InstanceMasksFingerprint,
+        "images": fpr.ImagesFingerprint,
+    }
+    accumulator = kinds[kind](len(names), is_3d)
+    shapes = []
+    for i, name in enumerate(names):
+        parts, shape, meta = image_parts(os.path.join(folder, name), is_3d)
+        shapes.append(shape[:-1])
+        for image in parts:
+            accumulator.add(i, image, meta) if kind == "images" else accumulator.add(i, image)
+    fingerprint = accumulator.result()
+    fingerprint.update(fpr.shape_stats(shapes))  # the size of the images
+    return fingerprint
+
+
 def _prediction_statistics(
     workflow: str, ndim: str, paths: CN, n_classes: Optional[int]
 ) -> Tuple[Optional[dict], List[str]]:
@@ -2949,14 +2980,12 @@ def _prediction_statistics(
     Statistics of the predictions of a job and warnings about what is plainly wrong in them (e.g. images predicted as
     only background), or None if the job wrote no predictions.
 
-    The predicted masks and images are analyzed as :func:`check_data` analyzes the data (the wizard's fingerprints,
-    on up to 64 images), so their statistics have the same keys as those of the test data and can be compared: the
-    predictions of semantic and instance segmentation as targets (``DATA.TEST.GT_PATH``), the points of detection as
-    its targets, and the images of the other workflows as raw images. In classification, the images by predicted
-    class and by true class.
+    The predicted masks and images are analyzed as :func:`check_data` analyzes the data (see :func:`_fingerprint`), so
+    their statistics have the same keys as those of the test data and can be compared: the predictions of semantic
+    and instance segmentation as masks, the points of detection as points, and the images of the other workflows as
+    raw images. In classification, the images by predicted class and by true class.
     """
     from biapy.wizard import fingerprint as fpr
-    from biapy.wizard.data_check import check_folder
 
     r = paths.PATHS.RESULT_DIR
     warnings_found = []
@@ -3002,21 +3031,27 @@ def _prediction_statistics(
             warnings_found.append(f"{without} of the {len(files)} test images have no point detected")
     else:
         if workflow == "SEMANTIC_SEG":
-            key, folders = "DATA.TEST.GT_PATH", [r.PER_IMAGE_BIN, r.FULL_IMAGE_BIN, r.AS_3D_STACK_BIN]
+            kind, folders = "semantic", [r.PER_IMAGE_BIN, r.FULL_IMAGE_BIN, r.AS_3D_STACK_BIN]
         elif workflow == "INSTANCE_SEG":
-            key = "DATA.TEST.GT_PATH"
-            folders = [r.PER_IMAGE_POST_PROCESSING, r.PER_IMAGE_INSTANCES, r.FULL_IMAGE_POST_PROCESSING,
-                       r.FULL_IMAGE_INSTANCES]
+            # The instances before post-processing: 'per_image_post_processing' can also hold the post-processed
+            # probabilities instead (TEST.POST_PROCESSING.MEDIAN_FILTER), which are not instances
+            kind, folders = "instance", [r.PER_IMAGE_INSTANCES, r.FULL_IMAGE_INSTANCES]
         else:  # denoising, super-resolution, self-supervised, image to image: the predicted images
-            key, folders = "predictions", [r.PER_IMAGE, r.FULL_IMAGE, r.AS_3D_STACK]
+            kind, folders = "images", [r.PER_IMAGE, r.FULL_IMAGE, r.AS_3D_STACK]
         folder = _first_folder(folders)
         if folder is None:
             return None, []
-        result = check_folder(folder, key, workflow, ndim)
-        if result["error"]:
-            return None, [f"The predictions in {folder} could not be analyzed: {result['error_message']}"]
-        fingerprint = _without_nan(result["sample_info"].get("fingerprint") or {})
-        fingerprint.pop("representations", None)  # the wizard's proposal to train, not about the predictions
+        if folder in (r.AS_3D_STACK, r.AS_3D_STACK_BIN):  # 2D images analyzed as a 3D stack: one 3D image
+            ndim = "3D"
+        try:
+            fingerprint = _fingerprint(folder, kind, ndim)
+        except Exception as e:  # e.g. an image being written: the rest of the results can be given anyway
+            return None, [f"The predictions in {folder} could not be analyzed ({type(e).__name__}: {e})"]
+        if fingerprint is None:
+            return None, []
+        fingerprint = _without_nan(fingerprint)
+        if "error" in fingerprint:  # e.g. masks with more than 1000 labels
+            return None, [f"The predictions in {folder} could not be analyzed in detail ({fingerprint['error']})"]
         if (fingerprint.get("foreground_fraction") or {}).get("min") == 0:
             nothing = "are predicted as only background" if workflow == "SEMANTIC_SEG" else "have no object"
             warnings_found.append(f"Some of the {fingerprint['n_analyzed']} test images analyzed {nothing}")
