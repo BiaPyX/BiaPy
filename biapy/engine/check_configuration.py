@@ -1383,8 +1383,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert len(loss) == len(weights), (
             f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(loss)} vs {len(weights)}"
         )
-        assert (set(loss) in ({"CE"}, {"DICE"}, {"CE", "DICE"})), (
-            f"LOSS.TYPE for SEMANTIC_SEG must be ['CE'], ['DICE'], or ['DICE', 'CE'] together, got {loss}"
+        assert (set(loss) - {"CLDICE"} in ({"CE"}, {"DICE"}, {"CE", "DICE"})) and len(set(loss)) == len(loss), (
+            "LOSS.TYPE for SEMANTIC_SEG must be ['CE'], ['DICE'], or ['DICE', 'CE'] together, optionally plus "
+            f"'CLDICE', got {loss}"
         )
 
         if cfg.DATA.N_CLASSES > 2:

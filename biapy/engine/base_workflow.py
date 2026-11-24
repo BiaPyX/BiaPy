@@ -629,7 +629,7 @@ class Base_Workflow(metaclass=ABCMeta):
         if not names:
             return type(self.loss).__name__
         weights = list(self.cfg.LOSS.WEIGHTS) if len(self.cfg.LOSS.WEIGHTS) == len(names) else [1] * len(names)
-        readable = {"CE": "cross-entropy", "DICE": "Dice", "MAE": "MAE (L1)", "MSE": "MSE (L2)"}
+        readable = {"CE": "cross-entropy", "DICE": "Dice", "CLDICE": "clDice", "MAE": "MAE (L1)", "MSE": "MSE (L2)"}
         terms = [
             ("{:g} x ".format(w) if len(set(weights)) > 1 else "") + readable.get(n.upper(), n)
             for n, w in zip(names, weights)

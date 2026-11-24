@@ -2183,7 +2183,8 @@ class Config:
         # workflow's 'define_metrics'). Old single-string combos (e.g. "W_MAE_SSIM") still work,
         # auto-converted in check_configuration.py. Valid names per workflow:
         #   * Semantic segmentation: "CE" (default), "DICE", or ["DICE", "CE"] together (fused
-        #     CE+Dice, not decomposed).
+        #     CE+Dice, not decomposed). "CLDICE" (soft clDice over the foreground classes) can be added
+        #     to any of them, e.g. ["DICE", "CE", "CLDICE"] with weights [1, 1, 0.5].
         #   * Instance segmentation: set via PROBLEM.INSTANCE_SEG.DATA_CHANNELS(_LOSSES).
         #   * Detection: always CE. Classification: always "CE".
         #   * Continuous-image (DENOISING, SUPER_RESOLUTION, SELF_SUPERVISED, IMAGE_TO_IMAGE):

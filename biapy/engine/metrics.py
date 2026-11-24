@@ -3309,10 +3309,7 @@ class WeightedCompositeLoss(nn.Module):
             pred = pred["pred"]
         if isinstance(target, dict):
             target = target["pred"]
-        total = pred.new_zeros(())
-        for w, fn in self.weighted_terms:
-            total = total + w * fn(pred, target)
-        return total
+        return sum(w * fn(pred, target) for w, fn in self.weighted_terms)
 
 
 def continuous_image_loss_registry(device):
@@ -3679,6 +3676,9 @@ class CLDiceComponentPenaltyLoss(nn.Module):
     - clDice (Shit et al., https://arxiv.org/abs/2003.07311): soft-skeleton topology-preserving
       Dice between a "membrane probability" derived from the affinity logits
       (``1 - mean(sigmoid(logits), channel)``) and the same quantity from the target affinities.
+      With ``semantic=True`` it is computed instead between the foreground probabilities of semantic
+      segmentation logits (sigmoid for one channel, softmax without the background channel otherwise)
+      and the one-hot class mask.
     - Spurious-component penalty: connected components in the (detached, thresholded) predicted
       membrane probability with no overlap in the thresholded target get their mean predicted
       probability penalised toward 0.
@@ -3691,6 +3691,7 @@ class CLDiceComponentPenaltyLoss(nn.Module):
         threshold: float = 0.5,
         component_weight: float = 1.0,
         ignore_index: Optional[int] = None,
+        semantic: bool = False,
     ):
         """
         Initialize the clDice + spurious-component-penalty loss.
@@ -3713,6 +3714,9 @@ class CLDiceComponentPenaltyLoss(nn.Module):
         ignore_index : int, optional
             Target value marking ignored entries; voxels with any ignored channel are zeroed in both
             membrane maps.
+
+        semantic : bool, optional
+            Take semantic segmentation logits and a class mask ``(B, 1, ...)`` instead of affinities.
         """
         super().__init__()
         self.ignore_index = ignore_index
@@ -3720,6 +3724,7 @@ class CLDiceComponentPenaltyLoss(nn.Module):
         self.smooth = smooth
         self.threshold = threshold
         self.component_weight = component_weight
+        self.semantic = semantic
 
     def _membrane_prob(self, affinity_prob: torch.Tensor) -> torch.Tensor:
         """Derive a single-channel membrane probability from multi-channel affinity probabilities."""
@@ -3749,30 +3754,43 @@ class CLDiceComponentPenaltyLoss(nn.Module):
             return torch.zeros((), device=membrane_pred.device, dtype=membrane_pred.dtype)
         return (membrane_pred * weight_t).sum() / weight_t.sum().clamp_min(1.0)
 
-    def forward(self, pred_logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def forward(self, pred_logits, target: torch.Tensor) -> torch.Tensor:
         """
         Compute the clDice + spurious-component-penalty loss.
 
         Parameters
         ----------
-        pred_logits : torch.Tensor
-            Raw (pre-sigmoid) affinity logits, ``(B, C, H, W)`` or ``(B, C, D, H, W)``.
+        pred_logits : torch.Tensor, dict or list
+            Raw (pre-sigmoid) affinity logits, ``(B, C, H, W)`` or ``(B, C, D, H, W)``. Multiple outputs
+            are handled by :func:`deep_supervision_loss`.
 
         target : torch.Tensor
-            GT affinities (0/1), same shape as ``pred_logits``.
+            GT affinities (0/1), same shape as ``pred_logits``, or the class mask with ``semantic=True``.
 
         Returns
         -------
         loss : torch.Tensor
             Scalar loss (clDice + ``component_weight`` * spurious-component penalty).
         """
-        affinity_prob = torch.sigmoid(pred_logits)
+        if len(split_outputs(pred_logits)) > 1:
+            return deep_supervision_loss(self, pred_logits, target)
+        if isinstance(pred_logits, dict):
+            pred_logits = pred_logits["pred"]
+
         if self.ignore_index is not None:
             ignored = target == self.ignore_index
-            valid = (~ignored.any(dim=1, keepdim=True)).to(affinity_prob.dtype)
+            valid = (~ignored.any(dim=1, keepdim=True)).to(pred_logits.dtype)
             target = target.masked_fill(ignored, 0)
-        membrane_pred = self._membrane_prob(affinity_prob)
-        membrane_true = self._membrane_prob(target.float())
+        if not self.semantic:
+            membrane_pred = self._membrane_prob(torch.sigmoid(pred_logits))
+            membrane_true = self._membrane_prob(target.float())
+        elif pred_logits.shape[1] == 1:
+            membrane_pred = torch.sigmoid(pred_logits)
+            membrane_true = target.to(pred_logits.dtype)
+        else:
+            membrane_pred = torch.softmax(pred_logits, dim=1)[:, 1:]
+            membrane_true = F.one_hot(target[:, 0].long(), pred_logits.shape[1]).movedim(-1, 1)[:, 1:]
+            membrane_true = membrane_true.to(pred_logits.dtype)
         if self.ignore_index is not None:
             membrane_pred = membrane_pred * valid
             membrane_true = membrane_true * valid
@@ -3784,6 +3802,8 @@ class CLDiceComponentPenaltyLoss(nn.Module):
         tsens = (torch.sum(skel_true * membrane_pred) + self.smooth) / (torch.sum(skel_true) + self.smooth)
         cl_dice = 1.0 - 2.0 * (tprec * tsens) / (tprec + tsens)
 
+        if self.component_weight == 0:
+            return cl_dice
         penalty = self._spurious_component_penalty(membrane_pred, membrane_true)
         return cl_dice + self.component_weight * penalty
 

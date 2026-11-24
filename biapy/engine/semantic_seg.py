@@ -27,6 +27,8 @@ from biapy.engine.metrics import (
     DiceCELoss,
     DiceLoss,
     ContrastCELoss,
+    CLDiceComponentPenaltyLoss,
+    WeightedCompositeLoss,
 )
 
 
@@ -198,6 +200,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             f"'LOSS.TYPE' and 'LOSS.WEIGHTS' must have the same length, got {len(names)} vs {len(weights)}"
         )
         by_name = dict(zip(names, weights))
+        cldice_w = by_name.pop("CLDICE", 0.0)
+        names = [n for n in names if n != "CLDICE"]
         if set(names) == {"DICE", "CE"}:
             # Fused DiceCELoss, not decomposed: shares softmax/rebalancing/ignore_index across both terms.
             semantic_loss = DiceCELoss(
@@ -227,8 +231,12 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         else:
             raise ValueError(
                 f"LOSS.TYPE {self.cfg.LOSS.TYPE} not supported for SEMANTIC_SEG; options: ['CE'], "
-                "['DICE'], or ['DICE', 'CE'] together"
+                "['DICE'], or ['DICE', 'CE'] together, optionally plus 'CLDICE'"
             )
+        if cldice_w > 0:
+            ignore_index = None if self.cfg.LOSS.IGNORE_INDEX == -1 else self.cfg.LOSS.IGNORE_INDEX
+            cldice = CLDiceComponentPenaltyLoss(component_weight=0.0, ignore_index=ignore_index, semantic=True)
+            semantic_loss = WeightedCompositeLoss([(1.0, semantic_loss), (cldice_w, cldice)])
 
         if self.cfg.LOSS.CONTRAST.ENABLE: 
             self.loss = ContrastCELoss(
