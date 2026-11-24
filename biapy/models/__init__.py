@@ -2065,7 +2065,9 @@ def check_bmz_model_compatibility(
 
     # Model version > 5   
     if isinstance(axes_order, str):
-        input_image_shape = inputs[0].get("shape", {}).get("min", [])
+        shape = inputs[0].get("shape", {})
+        # spec 0.4: fixed shape (list) or parametrized ({min, step})
+        input_image_shape = list(shape) if isinstance(shape, list) else shape.get("min", [])
     elif isinstance(axes_order, list):
         _axes_order = ""
         for axis in axes_order:

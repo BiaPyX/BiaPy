@@ -1218,6 +1218,10 @@ def test_bmz_blacklist():
     manifest["config"]["bioimageio"]["nickname"] = "other-model"
     r = check_bmz_model_compatibility(manifest, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
     assert not r["error"], r["reason_message"]
+    # 0.4 RDFs may give a fixed shape instead of {min, step} (e.g. laid-back-lobster)
+    manifest["inputs"][0]["shape"] = [1, 1, 512, 512]
+    r = check_bmz_model_compatibility(manifest, {"workflow_type": "SEMANTIC_SEG", "ndim": "2D", "nclasses": "all"})
+    assert not r["error"] and r["opts"]["DATA.PATCH_SIZE"] == (512, 512, 1), r["reason_message"]
 
 
 def test_bmz_dependency_check_raw_rdf(monkeypatch):
