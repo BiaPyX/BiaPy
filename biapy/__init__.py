@@ -18,6 +18,7 @@ __version__ = "3.7.3"
 
 import argparse
 import contextlib
+import contextvars
 import json
 import os
 import sys
@@ -27,7 +28,7 @@ import yaml
 # The engine (BiaPy, build_config, validate_config) is imported on first use: importing it loads PyTorch and every workflow,
 # which takes several seconds, and lightweight parts such as biapy.wizard don't need it.
 _LAZY = {"BiaPy": "._biapy", "build_config": "._biapy", "validate_config": "._biapy", "check_data": "._biapy", "check_data_for_workflow": "._biapy", "list_workflows": "._biapy", "inspect_image": "._biapy", "get_config_template": "._biapy", "create_config": "._biapy", "search_bmz_models": "._biapy", "inspect_results": "._biapy", "plan_job": "._biapy", "run_job": "._biapy", "job_status": "._biapy", "stop_job": "._biapy"}
-__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "plan_job", "run_job", "job_status", "stop_job", "main", "__version__"]
+__all__ = ["BiaPy", "build_config", "validate_config", "check_data", "check_data_for_workflow", "list_workflows", "inspect_image", "get_config_template", "create_config", "search_bmz_models", "inspect_results", "plan_job", "run_job", "job_status", "stop_job", "run_subcommand", "main", "__version__"]
 
 
 def __getattr__(name):
@@ -44,9 +45,18 @@ def __dir__():
     return sorted(list(globals()) + list(_LAZY))
 
 
+class _Parser(argparse.ArgumentParser):
+    """Parser of a subcommand: inside :func:`run_subcommand`, wrong arguments give a report instead of exiting."""
+
+    def error(self, message):
+        if _capturing.get():
+            raise _CapturedReport(_report(ok=False, errors=[f"{self.prog}: {message}"]))
+        super().error(message)
+
+
 def _command_parser(command, description):
     """Parser of a subcommand (``biapy <command>``), with the ``--json`` option all of them have."""
-    parser = argparse.ArgumentParser(prog=f"biapy {command}", description=description)
+    parser = _Parser(prog=f"biapy {command}", description=description)
     parser.add_argument("--json", action="store_true", help="Print the result as JSON, for agents and scripts")
     return parser
 
@@ -78,14 +88,30 @@ def _from_report(report):
     return _report(report["ok"], report["errors"], report["warnings"], **data)
 
 
+class _CapturedReport(Exception):
+    """Raised by :func:`_finish` instead of printing, inside :func:`run_subcommand`: it carries the report."""
+
+    def __init__(self, report):
+        super().__init__()
+        self.report = report
+
+
+# Whether the subcommands run inside run_subcommand (in this thread): then they give their report instead of printing it
+_capturing = contextvars.ContextVar("biapy_capturing", default=False)
+
+
 def _finish(report, as_json, print_text):
     """
     Print the result of a subcommand and exit.
 
     With ``as_json``, the whole ``report`` is printed as JSON. Otherwise its warnings and errors go to stderr and, if
     it went well, ``print_text(report["data"])`` prints the rest for people. The exit code is 0 if ``report["ok"]``,
-    1 if not.
+    1 if not. Inside :func:`run_subcommand`, the report is given back instead.
     """
+    if _capturing.get():
+        from biapy.wizard.config_builder import to_jsonable
+
+        raise _CapturedReport(to_jsonable(report))
     if as_json:
         # The wizard imports numpy: imported here so that 'import biapy' stays light
         from biapy.wizard.config_builder import to_jsonable
@@ -825,6 +851,53 @@ def _stop_job_cli(argv):
     _finish(report, args.json, print_text)
 
 
+# Subcommands of the 'biapy' command: they have their own options and don't run a job
+_SUBCOMMANDS = {
+    "validate-config": _validate_config_cli,
+    "check-data": _check_data_cli,
+    "list-workflows": _list_workflows_cli,
+    "inspect-image": _inspect_image_cli,
+    "get-config-template": _get_config_template_cli,
+    "create-config": _create_config_cli,
+    "search-bmz-models": _search_bmz_models_cli,
+    "inspect-results": _inspect_results_cli,
+    "plan": _plan_cli,
+    "run": _run_cli,
+    "job-status": _job_status_cli,
+    "stop-job": _stop_job_cli,
+}
+
+
+def run_subcommand(command, args=()):
+    """
+    Run a subcommand (``biapy <command> <args> --json``) in this process and return its report instead of printing
+    it: ``schema_version``, ``ok``, ``errors``, ``warnings`` and ``data``, the same JSON the command prints. Used by
+    the MCP server (``biapy mcp``), so that agents get exactly what the command gives.
+
+    Parameters
+    ----------
+    command : str
+        The subcommand, e.g. "check-data".
+    args : list of str, optional
+        Its arguments, as on the command line, e.g. ``["config.yaml", "--percentage", "10"]``.
+
+    Returns
+    -------
+    dict
+        The report of the subcommand. Wrong arguments give a report with ``ok`` false and the argparse error.
+    """
+    if command not in _SUBCOMMANDS:
+        raise ValueError(f"Unknown subcommand '{command}'. Available: {', '.join(_SUBCOMMANDS)}")
+    token = _capturing.set(True)
+    try:
+        _SUBCOMMANDS[command]([*args, "--json"])
+    except _CapturedReport as r:
+        return r.report
+    finally:
+        _capturing.reset(token)
+    raise RuntimeError(f"'{command}' gave no report")
+
+
 def main():
     r"""
     Run BiaPy.
@@ -889,9 +962,17 @@ def main():
     with status 0 upon successful completion.
     """
     # Subcommands have their own options and don't run a job; any other call runs a job
-    subcommands = {"validate-config": _validate_config_cli, "check-data": _check_data_cli, "list-workflows": _list_workflows_cli, "inspect-image": _inspect_image_cli, "get-config-template": _get_config_template_cli, "create-config": _create_config_cli, "search-bmz-models": _search_bmz_models_cli, "inspect-results": _inspect_results_cli, "plan": _plan_cli, "run": _run_cli, "job-status": _job_status_cli, "stop-job": _stop_job_cli}
-    if len(sys.argv) > 1 and sys.argv[1] in subcommands:
-        subcommands[sys.argv[1]](sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] in _SUBCOMMANDS:
+        _SUBCOMMANDS[sys.argv[1]](sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "mcp":  # the MCP server, for agents
+        try:
+            from biapy.agent.mcp_server import serve
+        except ModuleNotFoundError as e:
+            if e.name != "mcp" and not str(e.name).startswith("mcp."):
+                raise
+            sys.exit("The MCP server needs the MCP SDK: install it with  pip install \"biapy[mcp]\"")
+        serve(sys.argv[2:])
+        sys.exit(0)
 
     ##########################
     #   ARGS COMPROBATION    #
@@ -928,7 +1009,8 @@ def main():
         "  plan                  describe what running a configuration would do, without running it\n"
         "  run                   run a job in the background, after checking it as 'plan' does\n"
         "  job-status            say whether a job is running, where it is and, if it failed, why\n"
-        "  stop-job              stop a job started with 'run'\n",
+        "  stop-job              stop a job started with 'run'\n"
+        "  mcp                   run the MCP server, for agents (needs 'pip install biapy[mcp]')\n",
     )
 
     parser.add_argument("--config", required=True, help="Path to the configuration file")

@@ -53,6 +53,10 @@ dependencies = [
     "psutil>=5.9",
 ]
 
+[project.optional-dependencies]
+# The MCP server for AI agents ("biapy mcp")
+mcp = ["mcp>=2.3,<3"]
+
 [project.scripts]
 biapy = "biapy:main"
 
