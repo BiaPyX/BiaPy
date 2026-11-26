@@ -40,6 +40,7 @@ Check a config without running it: `biapy validate-config my_config.yaml [--no-d
 | `biapy/config/` | `config.py`: every config option with its default value |
 | `biapy/data/` | Data loading, normalization, pre/post-processing and data generators |
 | `biapy/models/` | One file per architecture; `__init__.py` has `build_model()` and BioImage Model Zoo loading |
+| `biapy/agent/` | MCP server for AI agents (`biapy mcp`, needs `pip install "biapy[mcp]"`; `biapy mcp --setup claude|codex|print` adds it to an agent): each tool runs a subcommand with `run_subcommand()` and returns its `--json` report. Add no logic here: put it in the subcommand |
 | `biapy/wizard/` | Logic of the configuration wizard shared by the front-ends (BiaPy-GUI, Fiji plugin): data checks, nnU-Net-like planning and config building. Must import without loading PyTorch |
 | `biapy/citations/` | `references.yaml`: works to cite and the config rules that decide when each applies (written as `CITATIONS.md`/`citations.bib` at the end of `run_job()` and used in BMZ exports) |
 | `biapy/utils/` | Helpers, callbacks and standalone scripts |
@@ -107,6 +108,7 @@ pytest -q                                  # all of them (tests/test_*.py, ~40 s
 pytest tests/test_wizard.py -q             # wizard: data checks, planning, configs built (~15 s)
 pytest tests/test_wizard_api.py -q         # wizard interface with the front-ends (see Rules)
 pytest tests/test_cli.py -q                # biapy subcommands: --json output, text output and exit codes (~7 s)
+pytest tests/test_mcp.py -q                # run_subcommand and the MCP server's tools (skipped without the MCP SDK)
 pytest tests/test_vit_backbones.py -q      # every ViT backbone/architecture combination, built on 'meta' device
 pytest tests/test_patch_sampling.py -q     # foreground oversampling (biapy/data/patch_sampling.py)
 pytest tests/test_tta_equivariance.py -q   # instance representations/channels and TTA (data/post_processing/tta.py)
