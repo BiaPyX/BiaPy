@@ -2034,11 +2034,22 @@ def detection_metrics(
             _true[:, i] *= resolution[i]
             _pred[:, i] *= resolution[i]
 
-        # Create cost matrix
+        # Create cost matrix: prioritize maximum number of matches within tolerance,
+        # breaking ties by minimum total distance among valid (<= tolerance) matches.
         distances = distance_matrix(_pred, _true)
         n_matched = min(len(_true), len(_pred))
-        costs = -(distances >= tolerance).astype(float) - distances / (2 * n_matched)
-        pred_ind, true_ind = linear_sum_assignment(-costs)
+        if n_matched > 0:
+            if tolerance > 0:
+                costs = np.where(
+                    distances <= tolerance,
+                    distances / (2 * n_matched * tolerance),
+                    1.0,
+                )
+            else:
+                costs = np.where(distances <= tolerance, 0.0, 1.0)
+            pred_ind, true_ind = linear_sum_assignment(costs)
+        else:
+            pred_ind, true_ind = np.array([], dtype=int), np.array([], dtype=int)
 
         # Analyse which associations are below the tolerance to consider them TP
         for i in range(len(pred_ind)):
@@ -2055,7 +2066,7 @@ def detection_metrics(
             else:
                 consider_point = True
 
-            if distances[pred_ind[i], true_ind[i]] < tolerance:
+            if distances[pred_ind[i], true_ind[i]] <= tolerance:
                 if consider_point:
                     TP += 1
                     tag[true_ind[i]] = "TP"
