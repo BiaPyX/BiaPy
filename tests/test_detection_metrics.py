@@ -8,7 +8,7 @@ from biapy.engine.metrics import detection_metrics
 def test_detection_metrics_maximizes_valid_matches_within_tolerance():
     """Valid matches within tolerance must not be sacrificed for shorter distances."""
     # Both pairs (pred[0]->gt[0] and pred[1]->gt[1]) are at distance 9.5 < 10.
-    # Assigning pred[0]->gt[1] (distance 0.5) forces pred[1]->gt[0] (distance ~13.8 >= 10),
+    # Assigning pred[0]->gt[1] (distance 0.5) forces pred[1]->gt[0] (distance ~13.8 > 10),
     # yielding only 1 TP instead of 2.
     true_points = [[0, 0, 0], [0, 10, 0]]
     pred_points = [[0, 9.5, 0], [0, 10, 9.5]]
@@ -39,7 +39,7 @@ def test_detection_metrics_maximizes_matches_with_large_tolerance():
 
 
 def test_detection_metrics_unmatched_distant_gt_does_not_flip_closest_tp():
-    """Distances of invalid (>= tolerance) pairs must not affect which valid match is chosen."""
+    """Distances of invalid (> tolerance) pairs must not affect which valid match is chosen."""
     # Only gt[0]=[0, 0, 0] has valid predictions within tolerance=10:
     # pred[0]=[0, 4, 0] (distance 4) and pred[1]=[0, -6, 0] (distance 6).
     # gt[1]=[0, 50, 0] is out of tolerance for both predictions and must not bias the match.
@@ -62,6 +62,34 @@ def test_detection_metrics_unmatched_distant_gt_does_not_flip_closest_tp():
     assert metrics["TP (class)"] == 1
     assert metrics["FN (class)"] == 0
     assert list(df_fp["pred_id"]) == [2]
+
+
+def test_detection_metrics_distance_equal_to_tolerance_is_tp():
+    """A prediction exactly at the tolerance distance counts as TP; one just beyond does not."""
+    # pred[0] is 10.0 from gt[0] (== tolerance); pred[1] is 10.5 from gt[1] (> tolerance).
+    true_points = [[0, 0, 0], [0, 50, 0]]
+    pred_points = [[0, 10, 0], [0, 60.5, 0]]
+
+    metrics, df, df_fp = detection_metrics(true_points, pred_points, tolerance=10)
+
+    assert metrics["TP"] == 1
+    assert metrics["FP"] == 1
+    assert metrics["FN"] == 1
+    assert list(df["tag"]) == ["TP", "FN"]
+    assert df.loc[0, "distance"] == pytest.approx(10.0)
+    assert list(df_fp["pred_id"]) == [2]
+
+
+def test_detection_metrics_zero_tolerance_matches_exact_points():
+    """With tolerance=0, predictions that coincide with GT points are matched as TP."""
+    true_points = [[0, 0, 0], [0, 5, 0]]
+    pred_points = [[0, 5, 0], [0, 0, 0]]
+
+    metrics, _, _ = detection_metrics(true_points, pred_points, tolerance=0)
+
+    assert metrics["TP"] == 2
+    assert metrics["FP"] == 0
+    assert metrics["FN"] == 0
 
 
 def test_detection_metrics_empty_predictions_no_divide_warning():
